@@ -50,6 +50,7 @@ Tool configuration files (`.claude/settings.json`, `.opencode.json`, `.aider.con
 - **Pointers are followed.** A file that points to another file in the repository, as a line with only a path (`AI-AGENTS.md`) or a Claude Code import (`@docs/guide.md`), is followed on the target branch: the file it points to is read in its place, within the same limits. Paths outside the repository are ignored.
 - **Bounded.** At most 8 files and 64 KB per review, root files first; a longer file is cut. The review logs what was left out.
 - **Findings are labeled Repo Instruction.** Kody reports one only when the instruction applies to the changed file and the line that breaks it was added or modified by the pull request. The comment quotes the instruction and names the file.
+- **The review's filters apply.** Repo Instruction findings go through the team's severity filter and suggestion limits like any other finding; one below the threshold is not posted. The setting lets Kody read the files, not post past those limits.
 - **Never instructions to Kody.** The files are treated as repository text to check the diff against. Anything they ask the reviewer to do is ignored, and they never change how bugs, security or performance issues are judged.
 
 <Note>

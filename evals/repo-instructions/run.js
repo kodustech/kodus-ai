@@ -9,7 +9,13 @@
 // case's CLAUDE.md. Scoring is deterministic: ground truth is the enumerated
 // violation sites, no judge.
 //
-//   node evals/repo-instructions/run.js --model=<tier0 id> [--arm=both|on|off] [--cases=<id,id>] [--limit=N] [--concurrency=N] [--output=path] [--gate]
+//   node evals/repo-instructions/run.js --model=<tier0 id> [--set=controlled|full] [--arm=both|on|off] [--cases=<id,id>] [--limit=N] [--concurrency=N] [--output=path] [--gate]
+//
+// The gated number counts the violation sites the review posts: what ships
+// after the review's severity and quantity filters, with the team's default
+// settings. What the finder reported before those filters is a diagnostic
+// beside it (`reported`), and `metrics.on.shippedRate` is the share of the
+// finder's instruction findings that reached the PR.
 //
 // Writes the shared result (evals/shared/eval-result.js): per case, the
 // violation sites the on arm reported, out of all of them. --gate fails below
@@ -21,7 +27,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const { buildCases, DECOY } = require('./cases');
+const { buildCases, casesFor, CASE_SETS, DECOY } = require('./cases');
 const { catalog } = require('./catalog');
 const { TIER0 } = require('../shared/tier0-models');
 const { countTokens, tokensUsed } = require('../shared/eval-kit');
@@ -32,7 +38,7 @@ const LINE_TOLERANCE = 2;
 const INFRA_BUDGET = 0.05;
 
 function parseArgs(argv) {
-    const out = { model: 'gpt-5.4', arm: 'both', cases: [], limit: null, concurrency: 4, output: '', gate: false };
+    const out = { model: 'gpt-5.4', set: 'controlled', arm: 'both', cases: [], limit: null, concurrency: 4, output: '', gate: false };
     for (const arg of argv.slice(2)) {
         if (arg === '--gate') {
             out.gate = true;
@@ -45,14 +51,19 @@ function parseArgs(argv) {
         }
         if (m[1] === 'model') out.model = m[2];
         else if (m[1] === 'arm') out.arm = m[2];
+        else if (m[1] === 'set') out.set = m[2];
         else if (m[1] === 'limit') out.limit = Number(m[2]);
         else if (m[1] === 'cases') out.cases = m[2].split(',').map((id) => id.trim().replace(/^repo-instructions:/, '')).filter(Boolean);
         else if (m[1] === 'output') out.output = m[2];
         else if (m[1] === 'concurrency') out.concurrency = Math.max(1, Number(m[2]) || 1);
         else {
-            console.error(`unknown flag --${m[1]}. Known: --model --arm --cases --limit --concurrency --output --gate`);
+            console.error(`unknown flag --${m[1]}. Known: --model --set --arm --cases --limit --concurrency --output --gate`);
             process.exit(2);
         }
+    }
+    if (!(out.set in CASE_SETS)) {
+        console.error(`--set must be ${Object.keys(CASE_SETS).join(' or ')} (got ${out.set})`);
+        process.exit(2);
     }
     if (!['both', 'on', 'off'].includes(out.arm)) {
         console.error(`--arm must be both, on or off (got ${out.arm})`);
@@ -86,11 +97,16 @@ function overlaps(finding, line) {
     return line >= start - LINE_TOLERANCE && line <= (Number.isFinite(end) ? end : start) + LINE_TOLERANCE;
 }
 
-function scoreOn(testCase, findings) {
+// `findings`: what the review ships; `loopFindings`: what the finder reported
+// before the review's filters (the diagnostic).
+function scoreOn(testCase, findings, loopFindings = []) {
     const instruction = findings.filter((f) => f.label === 'repo_instruction');
+    const loopInstruction = loopFindings.filter((f) => f.label === 'repo_instruction');
     const sites = Object.entries(testCase.groundTruth).flatMap(([file, list]) =>
         list.map((o) => ({ file, line: o.line })),
     );
+    const coveredBy = (list) =>
+        sites.filter((s) => list.some((f) => f.relevantFile === s.file && overlaps(f, s.line))).length;
     const isTrue = (f) =>
         sites.some((s) => s.file === f.relevantFile && overlaps(f, s.line));
     const covered = sites.filter((s) =>
@@ -109,6 +125,8 @@ function scoreOn(testCase, findings) {
         cited: instruction.filter((f) => citesInstruction(f, testCase.convention)).length,
         decoyHits: instruction.filter((f) => decoyPattern.test(f.suggestionContent || '')).length,
         otherFindings: findings.length - instruction.length,
+        loopSitesCovered: coveredBy(loopInstruction),
+        loopInstructionFindings: loopInstruction.length,
     };
 }
 
@@ -135,6 +153,9 @@ function summarize(rows) {
                   decoyHits: sum(on, 'decoyHits'),
                   instructionFindings: sum(on, 'instructionFindings'),
                   otherFindings: sum(on, 'otherFindings'),
+                  loopOccurrenceRecall: ratio(sum(on, 'loopSitesCovered'), sum(on, 'sites')),
+                  loopInstructionFindings: sum(on, 'loopInstructionFindings'),
+                  shippedRate: ratio(sum(on, 'instructionFindings'), sum(on, 'loopInstructionFindings')),
               }
             : null,
         off: off.length
@@ -150,9 +171,10 @@ function summarize(rows) {
 async function main() {
     const args = parseArgs(process.argv);
     countTokens();
-    let cases = buildCases();
-    // --cases takes the Kody Rules case ids (evals/kody-rules/github-cases.json).
-    if (args.cases.length) cases = cases.filter((c) => args.cases.includes(c.caseId.replace(/^repo-instructions:/, '')));
+    // --cases takes the Kody Rules case ids (evals/kody-rules/github-cases.json), from every case.
+    let cases = args.cases.length
+        ? buildCases().filter((c) => args.cases.includes(c.caseId.replace(/^repo-instructions:/, '')))
+        : casesFor(args.set);
     if (Number.isFinite(args.limit)) cases = cases.slice(0, args.limit);
     const arms = args.arm === 'both' ? ['on', 'off'] : [args.arm];
 
@@ -161,7 +183,7 @@ async function main() {
         config: { label: `${args.model}-repo-instructions`, provider: 'tier0', model: args.model },
     });
 
-    console.log(`════ repo-instructions · model=${args.model} · arms=${arms.join(',')} · cases=${cases.length} · decoy="${DECOY}" ════`);
+    console.log(`════ repo-instructions · model=${args.model} · set=${args.set} · arms=${arms.join(',')} · cases=${cases.length} · decoy="${DECOY}" ════`);
 
     const tasks = cases.flatMap((testCase) => arms.map((arm) => ({ testCase, arm })));
     const rows = [];
@@ -179,8 +201,9 @@ async function main() {
             console.log(`INFRA ${testCase.caseId} [${arm}] ${String(result?.error || 'no output').slice(0, 160)}`);
             return;
         }
-        const findings = JSON.parse(result.output).findings || [];
-        const score = arm === 'on' ? scoreOn(testCase, findings) : scoreOff(findings);
+        const output = JSON.parse(result.output);
+        const findings = output.findings || [];
+        const score = arm === 'on' ? scoreOn(testCase, findings, output.loopFindings || []) : scoreOff(findings);
         rows.push({ caseId: testCase.caseId, arm, status: 'ok', score, tokenUsage: result.tokenUsage });
         console.log(`OK    ${testCase.caseId} [${arm}] ${JSON.stringify(score)}`);
     };
@@ -196,7 +219,7 @@ async function main() {
 
     const infra = rows.filter((r) => r.status === 'infra').length;
     const metrics = summarize(rows);
-    const checksById = new Map(catalog().map((c) => [c.id, c.checks]));
+    const checksById = new Map(catalog('full').map((c) => [c.id, c.checks]));
     const resultCases = cases.map((testCase) => {
         const on = rows.find((r) => r.caseId === testCase.caseId && r.arm === 'on');
         const detail = on?.status === 'ok' ? on.score.siteResults : [];
@@ -209,18 +232,24 @@ async function main() {
             ...(on?.status === 'ok' ? {} : { unmeasured: true }),
         };
     });
-    const floor = (require('./targets.json').models[args.model] || {}).floor ?? null;
+    const floor = ((require('./targets.json').sets || {})[args.set]?.models || {})[args.model]?.floor ?? null;
     const leaks = metrics.off?.leakedInstructionLabels ?? 0;
     const result = {
         eval: 'repo-instructions',
         question: evalQuestion('evals/repo-instructions'),
         model: args.model,
+        set: args.set,
         runs: 1,
         metric: {
-            name: 'violation sites reported with the setting on',
+            name: 'violation sites the review posts with the setting on',
             value: metrics.on?.occurrenceRecall ?? null,
             floor,
             baseline: null,
+        },
+        // Not gated: what the finder reported before the review's filters.
+        reported: {
+            name: "violation sites the finder reported, before the review's filters",
+            value: metrics.on?.loopOccurrenceRecall ?? null,
         },
         cases: resultCases,
         tokens: tokensUsed(),
@@ -263,10 +292,14 @@ async function main() {
     return 0;
 }
 
-main().then(
-    (code) => process.exit(code),
-    (error) => {
-        console.error(`infra: ${error instanceof Error ? error.stack : String(error)}`);
-        process.exit(2);
-    },
-);
+if (require.main === module) {
+    main().then(
+        (code) => process.exit(code),
+        (error) => {
+            console.error(`infra: ${error instanceof Error ? error.stack : String(error)}`);
+            process.exit(2);
+        },
+    );
+}
+
+module.exports = { scoreOn, summarize };

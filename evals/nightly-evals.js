@@ -74,6 +74,13 @@ const NIGHTLY_EVALS = [
         files: ['evals/business-logic/targets.json', 'evals/business-logic/cases.json'],
     },
     {
+        id: 'repo-instructions',
+        stage: 'repo-instructions',
+        run: ['evals/repo-instructions/run.js', '--arm=both'],
+        sets: { controlled: ['--set=controlled'], full: ['--set=full'] },
+        files: ['evals/repo-instructions/targets.json', 'evals/repo-instructions/cases.js', 'evals/kody-rules/github-cases.json'],
+    },
+    {
         id: 'memories',
         stage: 'memories',
         run: ['evals/memories/run.js'],

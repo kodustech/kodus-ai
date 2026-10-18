@@ -1,15 +1,16 @@
 {
     "__doc": [
-        "Per-model floors for the repo-instructions gate: violation sites reported with the setting on.",
-        "Calibrate from two full runs of one commit (evals/AGENTS.md, \"Floors and judges\"); never copy these numbers elsewhere.",
-        "deepseek-v4-flash@fireworks (the nightly model): calibrated 2026-10-17 from 2 local runs of 5b6aeff14 (index + readRepoInstruction, quote check after verify), 29 and 25 of 43 sites. Noise from the paired per-case difference: sd of the difference of totals = sqrt(sum d^2) over the 14 cases, one run's sd = that / sqrt(2) / 43. floor = mean - 2 run sd, rounded down to 2 decimals. Both runs: no decoy hits, every instruction finding cited, and no repo_instruction finding with the setting off.",
-        "medusa#15810 (no-console) scored 0 of 4 in both runs and on the version that inlined the files, with no instruction finding at all: the model does not report it, not a lost read.",
-        "RATCHET: a PR that adds cases or moves the value on purpose recalibrates here in the same PR, with its runs as evidence."
+        "Floors per set and model for the violation sites the review posts with the setting on (run.js --gate), as ratios: what ships after the review's severity and quantity filters under the team's default settings (#1823). The finder's own recall is reported beside it, not gated.",
+        "controlled: the nightly and every tier-0 model's weekly run. full: on demand, no floor.",
+        "Calibrate from two full runs of one commit (evals/README.md, rules); never copy these numbers elsewhere.",
+        "Superseded: the floor calibrated 2026-10-17 on the replay setup scored the finder's own findings, before the review's filters."
     ],
-    "models": {
-        "deepseek-v4-flash@fireworks": {
-            "floor": 0.41,
-            "observed": 0.628
+    "sets": {
+        "controlled": {
+            "models": {}
+        },
+        "full": {
+            "models": {}
         }
     }
 }

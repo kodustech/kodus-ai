@@ -181,8 +181,16 @@ const STAGES = [
             },
             { kind: 'contract', name: "A scripted model reads the CLAUDE.md through the tool and the verifier gets it", wiring: ['repo-instructions'] },
         ],
-        eval: null,
-        note: 'Floor calibrated per model (evals/repo-instructions/targets.json); runs by hand: pnpm eval:repo-instructions.',
+        eval: {
+            path: 'evals/repo-instructions',
+            metric: 'of violation lines the review posts',
+            sets: {
+                controlled: 'real merged PRs, one per repository and convention, each with a CLAUDE.md on its target branch stating the convention it breaks beside a decoy',
+                full: 'every such PR (14)',
+            },
+            nightly: 'shared',
+            caveat: "Counts what the review posts under the team's default severity and quantity filters, which drop most of these findings (the finder rates them low); what the finder reported before the filters is shown beside it.",
+        },
     },
     {
         id: 'parse',

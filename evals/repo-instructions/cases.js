@@ -66,4 +66,27 @@ function buildCases() {
     }));
 }
 
-module.exports = { buildCases, DECOY };
+// `controlled`: one case per repository and convention, every one with lines
+// that break it; the nightly and every model's weekly run. `full`: every case,
+// on demand.
+const CASE_SETS = {
+    controlled: [
+        'n8n-io/n8n#33230::no-direct-process-env',
+        'n8n-io/n8n#33230::no-generic-error',
+        'medusajs/medusa#15788::no-any-type',
+        'twentyhq/twenty#22302::no-console',
+        'appsmithorg/appsmith#41827::no-direct-process-env',
+        'typeorm/typeorm#12421::no-any-type',
+        'backstage/backstage#34670::no-generic-error',
+    ],
+    full: null,
+};
+
+function casesFor(set = 'controlled') {
+    const cases = buildCases();
+    const ids = CASE_SETS[set];
+    if (ids === undefined) throw new Error(`unknown set ${set}: ${Object.keys(CASE_SETS).join(' or ')}`);
+    return ids ? cases.filter((c) => ids.includes(c.caseId.replace(/^repo-instructions:/, ''))) : cases;
+}
+
+module.exports = { buildCases, casesFor, CASE_SETS, DECOY };

@@ -273,6 +273,9 @@ export const GenerateRulesOptions = () => {
                                         that cover the changed files, and points
                                         out changes that break what they say.
                                         They are never turned into Kody Rules.
+                                        Your severity filter and suggestion
+                                        limits apply to these comments like any
+                                        other.
                                         {isGlobal &&
                                             " This is the default for every repository that doesn't set its own."}
                                     </Section.Description>
