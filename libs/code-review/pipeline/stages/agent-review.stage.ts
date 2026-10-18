@@ -1679,6 +1679,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             languageResultPrompt:
                                 context.codeReviewConfig?.languageResultPrompt,
                             languageIsDefault: agentWriting !== undefined,
+                            // The agent's voice may name another language
+                            // than the team's; the title has to follow it.
+                            rewriteTitle: agentWriting !== undefined,
                             organizationId:
                                 context.organizationAndTeamData?.organizationId,
                         },
@@ -1693,6 +1696,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             formattedTargets.add(deduped[target]);
                             deduped[target].suggestionContent =
                                 fmt.suggestionContent;
+                            if (fmt.title) {
+                                deduped[target].oneSentenceSummary = fmt.title;
+                            }
                         }
                     }
                     formattedCount += formatted.size;
