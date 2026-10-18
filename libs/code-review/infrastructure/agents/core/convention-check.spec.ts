@@ -91,7 +91,8 @@ describe('checkConventionQuotes in a skill with rule files', () => {
     const RULE = '.claude/skills/valve-rules/rules/zones.md';
     const OTHER = '.claude/skills/pump-rules/rules/zones.md';
     const files = {
-        [SKILL]: '# Valve rules\n\nRead the file under rules/ that matches the change.\n',
+        [SKILL]:
+            '# Valve rules\n\nRead the file under rules/ that matches the change.\n',
         [RULE]: '# Zones\n\n## Opening\n\nA valve opens only after its zone lock is held.\n',
         [OTHER]: '# Pumps\n\nA pump starts only after its circuit is armed.\n',
     };
@@ -185,9 +186,30 @@ describe('checkConventionQuotes', () => {
             expect(read).not.toHaveBeenCalled();
         });
 
+        it.each([
+            'TeamInstructions',
+            'Team instructions (Duplicate code CLI QA)',
+            'instructions',
+        ])('reads %s as the instructions', async (file) => {
+            const quote =
+                'Every valve handler must log the zone id before it opens a valve.';
+            const r = await checkConventionQuotes(
+                [conv(quote, { source: { file, section: '', quote } })],
+                reader({}),
+                [],
+                undefined,
+                INSTRUCTIONS,
+            );
+            expect(r.passed).toHaveLength(1);
+        });
+
         it('drops a quote the instructions do not hold', async () => {
             const r = await checkConventionQuotes(
-                [fromInstructions('Valves must emit a metric on each opening.')],
+                [
+                    fromInstructions(
+                        'Valves must emit a metric on each opening.',
+                    ),
+                ],
                 reader({}),
                 [],
                 undefined,

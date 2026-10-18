@@ -280,7 +280,9 @@ export function ruleCitation(s: Finding): string {
     const quote = s.kind === 'convention' ? s.source?.quote?.trim() : '';
     if (!quote) return '';
     const file = s.source?.file?.trim() ?? '';
-    const where = /^(team)?instructions$/i.test(file.replace(/[^A-Za-z]/g, ''))
+    const where = /^(teaminstructions|instructions$)/i.test(
+        file.replace(/[^A-Za-z]/g, ''),
+    )
         ? "agent's instructions"
         : `\`${file}\``;
     const quoted = quote

@@ -312,8 +312,9 @@ export async function checkConventionQuotes(
 /** The model cites a rule written in the agent's instructions by the name the
  *  prompt gives them (`<TeamInstructions>`). */
 function isTeamInstructionsSource(file: string): boolean {
+    // Models name it loosely ("Team instructions (Agent name)").
     const name = file.replace(/[^A-Za-z]/g, '').toLowerCase();
-    return name === 'teaminstructions' || name === 'instructions';
+    return name.startsWith('teaminstructions') || name === 'instructions';
 }
 
 async function findInSkillFiles(
