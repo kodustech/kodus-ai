@@ -38,6 +38,8 @@ export interface CustomAgentToolDeps {
         ) => Promise<CustomAgentMcpServer[]>;
         createAdapter?: (config: MCPAdapterConfig) => MCPAdapter;
         callTimeoutMs?: number;
+        /** Arguments filled in server-side per connection (see `buildCustomAgentMcpTools`). */
+        boundArgs?: Record<string, Record<string, unknown>>;
     };
     /** Review identifiers (organization, team, repository, PR, agent) for logs. */
     logContext?: Record<string, unknown>;
@@ -106,6 +108,7 @@ export async function buildCustomAgentTools(
                 servers,
                 createAdapter: deps.mcp.createAdapter,
                 callTimeoutMs: deps.mcp.callTimeoutMs,
+                boundArgs: deps.mcp.boundArgs,
             });
             tools.push(...mcp.tools);
             closers.push(() => mcp.close());

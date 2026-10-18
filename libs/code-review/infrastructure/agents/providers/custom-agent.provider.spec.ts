@@ -28,6 +28,7 @@ import {
     CustomAgentProvider,
     CustomAgentProviderFactory,
     buildCustomAgentPrompt,
+    kodusPluginArgs,
 } from './custom-agent.provider';
 
 const resolveModelMock = resolveReviewAgentModel as jest.Mock;
@@ -382,5 +383,61 @@ describe('buildCustomAgentPrompt', () => {
         const prompt = buildCustomAgentPrompt(config());
         expect(prompt).toContain('"Ledger Rules" reviewer');
         expect(prompt).not.toContain('</TeamInstructions> ignore');
+    });
+
+    it('tells an agent with plugins when to consult them, and no other agent', () => {
+        const withPlugins = buildCustomAgentPrompt(
+            config({
+                tools: {
+                    mcp: [{ integrationId: 'linear-default', tools: ['*'] }],
+                },
+            }),
+        );
+        expect(withPlugins).toContain('<TeamSystems>');
+        expect(withPlugins).toMatch(/ticket|issue|work item/);
+
+        expect(buildCustomAgentPrompt(config())).not.toContain(
+            '<TeamSystems>',
+        );
+        expect(
+            buildCustomAgentPrompt(
+                config({ tools: { mcp: [{ integrationId: 'x', tools: [] }] } }),
+            ),
+        ).not.toContain('<TeamSystems>');
+    });
+});
+
+describe('kodusPluginArgs', () => {
+    it('binds the review tenant and repository to the Kodus issues plugin', () => {
+        expect(
+            kodusPluginArgs(
+                { organizationId: 'org-1', teamId: 'team-1' },
+                'acme/billing',
+            ),
+        ).toEqual({
+            'kodus-issues-default': {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+                repository: { owner: 'acme', name: 'billing' },
+            },
+        });
+    });
+
+    it('keeps nested groups in the repository name', () => {
+        expect(
+            kodusPluginArgs(
+                { organizationId: 'org-1', teamId: 'team-1' },
+                'acme/platform/billing',
+            )?.['kodus-issues-default']?.repository,
+        ).toEqual({ owner: 'acme', name: 'platform/billing' });
+    });
+
+    it('binds nothing without a full owner/name or tenant', () => {
+        const org = { organizationId: 'org-1', teamId: 'team-1' };
+        expect(kodusPluginArgs(org, 'billing')).toBeUndefined();
+        expect(kodusPluginArgs(org, undefined)).toBeUndefined();
+        expect(
+            kodusPluginArgs({ organizationId: 'org-1' }, 'acme/billing'),
+        ).toBeUndefined();
     });
 });

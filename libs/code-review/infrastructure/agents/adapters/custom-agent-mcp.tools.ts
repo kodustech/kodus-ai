@@ -171,12 +171,44 @@ function withTimeout<T>(
     });
 }
 
+/**
+ * Drops the bound argument names from a tool's schema: the model does not
+ * know the review's tenant or repository, so asking it for them only invites
+ * a guess.
+ */
+function withoutBoundArgs(
+    schema: JSONSchema,
+    bound: Record<string, unknown> | undefined,
+): JSONSchema {
+    const names = Object.keys(bound ?? {});
+    const properties = (schema as { properties?: Record<string, unknown> })
+        .properties;
+    if (!names.length || !properties) return schema;
+    const kept = Object.fromEntries(
+        Object.entries(properties).filter(([key]) => !names.includes(key)),
+    );
+    const required = (schema as { required?: string[] }).required;
+    return {
+        ...schema,
+        properties: kept,
+        ...(required
+            ? { required: required.filter((key) => !names.includes(key)) }
+            : {}),
+    } as JSONSchema;
+}
+
 export async function buildCustomAgentMcpTools(params: {
     selections: readonly CustomAgentMcpSelection[];
     servers: readonly CustomAgentMcpServer[];
     createAdapter?: (config: MCPAdapterConfig) => MCPAdapter;
     callTimeoutMs?: number;
     connectTimeoutMs?: number;
+    /**
+     * Arguments the server fills in for every call to a connection, by
+     * integration id: the review's tenant and repository for the Kodus
+     * plugins. They are hidden from the model and always win over its input.
+     */
+    boundArgs?: Record<string, Record<string, unknown>>;
 }): Promise<CustomAgentMcpToolset> {
     const createAdapter = params.createAdapter ?? createMCPAdapter;
     const callTimeoutMs = params.callTimeoutMs ?? DEFAULT_MCP_CALL_TIMEOUT_MS;
@@ -185,7 +217,12 @@ export async function buildCustomAgentMcpTools(params: {
 
     const allowed = new Map<
         string,
-        { adapter: MCPAdapter; server: string; tool: string }
+        {
+            adapter: MCPAdapter;
+            server: string;
+            tool: string;
+            bound?: Record<string, unknown>;
+        }
     >();
     const tools: AgentTool[] = [];
     const adapters: MCPAdapter[] = [];
@@ -240,6 +277,7 @@ export async function buildCustomAgentMcpTools(params: {
         }
 
         const marks = serverMarksReadOnly(listed);
+        const bound = params.boundArgs?.[selection.integrationId];
         for (const raw of listed) {
             if (!wantsAll && !wanted.has(raw.name)) continue;
             if (connectionAllows && !connectionAllows.has(raw.name)) continue;
@@ -251,15 +289,19 @@ export async function buildCustomAgentMcpTools(params: {
                 adapter,
                 server: server.name,
                 tool: raw.name,
+                bound,
             });
             tools.push({
                 name: exposed,
                 description:
                     `[${server.name}:${raw.name}] read-only. ${raw.description ?? ''}`.trim(),
-                inputSchema: ((raw.inputSchema as JSONSchema) ?? {
-                    type: 'object',
-                    properties: {},
-                }) as JSONSchema,
+                inputSchema: withoutBoundArgs(
+                    ((raw.inputSchema as JSONSchema) ?? {
+                        type: 'object',
+                        properties: {},
+                    }) as JSONSchema,
+                    bound,
+                ),
                 execute: (input, ctx) => call(exposed, input, ctx),
             });
         }
@@ -279,10 +321,10 @@ export async function buildCustomAgentMcpTools(params: {
         }
         try {
             const result = await withTimeout(
-                entry.adapter.executeTool(
-                    entry.tool,
-                    (args ?? {}) as Record<string, unknown>,
-                ),
+                entry.adapter.executeTool(entry.tool, {
+                    ...((args ?? {}) as Record<string, unknown>),
+                    ...entry.bound,
+                }),
                 callTimeoutMs,
                 `MCP ${entry.server}:${entry.tool}`,
                 ctx?.signal,

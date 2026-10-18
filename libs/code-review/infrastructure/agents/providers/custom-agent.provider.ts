@@ -6,7 +6,10 @@ import type {
     MCPAdapter,
     MCPAdapterConfig,
 } from '@libs/mcp-server/mcp-adapter';
-import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
+import {
+    KODUS_ISSUES_INTEGRATION_ID,
+    MCPManagerService,
+} from '@libs/mcp-server/services/mcp-manager.service';
 import {
     buildCustomAgentTools,
     loadCustomAgentMcpServers,
@@ -47,6 +50,20 @@ export function buildCustomAgentPrompt(agent: CustomAgentConfig): string {
     const instructions = (agent.instructions || '')
         .replace(/<\/?TeamInstructions>/gi, '')
         .trim();
+    const hasPlugins = (agent.tools?.mcp ?? []).some(
+        (selection) => selection?.integrationId && selection.tools?.length,
+    );
+    // The tools alone say what each system can do, not when it is worth a
+    // call: without this the agent consults them only when the PR spells it out.
+    const teamSystems = hasPlugins
+        ? `
+
+  <TeamSystems>
+    Tools named \`System__tool\` read the team's own systems (trackers, wikis, monitoring). They are read-only.
+    Consult them when the change or its description points to something recorded there: a ticket, issue or work item, an incident, a design decision. Check the change against what you find, and cite it in the finding.
+    Do not search them speculatively when nothing in the change points there.
+  </TeamSystems>`
+        : '';
     return `  <Mission>
     You are the team's "${agent.name}" reviewer. Find the problems the team's instructions below ask you to look for, in the code this pull request changes. Investigate the codebase before reporting, and back each finding with evidence from the code.
   </Mission>
@@ -60,10 +77,31 @@ ${instructions}
     - issues outside what the team's instructions ask for (other reviewers cover them)
     - style or cosmetic issues, unless the instructions ask for them
     - speculative concerns without evidence in the code
-  </DoNotReport>`;
+  </DoNotReport>${teamSystems}`;
 }
 
 const logger = createLogger('CustomAgentProvider');
+
+/**
+ * The tenant and repository the Kodus issues plugin needs on every call. Its
+ * tools take them as arguments, and the model would only guess them, so the
+ * review fills them in. Nothing is bound without a full `owner/name`.
+ */
+export function kodusPluginArgs(
+    org: { organizationId?: string; teamId?: string },
+    repositoryFullName?: string,
+): Record<string, Record<string, unknown>> | undefined {
+    const [owner, ...rest] = (repositoryFullName ?? '').split('/');
+    const name = rest.join('/');
+    if (!org.organizationId || !org.teamId || !owner || !name) return undefined;
+    return {
+        [KODUS_ISSUES_INTEGRATION_ID]: {
+            organizationId: org.organizationId,
+            teamId: org.teamId,
+            repository: { owner, name },
+        },
+    };
+}
 
 /** Injection token for a replacement MCP adapter factory (tests, evals). */
 export const CUSTOM_AGENT_MCP_ADAPTER_FACTORY = Symbol.for(
@@ -164,6 +202,10 @@ export class CustomAgentProvider extends BaseCodeReviewAgentProvider {
                                   integrationIds,
                               ),
                           createAdapter: this.toolServices.createMcpAdapter,
+                          boundArgs: kodusPluginArgs(
+                              org,
+                              input.repositoryFullName,
+                          ),
                       }
                     : undefined,
         }).catch((error) => {

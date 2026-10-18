@@ -228,6 +228,59 @@ describe('buildCustomAgentMcpTools', () => {
         expect(adapter.executeTool).not.toHaveBeenCalled();
     });
 
+    it('fills bound arguments on the server side and hides them from the model', async () => {
+        const getIssue: MCPTool = {
+            name: 'KODUS_GET_ISSUE',
+            description: 'Get an issue',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    organizationId: { type: 'string' },
+                    teamId: { type: 'string' },
+                    repository: { type: 'object' },
+                    issueNumber: { type: 'number' },
+                },
+                required: [
+                    'organizationId',
+                    'teamId',
+                    'repository',
+                    'issueNumber',
+                ],
+            },
+            annotations: { readOnlyHint: true },
+            execute: jest.fn(),
+        };
+        const adapter = fakeAdapter([getIssue]);
+        const bound = {
+            organizationId: 'org-1',
+            teamId: 'team-1',
+            repository: { owner: 'acme', name: 'billing' },
+        };
+        const set = await buildCustomAgentMcpTools({
+            selections: [{ integrationId: 'int-tracker', tools: ['*'] }],
+            servers: [TRACKER],
+            createAdapter: () => adapter,
+            boundArgs: { 'int-tracker': bound },
+        });
+
+        expect(set.tools[0].inputSchema).toEqual({
+            type: 'object',
+            properties: { issueNumber: { type: 'number' } },
+            required: ['issueNumber'],
+        });
+
+        // The model cannot point the call at another tenant or repository.
+        await set.call(
+            'Tracker__KODUS_GET_ISSUE',
+            { issueNumber: 7, organizationId: 'default', teamId: 'x' },
+            ctx,
+        );
+        expect(adapter.executeTool).toHaveBeenCalledWith('KODUS_GET_ISSUE', {
+            issueNumber: 7,
+            ...bound,
+        });
+    });
+
     it('refuses to execute a tool outside the allowed set when called by name', async () => {
         const adapter = fakeAdapter([
             tool('get_ticket', { readOnlyHint: true }),
