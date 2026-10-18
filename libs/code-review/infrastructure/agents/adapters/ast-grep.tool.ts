@@ -164,6 +164,19 @@ function formatRuleCitations(matches: ParsedMatch[]): string {
     return `\n\n${RULE_CITATION}\n${lines.join('\n')}`;
 }
 
+/** `ast-grep scan` exits 1 when a `severity: error` rule matches and says so
+ *  on stderr ("Error: N error(s) found in code." plus a "Help:" line). That
+ *  is the scan succeeding, not a warning, so those two lines are dropped. */
+const DIAGNOSTICS_SUMMARY =
+    /^\s*(?:Error: \d+ error\(s\) found in code\.|Help: Scan succeeded and found error level diagnostics in the codebase\.)\s*$/;
+
+function withoutDiagnosticsSummary(stderr: string): string {
+    return stderr
+        .split('\n')
+        .filter((line) => !DIAGNOSTICS_SUMMARY.test(line))
+        .join('\n');
+}
+
 function randomWorkDir(): string {
     return `.kody-ast-grep-${Date.now().toString(36)}-${Math.random()
         .toString(36)
@@ -312,10 +325,13 @@ export function buildAstGrepTool(
     ) => {
         const result = await deps.exec(argv.map(shellQuote).join(' '));
         const matches = parseStream(result.stdout ?? '');
-        const stderr = (result.stderr ?? '').trim().slice(0, MAX_STDERR);
+        const stderr = withoutDiagnosticsSummary(result.stderr ?? '')
+            .trim()
+            .slice(0, MAX_STDERR);
 
-        // 0 = matches, 1 = no match (also used when a path is missing);
-        // anything else, or an `Error:` with nothing parsed, is a failure.
+        // 0 = matches, 1 = no match (also used when a path is missing) or
+        // matches of `severity: error` rules; anything else, or an `Error:`
+        // with nothing parsed, is a failure.
         if (
             matches.length === 0 &&
             (result.exitCode > 1 || /^\s*error/im.test(stderr))

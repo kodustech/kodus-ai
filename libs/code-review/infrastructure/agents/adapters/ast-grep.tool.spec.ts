@@ -426,6 +426,40 @@ describe('astGrep tool', () => {
             expect(exec).not.toHaveBeenCalled();
         });
 
+        it('reads exit 1 with matches from severity: error rules as success, without the summary as a warning', async () => {
+            const { tool, exec } = setup({ rules: RULES });
+            // What ast-grep 0.42 prints when an error-severity rule matches.
+            exec.mockResolvedValueOnce({
+                stdout: match('src/orders/cart.ts', 9, 'db.raw(q)', {
+                    ruleId: 'no-raw-sql',
+                    severity: 'error',
+                }),
+                stderr: 'Error: 1 error(s) found in code.\nHelp: Scan succeeded and found error level diagnostics in the codebase.\n',
+                exitCode: 1,
+            });
+            const r = await tool.execute({ useRules: true }, ctx);
+            expect(r.isError).toBeFalsy();
+            expect(r.output).toContain('1 match');
+            expect(r.output).not.toContain('ast-grep warnings');
+            expect(r.output).not.toContain('error(s) found');
+        });
+
+        it('keeps a real warning next to the error summary', async () => {
+            const { tool, exec } = setup({ rules: RULES });
+            exec.mockResolvedValueOnce({
+                stdout: match('src/orders/cart.ts', 9, 'db.raw(q)', {
+                    ruleId: 'no-raw-sql',
+                }),
+                stderr: 'Warning: src/legacy.ts could not be parsed\nError: 1 error(s) found in code.\nHelp: Scan succeeded and found error level diagnostics in the codebase.',
+                exitCode: 1,
+            });
+            const r = await tool.execute({ useRules: true }, ctx);
+            expect(r.output).toContain(
+                'ast-grep warnings: Warning: src/legacy.ts could not be parsed',
+            );
+            expect(r.output).not.toContain('error(s) found');
+        });
+
         it('teaches the citation that makes a rule match proof, in rules mode only', () => {
             expect(setup().tool.description).not.toContain('ast-grep:<ruleId>');
             const { tool } = setup({ rules: RULES });
