@@ -37,6 +37,10 @@ runo() {
     $RUNO "${own[@]}" --branch "$HEAD_REF" --profile "$PROFILE" "$@"
 }
 compose="docker compose -f docker-compose.dev.yml $BILLING_OVERLAY -f docker-compose.preview.yml -f $OVERLAY --profile mcp"
+# `runo exec` carries no RUNO_* values, and compose refuses to read the files
+# without them (RUNO_URL_WEBHOOKS is required). A build never uses them, so
+# placeholders are enough there; services must not be (re)created this way.
+compose_build="RUNO_PUBLIC_URL=build RUNO_PUBLIC_HOST=build RUNO_URL_WEBHOOKS=build $compose build"
 
 {
     echo "::group::preview [$PROFILE] up"
@@ -60,7 +64,7 @@ compose="docker compose -f docker-compose.dev.yml $BILLING_OVERLAY -f docker-com
         # The billing context tracks its own repository. Rebuild its pinned
         # local image before restarting, otherwise compose can keep serving
         # the image baked by the previous PR push.
-        runo exec -- "$compose build kodus-service-billing" ||
+        runo exec -- "$compose_build kodus-service-billing" ||
             echo "::warning::[$PROFILE] kodus-service-billing image rebuild failed — keeping the previous image"
     fi
     # `up` only uploads code when it CREATES the VM; on every later push the
