@@ -4,7 +4,9 @@ import {
     FindManyOptions,
     FindOneOptions,
     FindOptionsWhere,
+    In,
     LessThan,
+    Not,
     Repository,
 } from 'typeorm';
 
@@ -126,13 +128,18 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
     async findStaleInProgress(
         cutoffDate: Date,
         limit = 100,
+        options?: { excludeOrigins?: string[] },
     ): Promise<AutomationExecutionEntity[]> {
         try {
+            const excludeOrigins = options?.excludeOrigins ?? [];
             const staleExecutions =
                 await this.automationExecutionRepository.find({
                     where: {
                         status: AutomationStatus.IN_PROGRESS,
                         updatedAt: LessThan(cutoffDate),
+                        ...(excludeOrigins.length && {
+                            origin: Not(In(excludeOrigins)),
+                        }),
                     },
                     order: { updatedAt: 'ASC' },
                     take: limit,

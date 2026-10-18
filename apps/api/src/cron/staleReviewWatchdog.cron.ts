@@ -19,7 +19,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 
 const API_CRON_STALE_REVIEW_WATCHDOG =
-    process.env.API_CRON_STALE_REVIEW_WATCHDOG || '*/30 * * * *';
+    process.env.API_CRON_STALE_REVIEW_WATCHDOG || '*/10 * * * *';
 
 // Must sit above every legitimate recovery window: the job-level abort
 // timeout (105min, job-processor-router.service.ts) and the inbox claim
@@ -27,6 +27,15 @@ const API_CRON_STALE_REVIEW_WATCHDOG =
 // Anything IN_PROGRESS beyond this is unrecoverable — the process that
 // owned it died without a terminal update.
 const STALE_REVIEW_TIMEOUT_MINUTES = 180;
+
+// PR reviews heartbeat `updatedAt` every 60s while their process is alive
+// (automationCodeReview.ts startExecutionHeartbeat), so 15 quiet minutes
+// means the owner is gone even though the job and inbox windows above are
+// still open. A message redelivered after such a death opens a new
+// execution row, so reaping this one early does not race the retry.
+// CLI reviews do not heartbeat and stay on the long fallback.
+const STALE_HEARTBEAT_TIMEOUT_MINUTES = 15;
+const NON_HEARTBEAT_ORIGINS = ['cli'];
 
 const BATCH_SIZE = 100;
 
@@ -66,15 +75,33 @@ export class StaleReviewWatchdogCronProvider {
         }
 
         try {
+            const now = Date.now();
             const cutoffDate = new Date(
-                Date.now() - STALE_REVIEW_TIMEOUT_MINUTES * 60 * 1000,
+                now - STALE_REVIEW_TIMEOUT_MINUTES * 60 * 1000,
+            );
+            const heartbeatCutoffDate = new Date(
+                now - STALE_HEARTBEAT_TIMEOUT_MINUTES * 60 * 1000,
             );
 
-            const staleExecutions =
-                await this.automationExecutionService.findStaleInProgress(
+            const [heartbeatStale, fallbackStale] = await Promise.all([
+                this.automationExecutionService.findStaleInProgress(
+                    heartbeatCutoffDate,
+                    BATCH_SIZE,
+                    { excludeOrigins: NON_HEARTBEAT_ORIGINS },
+                ),
+                this.automationExecutionService.findStaleInProgress(
                     cutoffDate,
                     BATCH_SIZE,
-                );
+                ),
+            ]);
+
+            const staleExecutions = [
+                ...new Map(
+                    [...(heartbeatStale ?? []), ...(fallbackStale ?? [])].map(
+                        (execution) => [execution.uuid, execution],
+                    ),
+                ).values(),
+            ];
 
             if (!staleExecutions?.length) {
                 return;
@@ -85,7 +112,10 @@ export class StaleReviewWatchdogCronProvider {
                 context: StaleReviewWatchdogCronProvider.name,
                 metadata: {
                     cutoffDate,
+                    heartbeatCutoffDate,
                     staleTimeoutMinutes: STALE_REVIEW_TIMEOUT_MINUTES,
+                    staleHeartbeatTimeoutMinutes:
+                        STALE_HEARTBEAT_TIMEOUT_MINUTES,
                 },
             });
 

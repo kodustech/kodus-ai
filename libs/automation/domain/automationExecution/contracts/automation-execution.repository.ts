@@ -82,6 +82,7 @@ export interface IAutomationExecutionRepository {
     findStaleInProgress(
         cutoffDate: Date,
         limit?: number,
+        options?: { excludeOrigins?: string[] },
     ): Promise<AutomationExecutionEntity[]>;
     // Liveness heartbeat: bumps `updatedAt` of a still-IN_PROGRESS row so
     // the "review already running" gate can tell a live run from one whose
