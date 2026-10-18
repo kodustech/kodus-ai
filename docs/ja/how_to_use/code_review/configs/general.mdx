@@ -83,6 +83,9 @@ deterministicEvidence:
         secrets: false # 変更されたファイルに対する認証情報スキャン
         dependencies: false # この PR が追加または更新する依存関係の既知の CVE
 
+# what to review：コーディングエージェント向けの指示
+repoInstructionsEnabled: false # check changes against CLAUDE.md / AGENTS.md / .cursor/rules; the severity filter applies
+
 # what to review：重大度しきい値
 suggestionControl:
     applyFiltersToKodyRules: false
@@ -96,7 +99,6 @@ summary:
     customInstructions: ''
 
 # kody rules
-repoInstructionsEnabled: false # read CLAUDE.md / AGENTS.md / .cursor/rules during review; never imported as rules
 kodyRulesGeneratorEnabled: true
 kodyLearningExcludedReviewers: []
 kodyKnowledgeApproval:

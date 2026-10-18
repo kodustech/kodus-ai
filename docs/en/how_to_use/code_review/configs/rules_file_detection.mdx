@@ -7,14 +7,10 @@ Files such as `CLAUDE.md`, `AGENTS.md`, `.cursor/rules` and `.github/copilot-ins
 
 To make a convention an enforced review rule, write it as a [Repository Rule](/en/how_to_use/code_review/configs/repository_rules) in `.kody/rules`.
 
-<Frame caption="Use coding-agent instructions in reviews, in the Kody Rules Configuration sheet">
-  <img src="/images/sync-rules.png" />
-</Frame>
-
 ## Turning it on
 
 - **During onboarding**, the **Teach Kody how your team builds software** step lists the coding-agent files found in each selected repository and asks whether Kody should use them. It is off unless you turn it on.
-- **Later**, pick **Global** or a repository in the scope picker at the top of the **Code review** group, open **Kody Rules**, click **Configuration**, and turn on **Use coding-agent instructions in reviews**. The global value is the default for every repository that doesn't set its own.
+- **Later**, pick **Global** or a repository in the scope picker at the top of the **Code review** group, open **What to review**, and turn on **Coding-agent instructions**. The global value is the default for every repository that doesn't set its own.
 
 The setting is stored as `repoInstructionsEnabled` in the code review configuration (and in `kodus-config.yml`). The older `ideRulesSyncEnabled` is no longer read, so a value set there does not turn this on.
 
@@ -61,7 +57,7 @@ Deep review mode runs separate bug, security and performance reviewers and does 
 
 Earlier versions of Kodus converted these files into Kody Rules. Those rules are kept but **frozen**: they no longer update when the file changes, and they carry the **Agent file** origin on the Kody Rules page. The **rules from coding-agent files** chip filters the list down to them so you can pause or delete them, or move the conventions you want enforced into `.kody/rules`.
 
-Rules that onboarding imported from coding-agent files without anyone choosing them were removed: each repository's copy of a file had become its own rule applying to every repository. The Kody Rules page shows how many were removed and offers **Use coding-agent instructions in reviews**, which reads the same files in each repository's reviews. To get the removed rules back, contact support.
+Rules that onboarding imported from coding-agent files without anyone choosing them were removed: each repository's copy of a file had become its own rule applying to every repository. The Kody Rules page shows how many were removed and points to **Coding-agent instructions** in **What to review**, which reads the same files in each repository's reviews. To get the removed rules back, contact support.
 
 `@kody-sync` no longer does anything: Kody Rule files always sync, and coding-agent files never become rules. `@kody-ignore` still excludes a Kody Rule file from sync.
 

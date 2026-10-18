@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@components/ui/button";
 import { Card } from "@components/ui/card";
 import { useSuspenseKodyRulesCheckSyncStatus } from "@services/kodyRules/hooks";
@@ -26,17 +27,15 @@ const subscribe = (onChange: () => void) => {
 
 /**
  * Rules the onboarding import made from coding-agent files were removed when
- * those files stopped becoming rules. Offers the setting that reads the same
- * files during review, per repository, until it is on or dismissed.
+ * those files stopped becoming rules. Points to the setting that reads the
+ * same files during review ("What to review"), per repository, until it is on
+ * or dismissed.
  */
-export const RemovedOnboardingImportsNotice = ({
-    onOpenConfiguration,
-}: {
-    onOpenConfiguration: () => void;
-}) => {
+export const RemovedOnboardingImportsNotice = () => {
     const config = useCodeReviewConfig();
+    const router = useRouter();
     const { teamId } = useSelectedTeamId();
-    const { repositoryId } = useCodeReviewRouteParams();
+    const { repositoryId, directoryId } = useCodeReviewRouteParams();
     const syncStatus = useSuspenseKodyRulesCheckSyncStatus({
         teamId,
         repositoryId,
@@ -72,17 +71,22 @@ export const RemovedOnboardingImportsNotice = ({
                 <span className="text-text-secondary text-sm">
                     Kody no longer turns CLAUDE.md, AGENTS.md or .cursor/rules
                     into rules. Turn on{" "}
-                    <strong>Use coding-agent instructions in reviews</strong>{" "}
-                    and Kody reads those files in each repository&apos;s reviews
-                    instead. To get the removed rules back, contact support.
+                    <strong>Coding-agent instructions</strong> in{" "}
+                    <strong>What to review</strong> and Kody reads those files
+                    in each repository&apos;s reviews instead. To get the
+                    removed rules back, contact support.
                 </span>
             </div>
             <div className="flex shrink-0 items-center gap-2">
                 <Button
                     size="sm"
                     variant="primary"
-                    onClick={onOpenConfiguration}>
-                    Open configuration
+                    onClick={() =>
+                        router.push(
+                            `/settings/code-review/${repositoryId}/review-scope${directoryId ? `?directoryId=${directoryId}` : ""}`,
+                        )
+                    }>
+                    Open What to review
                 </Button>
                 <Button
                     size="icon-sm"

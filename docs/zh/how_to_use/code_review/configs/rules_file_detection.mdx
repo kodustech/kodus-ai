@@ -7,14 +7,10 @@ description: "让 Kody 读取团队为编码代理编写的指令(CLAUDE.md、AG
 
 要把某个约定变成强制执行的审查规则,请在 `.kody/rules` 中把它写成[代码库规则](/zh/how_to_use/code_review/configs/repository_rules)。
 
-<Frame caption="Kody Rules 的 Configuration 面板中的 Use coding-agent instructions in reviews">
-  <img src="/images/sync-rules.png" />
-</Frame>
-
 ## 开启方式
 
 - **在入门引导中**,**Teach Kody how your team builds software** 步骤会列出在每个所选代码库中找到的编码代理文件,并询问 Kody 是否应使用它们。除非您开启,否则它保持关闭。
-- **之后**,在侧边栏 **Code review** 分组顶部的范围选择器中选择 **Global** 或某个代码库,打开 **Kody Rules**,点击 **Configuration**,并开启 **Use coding-agent instructions in reviews**。全局值是所有未设置自身值的代码库的默认值。
+- **之后**,在侧边栏 **Code review** 分组顶部的范围选择器中选择 **Global** 或某个代码库,打开 **What to review**,并开启 **Coding-agent instructions**。全局值是所有未设置自身值的代码库的默认值。
 
 该设置以 `repoInstructionsEnabled` 的形式存储在代码审查配置中(以及 `kodus-config.yml` 中)。旧的 `ideRulesSyncEnabled` 不再被读取,在其中设置的值不会开启此功能。
 
@@ -61,7 +57,7 @@ description: "让 Kody 读取团队为编码代理编写的指令(CLAUDE.md、AG
 
 早期版本的 Kodus 会把这些文件转换为 Kody Rules。这些规则会被保留但**冻结**:文件更改时它们不再更新,并在 Kody Rules 页面上带有 **Agent file** 来源。**rules from coding-agent files** 筛选标签会把列表筛选到这些规则,方便您暂停或删除它们,或把想要强制执行的约定移到 `.kody/rules` 中。
 
-入门引导在无人选择的情况下从编码代理文件导入的规则已被删除:每个仓库中同一文件的副本都各自变成了一条适用于所有仓库的规则。Kody Rules 页面会显示删除的数量,并提供 **Use coding-agent instructions in reviews**,开启后会在每个仓库的审查中读取这些文件。如需恢复已删除的规则,请联系支持团队。
+入门引导在无人选择的情况下从编码代理文件导入的规则已被删除:每个仓库中同一文件的副本都各自变成了一条适用于所有仓库的规则。Kody Rules 页面会显示删除的数量,并指向 **What to review** 中的 **Coding-agent instructions**,开启后会在每个仓库的审查中读取这些文件。如需恢复已删除的规则,请联系支持团队。
 
 `@kody-sync` 不再有任何作用:Kody Rule 文件始终同步,而编码代理文件从不会变成规则。`@kody-ignore` 仍然可以将某个 Kody Rule 文件排除在同步之外。
 

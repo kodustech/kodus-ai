@@ -268,10 +268,9 @@ export default function CustomizeTeamPage() {
                                     Kody reads the CLAUDE.md, AGENTS.md,
                                     .cursor/rules and Copilot instructions that
                                     cover the changed files, and points out
-                                    changes that break them. They never become
-                                    rules, and your severity filter and
-                                    suggestion limits apply as usual. Off unless
-                                    you turn it on.
+                                    changes that break them. Your severity
+                                    filter and suggestion limits apply as usual.
+                                    Off unless you turn it on.
                                 </span>
                             </div>
                             <Switch

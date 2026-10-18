@@ -25,17 +25,13 @@ const CODE_REVIEW_ROUTE_OVERRIDE_PATH_PREFIXES: Record<string, string[]> = {
         "reviewOptions",
         "v2PromptOverrides.categories",
         "suggestionControl",
+        "repoInstructionsEnabled",
     ],
     // Tabs shell: "What Kody writes" = suggestion voice + PR summary (the
     // custom messages count is added separately, see the shell header).
     "output": ["v2PromptOverrides.generation", "summary"],
     "pr-summary": ["summary"],
     "kody-rules": [
-        // `repoInstructionsEnabled` is intentionally NOT counted: it says
-        // whether reviews read the repo's coding-agent files, not how rules
-        // behave. Counting it made the Kody Rules nav badge show "1" on
-        // repos that hadn't customised any rule policy, which read as
-        // "1 custom rule" to users.
         "kodyKnowledgeApproval",
         "kodyRulesGeneratorEnabled",
         "kodyLearningExcludedReviewers",

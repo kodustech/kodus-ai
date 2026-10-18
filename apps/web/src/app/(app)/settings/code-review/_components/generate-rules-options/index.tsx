@@ -148,58 +148,6 @@ export const GenerateRulesOptions = () => {
         }
     });
 
-    const [handleAgentInstructionsToggle, { loading: isLoadingAgentToggle }] =
-        useAsyncAction(async () => {
-            try {
-                const newValue = !config?.repoInstructionsEnabled?.value;
-
-                const mutationResult = await createOrUpdateCodeReviewParameter(
-                    { repoInstructionsEnabled: newValue },
-                    teamId,
-                    repositoryId,
-                );
-
-                if (isCentralizedPrResponse(mutationResult)) {
-                    toast(
-                        getCentralizedPrToastPayload(
-                            mutationResult,
-                            "Change proposed through centralized pull request.",
-                        ),
-                    );
-                    return;
-                }
-
-                invalidateQueries({
-                    queryKey: generateQueryKey(PARAMETERS_PATHS.GET_BY_KEY, {
-                        params: {
-                            key: ParametersConfigKey.CODE_REVIEW_CONFIG,
-                            teamId,
-                        },
-                    }),
-                });
-
-                invalidateQueries({
-                    queryKey: generateQueryKey(
-                        PARAMETERS_PATHS.GET_CODE_REVIEW_PARAMETER,
-                        {
-                            params: { teamId },
-                        },
-                    ),
-                });
-
-                toast({ description: "Settings saved", variant: "success" });
-            } catch (error) {
-                console.error("Error saving settings:", error);
-
-                toast({
-                    title: "Error",
-                    description:
-                        "An error occurred while saving the settings. Please try again.",
-                    variant: "danger",
-                });
-            }
-        });
-
     const [handleImportRuleFiles, { loading: isImportingRuleFiles }] =
         useAsyncAction(async () => {
             try {
@@ -229,74 +177,11 @@ export const GenerateRulesOptions = () => {
 
     return (
         <div className="flex flex-col gap-2">
-            <Button
-                size="lg"
-                variant="helper"
-                className="w-full justify-between p-0"
-                disabled={!canEdit}
-                onClick={() => handleAgentInstructionsToggle()}>
-                <Card color="none" className="w-full">
-                    <CardHeader>
-                        <div className="flex items-center justify-between gap-20">
-                            <Section.Root>
-                                <Section.Header>
-                                    <div className="flex items-center gap-2">
-                                        <Section.Title>
-                                            Use coding-agent instructions in
-                                            reviews
-                                        </Section.Title>
-                                        {config?.repoInstructionsEnabled && (
-                                            <OverrideIndicator
-                                                initialState={
-                                                    config.repoInstructionsEnabled
-                                                }
-                                                currentValue={
-                                                    config.repoInstructionsEnabled
-                                                        .value
-                                                }
-                                                handleRevert={
-                                                    handleAgentInstructionsToggle
-                                                }
-                                            />
-                                        )}
-                                    </div>
-                                </Section.Header>
-
-                                <Section.Content>
-                                    <Section.Description>
-                                        Kody reads the files your team writes
-                                        for coding agents{" "}
-                                        <InlineCode className="bg-card-lv1">
-                                            (CLAUDE.md, AGENTS.md,
-                                            .cursor/rules)
-                                        </InlineCode>{" "}
-                                        that cover the changed files, and points
-                                        out changes that break what they say.
-                                        They are never turned into Kody Rules.
-                                        Your severity filter and suggestion
-                                        limits apply to these comments like any
-                                        other.
-                                        {isGlobal &&
-                                            " This is the default for every repository that doesn't set its own."}
-                                    </Section.Description>
-                                </Section.Content>
-                            </Section.Root>
-
-                            <Switch
-                                decorative
-                                loading={isLoadingAgentToggle}
-                                checked={config?.repoInstructionsEnabled?.value}
-                            />
-                        </div>
-                    </CardHeader>
-                </Card>
-            </Button>
-
-            <span className="text-text-secondary -mt-1 mb-2 ml-2 text-xs">
+            <span className="text-text-secondary mb-2 ml-2 text-xs">
                 <span>
                     Rule files in{" "}
                     <InlineCode className="bg-card-lv1">.kody/rules</InlineCode>{" "}
-                    are always kept in sync, whatever this setting.{" "}
+                    are always kept in sync.{" "}
                 </span>
                 <Link href={cfg.ruleFilesDocs || ""}>Check the docs</Link>
                 {!isGlobal && canEdit && (

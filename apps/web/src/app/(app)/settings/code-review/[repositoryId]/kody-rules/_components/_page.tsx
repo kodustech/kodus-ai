@@ -1002,9 +1002,7 @@ const KodyRulesPageContent = () => {
                 )}
                 {(isRepoView || isGlobalView) && (
                     <Suspense fallback={null}>
-                        <RemovedOnboardingImportsNotice
-                            onOpenConfiguration={() => setConfigOpen(true)}
-                        />
+                        <RemovedOnboardingImportsNotice />
                     </Suspense>
                 )}
                 <PendingSection

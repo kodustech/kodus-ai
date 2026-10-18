@@ -7,14 +7,10 @@ description: "チームがコーディングエージェント向けに書いた
 
 規約をレビューで強制されるルールにしたい場合は、`.kody/rules` に [リポジトリルール](/ja/how_to_use/code_review/configs/repository_rules) として記述してください。
 
-<Frame caption="Kody Rules の Configuration シートにある Use coding-agent instructions in reviews">
-  <img src="/images/sync-rules.png" />
-</Frame>
-
 ## 有効にする
 
 - **オンボーディング中**：**Teach Kody how your team builds software** ステップで、選択した各リポジトリで見つかったコーディングエージェント向けファイルが一覧表示され、Kody にそれらを使わせるかどうかを尋ねられます。オンにしない限りオフのままです。
-- **あとから**：サイドバーで、**Code review** グループ上部のスコープピッカーで **Global** またはリポジトリを選択し、**Kody Rules** を開いて **Configuration** をクリックし、**Use coding-agent instructions in reviews** をオンにします。Global の値は、独自の値を設定していないすべてのリポジトリのデフォルトになります。
+- **あとから**：サイドバーで、**Code review** グループ上部のスコープピッカーで **Global** またはリポジトリを選択し、**What to review** を開いて **Coding-agent instructions** をオンにします。Global の値は、独自の値を設定していないすべてのリポジトリのデフォルトになります。
 
 この設定は、コードレビュー設定（および `kodus-config.yml`）に `repoInstructionsEnabled` として保存されます。以前の `ideRulesSyncEnabled` はもう読み取られないため、そこに設定した値でこの機能が有効になることはありません。
 
@@ -61,7 +57,7 @@ Deep review モードはバグ・セキュリティ・パフォーマンスの�
 
 以前のバージョンの Kodus は、これらのファイルを Kody Rules に変換していました。それらのルールは残りますが **凍結** されます。ファイルが変更されても更新されず、Kody Rules ページでは **Agent file** のオリジンが付きます。**rules from coding-agent files** チップで一覧をそれらのルールに絞り込めるので、一時停止や削除をしたり、強制したい規約を `.kody/rules` に移したりできます。
 
-オンボーディングで誰も選択しないままコーディングエージェント向けファイルからインポートされたルールは削除されました。各リポジトリにある同じファイルのコピーが、それぞれすべてのリポジトリに適用される別々のルールになっていたためです。Kody Rules ページには削除された件数が表示され、**Use coding-agent instructions in reviews** を有効にすると、各リポジトリのレビューで同じファイルが読み込まれます。削除されたルールを戻したい場合はサポートにお問い合わせください。
+オンボーディングで誰も選択しないままコーディングエージェント向けファイルからインポートされたルールは削除されました。各リポジトリにある同じファイルのコピーが、それぞれすべてのリポジトリに適用される別々のルールになっていたためです。Kody Rules ページには削除された件数が表示され、**What to review** の **Coding-agent instructions** を有効にすると、各リポジトリのレビューで同じファイルが読み込まれます。削除されたルールを戻したい場合はサポートにお問い合わせください。
 
 `@kody-sync` はもう何の効果もありません。Kody Rule ファイルは常に同期され、コーディングエージェント向けファイルがルールになることはないためです。`@kody-ignore` は引き続き Kody Rule ファイルを同期の対象から外します。
 

@@ -84,6 +84,9 @@ deterministicEvidence:
         secrets: false # credential scanning over the changed files
         dependencies: false # known CVEs in dependencies this PR adds or bumps
 
+# what to review: coding-agent instructions
+repoInstructionsEnabled: false # check changes against CLAUDE.md / AGENTS.md / .cursor/rules; the severity filter applies
+
 # what to review: severity threshold
 suggestionControl:
     applyFiltersToKodyRules: false
@@ -97,7 +100,6 @@ summary:
     customInstructions: ''
 
 # kody rules
-repoInstructionsEnabled: false # read CLAUDE.md / AGENTS.md / .cursor/rules during review; never imported as rules
 kodyRulesGeneratorEnabled: true
 kodyLearningExcludedReviewers: []
 kodyKnowledgeApproval:
