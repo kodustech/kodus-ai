@@ -49,6 +49,26 @@ describe('CreateOrUpdateCodeReviewParameterDto — custom agents', () => {
         expect(await validateConfig({ customAgents: [agent()] })).toBe('[]');
     });
 
+    it('refuses ast-grep rules over the size the tool runs', async () => {
+        const limit = CUSTOM_AGENT_LIMITS.maxAstGrepRuleBytes;
+        expect(
+            await validateConfig({
+                customAgents: [
+                    agent({ tools: { astGrepConfig: 'x'.repeat(limit) } }),
+                ],
+            }),
+        ).toBe('[]');
+        expect(
+            await validateConfig({
+                customAgents: [
+                    agent({
+                        tools: { astGrepConfig: 'é'.repeat(limit / 2 + 1) },
+                    }),
+                ],
+            }),
+        ).toContain('astGrepConfig');
+    });
+
     it('still accepts an agent saved with the retired mode', async () => {
         for (const mode of ['shadow', 'post']) {
             const legacy = agent();

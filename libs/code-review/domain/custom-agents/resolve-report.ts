@@ -5,6 +5,7 @@ import {
     CUSTOM_AGENT_LIMITS,
     type KnowledgeItem,
     type KnowledgeLinkTarget,
+    utf8ByteLength,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
 import type { KnowledgeItemResolution } from './contracts';
@@ -27,6 +28,15 @@ export function countAstGrepRules(
 ): AstGrepRuleReport {
     const report: AstGrepRuleReport = { ruleCount: 0, ruleIds: [], errors: [] };
     if (!source?.trim()) return report;
+
+    // The tool refuses rules this large, so none of them would run.
+    const bytes = utf8ByteLength(source);
+    if (bytes > CUSTOM_AGENT_LIMITS.maxAstGrepRuleBytes) {
+        report.errors.push(
+            `The rules are ${bytes} bytes; ast-grep runs at most ${CUSTOM_AGENT_LIMITS.maxAstGrepRuleBytes}.`,
+        );
+        return report;
+    }
 
     let documents: unknown[];
     try {

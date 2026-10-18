@@ -4,6 +4,7 @@ import {
     ArrayMinSize,
     IsArray,
     IsBoolean,
+    IsByteLength,
     IsEnum,
     IsIn,
     IsInt,
@@ -534,6 +535,9 @@ class CustomAgentMcpToolsDto {
 class CustomAgentToolsDto {
     @IsOptional()
     @IsString()
+    @IsByteLength(0, CUSTOM_AGENT_LIMITS.maxAstGrepRuleBytes, {
+        message: `astGrepConfig allows at most ${CUSTOM_AGENT_LIMITS.maxAstGrepRuleBytes} bytes`,
+    })
     astGrepConfig?: string;
 
     @IsOptional()

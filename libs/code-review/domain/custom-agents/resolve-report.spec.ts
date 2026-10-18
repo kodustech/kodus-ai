@@ -3,7 +3,10 @@ import {
     isKodyRuleSource,
     knowledgeBudgets,
 } from './resolve-report';
-import { astGrepRulesPath } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import {
+    astGrepRulesPath,
+    CUSTOM_AGENT_LIMITS,
+} from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
 describe('astGrepRulesPath', () => {
     it.each([
@@ -56,6 +59,19 @@ describe('custom agent resolve report', () => {
         expect(report.errors).toEqual([
             'Rule 1 has no id.',
             'Rule "half-rule" has no rule pattern.',
+        ]);
+    });
+
+    it('reports rules over the size the tool runs instead of counting them', () => {
+        const rule = 'id: r\nlanguage: ts\nrule: { pattern: x }\n---\n';
+        const source = rule.repeat(
+            Math.ceil(CUSTOM_AGENT_LIMITS.maxAstGrepRuleBytes / rule.length) + 1,
+        );
+        const report = countAstGrepRules(source);
+        expect(report.ruleCount).toBe(0);
+        expect(report.ruleIds).toEqual([]);
+        expect(report.errors).toEqual([
+            `The rules are ${Buffer.byteLength(source)} bytes; ast-grep runs at most ${CUSTOM_AGENT_LIMITS.maxAstGrepRuleBytes}.`,
         ]);
     });
 

@@ -345,7 +345,15 @@ export const CUSTOM_AGENT_LIMITS = {
     maxDocTokens: 20000,
     maxInstructionsLength: 8000,
     maxWritingLength: 2000,
+    /** UTF-8 bytes of ast-grep rule YAML (inline or a rule file); anything
+     *  larger is not a rule file, and the tool refuses to run it. */
+    maxAstGrepRuleBytes: 64_000,
 } as const;
+
+/** UTF-8 size of a string, the same in Node and the browser. */
+export function utf8ByteLength(value: string): number {
+    return new TextEncoder().encode(value).length;
+}
 
 /**
  * `tools.astGrepConfig` holds either the rule YAML itself or the repository
@@ -435,7 +443,17 @@ export const customAgentConfigSchema = z.object({
     tools: z.object({
         /** ast-grep rule YAML the agent may run, or the repository path of a
          *  rule file read from the target branch (see `astGrepRulesPath`). */
-        astGrepConfig: z.string().optional(),
+        astGrepConfig: z
+            .string()
+            .refine(
+                (value) =>
+                    utf8ByteLength(value) <=
+                    CUSTOM_AGENT_LIMITS.maxAstGrepRuleBytes,
+                {
+                    message: `ast-grep rules allow at most ${CUSTOM_AGENT_LIMITS.maxAstGrepRuleBytes} bytes`,
+                },
+            )
+            .optional(),
         mcp: z.array(customAgentMcpToolsSchema).optional(),
         cli: z
             .array(cliToolConfigSchema)

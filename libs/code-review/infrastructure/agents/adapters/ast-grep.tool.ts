@@ -22,14 +22,16 @@
  */
 import type { AgentTool } from '@libs/agent-harness/domain/contracts/tool.contract';
 import type { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
+import { CUSTOM_AGENT_LIMITS } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { createLogger } from '@libs/core/log/logger';
 
 const logger = createLogger('AstGrepTool');
 
 export const AST_GREP_TOOL_NAME = 'astGrep';
 export const MAX_AST_GREP_MATCHES = 50;
-/** A rule file is a handful of YAML documents; anything this large is not one. */
-export const MAX_AST_GREP_RULE_BYTES = 64_000;
+/** A rule file is a handful of YAML documents; anything this large is not
+ *  one. The same limit refuses such rules on save. */
+export const MAX_AST_GREP_RULE_BYTES = CUSTOM_AGENT_LIMITS.maxAstGrepRuleBytes;
 const MAX_PATTERN_LENGTH = 2_000;
 const MAX_PATHS = 20;
 const MAX_MATCH_TEXT = 200;

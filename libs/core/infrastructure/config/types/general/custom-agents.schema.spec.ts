@@ -1,4 +1,5 @@
 import {
+    CUSTOM_AGENT_LIMITS,
     customAgentConfigSchema,
     customAgentsSchema,
     knowledgeLinkProblems,
@@ -48,6 +49,24 @@ describe('custom agent config schemas', () => {
                 }).success,
             ).toBe(true);
         }
+    });
+
+    it('refuses ast-grep rules over the size the tool runs', () => {
+        const withRules = (astGrepConfig: string) => ({
+            ...agent('ledger'),
+            tools: { astGrepConfig },
+        });
+        const limit = CUSTOM_AGENT_LIMITS.maxAstGrepRuleBytes;
+        expect(
+            customAgentConfigSchema.safeParse(withRules('x'.repeat(limit)))
+                .success,
+        ).toBe(true);
+        // Bytes, not characters: 'é' is two bytes in UTF-8.
+        const parsed = customAgentConfigSchema.safeParse(
+            withRules('é'.repeat(limit / 2 + 1)),
+        );
+        expect(parsed.success).toBe(false);
+        expect(JSON.stringify(parsed.error?.issues)).toContain('astGrepConfig');
     });
 
     it('refuses an install with any unpinned package', () => {
