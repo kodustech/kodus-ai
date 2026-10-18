@@ -452,7 +452,7 @@ describe('collectSingleComments', () => {
 });
 
 describe('custom agents summary', () => {
-    it('renders one row per agent with what reached the PR', () => {
+    it('renders one row per agent that ran and one line for those that did not', () => {
         const summary = summarizeCustomAgentRuns(
             [
                 {
@@ -476,9 +476,8 @@ describe('custom agents summary', () => {
         const markdown = formatCustomAgentsSummary(summary);
 
         expect(markdown).toContain('| Ledger \\| Rules | ran | 2 | 1 |');
-        expect(markdown).toContain(
-            '| Docs | not run: no matching files | 0 | 0 |',
-        );
+        expect(markdown).not.toContain('| Docs |');
+        expect(markdown).toContain('Not run: Docs (no matching files)');
     });
 
     it('escapes a trailing backslash so it cannot unescape the pipe', () => {

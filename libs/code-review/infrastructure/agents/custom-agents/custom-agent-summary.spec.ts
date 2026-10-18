@@ -25,7 +25,7 @@ describe('summarizeCustomAgentRuns — ignored paths', () => {
         });
         expect(summary.status).toBe('ignored-paths');
         expect(formatCustomAgentsSummary([summary])).toContain(
-            'not run: its files are in the ignored paths',
+            'Not run: Terraform (its files are in the ignored paths)',
         );
     });
 
@@ -45,7 +45,7 @@ describe('summarizeCustomAgentRuns — ignored paths', () => {
         });
         expect(summary.status).toBe('deleted-files');
         const table = formatCustomAgentsSummary([summary]);
-        expect(table).toContain('not run: its files were deleted');
+        expect(table).toContain('Not run: Terraform (its files were deleted)');
         expect(table).not.toContain('ignored paths');
     });
 
@@ -112,5 +112,43 @@ describe('withDeliveredCounts', () => {
             undefined,
         );
         expect(out[0].posted).toBe(2);
+    });
+});
+
+describe('formatCustomAgentsSummary — agents that did not run', () => {
+    const many = Array.from({ length: 30 }, (_, i) => ({
+        id: `a${i}`,
+        name: `Agent ${i}`,
+        slug: `agent-${i}`,
+        status: (i < 2
+            ? 'ran'
+            : i < 27
+              ? 'no-matching-files'
+              : i < 29
+                ? 'ignored-paths'
+                : 'failed') as any,
+        droppedByVerify: 0,
+        posted: i < 2 ? 1 : 0,
+    }));
+
+    it('keeps rows for the agents that ran or failed and one line per reason for the rest', () => {
+        const markdown = formatCustomAgentsSummary(many);
+        const rows = markdown.split('\n').filter((l) => /^\| Agent \d/.test(l));
+
+        expect(rows).toHaveLength(3);
+        expect(markdown).toContain('| Agent 29 | failed |');
+        expect(markdown).toContain(
+            `Not run: ${Array.from({ length: 25 }, (_, i) => `Agent ${i + 2}`).join(', ')} (no matching files)`,
+        );
+        expect(markdown).toContain(
+            'Not run: Agent 27, Agent 28 (its files are in the ignored paths)',
+        );
+    });
+
+    it('drops the table when no agent ran', () => {
+        const markdown = formatCustomAgentsSummary([many[5]]);
+
+        expect(markdown).not.toContain('| Agent | Status');
+        expect(markdown).toContain('Not run: Agent 5 (no matching files)');
     });
 });

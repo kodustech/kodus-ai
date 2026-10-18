@@ -130,29 +130,61 @@ const STATUS_TEXT: Record<CustomAgentRun['status'], string> = {
     'incomplete': 'incomplete',
 };
 
+/** Why an agent did not run, for the one line that lists those agents. */
+const NOT_RUN_REASON: Partial<Record<CustomAgentRun['status'], string>> = {
+    'no-matching-files': 'no matching files',
+    'ignored-paths': 'its files are in the ignored paths',
+    'deleted-files': 'its files were deleted',
+};
+
 const escapeCell = (text: string): string =>
     text.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
 
-/** Markdown section for the end-review comment; empty when no agent was configured. */
+/**
+ * Markdown section for the end-review comment; empty when no agent was
+ * configured. Agents that ran (or failed) get a row; those that did not run
+ * are listed by name on one line per reason, so thirty configured agents do
+ * not make a thirty-row table for the two that ran.
+ */
 export function formatCustomAgentsSummary(
     runs: readonly CustomAgentRunSummary[] | undefined,
 ): string {
     if (!runs?.length) {
         return '';
     }
-    const rows = runs.map(
-        (r) =>
-            `| ${escapeCell(r.name)} | ${STATUS_TEXT[r.status]} | ${r.posted} | ${r.droppedByVerify} |`,
+    const rows = runs
+        .filter((r) => !NOT_RUN_REASON[r.status])
+        .map(
+            (r) =>
+                `| ${escapeCell(r.name)} | ${STATUS_TEXT[r.status]} | ${r.posted} | ${r.droppedByVerify} |`,
+        );
+    const notRun = new Map<string, string[]>();
+    for (const r of runs) {
+        const reason = NOT_RUN_REASON[r.status];
+        if (reason) {
+            notRun.set(reason, [...(notRun.get(reason) ?? []), r.name]);
+        }
+    }
+    const notRunLines = [...notRun].map(
+        ([reason, names]) =>
+            `Not run: ${names.map((n) => n.replace(/\r?\n/g, ' ')).join(', ')} (${reason})`,
     );
+    const table = rows.length
+        ? [
+              '| Agent | Status | Posted | Dropped by verification |',
+              '| --- | --- | --- | --- |',
+              ...rows,
+          ]
+        : [];
     return [
         '',
         '',
         '<details>',
         '<summary>Custom agents</summary>',
         '',
-        '| Agent | Status | Posted | Dropped by verification |',
-        '| --- | --- | --- | --- |',
-        ...rows,
+        ...table,
+        ...(table.length && notRunLines.length ? [''] : []),
+        ...notRunLines.flatMap((line, i) => (i ? ['', line] : [line])),
         '',
         '</details>',
     ].join('\n');
