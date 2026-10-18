@@ -118,7 +118,9 @@ export async function formatAndShapeSuggestions(
                     formattedTargets.add(suggestions[target]);
                     suggestions[target].suggestionContent =
                         fmt.suggestionContent;
-                    if (fmt.title) {
+                    // Only when asked: a native finding keeps its title even
+                    // if the model volunteers one.
+                    if (fmt.title && agentWriting !== undefined) {
                         suggestions[target].oneSentenceSummary = fmt.title;
                     }
                 }
