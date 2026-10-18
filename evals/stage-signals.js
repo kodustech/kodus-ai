@@ -208,14 +208,17 @@ function finderTitle(caseId) {
 function finderCases(rows = []) {
     return rows.map((row) => {
         const m = row.metadata || {};
-        const checks = `Finds the known bugs in "${finderTitle(row.caseId)}"`;
+        const checks = m.control ? `Ships nothing on "${finderTitle(row.caseId)}" (control: nothing to find)` : `Finds the known bugs in "${finderTitle(row.caseId)}"`;
         if (!Number.isInteger(m.goldens)) return { id: row.caseId, checks, hits: 0, total: 0, unmeasured: true };
+        if (m.control) return { id: row.caseId, checks, hits: 0, total: 0, control: true, fpFindings: m.fpFindings ?? 0 };
         // Counted from the bugs shown, never from `matched`: on a confirmed night
         // confirm-gate.js marks a bug found when either run found it but keeps
         // the first run's `matched`, and the two would disagree.
         const detail = (m.goldenResults || []).map((g) => ({ what: g.golden, ok: Boolean(g.found) }));
-        if (!detail.length) return { id: row.caseId, checks, hits: m.matched ?? 0, total: m.goldens };
-        return { id: row.caseId, checks, hits: detail.filter((d) => d.ok).length, total: detail.length, detail };
+        // The findings shipped that match no known bug: an experiment's precision (evals/experiment.js).
+        const fpFindings = Number.isInteger(m.fpFindings) ? m.fpFindings : null;
+        if (!detail.length) return { id: row.caseId, checks, hits: m.matched ?? 0, total: m.goldens, fpFindings };
+        return { id: row.caseId, checks, hits: detail.filter((d) => d.ok).length, total: detail.length, detail, fpFindings };
     });
 }
 
@@ -435,4 +438,4 @@ function main() {
 
 if (require.main === module) process.exit(main());
 
-module.exports = { testRows, nightlyRows, weeklyRows, weeklyTestRows, routeOf, READERS, NAME_PREFIX, TESTS_PREFIX, WEEKLY_PREFIX, WEEKLY_TESTS_PREFIX, VERDICT_STATUS, catalogPath, usageMeta, jestBySpec };
+module.exports = { finderCases, testRows, nightlyRows, weeklyRows, weeklyTestRows, routeOf, READERS, NAME_PREFIX, TESTS_PREFIX, WEEKLY_PREFIX, WEEKLY_TESTS_PREFIX, VERDICT_STATUS, catalogPath, usageMeta, jestBySpec };
