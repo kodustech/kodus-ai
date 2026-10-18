@@ -2,6 +2,7 @@ import * as severityClassifier from '@libs/code-review/infrastructure/agents/eng
 import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context';
 import { AgentReviewStage } from './agent-review.stage';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
+import { formatSuggestionContent } from '@libs/code-review/infrastructure/agents/engine/format-suggestion-content';
 import { LLM } from '@libs/llm/llm';
 import { hasManagedModelKey } from '@libs/llm/managed-slot';
 
@@ -306,6 +307,44 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
             'Second entry also unbalanced.',
         );
         expect(result.customAgentRuns[0].posted).toBe(2);
+    });
+
+    it("writes a single-comment agent's comment in the agent's voice", async () => {
+        (formatSuggestionContent as jest.Mock).mockResolvedValueOnce(
+            new Map([
+                [
+                    0,
+                    {
+                        suggestionContent: 'O débito fica sem crédito.',
+                        title: 'Lançamento sem contrapartida',
+                    },
+                ],
+            ]),
+        );
+        const { stage } = makeStage(output([finding()]));
+        const writing = 'Escreva em português do Brasil.';
+
+        const result = await run(
+            stage,
+            makeContext([
+                agent({
+                    presentation: { format: 'single-comment', writing },
+                }),
+            ]),
+        );
+
+        expect(formatSuggestionContent).toHaveBeenCalledWith(
+            [expect.objectContaining({ title: 'Unbalanced ledger entry' })],
+            expect.objectContaining({
+                customWritingGuidelines: writing,
+                rewriteTitle: true,
+            }),
+        );
+        const [comment] = result.validSuggestionsByPR;
+        expect(comment.oneSentenceSummary).toBe('Ledger Rules (1)');
+        expect(comment.suggestionContent).toBe(
+            '1. **Lançamento sem contrapartida** — `src/ledger.ts:3`\n\n   O débito fica sem crédito.',
+        );
     });
 
     it('posts the most severe finding of a single-comment agent capped at one', async () => {

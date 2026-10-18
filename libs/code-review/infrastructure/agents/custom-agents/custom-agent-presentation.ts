@@ -308,19 +308,32 @@ function buildSingleComment(
     const ordered = [...findings].sort(
         (a, b) => rankOf(a.severity) - rankOf(b.severity),
     );
+    // An agent with its own writing instructions may write in any language,
+    // and its findings already come in that voice (the formatter rewrites
+    // their title and body). The comment then adds no English words of its
+    // own: no "finding" heading and no severity names, which the order (most
+    // severe first) and the comment's severity badge already carry.
+    const ownVoice = !!agent.presentation?.writing?.trim();
     const items = ordered.map((s, i) => {
-        const where = s.relevantFile
+        const location = s.relevantFile
             ? s.relevantLinesStart
-                ? ` — \`${s.relevantFile}:${s.relevantLinesStart}\``
-                : ` — \`${s.relevantFile}\``
+                ? `\`${s.relevantFile}:${s.relevantLinesStart}\``
+                : `\`${s.relevantFile}\``
             : '';
-        const severity = s.severity ? ` (${s.severity.toLowerCase()})` : '';
-        const title = s.oneSentenceSummary?.trim() || 'Finding';
+        const severity =
+            s.severity && !ownVoice ? ` (${s.severity.toLowerCase()})` : '';
+        const title =
+            s.oneSentenceSummary?.trim() || (ownVoice ? '' : 'Finding');
+        const head = title
+            ? `**${title}**${location ? ` — ${location}` : ''}`
+            : location;
         const body = (s.suggestionContent || '').trim();
-        return `${i + 1}. **${title}**${where}${severity}${body ? `\n\n   ${body.replace(/\n/g, '\n   ')}` : ''}`;
+        return `${i + 1}. ${head}${severity}${body ? `\n\n   ${body.replace(/\n/g, '\n   ')}` : ''}`;
     });
     const count = findings.length;
-    const summary = `${agent.name}: ${count} finding${count === 1 ? '' : 's'} in this pull request`;
+    const summary = ownVoice
+        ? `${agent.name} (${count})`
+        : `${agent.name}: ${count} finding${count === 1 ? '' : 's'} in this pull request`;
     const content = items.join('\n\n');
 
     return {

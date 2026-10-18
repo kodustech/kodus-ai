@@ -358,6 +358,46 @@ describe('collectSingleComments', () => {
         );
         expect(comment.suggestionContent).toContain('`src/ledger/close.ts:3`');
     });
+
+    it('adds no English of its own around an agent that writes in another language', () => {
+        // The findings already come in the agent's voice (the formatter
+        // rewrote their title and body); the comment's own words must not
+        // switch the reader back to English.
+        const agents = indexCustomAgents([
+            agent('pt', {
+                format: 'single-comment',
+                writing: 'Escreva em português do Brasil.',
+            }),
+        ]);
+        const out = collectSingleComments(
+            [
+                finding('pt', {
+                    severity: 'high',
+                    oneSentenceSummary: 'Lançamento sem contrapartida',
+                    suggestionContent: 'O débito fica sem crédito.',
+                }),
+                finding('pt', {
+                    severity: 'low',
+                    oneSentenceSummary: '',
+                    suggestionContent: 'Nome fora do padrão.',
+                    relevantLinesStart: 12,
+                }),
+            ],
+            agents,
+        );
+
+        const [comment] = out.prLevel;
+        expect(comment.oneSentenceSummary).toBe('Agent pt (2)');
+        expect(comment.suggestionContent).not.toMatch(
+            /finding|pull request|\((high|low)\)/i,
+        );
+        expect(comment.suggestionContent).toContain(
+            '1. **Lançamento sem contrapartida** — `src/ledger/post.ts:10`',
+        );
+        expect(comment.suggestionContent).toContain(
+            '2. `src/ledger/post.ts:12`',
+        );
+    });
 });
 
 describe('custom agents summary', () => {
