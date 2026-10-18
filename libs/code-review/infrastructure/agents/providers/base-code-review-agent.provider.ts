@@ -166,6 +166,12 @@ export abstract class BaseCodeReviewAgentProvider {
         return undefined;
     }
 
+    /** Unset for every built-in agent; a custom agent returns its
+     *  instructions, so a rule quoted from them can pass the quote check. */
+    protected getTeamInstructions(): string | undefined {
+        return undefined;
+    }
+
     /** Tools of this agent beyond the repository and knowledge tools. Built
      *  per run and closed when the run ends. */
     protected async buildAgentTools(
@@ -656,6 +662,7 @@ export abstract class BaseCodeReviewAgentProvider {
                     // never sees prior-round decisions.
                     previousDecisions: input.previousDecisions,
                     conventionGuides: this.getConventionGuides(input),
+                    teamInstructions: this.getTeamInstructions(),
                     // HEAVY opt-in (`--heavy`) — forwarded explicitly, same reason
                     // as skipHeavyPasses above: loopParams is built field-by-field,
                     // so without this line the resample passes never run.

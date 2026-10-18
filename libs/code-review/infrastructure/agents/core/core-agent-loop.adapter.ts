@@ -296,6 +296,7 @@ export async function runAgentLoopViaCore(
                         input.baseBranch,
                     ),
                     guideFiles: input.conventionGuides,
+                    teamInstructions: input.teamInstructions,
                     astGrepLog,
                 },
             }),

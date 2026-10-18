@@ -620,6 +620,9 @@ export interface ConventionCheckParams {
     /** Guides linked to this agent. Non-empty → only these may be quoted, and
      *  the recall pass asks for missed violations of them. */
     guideFiles?: string[];
+    /** The custom agent's instructions: a rule cited from `TeamInstructions`
+     *  is checked against them. */
+    teamInstructions?: string;
     /** What the ast-grep tool returned during this review (see
      *  recordAstGrepOutputs). Absent → no finding is proven by ast-grep. */
     astGrepLog?: AstGrepOutputLog;
@@ -1019,6 +1022,7 @@ async function routeByKind(
         check.readGuide,
         check.guideFiles ?? [],
         check.listGuideDir,
+        check.teamInstructions,
     );
     if (quoted.rejected.length > 0) {
         finderLogger.log({

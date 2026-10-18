@@ -223,6 +223,7 @@ export async function checkConventionQuotes(
     readGuide: GuideFileReader,
     guideFiles: readonly string[] = [],
     listGuideDir?: GuideDirLister,
+    teamInstructions?: string,
 ): Promise<ConventionCheckResult> {
     const passed: ConventionCheckPassed[] = [];
     const rejected: ConventionCheckRejected[] = [];
@@ -254,6 +255,17 @@ export async function checkConventionQuotes(
             reject(finding, 'quote too short to identify a rule');
             continue;
         }
+        // A rule the team wrote in the agent's own instructions, not in a
+        // repository file: the instructions are the text to quote from.
+        if (isTeamInstructionsSource(file)) {
+            const text = teamInstructions ?? '';
+            if (text.trim() && findQuoteSection(text, quote) != null) {
+                passed.push({ finding, sectionText: text });
+            } else {
+                reject(finding, "quote not found in the agent's instructions");
+            }
+            continue;
+        }
         if (guideFiles.length > 0 && !isLinkedGuide(file, guideFiles)) {
             reject(finding, `${file} is not a guide linked to this review`);
             continue;
@@ -282,6 +294,13 @@ export async function checkConventionQuotes(
         reject(finding, `quote not found in ${file} on the target branch`);
     }
     return { passed, rejected };
+}
+
+/** The model cites a rule written in the agent's instructions by the name the
+ *  prompt gives them (`<TeamInstructions>`). */
+function isTeamInstructionsSource(file: string): boolean {
+    const name = file.replace(/[^A-Za-z]/g, '').toLowerCase();
+    return name === 'teaminstructions' || name === 'instructions';
 }
 
 async function findInSkillFiles(

@@ -158,6 +158,61 @@ describe('checkConventionQuotes in a skill with rule files', () => {
 });
 
 describe('checkConventionQuotes', () => {
+    describe("a rule quoted from the agent's own instructions", () => {
+        const INSTRUCTIONS =
+            'Valve rules:\n- Every valve handler must log the zone id before it opens a valve.\n- Close valves in a finally block.';
+        const fromInstructions = (quote: string) =>
+            conv(quote, {
+                source: { file: 'TeamInstructions', section: '', quote },
+            });
+
+        it('passes when the quote is in the instructions, with no guide file read', async () => {
+            const read = reader({});
+            const r = await checkConventionQuotes(
+                [
+                    fromInstructions(
+                        'Every valve handler must log the zone id before it opens a valve.',
+                    ),
+                ],
+                read,
+                [GUIDE],
+                undefined,
+                INSTRUCTIONS,
+            );
+            expect(r.rejected).toEqual([]);
+            expect(r.passed).toHaveLength(1);
+            expect(r.passed[0].sectionText).toBe(INSTRUCTIONS);
+            expect(read).not.toHaveBeenCalled();
+        });
+
+        it('drops a quote the instructions do not hold', async () => {
+            const r = await checkConventionQuotes(
+                [fromInstructions('Valves must emit a metric on each opening.')],
+                reader({}),
+                [],
+                undefined,
+                INSTRUCTIONS,
+            );
+            expect(r.passed).toEqual([]);
+            expect(r.rejected[0].detail).toContain(
+                "quote not found in the agent's instructions",
+            );
+        });
+
+        it('drops it when the agent has no instructions to quote', async () => {
+            const r = await checkConventionQuotes(
+                [
+                    fromInstructions(
+                        'Every valve handler must log the zone id before it opens a valve.',
+                    ),
+                ],
+                reader({}),
+                [],
+            );
+            expect(r.passed).toEqual([]);
+        });
+    });
+
     it('passes a verbatim quote (whitespace-normalized) with its section', async () => {
         const read = reader({ [GUIDE]: GUIDE_TEXT });
         const r = await checkConventionQuotes(

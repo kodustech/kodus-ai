@@ -155,6 +155,10 @@ export class CustomAgentProvider extends BaseCodeReviewAgentProvider {
         ];
     }
 
+    protected getTeamInstructions(): string | undefined {
+        return this.agent.instructions || undefined;
+    }
+
     /**
      * astGrep (with a sandbox checkout), the read-only MCP tools the agent
      * selected, and runCli for the CLIs installed for THIS agent. A tool that

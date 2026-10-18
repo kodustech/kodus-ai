@@ -451,6 +451,9 @@ export interface AgentLoopInput {
      *  take the quote check (target branch, via the sandbox) and the
      *  convention verifier instead of HV2. Unset for every other agent. */
     conventionGuides?: string[];
+    /** Custom agents only: the team's instructions, the text a rule cited
+     *  from `TeamInstructions` is quote-checked against. */
+    teamInstructions?: string;
     /** Reasoning effort level from BYOK config. Mapped to provider-specific
      *  providerOptions (anthropic.thinking, google.thinkingConfig, etc). */
     reasoningEffort?: ReasoningEffort;
