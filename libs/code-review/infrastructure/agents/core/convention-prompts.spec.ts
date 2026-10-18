@@ -49,6 +49,12 @@ describe('submitResult schema', () => {
         expect(props.source.required).toEqual(['file', 'quote']);
         expect(props.source.additionalProperties).toBe(false);
     });
+
+    it('tells a custom agent how to cite an ast-grep rule match', () => {
+        const props = itemProps(true);
+        expect(props.kind.description).toContain('ast-grep');
+        expect(props.source.description).toContain('ast-grep:<ruleId>');
+    });
 });
 
 describe('sanitizeFindingsResult with kind/source', () => {

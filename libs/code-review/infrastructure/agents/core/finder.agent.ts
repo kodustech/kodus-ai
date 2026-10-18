@@ -183,13 +183,13 @@ function withConventionFields(tool: AgentTool): AgentTool {
                                 type: 'string',
                                 enum: ['bug', 'convention'],
                                 description:
-                                    "'convention' when the finding applies a rule from a team guide; 'bug' otherwise.",
+                                    "'convention' when the finding applies a rule from a team guide or reports an ast-grep rule match; 'bug' otherwise.",
                             },
                             source: {
                                 type: 'object',
                                 additionalProperties: false,
                                 description:
-                                    'Required for kind convention: the guide file, its section heading, and the exact sentence of the rule, copied verbatim.',
+                                    'Required for kind convention: the guide file, its section heading, and the exact sentence of the rule, copied verbatim. For an ast-grep rule match: file "ast-grep:<ruleId>" and the rule\'s message as quote.',
                                 properties: {
                                     file: { type: 'string' },
                                     section: { type: 'string' },

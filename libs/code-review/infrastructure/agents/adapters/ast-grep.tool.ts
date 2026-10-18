@@ -138,6 +138,27 @@ function formatMatches(matches: ParsedMatch[], header: string): string {
     return lines.join('\n');
 }
 
+/** How a finding backed by a rule match must be reported for the match to
+ *  stand as its proof (`astGrepRuleIdOf` / `isProvenByAstGrep`). */
+const RULE_CITATION =
+    'Report a finding backed by a rule match with kind "convention", the matched file and line, and source.file "ast-grep:<ruleId>" (the id in brackets) with the rule\'s message as source.quote. A match cited that way is proof on its own and needs no further check.';
+
+/** The citation of each rule that matched, so the model copies it exactly. */
+function formatRuleCitations(matches: ParsedMatch[]): string {
+    const messages = new Map<string, string | undefined>();
+    for (const m of matches) {
+        if (m.ruleId && !messages.has(m.ruleId)) {
+            messages.set(m.ruleId, m.message);
+        }
+    }
+    if (messages.size === 0) return '';
+    const lines = [...messages].map(
+        ([id, message]) =>
+            `- ${id}: kind "convention", source.file "ast-grep:${id}"${message ? `, source.quote ${JSON.stringify(message)}` : ''}`,
+    );
+    return `\n\n${RULE_CITATION}\n${lines.join('\n')}`;
+}
+
 function randomWorkDir(): string {
     return `.kody-ast-grep-${Date.now().toString(36)}-${Math.random()
         .toString(36)
@@ -226,7 +247,7 @@ export function buildAstGrepTool(
         'Structural code search with ast-grep: matches syntax, not text, so it ignores formatting, comments and strings. ' +
         'Give a pattern and its language to find every place a construct appears.' +
         (hasRules
-            ? " Set useRules to run the team's ast-grep rules over the changed files."
+            ? ` Set useRules to run the team's ast-grep rules over the changed files. ${RULE_CITATION}`
             : '');
 
     const run = async (
@@ -257,8 +278,9 @@ export function buildAstGrepTool(
             };
         }
         const notes = stderr ? `\n\nast-grep warnings: ${stderr}` : '';
+        const citations = mode === 'rules' ? formatRuleCitations(matches) : '';
         return {
-            output: formatMatches(matches, header) + notes,
+            output: formatMatches(matches, header) + citations + notes,
             meta: { mode, matches: matches.length },
         };
     };

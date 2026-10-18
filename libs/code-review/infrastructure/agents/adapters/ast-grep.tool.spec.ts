@@ -9,6 +9,7 @@ import {
     buildAstGrepTool,
     type AstGrepToolDeps,
 } from '@libs/code-review/infrastructure/agents/adapters/ast-grep.tool';
+import { isProvenByAstGrep } from '@libs/code-review/infrastructure/agents/core/convention-check';
 
 // One shared warn so the test can read what the tool's module logger wrote.
 const mockWarn = jest.fn();
@@ -348,6 +349,55 @@ describe('astGrep tool', () => {
             expect(r.isError).toBe(true);
             expect(r.output).toContain('tools/review-rules.yml');
             expect(exec).not.toHaveBeenCalled();
+        });
+
+        it('teaches the citation that makes a rule match proof, in rules mode only', () => {
+            expect(setup().tool.description).not.toContain('ast-grep:<ruleId>');
+            const { tool } = setup({ rules: RULES });
+            expect(tool.description).toContain('kind "convention"');
+            expect(tool.description).toContain('"ast-grep:<ruleId>"');
+            expect(tool.description).toContain("rule's message");
+        });
+
+        it('ends a rules run with the citation of each matched rule, which the proof check accepts', async () => {
+            const { tool, exec } = setup({ rules: RULES });
+            exec.mockResolvedValueOnce({
+                stdout: match('src/orders/cart.ts', 9, 'db.raw(q)', {
+                    ruleId: 'no-raw-sql',
+                    message: 'Use the query builder',
+                }),
+                stderr: '',
+                exitCode: 0,
+            });
+            const r = await tool.execute({ useRules: true }, ctx);
+            expect(r.output).toContain('source.file "ast-grep:no-raw-sql"');
+
+            // The finding the model writes from that instruction is proven.
+            const finding = {
+                relevantFile: 'src/orders/cart.ts',
+                relevantLinesStart: 9,
+                relevantLinesEnd: 9,
+                kind: 'convention',
+                source: {
+                    file: 'ast-grep:no-raw-sql',
+                    quote: 'Use the query builder',
+                },
+            } as any;
+            expect(isProvenByAstGrep(finding, [r.output])).toBe(true);
+        });
+
+        it('adds no citation to a pattern search', async () => {
+            const { tool, exec } = setup({ rules: RULES });
+            exec.mockResolvedValueOnce({
+                stdout: match('src/orders/cart.ts', 9, 'db.raw(q)'),
+                stderr: '',
+                exitCode: 0,
+            });
+            const r = await tool.execute(
+                { pattern: 'db.raw($Q)', language: 'ts' },
+                ctx,
+            );
+            expect(r.output).not.toContain('source.file');
         });
 
         it('refuses an oversized rule file', async () => {
