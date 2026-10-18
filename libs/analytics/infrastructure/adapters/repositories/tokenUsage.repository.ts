@@ -64,18 +64,20 @@ const TASK_FALLBACK = '';
  */
 // Valid routing tasks — mirror of ROUTING_TASKS in token-usage-tu.ts (LlmTask).
 // A `tu.route` outside this set (stale tier string, garbage) is NOT trusted.
-const ROUTING_TASKS = [
+export const READ_ROUTING_TASKS = [
     'codeReview',
     'kodyRulesReview',
     'ruleGeneration',
     'businessValidation',
     'prSummary',
     'conversation',
+    'customAgent',
+    'customAgentCheck',
 ];
 
 const taskExpr = (areaField: unknown) => ({
     $cond: [
-        { $in: ['$attributes.tu.route', ROUTING_TASKS] },
+        { $in: ['$attributes.tu.route', READ_ROUTING_TASKS] },
         '$attributes.tu.route',
         {
             $let: {

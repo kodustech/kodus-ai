@@ -54,6 +54,12 @@ export const BACKFILL_ROUTING_TASKS = [
     'customAgentCheck',
 ];
 
+// Mirror of CUSTOM_AGENT_RUN_PREFIX / CUSTOM_AGENT_CHECK_RUN_SUFFIX in
+// token-usage-tu.ts (asserted equal by token-usage-tu.spec.ts).
+export const BACKFILL_CUSTOM_AGENT_RUN_PREFIX = 'code-review-custom-';
+export const BACKFILL_CUSTOM_AGENT_CHECK_RUN_SUFFIX =
+    '-(?:convention-)?verify$';
+
 const gf = (f: string) => ({ $getField: { field: f, input: '$attributes' } });
 
 // Canonical model = last ':'-segment of gen_ai.response.model (mirrors deriveTu).
@@ -165,42 +171,79 @@ const SET_TU = {
             // non-task value never leaks in. Keep in sync with token-usage-tu.ts.
             route: {
                 $cond: [
-                    { $in: [gf('route'), BACKFILL_ROUTING_TASKS] },
-                    gf('route'),
+                    // A custom agent's run name decides first (mirror of
+                    // routeFromCustomAgentRun).
                     {
-                        $let: {
-                            vars: { a: areaExpr },
-                            in: {
-                                $switch: {
-                                    branches: [
-                                        {
-                                            case: {
-                                                $in: [
-                                                    '$$a',
-                                                    ['review', 'suggestions'],
-                                                ],
-                                            },
-                                            then: 'codeReview',
-                                        },
-                                        {
-                                            case: { $eq: ['$$a', 'kody_rules'] },
-                                            then: 'kodyRulesReview',
-                                        },
-                                        {
-                                            case: { $eq: ['$$a', 'summary'] },
-                                            then: 'prSummary',
-                                        },
-                                        {
-                                            case: {
-                                                $eq: ['$$a', 'conversation'],
-                                            },
-                                            then: 'conversation',
-                                        },
-                                    ],
-                                    default: '',
+                        $regexMatch: {
+                            input: rn,
+                            regex: `^${BACKFILL_CUSTOM_AGENT_RUN_PREFIX}`,
+                        },
+                    },
+                    {
+                        $cond: [
+                            {
+                                $regexMatch: {
+                                    input: rn,
+                                    regex: BACKFILL_CUSTOM_AGENT_CHECK_RUN_SUFFIX,
                                 },
                             },
-                        },
+                            'customAgentCheck',
+                            'customAgent',
+                        ],
+                    },
+                    {
+                        $cond: [
+                            { $in: [gf('route'), BACKFILL_ROUTING_TASKS] },
+                            gf('route'),
+                            {
+                                $let: {
+                                    vars: { a: areaExpr },
+                                    in: {
+                                        $switch: {
+                                            branches: [
+                                                {
+                                                    case: {
+                                                        $in: [
+                                                            '$$a',
+                                                            [
+                                                                'review',
+                                                                'suggestions',
+                                                            ],
+                                                        ],
+                                                    },
+                                                    then: 'codeReview',
+                                                },
+                                                {
+                                                    case: {
+                                                        $eq: [
+                                                            '$$a',
+                                                            'kody_rules',
+                                                        ],
+                                                    },
+                                                    then: 'kodyRulesReview',
+                                                },
+                                                {
+                                                    case: {
+                                                        $eq: ['$$a', 'summary'],
+                                                    },
+                                                    then: 'prSummary',
+                                                },
+                                                {
+                                                    case: {
+                                                        $eq: [
+                                                            '$$a',
+                                                            'conversation',
+                                                        ],
+                                                    },
+                                                    then: 'conversation',
+                                                },
+                                            ],
+                                            default: '',
+                                        },
+                                    },
+                                },
+                            },
+                        ],
                     },
                 ],
             },

@@ -440,7 +440,7 @@ export const Models = (props: {
 }) => (
     <Section
         title="Models"
-        description="By default the routing table decides, under Custom Agents and Custom Agents (check). Pin a model here to override it for this agent only.">
+        description="By default the routing table decides, under Custom Agents and Custom Agents: finding check. Pin a model here to override it for this agent only.">
         <ModelsFields {...props} />
     </Section>
 );

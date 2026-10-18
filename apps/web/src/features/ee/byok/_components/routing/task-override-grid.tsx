@@ -379,7 +379,7 @@ const AGENT_CARDS: AgentCard[] = [
     {
         task: "customAgentCheck",
         Icon: ShieldQuestionIcon,
-        title: "Custom Agents (check)",
+        title: "Custom Agents: finding check",
     },
 ];
 
