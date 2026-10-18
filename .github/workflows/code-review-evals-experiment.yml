@@ -27,10 +27,20 @@ on:
                 required: false
                 default: "2"
                 type: string
-            model:
-                description: "The model both sides run on (evals/shared/tier0-models.js)"
+            models:
+                description: "The models, comma-separated (evals/shared/tier0-models.js): each compared on its own, one decision over them"
                 required: false
                 default: "deepseek-v4-flash@fireworks"
+                type: string
+            set:
+                description: "The cases \"is it better?\" runs on: full, or a set of the step's own (evals/README.md, \"A set of its own\")"
+                required: false
+                default: "full"
+                type: string
+            team_config:
+                description: "A JSON file in the branch of the review config keys a team saves: one commit, the config off against on (empty: main against the branch)"
+                required: false
+                default: ""
                 type: string
 
 permissions:
@@ -68,12 +78,20 @@ jobs:
 
                   export const environment = devEnvironment;
                   EOF
+            # Base-side runs another experiment on the same base code already paid for (evals/README.md).
+            - uses: actions/cache/restore@v4
+              with:
+                  path: ~/.cache/kodus-evals/experiment-base
+                  key: experiment-base-${{ inputs.step }}-${{ github.run_id }}
+                  restore-keys: experiment-base-${{ inputs.step }}-
             - name: Run the experiment
               env:
                   STEP: ${{ inputs.step }}
                   PHASES: ${{ inputs.phases }}
                   RUNS: ${{ inputs.runs }}
-                  MODEL: ${{ inputs.model }}
+                  MODELS: ${{ inputs.models }}
+                  SET: ${{ inputs.set }}
+                  TEAM_CONFIG: ${{ inputs.team_config }}
                   NAME: ${{ github.ref_name }}
                   BYOK_OPENAI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
                   BYOK_ANTHROPIC_API_KEY: ${{ secrets.BYOK_ANTHROPIC_API_KEY }}
@@ -87,7 +105,15 @@ jobs:
                   # The panel's experiments API: the result goes there, and code it
                   # already measured (from a laptop or an earlier push) is not run again.
                   KODUS_QUALITY_INGEST_TOKEN: ${{ secrets.KODUS_QUALITY_INGEST_TOKEN }}
-              run: node evals/experiment.js --step="$STEP" --base=origin/main --phases="$PHASES" --runs="$RUNS" --model="$MODEL" --name="$NAME" --if-new --out=experiment
+              run: |
+                  args=(--step="$STEP" --base=origin/main --phases="$PHASES" --runs="$RUNS" --models="$MODELS" --set="$SET" --name="$NAME" --if-new --out=experiment)
+                  if [ -n "$TEAM_CONFIG" ]; then args+=(--team-config="$TEAM_CONFIG"); fi
+                  node evals/experiment.js "${args[@]}"
+            - uses: actions/cache/save@v4
+              if: always()
+              with:
+                  path: ~/.cache/kodus-evals/experiment-base
+                  key: experiment-base-${{ inputs.step }}-${{ github.run_id }}
             - name: Job summary
               if: always() && hashFiles('experiment/summary.md') != ''
               run: cat experiment/summary.md >> "$GITHUB_STEP_SUMMARY"

@@ -10,6 +10,7 @@ const path = require('path');
 
 const buildTests = require('./recall-tests');
 const { TIER0, defaultMatrix } = require('../shared/tier0-models');
+const { readTeamConfig } = require('../shared/team-config');
 
 const RESULTS_DIR = path.join(__dirname, 'results');
 
@@ -26,6 +27,7 @@ const KNOWN_FLAGS = new Set([
     'listModels',
     'gate',
     'no-judge',
+    'team-config',
 ]);
 
 function parseArgs(argv) {
@@ -45,6 +47,7 @@ function parseArgs(argv) {
         listModels: false,
         noJudge: process.env.RECALL_NO_JUDGE === '1',
         gate: process.env.RECALL_GATE === '1',
+        teamConfig: '',
     };
 
     for (let i = 2; i < argv.length; i += 1) {
@@ -98,6 +101,9 @@ function parseArgs(argv) {
             out.listModels = true;
         } else if (key === 'gate') {
             out.gate = true;
+        } else if (key === 'team-config') {
+            out.teamConfig = value || '';
+            if (consumesNext) i += 1;
         }
     }
 
@@ -186,6 +192,8 @@ function submissionResultFromOutput(caseId, output, tokenUsage) {
 function runMetaOf(args) {
     return {
         harness: { name: 'kodus', version: process.env.KODUS_VERSION || 'dev' },
+        // The team config saved over each case's (--team-config), by its hash.
+        teamConfig: args.team ? args.team.hash : null,
         model: {
             // id publico = modelo real; sufixo (@sub, @nvidia) e so roteamento
             id:
@@ -259,6 +267,15 @@ async function main() {
     if (args.listModels) {
         for (const model of defaultMatrix()) console.log(model);
         return;
+    }
+
+    if (args.teamConfig) {
+        try {
+            args.team = readTeamConfig(args.teamConfig);
+        } catch (error) {
+            console.error(error.message);
+            process.exit(2);
+        }
     }
 
     // A subscription model has no production route: the finder would run
@@ -344,7 +361,14 @@ async function main() {
         }
     }
 
-    const tests = await buildTests();
+    let tests;
+    try {
+        tests = await buildTests();
+    } catch (error) {
+        // An unknown set, or a set naming a case with no dataset: nothing to measure.
+        console.error(error.message);
+        process.exit(2);
+    }
     let selectedTests = Number.isFinite(args.limit)
         ? tests.slice(0, args.limit)
         : tests;
@@ -363,6 +387,7 @@ async function main() {
     countTokens();
     const provider = new InvestigationAgentProvider({
         config: providerConfigFor(args.model),
+        teamConfig: args.team ? args.team.configs : null,
     });
 
     const rows = [];
@@ -566,8 +591,10 @@ async function main() {
     // whose output failed to parse is written as a 'fail' with empty metadata
     // and never counted as infra, so counting only infra rows would let a run
     // that scored a handful of PRs report itself as a full one.
+    // A control case (no known bug: recall-assertion.js) has no recall by design.
     const unmeasured = rows.filter(
-        (row) => !Number.isFinite(row.metadata?.recall),
+        (row) =>
+            !Number.isFinite(row.metadata?.recall) && !row.metadata?.control,
     ).length;
     const summary = {
         model: args.model,
@@ -576,6 +603,12 @@ async function main() {
         tokens,
         usage: tokensUsed(),
         cases: rows.length,
+        // The model that scored every case: a number holds only under its judge.
+        judge: NO_JUDGE ? null : JUDGE_MODEL,
+        // What --team-config saved over each case's config, or null.
+        teamConfig: args.team
+            ? { hash: args.team.hash, configs: args.team.configs }
+            : null,
         passed: rows.filter((row) => row.status === 'pass').length,
         failed: qualityFailures,
         infraFailures,

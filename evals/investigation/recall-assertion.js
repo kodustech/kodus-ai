@@ -63,7 +63,14 @@ module.exports = async (output, context) => {
     const findings = Array.isArray(parsed.findings) ? parsed.findings : [];
     const goldens = asArray(context && context.vars && context.vars.goldenComments);
     if (!goldens.length) {
-        return { pass: true, score: 1, reason: 'No goldenComments in case — nothing to score.' };
+        // A control case (a set's PR built with nothing to find): no recall, and
+        // every finding the review ships is noise.
+        return {
+            pass: findings.length === 0,
+            score: findings.length === 0 ? 1 : 0,
+            reason: `control: nothing to find, ${findings.length} finding${findings.length === 1 ? '' : 's'} shipped`,
+            metadata: { control: true, recall: null, precision: null, matched: 0, goldens: 0, tpFindings: 0, fpFindings: findings.length, findings: findings.length, goldenResults: [] },
+        };
     }
 
     const apiKey = loadJudgeKey();
