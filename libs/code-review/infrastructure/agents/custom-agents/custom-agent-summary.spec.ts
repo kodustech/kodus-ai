@@ -37,6 +37,27 @@ describe('summarizeCustomAgentRuns — ignored paths', () => {
         expect(summary.status).toBe('no-matching-files');
     });
 
+    it('says the files were deleted when only deleted files were in scope', () => {
+        const [summary] = summarizeCustomAgentRuns([run()], [], {
+            agents: [agent],
+            ignoredFiles: ['infra/envs/prod/main.tf'],
+            removedFiles: ['infra/envs/prod/main.tf'],
+        });
+        expect(summary.status).toBe('deleted-files');
+        const table = formatCustomAgentsSummary([summary]);
+        expect(table).toContain('not run: its files were deleted');
+        expect(table).not.toContain('ignored paths');
+    });
+
+    it('still says ignored when an ignored file in scope was not deleted', () => {
+        const [summary] = summarizeCustomAgentRuns([run()], [], {
+            agents: [agent],
+            ignoredFiles: ['infra/a.tf', 'infra/b.tf'],
+            removedFiles: ['infra/a.tf'],
+        });
+        expect(summary.status).toBe('ignored-paths');
+    });
+
     it('leaves an agent that ran alone', () => {
         const [summary] = summarizeCustomAgentRuns([run('ran')], [], {
             agents: [agent],

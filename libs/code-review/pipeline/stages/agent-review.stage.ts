@@ -1509,6 +1509,14 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 {
                     agents: context.codeReviewConfig?.customAgents ?? [],
                     ignoredFiles: context.ignoredFiles ?? [],
+                    // Deleted files sit in ignoredFiles too; the ignored
+                    // changes hold only the files the ignore paths matched.
+                    removedFiles: (context.ignoredFiles ?? []).filter(
+                        (f) =>
+                            !(context.ignoredFileChanges ?? []).some(
+                                (c) => c.filename === f,
+                            ),
+                    ),
                 },
             );
             const prLevelSuggestions = deduped.filter(isPrLevelSuggestion);
@@ -1816,8 +1824,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     });
                     allDiscarded.push({
                         ...s,
-                        priorityStatus:
-                            PriorityStatus.DISCARDED_BY_CODE_DIFF,
+                        priorityStatus: PriorityStatus.DISCARDED_BY_CODE_DIFF,
                         deliveryStatus: DeliveryStatus.NOT_SENT,
                     });
                     return null;
@@ -1857,9 +1864,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         // v2 severity scale (critical/high/medium/low). The agent returns the rule
         // UUID in brokenKodyRulesIds — use it for exact matching.
         const kodyRulesById = new Map(
-            kodyRules
-                .filter((r) => r.uuid)
-                .map((r) => [r.uuid!, r]),
+            kodyRules.filter((r) => r.uuid).map((r) => [r.uuid!, r]),
         );
         const kodyRulesWithSeverity: Partial<CodeSuggestion>[] =
             kodyRulesSuggestions.map((s) => {
@@ -1933,8 +1938,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
 
         let dedupedNonRules = nonKodyRulesForDedup;
         let dedupTrace: DedupTraceSummary = {
-            status:
-                nonKodyRulesForDedup.length <= 1 ? 'skipped' : 'success',
+            status: nonKodyRulesForDedup.length <= 1 ? 'skipped' : 'success',
             totalClassifiedCount: severityNormalized.length,
             kodyRulesSkippedCount: kodyRulesForDedup.length,
             nonKodyInputCount: nonKodyRulesForDedup.length,
@@ -1962,8 +1966,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 nonKodyInputCount: nonKodyRulesForDedup.length,
                 nonKodyOutputCount: dedupResult.suggestions.length,
                 finalOutputCount:
-                    dedupResult.suggestions.length +
-                    kodyRulesForDedup.length,
+                    dedupResult.suggestions.length + kodyRulesForDedup.length,
             };
         } catch (dedupError) {
             this.logger.warn({
@@ -2116,16 +2119,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         // surface regardless of severity). Teams can opt in to filter
         // them too via suggestionControl.applyFiltersToKodyRules=true.
         const severityFilter =
-            context.codeReviewConfig?.suggestionControl
-                ?.severityLevelFilter;
+            context.codeReviewConfig?.suggestionControl?.severityLevelFilter;
         const applyFiltersToKodyRules =
             context.codeReviewConfig?.suggestionControl
                 ?.applyFiltersToKodyRules === true;
-        if (
-            severityFilter &&
-            severityFilter !== 'low' &&
-            deduped.length > 0
-        ) {
+        if (severityFilter && severityFilter !== 'low' && deduped.length > 0) {
             const acceptedLevels: Record<string, string[]> = {
                 critical: ['critical'],
                 high: ['critical', 'high'],
@@ -2137,11 +2135,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             const before = deduped.length;
             const keeps = (s: Partial<CodeSuggestion>) =>
                 customAgentSeverityVerdict(s, agentsById) ??
-                survivesSeverityFilter(
-                    s,
-                    accepted,
-                    applyFiltersToKodyRules,
-                );
+                survivesSeverityFilter(s, accepted, applyFiltersToKodyRules);
             const droppedBySeverity = deduped.filter((s) => !keeps(s));
             deduped = deduped.filter(keeps);
             for (const s of droppedBySeverity) {

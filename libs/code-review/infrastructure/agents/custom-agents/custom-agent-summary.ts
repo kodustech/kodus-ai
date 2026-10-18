@@ -16,7 +16,12 @@ export interface CustomAgentRun {
     name: string;
     slug: string;
     status:
-        'ran' | 'no-matching-files' | 'ignored-paths' | 'failed' | 'incomplete';
+        | 'ran'
+        | 'no-matching-files'
+        | 'ignored-paths'
+        | 'deleted-files'
+        | 'failed'
+        | 'incomplete';
     /** Findings the verify pass refuted (or could not judge). */
     droppedByVerify: number;
 }
@@ -35,11 +40,13 @@ export function summarizeCustomAgentRuns(
     ignored?: {
         agents: ReadonlyArray<Pick<CustomAgentConfig, 'id' | 'scope'>>;
         ignoredFiles: readonly string[];
+        /** Deleted files, which the review sets aside with the ignored ones. */
+        removedFiles?: readonly string[];
     },
 ): CustomAgentRunSummary[] {
     return (runs ?? []).map((run) => ({
         ...run,
-        status: lostToIgnoredPaths(run, ignored) ? 'ignored-paths' : run.status,
+        status: notRunReason(run, ignored),
         posted: posted.filter((s) => s.customAgent?.id === run.id).length,
     }));
 }
@@ -79,32 +86,46 @@ export function withDeliveredCounts(
     });
 }
 
-function lostToIgnoredPaths(
+/**
+ * Why an agent whose scope matched no reviewed file did not run: its files
+ * were all deleted, or some are in the ignored paths. The review sets deleted
+ * files aside with the ignored ones, so they are told apart here.
+ */
+function notRunReason(
     run: CustomAgentRun,
     ignored:
         | {
               agents: ReadonlyArray<Pick<CustomAgentConfig, 'id' | 'scope'>>;
               ignoredFiles: readonly string[];
+              removedFiles?: readonly string[];
           }
         | undefined,
-): boolean {
+): CustomAgentRun['status'] {
     if (run.status !== 'no-matching-files' || !ignored?.ignoredFiles.length) {
-        return false;
+        return run.status;
     }
     const agent = ignored.agents.find((a) => a.id === run.id);
-    return (
-        !!agent &&
-        filesInAgentScope(
-            agent,
-            ignored.ignoredFiles.map((filename) => ({ filename })),
-        ).length > 0
+    if (!agent) {
+        return run.status;
+    }
+    const inScope = filesInAgentScope(
+        agent,
+        ignored.ignoredFiles.map((filename) => ({ filename })),
     );
+    if (!inScope.length) {
+        return run.status;
+    }
+    const removed = new Set(ignored.removedFiles ?? []);
+    return inScope.every((f) => removed.has(f.filename))
+        ? 'deleted-files'
+        : 'ignored-paths';
 }
 
 const STATUS_TEXT: Record<CustomAgentRun['status'], string> = {
     'ran': 'ran',
     'no-matching-files': 'not run: no matching files',
     'ignored-paths': 'not run: its files are in the ignored paths',
+    'deleted-files': 'not run: its files were deleted',
     'failed': 'failed',
     'incomplete': 'incomplete',
 };
