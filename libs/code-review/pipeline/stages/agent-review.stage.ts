@@ -144,7 +144,10 @@ import { hasManagedModelKey } from '@libs/llm/managed-slot';
 import { LLM } from '@libs/llm/llm';
 import { applyRevisionLinks } from '@libs/code-review/infrastructure/agents/engine/revision-link';
 import { checkRepeats } from '@libs/code-review/infrastructure/agents/engine/repeat-check';
-import { mergeKodyRuleFindings } from '@libs/code-review/infrastructure/agents/engine/kody-rules-merge';
+import {
+    mergeKodyRuleFindings,
+    otherLocationsToRender,
+} from '@libs/code-review/infrastructure/agents/engine/kody-rules-merge';
 import {
     MAX_REPEAT_CHECK_DECISIONS,
     type PrDecisionRecord,
@@ -977,10 +980,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // completeness. Core agents only — kody-rules is auxiliary and its
             // truncation shouldn't gate the whole review.
             for (const cut of result.incomplete || []) {
-                if (
-                    !CRITICAL_AGENTS.has(cut.agentName) &&
-                    !cut.customAgent
-                ) {
+                if (!CRITICAL_AGENTS.has(cut.agentName) && !cut.customAgent) {
                     continue;
                 }
 
@@ -1013,10 +1013,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // They were not published, so the review did not check everything
             // it found: 'partial', same as a cut-short agent (#2171).
             for (const gap of result.unverified || []) {
-                if (
-                    !CRITICAL_AGENTS.has(gap.agentName) &&
-                    !gap.customAgent
-                ) {
+                if (!CRITICAL_AGENTS.has(gap.agentName) && !gap.customAgent) {
                     continue;
                 }
 
@@ -1817,12 +1814,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
 
             // Render merged locations after formatting so rewrites cannot drop them.
             for (const s of deduped) {
-                const otherLocations = [
-                    ...new Set([
-                        ...(s.alsoFoundIn || []),
-                        ...(s.kodyRuleOtherLocations || []),
-                    ]),
-                ];
+                const otherLocations = otherLocationsToRender(s);
                 if (!otherLocations?.length) {
                     continue;
                 }
