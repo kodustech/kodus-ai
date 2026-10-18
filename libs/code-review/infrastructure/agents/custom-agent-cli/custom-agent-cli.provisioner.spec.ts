@@ -124,6 +124,21 @@ describe('provisionCustomAgentClis', () => {
         }
     });
 
+    it('says why the CLI is missing on a Kodus CLI review, even on E2B', async () => {
+        const sb = sandbox('e2b');
+        const result = await provisionCustomAgentClis({
+            sandbox: sb,
+            agents: [agent()],
+            changedFiles: ['src/ledger/post.ts'],
+            skipReason: 'not run on Kodus CLI reviews',
+        });
+        expect(sb.run).not.toHaveBeenCalled();
+        expect(result.byAgentId).toEqual({});
+        expect(result.warnings[0].detail).toContain(
+            'not run on Kodus CLI reviews',
+        );
+    });
+
     it('stays silent without an isolated sandbox when no running agent has a CLI', async () => {
         const result = await provisionCustomAgentClis({
             sandbox: sandbox('local'),

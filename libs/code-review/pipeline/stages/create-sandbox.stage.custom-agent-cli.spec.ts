@@ -110,6 +110,21 @@ describe('CreateSandboxStage custom agent CLIs', () => {
         });
     });
 
+    it('asks for no install on a Kodus CLI review, with the reason', async () => {
+        const { stage, context } = build({ sandboxType: 'e2b' });
+        context.origin = 'cli';
+        context.gitContext = {
+            remote: 'https://git.example/acme/app.git',
+            branch: 'feature',
+        };
+        await (stage as any).executeStage(context);
+        expect(provision).toHaveBeenCalledWith(
+            expect.objectContaining({
+                skipReason: expect.stringContaining('Kodus CLI reviews'),
+            }),
+        );
+    });
+
     it('keeps the sandbox when provisioning throws', async () => {
         provision.mockRejectedValue(new Error('boom'));
         const { stage, context } = build({ sandboxType: 'e2b' });

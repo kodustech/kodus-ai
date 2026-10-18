@@ -184,9 +184,16 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
                 },
             });
 
-            const customAgentClis = isCliMode
-                ? undefined
-                : await this.provisionCustomAgentClis(context, sandbox);
+            // A Kodus CLI review reads local changes the sandbox does not
+            // hold (it checks out the pushed branch), so a CLI there would
+            // report on other code. Not run; the review says so.
+            const customAgentClis = await this.provisionCustomAgentClis(
+                context,
+                sandbox,
+                isCliMode
+                    ? 'not run on Kodus CLI reviews: the sandbox holds the pushed branch, not the local changes'
+                    : undefined,
+            );
 
             return this.updateContext(context, (draft) => {
                 draft.sandboxHandle = sandbox;
@@ -258,6 +265,7 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
     private async provisionCustomAgentClis(
         context: CodeReviewPipelineContext,
         sandbox: SandboxInstance,
+        skipReason?: string,
     ): Promise<CustomAgentCliProvisioning | undefined> {
         const agents = context.codeReviewConfig?.customAgents ?? [];
         if (
@@ -276,6 +284,7 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
                 sandbox,
                 agents,
                 onlyCustomAgent: context.onlyCustomAgent,
+                skipReason,
                 changedFiles: (context.changedFiles ?? [])
                     .map((file) => file?.filename)
                     .filter(Boolean),

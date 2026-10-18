@@ -134,6 +134,9 @@ export async function provisionCustomAgentClis(params: {
     changedFiles: readonly string[];
     /** `@kody -v <slug>`: only that agent runs, enabled or not. */
     onlyCustomAgent?: string;
+    /** Set when this review must not run CLIs at all; each skipped CLI gets
+     *  a warning with this reason. */
+    skipReason?: string;
 }): Promise<CustomAgentCliProvisioning> {
     const result: CustomAgentCliProvisioning = { byAgentId: {}, warnings: [] };
     const { sandbox } = params;
@@ -150,16 +153,22 @@ export async function provisionCustomAgentClis(params: {
     );
     if (!candidates.length) return result;
 
-    // Without the isolated sandbox the CLIs are not offered; say so instead
-    // of letting the agent run without them silently.
-    if (!sandbox || sandbox.type !== 'e2b') {
+    // Without the isolated sandbox, or on a review that must not run them,
+    // the CLIs are not offered; say so instead of letting the agent run
+    // without them silently.
+    const skipReason =
+        params.skipReason ??
+        (!sandbox || sandbox.type !== 'e2b'
+            ? 'needs the isolated (E2B) sandbox; this review ran without it'
+            : undefined);
+    if (skipReason) {
         for (const agent of candidates) {
             for (const cli of agent.tools.cli ?? []) {
                 result.warnings.push(
                     buildCliInstallFailedWarning({
                         agentName: agent.name,
                         cliName: cli.name,
-                        reason: 'needs the isolated (E2B) sandbox; this review ran without it',
+                        reason: skipReason,
                     }),
                 );
             }
