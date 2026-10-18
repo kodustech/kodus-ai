@@ -199,6 +199,32 @@ describe('checkConventionQuotes', () => {
             );
         });
 
+        it('judges a convention finding with no source against the instructions', async () => {
+            // The model marked the finding as a convention and cited nothing;
+            // dropping it lost every finding of an instructions-only agent.
+            const read = reader({});
+            const r = await checkConventionQuotes(
+                [conv('', { source: undefined })],
+                read,
+                [],
+                undefined,
+                INSTRUCTIONS,
+            );
+            expect(r.rejected).toEqual([]);
+            expect(r.passed[0].sectionText).toBe(INSTRUCTIONS);
+            expect(r.passed[0].finding.source?.file).toBe('TeamInstructions');
+            expect(read).not.toHaveBeenCalled();
+        });
+
+        it('still drops a sourceless convention finding of an agent without instructions', async () => {
+            const r = await checkConventionQuotes(
+                [conv('', { source: undefined })],
+                reader({}),
+                [],
+            );
+            expect(r.passed).toEqual([]);
+        });
+
         it('drops it when the agent has no instructions to quote', async () => {
             const r = await checkConventionQuotes(
                 [

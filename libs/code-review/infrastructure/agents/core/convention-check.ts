@@ -243,6 +243,19 @@ export async function checkConventionQuotes(
     for (const finding of candidates) {
         const file = stripLeading(finding.source?.file ?? '');
         const quote = finding.source?.quote ?? '';
+        // No source at all from an agent that has instructions: its rules
+        // live there, so the verifier judges it against them rather than the
+        // finding being lost to a citation the model left out.
+        if (!file && !quote.trim() && teamInstructions?.trim()) {
+            passed.push({
+                finding: {
+                    ...finding,
+                    source: { file: 'TeamInstructions', section: '', quote: '' },
+                },
+                sectionText: teamInstructions,
+            });
+            continue;
+        }
         if (!file || !quote.trim()) {
             reject(finding, 'convention finding without source file or quote');
             continue;
