@@ -244,3 +244,21 @@ describe('evals/shared/quality-client.js', () => {
         expect(await client.recordedExperiments('dedup', 'feat/x')).toBeNull();
     });
 });
+
+describe('evals/experiment.js run names', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { runName } = require('./experiment');
+
+    const at = new Date('2026-10-17T21:46:33.120Z');
+
+    it('names a run after its branch, candidate commit and start, so two runs never share rows', () => {
+        expect(runName('feat/dedup-v2', '896fa156c1234', at, 'a1b2c3')).toBe('feat-dedup-v2-896fa156c-20261017214633-a1b2c3');
+        expect(runName('feat/dedup-v2', '27c191cd7aaaa', at, 'a1b2c3')).not.toBe(runName('feat/dedup-v2', '896fa156c1234', at, 'a1b2c3'));
+    });
+
+    it('keeps two runs at the same commit apart, even when they start in the same second', () => {
+        const later = new Date(at.getTime() + 60_000);
+        expect(runName('feat/dedup-v2', '896fa156c1234', later)).not.toBe(runName('feat/dedup-v2', '896fa156c1234', at));
+        expect(runName('feat/dedup-v2', '896fa156c1234', at)).not.toBe(runName('feat/dedup-v2', '896fa156c1234', at));
+    });
+});
