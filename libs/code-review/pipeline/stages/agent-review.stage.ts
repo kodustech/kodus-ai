@@ -1945,6 +1945,10 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             const customAgentSummaries = summarizeCustomAgentRuns(
                 result.customAgentRuns,
                 [...deduped, ...singleComments.grouped],
+                {
+                    agents: context.codeReviewConfig?.customAgents ?? [],
+                    ignoredFiles: context.ignoredFiles ?? [],
+                },
             );
             const prLevelSuggestions = deduped.filter(isPrLevelSuggestion);
             const fileLevelSuggestions = deduped.filter(
