@@ -19,6 +19,7 @@ import {
 } from '@libs/code-review/domain/custom-agents/resolve-report';
 import { CLI_SECRET_MASK } from '@libs/code-review/domain/custom-agents/cli-secrets';
 import {
+    astGrepRulesPath,
     customAgentConfigSchema,
     type KnowledgeItem,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
@@ -115,7 +116,7 @@ export class ResolveCustomAgentUseCase {
             params.agent as { tools?: { astGrepConfig?: string } } | undefined
         )?.tools?.astGrepConfig;
 
-        const [knowledgeSection, mcpSection] = await Promise.all([
+        const [knowledgeSection, mcpSection, astGrep] = await Promise.all([
             repository
                 ? this.resolveKnowledge(
                       organizationAndTeamData,
@@ -128,12 +129,17 @@ export class ResolveCustomAgentUseCase {
                       reason: GLOBAL_KNOWLEDGE,
                   }),
             this.listMcpTools(organizationAndTeamData),
+            this.resolveAstGrepRules(
+                organizationAndTeamData,
+                repository,
+                astGrepConfig,
+            ),
         ]);
 
         return {
             repository,
             agentIssues: params.agent ? validateDraftAgent(params.agent) : [],
-            astGrep: countAstGrepRules(astGrepConfig),
+            astGrep,
             knowledge: knowledgeSection,
             mcp: mcpSection,
         };
@@ -202,6 +208,57 @@ export class ResolveCustomAgentUseCase {
             return {
                 status: 'unavailable',
                 reason: 'Could not read the repository.',
+            };
+        }
+    }
+
+    /**
+     * Inline rules are counted as written. A rule file path is read from the
+     * branch, as a review reads it from the PR's target branch; at the global
+     * level there is no branch, so each repository reads its own.
+     */
+    private async resolveAstGrepRules(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repository: CustomAgentRepositoryRef | undefined,
+        astGrepConfig: string | undefined,
+    ): Promise<AstGrepRuleReport> {
+        const rulesPath = astGrepRulesPath(astGrepConfig);
+        if (!rulesPath) return countAstGrepRules(astGrepConfig);
+        const empty = { ruleCount: 0, ruleIds: [], rulesPath };
+        if (!repository) return { ...empty, errors: [] };
+        if (!this.knowledgeReader?.readFile) {
+            return { ...empty, errors: [NOT_BOUND] };
+        }
+        try {
+            const content = await this.knowledgeReader.readFile({
+                organizationAndTeamData,
+                repository,
+                path: rulesPath,
+            });
+            if (content === null || !content.trim()) {
+                return {
+                    ...empty,
+                    errors: [
+                        `Rule file ${rulesPath} was not found on ${repository.branch}.`,
+                    ],
+                };
+            }
+            return { ...countAstGrepRules(content), rulesPath };
+        } catch (error) {
+            this.logger.warn({
+                message: 'Could not read the ast-grep rule file',
+                context: ResolveCustomAgentUseCase.name,
+                error,
+                metadata: {
+                    organizationAndTeamData,
+                    repository: repository.id,
+                },
+            });
+            return {
+                ...empty,
+                errors: [
+                    `Could not read ${rulesPath}: ${error instanceof Error ? error.message : String(error)}`,
+                ],
             };
         }
     }

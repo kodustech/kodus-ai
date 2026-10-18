@@ -348,6 +348,18 @@ export const CUSTOM_AGENT_LIMITS = {
 } as const;
 
 /**
+ * `tools.astGrepConfig` holds either the rule YAML itself or the repository
+ * path of a rule file. A single line naming a `.yml`/`.yaml` file is a path,
+ * read from the pull request's TARGET branch so a PR cannot rewrite the rules
+ * it is judged by; anything else is inline YAML. Returns the path, if any.
+ */
+export function astGrepRulesPath(value: string | undefined): string | undefined {
+    const trimmed = value?.trim();
+    if (!trimmed || /\s/.test(trimmed)) return undefined;
+    return /^[^:#'"{}[\]]+\.ya?ml$/i.test(trimmed) ? trimmed : undefined;
+}
+
+/**
  * A CLI install command must pin every package it installs (`pkg@1.2.3`,
  * `pkg==1.2.3`, or a sha256 digest): an unpinned install would let a moving
  * registry tag decide what runs next to the team's secrets. The full rule is
@@ -421,7 +433,8 @@ export const customAgentConfigSchema = z.object({
         exclude: z.array(z.string()).optional(),
     }),
     tools: z.object({
-        /** ast-grep rule YAML the agent may run. */
+        /** ast-grep rule YAML the agent may run, or the repository path of a
+         *  rule file read from the target branch (see `astGrepRulesPath`). */
         astGrepConfig: z.string().optional(),
         mcp: z.array(customAgentMcpToolsSchema).optional(),
         cli: z

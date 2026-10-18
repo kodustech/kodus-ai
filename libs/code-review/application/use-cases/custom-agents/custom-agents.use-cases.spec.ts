@@ -130,6 +130,99 @@ describe('ResolveCustomAgentUseCase', () => {
         ]);
     });
 
+    describe('ast-grep rule file path', () => {
+        const agentWithPath = ledgerAgent({
+            tools: { astGrepConfig: 'rules/ledger.yml' },
+        });
+
+        it('reads the rule file from the branch and counts its rules', async () => {
+            const knowledgeReader = {
+                resolve: jest.fn(),
+                discover: jest.fn(),
+                readFile: jest
+                    .fn()
+                    .mockResolvedValue(
+                        'id: no-float-money\nlanguage: ts\nrule: { pattern: parseFloat($A) }',
+                    ),
+            };
+            const useCase = new ResolveCustomAgentUseCase(
+                parametersService(storedConfig()) as any,
+                codeManagementService as any,
+                knowledgeReader,
+            );
+
+            const report = await useCase.execute({
+                organizationAndTeamData,
+                repositoryId: 'repo-1',
+                agent: agentWithPath,
+            });
+
+            expect(knowledgeReader.readFile).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    repository: { id: 'repo-1', name: 'ledger', branch: 'main' },
+                    path: 'rules/ledger.yml',
+                }),
+            );
+            expect(report.astGrep).toEqual({
+                ruleCount: 1,
+                ruleIds: ['no-float-money'],
+                errors: [],
+                rulesPath: 'rules/ledger.yml',
+            });
+        });
+
+        it('reports a rule file missing on the branch', async () => {
+            const knowledgeReader = {
+                resolve: jest.fn(),
+                discover: jest.fn(),
+                readFile: jest.fn().mockResolvedValue(null),
+            };
+            const useCase = new ResolveCustomAgentUseCase(
+                parametersService(storedConfig()) as any,
+                codeManagementService as any,
+                knowledgeReader,
+            );
+
+            const report = await useCase.execute({
+                organizationAndTeamData,
+                repositoryId: 'repo-1',
+                agent: agentWithPath,
+            });
+
+            expect(report.astGrep.ruleCount).toBe(0);
+            expect(report.astGrep.errors).toEqual([
+                'Rule file rules/ledger.yml was not found on main.',
+            ]);
+        });
+
+        it('at the global level leaves the rule file to each repository', async () => {
+            const knowledgeReader = {
+                resolve: jest.fn(),
+                discover: jest.fn(),
+                readFile: jest.fn(),
+            };
+            const useCase = new ResolveCustomAgentUseCase(
+                parametersService(storedConfig()) as any,
+                codeManagementService as any,
+                knowledgeReader,
+            );
+
+            const report = await useCase.execute({
+                organizationAndTeamData,
+                repositoryId: 'global',
+                agent: agentWithPath,
+            });
+
+            expect(knowledgeReader.readFile).not.toHaveBeenCalled();
+            expect(report.astGrep).toEqual({
+                ruleCount: 0,
+                ruleIds: [],
+                errors: [],
+                rulesPath: 'rules/ledger.yml',
+            });
+        });
+    });
+
     it('reports schema problems of the draft, accepting typed secrets', async () => {
         const useCase = new ResolveCustomAgentUseCase(
             parametersService(storedConfig()) as any,

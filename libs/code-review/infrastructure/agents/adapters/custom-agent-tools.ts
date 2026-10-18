@@ -8,7 +8,10 @@
  */
 import type { AgentTool } from '@libs/agent-harness/domain/contracts/tool.contract';
 import type { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
-import type { CustomAgentConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import {
+    astGrepRulesPath,
+    type CustomAgentConfig,
+} from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { createLogger } from '@libs/core/log/logger';
 import {
@@ -107,12 +110,20 @@ export async function buildCustomAgentTools(
         );
     }
     if (astGrepInstalled) {
+        // One field holds either a rule file path (read from the target
+        // branch, so the PR cannot rewrite it) or the rule YAML itself.
+        const rulesPath = astGrepRulesPath(agent.tools?.astGrepConfig);
         tools.push(
             buildAstGrepTool({
                 exec: deps.remoteCommands!.exec!,
                 writeFile: deps.writeFile!,
                 changedFiles: deps.changedFiles,
-                rules: agent.tools?.astGrepConfig?.trim() || undefined,
+                ...(rulesPath
+                    ? { rulesPath, readTargetFile: deps.readTargetFile }
+                    : {
+                          rules:
+                              agent.tools?.astGrepConfig?.trim() || undefined,
+                      }),
                 logContext: deps.logContext,
             }) as AgentTool,
         );

@@ -398,6 +398,49 @@ describe('CustomAgentProvider — knowledge and tools', () => {
         );
     });
 
+    it('reads a rule file path from the target branch, never the checkout', async () => {
+        const exec = jest.fn(async (command: string) =>
+            command === 'ast-grep --version'
+                ? { stdout: 'ast-grep 0.45.3', stderr: '', exitCode: 0 }
+                : command.startsWith('git show')
+                  ? {
+                        stdout: 'id: no-console\nlanguage: TypeScript\nrule:\n  pattern: console.log($A)',
+                        stderr: '',
+                        exitCode: 0,
+                    }
+                  : { stdout: '', stderr: '', exitCode: 1 },
+        );
+        const sandbox = {
+            type: 'e2b',
+            run: jest.fn(async () => ({ stdout: '', exitCode: 0 })),
+            repoDir: '/home/user/repo',
+            writeFile: jest.fn(async () => {}),
+            remoteCommands: { exec },
+        };
+
+        await provider(
+            config({ tools: { astGrepConfig: 'rules/no-console.yml' } }),
+        ).execute(
+            input({
+                baseBranch: 'main',
+                remoteCommands: sandbox.remoteCommands,
+                customAgentTooling: { sandbox },
+            }),
+        );
+
+        const [, secrets] = runLoopMock.mock.calls[0];
+        const astGrep = secrets.extraTools.find((t: any) => t.name === 'astGrep');
+        await astGrep.execute({ useRules: true }, { runId: 'r' });
+
+        expect(exec).toHaveBeenCalledWith(
+            "git show 'refs/remotes/origin/main:rules/no-console.yml'",
+        );
+        expect(sandbox.writeFile).toHaveBeenCalledWith(
+            expect.stringMatching(/rules\.yml$/),
+            expect.stringContaining('id: no-console'),
+        );
+    });
+
     it('runs an MCP call once per review and agent, and again in another review', async () => {
         const mcpManager = {
             getConnections: jest.fn(async (_org: any, format?: boolean) =>

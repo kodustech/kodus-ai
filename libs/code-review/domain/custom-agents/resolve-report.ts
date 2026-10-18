@@ -13,6 +13,8 @@ export type AstGrepRuleReport = {
     ruleCount: number;
     ruleIds: string[];
     errors: string[];
+    /** Set when `astGrepConfig` names a rule file of the repository. */
+    rulesPath?: string;
 };
 
 /**

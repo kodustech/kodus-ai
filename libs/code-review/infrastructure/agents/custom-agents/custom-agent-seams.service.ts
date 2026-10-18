@@ -135,6 +135,21 @@ export class CustomAgentKnowledgeReaderService implements ICustomAgentKnowledgeR
         );
     }
 
+    async readFile(
+        params: Parameters<
+            NonNullable<ICustomAgentKnowledgeReader['readFile']>
+        >[0],
+    ): Promise<string | null> {
+        const read = await readerFor(
+            this.codeManagementService,
+            params.organizationAndTeamData,
+            params.repository,
+            params.repository.branch,
+        ).readFile(params.path);
+        if (read.status === 'refused') throw new Error(read.reason);
+        return read.status === 'ok' ? read.content : null;
+    }
+
     async discover(
         params: Parameters<ICustomAgentKnowledgeReader['discover']>[0],
     ): Promise<KnowledgeCandidate[]> {

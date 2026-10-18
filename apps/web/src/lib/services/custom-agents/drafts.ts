@@ -2,6 +2,7 @@ import type {
     CliToolConfig,
     CliToolSecret,
     CustomAgent,
+    CustomAgentResolveReport,
     CustomAgentStatus,
     KnowledgeCandidate,
     KnowledgeItem,
@@ -17,6 +18,39 @@ export const CUSTOM_AGENT_LIMITS = {
     maxInstructionsLength: 8000,
     maxWritingLength: 2000,
 } as const;
+
+/**
+ * Mirrors `astGrepRulesPath` on the backend: a single line naming a
+ * `.yml`/`.yaml` file is the path of a rule file in the repository; anything
+ * else is the rule YAML itself.
+ */
+export const astGrepRulesPath = (value?: string): string | undefined => {
+    const trimmed = value?.trim();
+    if (!trimmed || /\s/.test(trimmed)) return undefined;
+    return /^[^:#'"{}[\]]+\.ya?ml$/i.test(trimmed) ? trimmed : undefined;
+};
+
+/** The hint under the ast-grep rules field. */
+export const astGrepHint = (
+    value?: string,
+    report?: Pick<CustomAgentResolveReport, "astGrep">,
+): string => {
+    const path = astGrepRulesPath(value);
+    const count = report?.astGrep.ruleCount ?? 0;
+    const ids = report?.astGrep.ruleIds.join(", ") ?? "";
+    const proof = "A rule match is proof; it needs no model check.";
+    if (path) {
+        const where =
+            "Read from the pull request's target branch, so a pull request cannot change the rules it is checked against.";
+        return count
+            ? `${count} ${count === 1 ? "rule" : "rules"} in ${path}: ${ids}. ${where} ${proof}`
+            : `Rules in ${path}. ${where}`;
+    }
+    if (count) {
+        return `${count} ${count === 1 ? "rule" : "rules"}: ${ids}. ${proof}`;
+    }
+    return "Rule YAML, or the path of a rule file in the repository (read from the pull request's target branch). A match counts as proof.";
+};
 
 /** A package spec pinned to an exact version or digest, matched whole. */
 const PINNED_SPEC =

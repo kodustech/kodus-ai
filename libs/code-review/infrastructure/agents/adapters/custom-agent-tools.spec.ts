@@ -144,6 +144,53 @@ describe('buildCustomAgentTools', () => {
         expect(noCheckout.warnings).toEqual([]);
     });
 
+    describe('astGrepConfig as a path or as inline rules', () => {
+        const RULES =
+            'id: no-console\nlanguage: TypeScript\nrule:\n  pattern: console.log($A)';
+
+        async function rulesRun(astGrepConfig: string) {
+            const exec = jest.fn(async (command: string) =>
+                command === 'ast-grep --version'
+                    ? { stdout: 'ast-grep 0.45.3', stderr: '', exitCode: 0 }
+                    : { stdout: '', stderr: '', exitCode: 0 },
+            );
+            const writeFile = jest.fn(async () => {});
+            const readTargetFile = jest.fn(async () => RULES);
+            const set = await buildCustomAgentTools(
+                { tools: { astGrepConfig } },
+                {
+                    remoteCommands: { ...remoteCommands, exec },
+                    writeFile,
+                    changedFiles: ['src/a.ts'],
+                    readTargetFile,
+                },
+            );
+            const tool = set.tools.find((t) => t.name === 'astGrep')!;
+            await tool.execute({ useRules: true }, { runId: 'r' } as any);
+            return { writeFile, readTargetFile };
+        }
+
+        it('reads a rule file path from the target branch', async () => {
+            const { writeFile, readTargetFile } = await rulesRun(
+                'rules/no-console.yml',
+            );
+            expect(readTargetFile).toHaveBeenCalledWith('rules/no-console.yml');
+            expect(writeFile).toHaveBeenCalledWith(
+                expect.stringMatching(/rules\.yml$/),
+                RULES,
+            );
+        });
+
+        it('runs inline rules as written, without reading the branch', async () => {
+            const { writeFile, readTargetFile } = await rulesRun(RULES);
+            expect(readTargetFile).not.toHaveBeenCalled();
+            expect(writeFile).toHaveBeenCalledWith(
+                expect.stringMatching(/rules\.yml$/),
+                RULES,
+            );
+        });
+    });
+
     it('leaves astGrep out when the sandbox cannot write its neutral config', async () => {
         const set = await buildCustomAgentTools(
             { tools: {} },

@@ -129,7 +129,13 @@ export type ReadOnlyMcpIntegration = {
 export type CustomAgentResolveReport = {
     repository: { id: string; name: string; branch: string };
     agentIssues: string[];
-    astGrep: { ruleCount: number; ruleIds: string[]; errors: string[] };
+    astGrep: {
+        ruleCount: number;
+        ruleIds: string[];
+        errors: string[];
+        /** Set when the field names a rule file of the repository. */
+        rulesPath?: string;
+    };
     knowledge: Section<{
         items: KnowledgeItemReport[];
         budgets: KnowledgeTargetBudget[];

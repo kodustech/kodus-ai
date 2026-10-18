@@ -658,3 +658,48 @@ describe("custom agent drafts", () => {
         });
     });
 });
+
+describe("ast-grep rules field", () => {
+    // Imported here so the list above stays as it was.
+    const { astGrepHint, astGrepRulesPath } =
+        jest.requireActual<typeof import("./drafts")>("./drafts");
+
+    const report = (astGrep: {
+        ruleCount: number;
+        ruleIds: string[];
+        errors: string[];
+        rulesPath?: string;
+    }) => ({ astGrep }) as any;
+
+    it("reads a single .yml line as a rule file path, anything else as inline rules", () => {
+        expect(astGrepRulesPath("rules/no-console.yml")).toBe(
+            "rules/no-console.yml",
+        );
+        expect(astGrepRulesPath("id: no-console\nrule: {}")).toBeUndefined();
+        expect(astGrepRulesPath("id: rules.yml")).toBeUndefined();
+    });
+
+    it("says a rule file is read from the target branch, and what it holds", () => {
+        expect(astGrepHint("rules/no-console.yml")).toContain(
+            "rules/no-console.yml",
+        );
+        expect(astGrepHint("rules/no-console.yml")).toContain("target branch");
+        const hint = astGrepHint(
+            "rules/no-console.yml",
+            report({
+                ruleCount: 2,
+                ruleIds: ["no-console", "py-print"],
+                errors: [],
+                rulesPath: "rules/no-console.yml",
+            }),
+        );
+        expect(hint).toContain("2 rules in rules/no-console.yml");
+        expect(hint).toContain("no-console, py-print");
+    });
+
+    it("explains both forms when the field is empty", () => {
+        const hint = astGrepHint(undefined);
+        expect(hint).toContain("Rule YAML");
+        expect(hint).toContain("path");
+    });
+});

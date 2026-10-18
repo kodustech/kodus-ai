@@ -16,6 +16,7 @@ import { Switch } from "@components/ui/switch";
 import TagInput from "@components/ui/tag-input";
 import { Textarea } from "@components/ui/textarea";
 import {
+    astGrepHint,
     cliIssues,
     CUSTOM_AGENT_LIMITS,
     newCliTool,
@@ -652,18 +653,14 @@ export const ToolsCard = (props: ToolsProps) => {
                     <Field
                         label="Structural search (ast-grep rules)"
                         htmlFor="agent-ast-grep"
-                        hint={
-                            report?.astGrep.ruleCount
-                                ? `${report.astGrep.ruleCount} rules: ${report.astGrep.ruleIds.join(", ")}. A rule match is proof; it needs no model check.`
-                                : "Rule YAML the agent may run. A match counts as proof."
-                        }>
+                        hint={astGrepHint(agent.tools.astGrepConfig, report)}>
                         <Textarea
                             id="agent-ast-grep"
                             className="min-h-24 font-mono text-xs"
                             value={agent.tools.astGrepConfig ?? ""}
                             disabled={!canEdit}
                             placeholder={
-                                "id: no-float-money\nlanguage: typescript\nrule:\n  pattern: parseFloat($A)"
+                                "id: no-float-money\nlanguage: typescript\nrule:\n  pattern: parseFloat($A)\n\nor a rule file path: rules/review.yml"
                             }
                             onChange={(e) =>
                                 onChange((current) => ({

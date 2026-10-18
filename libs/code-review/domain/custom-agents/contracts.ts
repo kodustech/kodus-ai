@@ -66,6 +66,14 @@ export interface ICustomAgentKnowledgeReader {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: CustomAgentRepositoryRef;
     }): Promise<KnowledgeCandidate[]>;
+
+    /** One file of the branch (an ast-grep rule file); null when absent.
+     *  Throws when the file cannot be read as text. */
+    readFile?(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: CustomAgentRepositoryRef;
+        path: string;
+    }): Promise<string | null>;
 }
 
 // ── Tools ──────────────────────────────────────────────────────────────────

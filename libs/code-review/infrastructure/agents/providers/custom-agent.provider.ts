@@ -17,6 +17,7 @@ import {
 } from '@libs/code-review/infrastructure/agents/adapters/custom-agent-tools';
 import { RunToolCache } from '@libs/code-review/infrastructure/agents/adapters/run-tool-cache';
 import { buildRunCliAgentTool } from '@libs/code-review/infrastructure/agents/custom-agent-cli/run-cli.tool';
+import { makeTargetBranchGuideReader } from '@libs/code-review/infrastructure/agents/core/convention-check';
 
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import type {
@@ -202,12 +203,18 @@ export class CustomAgentProvider extends BaseCodeReviewAgentProvider {
             changedFiles: (input.changedFiles ?? [])
                 .map((f) => f.filename)
                 .filter(Boolean),
+            // The target branch, never the checkout (the PR head): the
+            // knowledge reader when the review has one, else the sandbox's
+            // fetched base ref, as the convention check reads guides.
             readTargetFile: reader
                 ? async (path) => {
                       const read = await reader.readFile(path);
                       return read.status === 'ok' ? read.content : null;
                   }
-                : undefined,
+                : makeTargetBranchGuideReader(
+                      input.remoteCommands,
+                      input.baseBranch,
+                  ),
             mcp:
                 mcpManager && org
                     ? {

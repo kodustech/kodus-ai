@@ -3,6 +3,28 @@ import {
     isKodyRuleSource,
     knowledgeBudgets,
 } from './resolve-report';
+import { astGrepRulesPath } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+
+describe('astGrepRulesPath', () => {
+    it.each([
+        ['rules/no-console.yml', 'rules/no-console.yml'],
+        ['  .ast-grep/rules.yaml\n', '.ast-grep/rules.yaml'],
+        ['sgrules.YML', 'sgrules.YML'],
+    ])('reads %j as a repository path', (value, path) => {
+        expect(astGrepRulesPath(value)).toBe(path);
+    });
+
+    it.each([
+        [undefined],
+        [''],
+        ['id: no-console\nlanguage: ts\nrule:\n  pattern: console.log($A)'],
+        ['id: rules.yml'],
+        ['rules/no-console.ts'],
+        ['my rules.yml'],
+    ])('reads %j as inline rules, not a path', (value) => {
+        expect(astGrepRulesPath(value)).toBeUndefined();
+    });
+});
 
 describe('custom agent resolve report', () => {
     it('counts one ast-grep rule per YAML document', () => {
