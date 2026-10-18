@@ -127,6 +127,9 @@ export interface RawFinding {
     relevantLinesEnd?: number;
     severity?: string;
     label?: string;
+    /** Custom agents: whether the finding applies a team rule, and which. */
+    kind?: CodeSuggestion['kind'];
+    source?: CodeSuggestion['source'];
 }
 
 export interface MappableAgentResult {
@@ -333,6 +336,9 @@ export function mapAgentFindings(
             ...(s.revisesSuggestionId && {
                 revisesSuggestionId: s.revisesSuggestionId,
             }),
+            // Lane credit in dedup and the rule citation read these.
+            ...(s.kind && { kind: s.kind }),
+            ...(s.source && { source: s.source }),
         } as Partial<CodeSuggestion>;
     });
 
