@@ -147,10 +147,25 @@ export function customAgentWriting(
 }
 
 /**
- * Makes the custom agent's finding the survivor of a dedup group it shares
- * with native findings: the team asked that agent for that problem, so its
- * tag and wording are the ones the PR shows. A scanner finding keeps the
- * group (see preferAnalyzerKeep), since it carries a proof the agent's does not.
+ * A custom agent finding inside the agent's lane: it applies the team rule
+ * the agent was asked for, and quotes it.
+ */
+export function isCustomAgentLaneFinding(s: Finding): boolean {
+    return (
+        isCustomAgentFinding(s) &&
+        s.kind === 'convention' &&
+        !!s.source?.quote?.trim()
+    );
+}
+
+/**
+ * Picks the survivor of a dedup group a custom agent shares with native
+ * findings. The agent's finding keeps the group only inside its lane (see
+ * isCustomAgentLaneFinding): the team asked that agent for that rule, so its
+ * tag and wording are the ones the PR shows. A bug the agent reported outside
+ * its instructions takes no credit: the generalist's finding stays, or gets
+ * the group back. A scanner finding keeps the group (see preferAnalyzerKeep),
+ * since it carries a proof the agent's does not.
  */
 export function preferCustomAgentKeep(
     groups: DedupGroup[],
@@ -163,14 +178,24 @@ export function preferCustomAgentKeep(
 
     return groups.map((group) => {
         const keep = at(group.keep);
-        if (!keep || isCustomAgentFinding(keep) || isAnalyzerSuggestion(keep)) {
+        if (
+            !keep ||
+            isCustomAgentLaneFinding(keep) ||
+            isAnalyzerSuggestion(keep)
+        ) {
             return group;
         }
         const duplicates = group.duplicates ?? [];
-        const promoted = duplicates.find((index) => {
-            const s = at(index);
-            return !!s && isCustomAgentFinding(s);
-        });
+        const firstDuplicate = (test: (s: Finding) => boolean) =>
+            duplicates.find((index) => {
+                const s = at(index);
+                return !!s && test(s);
+            });
+        const promoted =
+            firstDuplicate(isCustomAgentLaneFinding) ??
+            (isCustomAgentFinding(keep)
+                ? firstDuplicate((s) => !isCustomAgentFinding(s))
+                : undefined);
         if (promoted === undefined) {
             return group;
         }
@@ -212,17 +237,32 @@ export function keepOwnFindingsApart(
 
     return groups.flatMap((group) => {
         const keep = at(group.keep);
-        if (!keep || !isCustomAgentFinding(keep) || !group.duplicates?.length) {
+        if (!keep || !group.duplicates?.length) {
             return [group];
+        }
+        // The finding each agent's other findings in the group must overlap.
+        // Under a custom agent's keep, only that agent's own findings are
+        // checked, against the keep. Under a native keep (an off-lane agent
+        // does not take the group), each agent keeps the finding on the
+        // keep's code, or its first one, merged; the rest go apart.
+        const anchors = new Map<string, Finding>();
+        if (isCustomAgentFinding(keep)) {
+            anchors.set(keep.customAgent.id, keep);
+        } else {
+            const own = group.duplicates
+                .map(at)
+                .filter((s): s is Finding => !!s && isCustomAgentFinding(s));
+            for (const s of [...own.filter((f) => overlaps(f, keep)), ...own]) {
+                if (!anchors.has(s.customAgent.id)) {
+                    anchors.set(s.customAgent.id, s);
+                }
+            }
         }
         const duplicates = group.duplicates.filter((index) => {
             const s = at(index);
-            return !(
-                s &&
-                isCustomAgentFinding(s) &&
-                s.customAgent.id === keep.customAgent.id &&
-                !overlaps(s, keep)
-            );
+            if (!s || !isCustomAgentFinding(s)) return true;
+            const anchor = anchors.get(s.customAgent.id);
+            return !anchor || anchor === s || overlaps(s, anchor);
         });
         if (duplicates.length === group.duplicates.length) return [group];
         // Emptied by this split: nothing left to merge into the keep.

@@ -149,14 +149,89 @@ describe('customAgentWriting', () => {
 });
 
 describe('preferCustomAgentKeep', () => {
-    it('promotes the custom agent finding to represent the group', () => {
+    // A finding that applies the team rule the agent was asked for.
+    const convention = (agentId: string) =>
+        finding(agentId, {
+            kind: 'convention',
+            source: { file: 'docs/ledger.md', quote: 'Debits equal credits.' },
+        });
+
+    it('promotes the custom agent convention finding to represent the group', () => {
         const suggestions = [
             finding(undefined, { label: 'bug' }),
-            finding('a'),
+            convention('a'),
         ];
         expect(
             preferCustomAgentKeep([{ keep: 0, duplicates: [1] }], suggestions),
         ).toEqual([{ keep: 1, duplicates: [0] }]);
+    });
+
+    it("leaves the generalist's finding as representative over an off-lane bug", () => {
+        const suggestions = [
+            finding(undefined, { label: 'bug' }),
+            finding('a', { kind: 'bug' }),
+            finding('b'),
+        ];
+        expect(
+            preferCustomAgentKeep(
+                [{ keep: 0, duplicates: [1, 2] }],
+                suggestions,
+            ),
+        ).toEqual([{ keep: 0, duplicates: [1, 2] }]);
+    });
+
+    it('does not credit a convention finding that quotes no rule', () => {
+        const suggestions = [
+            finding(undefined, { label: 'bug' }),
+            finding('a', {
+                kind: 'convention',
+                source: { file: 'docs/ledger.md', quote: '  ' },
+            }),
+        ];
+        expect(
+            preferCustomAgentKeep([{ keep: 0, duplicates: [1] }], suggestions),
+        ).toEqual([{ keep: 0, duplicates: [1] }]);
+    });
+
+    it('hands an off-lane representative back to the generalist', () => {
+        const suggestions = [
+            finding('a', { kind: 'bug' }),
+            finding(undefined, { label: 'bug' }),
+        ];
+        expect(
+            preferCustomAgentKeep([{ keep: 0, duplicates: [1] }], suggestions),
+        ).toEqual([{ keep: 1, duplicates: [0] }]);
+    });
+
+    it('prefers the convention finding over an off-lane representative', () => {
+        const suggestions = [
+            finding('a', { kind: 'bug' }),
+            finding(undefined, { label: 'bug' }),
+            convention('b'),
+        ];
+        expect(
+            preferCustomAgentKeep(
+                [{ keep: 0, duplicates: [1, 2] }],
+                suggestions,
+            ),
+        ).toEqual([{ keep: 2, duplicates: [0, 1] }]);
+    });
+
+    it('leaves a group of custom agent findings alone', () => {
+        const suggestions = [finding('a', { kind: 'bug' }), finding('b')];
+        expect(
+            preferCustomAgentKeep([{ keep: 0, duplicates: [1] }], suggestions),
+        ).toEqual([{ keep: 0, duplicates: [1] }]);
+    });
+
+    it('leaves a group of native findings alone', () => {
+        const suggestions = [
+            finding(undefined, { label: 'bug' }),
+            finding(undefined, { label: 'security' }),
+        ];
+        expect(
+            preferCustomAgentKeep([{ keep: 0, duplicates: [1] }], suggestions),
+        ).toEqual([{ keep: 0, duplicates: [1] }]);
     });
 
     it('keeps a scanner finding as the representative', () => {
@@ -203,6 +278,29 @@ describe('keepOwnFindingsApart', () => {
         expect(
             keepOwnFindingsApart([{ keep: 0, duplicates: [1] }], suggestions),
         ).toEqual([{ keep: 0, duplicates: [1] }]);
+    });
+
+    it("keeps one agent's findings apart under a native representative too", () => {
+        // An off-lane agent does not take the group (preferCustomAgentKeep),
+        // so the native finding stays its representative: it can absorb the
+        // agent's finding on its own code, never the agent's other ones.
+        const suggestions = [
+            finding(undefined, {
+                relevantFile: 'reporting/team.ts',
+                relevantLinesStart: 5,
+                relevantLinesEnd: 8,
+                label: 'bug',
+            }),
+            at('api/update.ts', 1, 37),
+            at('reporting/team.ts', 1, 42),
+            at('reporting/weekly.ts', 1, 28),
+        ];
+        expect(
+            keepOwnFindingsApart(
+                [{ keep: 0, duplicates: [1, 2, 3] }],
+                suggestions,
+            ),
+        ).toEqual([{ keep: 0, duplicates: [2] }]);
     });
 
     it('still merges findings of different agents, or a native one', () => {

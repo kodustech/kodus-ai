@@ -152,7 +152,6 @@ afterEach(() => {
 });
 
 describe('AgentReviewStage — custom agents (#2172)', () => {
-
     it('dispatches the enabled agents for every organization', async () => {
         const { stage, reviewOrchestrator, featureGate } = makeStage(
             output([]),
@@ -219,9 +218,7 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
 
         const result = await run(
             stage,
-            makeContext([
-                agent({ presentation: { minSeverity: 'high' } }),
-            ]),
+            makeContext([agent({ presentation: { minSeverity: 'high' } })]),
         );
 
         expect(contents(result.validSuggestions)).toEqual([
@@ -252,9 +249,7 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
 
         const result = await run(
             stage,
-            makeContext([
-                agent({ presentation: { maxComments: 1 } }),
-            ]),
+            makeContext([agent({ presentation: { maxComments: 1 } })]),
         );
 
         expect(contents(result.validSuggestions)).toEqual(['Critical one.']);
@@ -458,6 +453,54 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
             ]);
         });
 
+        it('credits the agent with a group only for a finding in its lane', async () => {
+            (hasManagedModelKey as jest.Mock).mockReturnValue(true);
+            runSpy.mockImplementation(async (args: any) =>
+                args?.runName === 'code-review-dedup'
+                    ? {
+                          groups: [
+                              { keep: 1, duplicates: [0] },
+                              { keep: 2, duplicates: [3] },
+                          ],
+                          unique: [],
+                      }
+                    : { groups: [], unique: [] },
+            );
+            const { stage } = makeStage(
+                output([
+                    native(),
+                    // A bug outside the agent's instructions.
+                    finding({ kind: 'bug' }),
+                    native({
+                        relevantLinesStart: 9,
+                        relevantLinesEnd: 9,
+                        suggestionContent: 'Native: credit missing.',
+                    }),
+                    // The team rule the agent was asked for.
+                    finding({
+                        relevantLinesStart: 9,
+                        relevantLinesEnd: 9,
+                        kind: 'convention',
+                        source: {
+                            file: 'docs/ledger.md',
+                            quote: 'Debits equal credits.',
+                        },
+                        suggestionContent: 'Rule: debit needs a credit.',
+                    }),
+                ]),
+            );
+            honorEveryMerge(stage);
+
+            const result = await run(stage, makeContext([agent()]));
+
+            expect(contents(result.validSuggestions).sort()).toEqual(
+                [
+                    'Native: the entry is one-sided.',
+                    'Rule: debit needs a credit.',
+                ].sort(),
+            );
+        });
+
         it('a finding its own agent filters out never takes a native one with it', async () => {
             (hasManagedModelKey as jest.Mock).mockReturnValue(true);
             runSpy.mockImplementation(async (args: any) =>
@@ -507,9 +550,7 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
 
             const result = await run(
                 stage,
-                makeContext([
-                    agent({ presentation: { maxComments: 1 } }),
-                ]),
+                makeContext([agent({ presentation: { maxComments: 1 } })]),
             );
 
             expect(contents(result.validSuggestions).sort()).toEqual(
@@ -577,7 +618,6 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
                 ]),
             );
         });
-
 
         it('hands the agents the sandbox and the CLIs installed for them', async () => {
             const { stage, reviewOrchestrator } = makeStage(output([]));
