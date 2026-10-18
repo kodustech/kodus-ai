@@ -710,8 +710,9 @@ describe('CONTRACT E: N-model policy — boundary is model-agnostic (gate lives 
 
 // ── issue #1831 acceptance criteria ─────────────────────────────────────────
 // Every case below is a shape the incident actually produced, measured against
-// 40 real merged PRs from polyglot Ruby repos (evals/kody-rules/
-// detector-fp-repro.js). The rule is the real one: a Ruby-scoped "avoid
+// 40 real merged PRs from polyglot Ruby repos (the 2026 detector repro; today
+// evals/kody-rules/polyglot-cases.json runs it through production's review).
+// The rule is the real one: a Ruby-scoped "avoid
 // unnecessary semicolons" whose compiled detector was `;\s*(?:#.*)?$` with an
 // empty `path`. It published 614 comments over that corpus; not one was a true
 // violation.

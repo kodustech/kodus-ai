@@ -22,7 +22,7 @@ short Discord message about it tomorrow morning.
 The finder runs on 30 recorded PRs with known bugs. Tool calls are answered
 from a recording. A judge model decides whether each finding matches a known
 bug. Recall is the share of known bugs matched, averaged over PRs. With no code
-change, one PR's recall can swing 50pp between nights, and the 30-PR mean moves
+change, one PR's recall can swing 50pp between nights, and the night's mean moves
 by the noise stated in facts.md. A pattern across many PRs is signal. One PR is
 not.
 

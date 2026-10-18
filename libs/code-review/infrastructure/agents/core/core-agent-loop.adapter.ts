@@ -21,6 +21,7 @@
  *  - discardedBySeverity is [] by design: the new path has no severity
  *    pre-filter — verify alone decides keep/drop.
  */
+import type { AgentSpec } from '@libs/agent-harness/domain/contracts/agent.contract';
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 
 import { ContextWindowCompressor } from '@libs/agent-harness/infrastructure/compression/context-window-compressor';
@@ -60,10 +61,17 @@ import {
 
 const funnelLogger = createLogger('review-funnel');
 
-export async function runAgentLoopViaCore(
+/**
+ * What one review agent runs with, its finder and its verifier alike: the
+ * runner (wrapped to recover from a context overflow when the window is
+ * known), the investigation tools, the provider options and the model ids.
+ * Called by runAgentLoopViaCore; the funnel's verify eval builds its verifier
+ * from it too.
+ */
+export function finderRunEnvironment(
     input: AgentLoopInput,
     secrets: AgentLoopSecrets,
-): Promise<AgentLoopOutput> {
+) {
     // The adapter resolves ONLY the slot — LLM.run (inside the runner) builds +
     // wraps the model (limiter with the finder's own queueTimeoutMs + reporter),
     // derives tuning, applies the prompt-cache, and records the cost span. The
@@ -107,11 +115,6 @@ export async function runAgentLoopViaCore(
         ? recordAstGrepOutputs(baseTools, astGrepLog)
         : baseTools;
 
-    const coverageLedger = new DiffCoverageLedger({
-        changedFiles: input.changedFiles,
-        fileTiers: input.fileTiers,
-    });
-
     // Reasoning/thinking config (provider-specific) → providerOptions, forwarded
     // to every model call (finder + verifier). Ported from the legacy loop.
     const providerOptions = buildProviderOptions(
@@ -126,20 +129,6 @@ export async function runAgentLoopViaCore(
             openrouterAllowFallbacks: input.openrouterAllowFallbacks,
         },
     );
-
-    // Recall-pass gating — ported from the legacy loop: skip the heavy passes in
-    // fast mode, self-contained (no tools) trial flow, or when the caller asks.
-    // EXCEPTION: an explicit `heavy` opt-in (CLI `--heavy` / PR `@kody review
-    // --heavy`) forces the recall passes to run regardless — the whole point of
-    // heavy is more recall via resampling, so it must not be silently nullified
-    // by the default fast/self-contained gating.
-    const isSelfContained = tools.list().length === 0;
-    const skipHeavyPasses =
-        !input.heavy &&
-        (input.reviewMode === 'fast' ||
-            isSelfContained ||
-            !!input.skipHeavyPasses);
-    const skipSynthesisRescue = !!input.skipSynthesisRescue;
 
     const contextWindowTokens = input.contextWindowTokens;
     // Fixed per-request overhead (system prompt + tool schemas) the provider
@@ -168,6 +157,93 @@ export async function runAgentLoopViaCore(
     // tool built for the primary would be rejected by a non-strict fallback
     // (e.g. Gemini primary → OpenAI fallback). See supportsStrictToolsForRun.
     const fallbackModelId = secrets.byokConfig?.fallback?.model;
+    // Overflow net (issue #1574): if a mis-sized window lets any finder sub-run
+    // overflow mid-loop, re-run THAT pass once at a tighter window instead of
+    // failing the review. Wrapping the shared runner covers every pass (base +
+    // resamples + synthesis-rescue) at one seam. Only when a window is known —
+    // otherwise `tighten` can't scale anything, so we skip the wrapper entirely.
+    const tightenCompression = (spec: AgentSpec, scale: number) =>
+        contextWindowTokens
+            ? {
+                  ...spec,
+                  policies: spec.policies.map((p) =>
+                      p.name === 'compression'
+                          ? new CompressionPolicy(
+                                new ContextWindowCompressor(
+                                    Math.floor(contextWindowTokens * scale),
+                                    { overheadTokens },
+                                ),
+                            )
+                          : p,
+                  ),
+              }
+            : spec;
+    const finderRunner = contextWindowTokens
+        ? new OverflowRecoveringRunner(runner, tightenCompression)
+        : runner;
+
+    return {
+        tools,
+        toolCache,
+        providerOptions,
+        contextWindowTokens,
+        overheadTokens,
+        specModelId,
+        fallbackModelId,
+        finderRunner,
+        readGuide,
+        astGrepLog,
+        // What verify runs with (verifyFindings), as runFinderWithVerify gets it.
+        verifyParams: {
+            runner: finderRunner,
+            modelId: specModelId,
+            fallbackModelId,
+            tools,
+            providerOptions,
+            previousDecisions: input.previousDecisions,
+            telemetryMetadata: input.telemetryMetadata,
+            agentName: input.agentName,
+            usageRunName: input.usageRunName,
+        },
+    };
+}
+
+export async function runAgentLoopViaCore(
+    input: AgentLoopInput,
+    secrets: AgentLoopSecrets,
+): Promise<AgentLoopOutput> {
+    const {
+        tools,
+        toolCache,
+        providerOptions,
+        contextWindowTokens,
+        overheadTokens,
+        specModelId,
+        fallbackModelId,
+        verifyParams,
+        readGuide,
+        astGrepLog,
+    } = finderRunEnvironment(input, secrets);
+
+    const coverageLedger = new DiffCoverageLedger({
+        changedFiles: input.changedFiles,
+        fileTiers: input.fileTiers,
+    });
+
+    // Recall-pass gating — ported from the legacy loop: skip the heavy passes in
+    // fast mode, self-contained (no tools) trial flow, or when the caller asks.
+    // EXCEPTION: an explicit `heavy` opt-in (CLI `--heavy` / PR `@kody review
+    // --heavy`) forces the recall passes to run regardless — the whole point of
+    // heavy is more recall via resampling, so it must not be silently nullified
+    // by the default fast/self-contained gating.
+    const isSelfContained = tools.list().length === 0;
+    const skipHeavyPasses =
+        !input.heavy &&
+        (input.reviewMode === 'fast' ||
+            isSelfContained ||
+            !!input.skipHeavyPasses);
+    const skipSynthesisRescue = !!input.skipSynthesisRescue;
+
     const buildSpecWithLedger = (ledger: DiffCoverageLedger) =>
         buildFinderAgentSpec({
             systemPrompt: input.systemPrompt,
@@ -201,31 +277,6 @@ export async function runAgentLoopViaCore(
             }),
         );
 
-    // Overflow net (issue #1574): if a mis-sized window lets any finder sub-run
-    // overflow mid-loop, re-run THAT pass once at a tighter window instead of
-    // failing the review. Wrapping the shared runner covers every pass (base +
-    // resamples + synthesis-rescue) at one seam. Only when a window is known —
-    // otherwise `tighten` can't scale anything, so we skip the wrapper entirely.
-    const tightenCompression = (spec: typeof finderSpec, scale: number) =>
-        contextWindowTokens
-            ? {
-                  ...spec,
-                  policies: spec.policies.map((p) =>
-                      p.name === 'compression'
-                          ? new CompressionPolicy(
-                                new ContextWindowCompressor(
-                                    Math.floor(contextWindowTokens * scale),
-                                    { overheadTokens },
-                                ),
-                            )
-                          : p,
-                  ),
-              }
-            : spec;
-    const finderRunner = contextWindowTokens
-        ? new OverflowRecoveringRunner(runner, tightenCompression)
-        : runner;
-
     // Standard agent run context: runId + a signal that aborts on the parent job
     // signal OR after the hard per-agent timeout. Shared with conversation +
     // business so every agent has the same cancellation/timeout guarantee.
@@ -241,7 +292,7 @@ export async function runAgentLoopViaCore(
         !!verifySlot &&
         (verifySlot.provider !== secrets.byokConfig?.provider ||
             verifySlot.model !== secrets.byokConfig?.model);
-    const verifyParams = verifyOnOwnModel
+    const ownVerify = verifyOnOwnModel
         ? {
               verifyRunner: new AiSdkAgentRunner(verifySlot, {
                   organizationId: input.telemetryMetadata?.organizationId,
@@ -275,19 +326,14 @@ export async function runAgentLoopViaCore(
     const r = await runFinderWithVerify(
         {
             ...verifyParams,
-            runner: finderRunner,
+            ...ownVerify,
             finderSpec,
             makeResampleSpec,
-            modelId: specModelId,
-            fallbackModelId,
-            tools,
-            providerOptions,
             skipHeavyPasses,
             skipSynthesisRescue,
             // HEAVY mode — extra critic pass. Only meaningful when heavy passes
             // run at all (not fast/self-contained); harmless otherwise.
             heavy: !!input.heavy && !skipHeavyPasses,
-            previousDecisions: input.previousDecisions,
             teamSystemTools: input.teamSystemTools,
             ...(readGuide && {
                 conventionCheck: {
@@ -301,9 +347,6 @@ export async function runAgentLoopViaCore(
                     astGrepLog,
                 },
             }),
-            telemetryMetadata: input.telemetryMetadata,
-            agentName: input.agentName,
-            usageRunName: input.usageRunName,
             // Wire the prose-findings recovery to the internal-model fallback.
             // The finder/recall passes stay decoupled from BYOK — they only see
             // the ProseRecoverer function.

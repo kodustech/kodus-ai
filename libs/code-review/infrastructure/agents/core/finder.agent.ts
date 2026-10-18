@@ -815,74 +815,27 @@ export async function runFinderWithVerify(
               rejected: [] as ConventionCheckRejected[],
           };
 
-    // Verify each finding (HV2 refute-to-drop) with the confidence SPLIT inside
-    // LlmVerifier: high-confidence → light depth, low-confidence → full depth.
+    // HV2 on the bug findings (refute-to-drop + evidence gate), on the check
+    // model when the caller gave one.
     const verify = verifyModelOf(params);
-    const verifier = new LlmVerifier(verify.runner, {
-        modelId: verify.modelId,
-        fallbackModelId: verify.fallbackModelId,
-        tools: params.tools,
-        providerOptions: verify.providerOptions,
-        telemetryMetadata: params.telemetryMetadata,
-        agentName: params.agentName,
-        usageRunName: params.usageRunName,
-        previousDecisions: params.previousDecisions,
-    });
-    const pass = await runVerificationPass<FinderSuggestion>(
-        { candidates: route.bugs, verifier, concurrency: params.concurrency },
-        ctx,
-    );
-
-    let kept = pass.kept;
-    let dropped = pass.dropped;
-    let gateUsage: VerifyUsage = ZERO_VERIFY_USAGE;
-
-    // Per-finding verifier verdict (carries the verifier's investigation tool
-    // calls) so we can attribute per-finding verifier evidence to the trace.
-    const verdictByFinding = new Map<FinderSuggestion, Verdict>();
-    pass.kept.forEach((f, i) => verdictByFinding.set(f, pass.keptVerdicts[i]));
-    pass.dropped.forEach((d) => verdictByFinding.set(d.candidate, d.verdict));
-
-    // EVIDENCE GATE (ported from legacy): a finding kept WITHOUT the finder
-    // having investigated its file is not trusted blindly — it gets a thorough
-    // FULL re-verify, which may then drop it.
     const investigated = strongFilesFromRun(finderState);
-    const unevidenced = kept.filter(
-        (f) => !fileWasInvestigated(investigated, f.relevantFile),
-    );
-    if (unevidenced.length > 0) {
-        const fullVerifier = new LlmVerifier(verify.runner, {
+    const hv2 = await verifyFindings(
+        {
+            ...params,
+            runner: verify.runner,
             modelId: verify.modelId,
             fallbackModelId: verify.fallbackModelId,
-            tools: params.tools,
-            forceFull: true,
             providerOptions: verify.providerOptions,
-            telemetryMetadata: params.telemetryMetadata,
-            agentName: params.agentName,
-            usageRunName: params.usageRunName,
-            previousDecisions: params.previousDecisions,
-        });
-        const gate = await runVerificationPass<FinderSuggestion>(
-            {
-                candidates: unevidenced,
-                verifier: fullVerifier,
-                concurrency: params.concurrency,
-            },
-            ctx,
-        );
-        // The gate's re-verify is the more thorough look — its verdict (and tool
-        // evidence) supersedes the first pass for the re-checked findings.
-        gate.kept.forEach((f, i) =>
-            verdictByFinding.set(f, gate.keptVerdicts[i]),
-        );
-        gate.dropped.forEach((d) =>
-            verdictByFinding.set(d.candidate, d.verdict),
-        );
-        const stillDropped = new Set(gate.dropped.map((d) => d.candidate));
-        kept = kept.filter((f) => !stillDropped.has(f));
-        dropped = [...dropped, ...gate.dropped];
-        gateUsage = { ...fullVerifier.usage };
-    }
+        },
+        route.bugs,
+        investigated,
+        ctx,
+    );
+    let kept = hv2.kept;
+    let dropped = hv2.dropped;
+    // Per-finding verifier verdict (carries the verifier's investigation tool
+    // calls) so we can attribute per-finding verifier evidence to the trace.
+    const verdictByFinding = hv2.verdictByFinding;
 
     // Convention findings that passed the quote check. The quote check is
     // their evidence gate: they never take the HV2 full re-verify above,
@@ -982,11 +935,112 @@ export async function runFinderWithVerify(
         unverified,
         droppedByQuoteCheck: route.rejected,
         finderState,
-        verifyUsage: sumVerifyUsage(
-            sumVerifyUsage(verifier.usage, gateUsage),
-            conventionUsage,
-        ),
+        verifyUsage: sumVerifyUsage(hv2.verifyUsage, conventionUsage),
         recallUsage,
+    };
+}
+
+/**
+ * The verify step: each candidate judged by the verifier (refute-to-drop), then
+ * the evidence gate, which re-verifies in full a finding kept on a file the
+ * finder never investigated (`investigated`: strongFilesFromRun of its run).
+ * Called by runFinderWithVerify; the funnel's verify eval calls it too.
+ */
+export async function verifyFindings(
+    params: Pick<
+        RunFinderWithVerifyParams,
+        | 'runner'
+        | 'modelId'
+        | 'fallbackModelId'
+        | 'tools'
+        | 'concurrency'
+        | 'providerOptions'
+        | 'telemetryMetadata'
+        | 'agentName'
+        | 'usageRunName'
+        | 'previousDecisions'
+    >,
+    suggestions: FinderSuggestion[],
+    investigated: Set<string>,
+    ctx: ToolContext,
+): Promise<{
+    kept: FinderSuggestion[];
+    dropped: { candidate: FinderSuggestion; verdict: Verdict }[];
+    verdictByFinding: Map<FinderSuggestion, Verdict>;
+    verifyUsage: VerifyUsage;
+}> {
+    // Verify each finding (HV2 refute-to-drop) with the confidence SPLIT inside
+    // LlmVerifier: high-confidence → light depth, low-confidence → full depth.
+    const verifier = new LlmVerifier(params.runner, {
+        modelId: params.modelId,
+        fallbackModelId: params.fallbackModelId,
+        tools: params.tools,
+        providerOptions: params.providerOptions,
+        telemetryMetadata: params.telemetryMetadata,
+        agentName: params.agentName,
+        usageRunName: params.usageRunName,
+        previousDecisions: params.previousDecisions,
+    });
+    const pass = await runVerificationPass<FinderSuggestion>(
+        { candidates: suggestions, verifier, concurrency: params.concurrency },
+        ctx,
+    );
+
+    let kept = pass.kept;
+    let dropped = pass.dropped;
+    let gateUsage: VerifyUsage = ZERO_VERIFY_USAGE;
+
+    // Per-finding verifier verdict (carries the verifier's investigation tool
+    // calls) so we can attribute per-finding verifier evidence to the trace.
+    const verdictByFinding = new Map<FinderSuggestion, Verdict>();
+    pass.kept.forEach((f, i) => verdictByFinding.set(f, pass.keptVerdicts[i]));
+    pass.dropped.forEach((d) => verdictByFinding.set(d.candidate, d.verdict));
+
+    // EVIDENCE GATE (ported from legacy): a finding kept WITHOUT the finder
+    // having investigated its file is not trusted blindly — it gets a thorough
+    // FULL re-verify, which may then drop it.
+    const unevidenced = kept.filter(
+        (f) => !fileWasInvestigated(investigated, f.relevantFile),
+    );
+    if (unevidenced.length > 0) {
+        const fullVerifier = new LlmVerifier(params.runner, {
+            modelId: params.modelId,
+            fallbackModelId: params.fallbackModelId,
+            tools: params.tools,
+            forceFull: true,
+            providerOptions: params.providerOptions,
+            telemetryMetadata: params.telemetryMetadata,
+            agentName: params.agentName,
+            usageRunName: params.usageRunName,
+            previousDecisions: params.previousDecisions,
+        });
+        const gate = await runVerificationPass<FinderSuggestion>(
+            {
+                candidates: unevidenced,
+                verifier: fullVerifier,
+                concurrency: params.concurrency,
+            },
+            ctx,
+        );
+        // The gate's re-verify is the more thorough look — its verdict (and tool
+        // evidence) supersedes the first pass for the re-checked findings.
+        gate.kept.forEach((f, i) =>
+            verdictByFinding.set(f, gate.keptVerdicts[i]),
+        );
+        gate.dropped.forEach((d) =>
+            verdictByFinding.set(d.candidate, d.verdict),
+        );
+        const stillDropped = new Set(gate.dropped.map((d) => d.candidate));
+        kept = kept.filter((f) => !stillDropped.has(f));
+        dropped = [...dropped, ...gate.dropped];
+        gateUsage = { ...fullVerifier.usage };
+    }
+
+    return {
+        kept,
+        dropped,
+        verdictByFinding,
+        verifyUsage: sumVerifyUsage(verifier.usage, gateUsage),
     };
 }
 
@@ -1055,7 +1109,7 @@ async function routeByKind(
 /** Files the finder actually investigated via readFile/checkTypes — the "strong
  *  evidence" the evidence gate checks. (grep is excluded: a search doesn't prove
  *  the agent read the matched code, matching the legacy strongFiles notion.) */
-function strongFilesFromRun(state: RunState): Set<string> {
+export function strongFilesFromRun(state: RunState): Set<string> {
     const out = new Set<string>();
     for (const step of state.steps) {
         for (const tc of step.message.toolCalls ?? []) {

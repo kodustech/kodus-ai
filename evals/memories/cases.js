@@ -120,12 +120,15 @@ const GENERATED = /generat|openapi|codegen|overwrit|by hand|manual(ly)? edit/i;
 // holds no literal a secret scanner would stop at the push.
 const FAKE_SLACK_TOKEN = ['xoxb', '2817364591', '8473625190', 'Qm7sKd92LpXz4RtNv8Wc1Yhe'].join('-');
 const FAKE_LIVE_KEY = ['sk', 'live', '51Hq8LmA9xKz2PqR7vT3nW8yB'].join('_');
-const SLACK_FIXTURE = `{
-    "team": "T024BE7LD",
-    "botToken": "${FAKE_SLACK_TOKEN}",
-    "signingSecret": "8f742231b10e8888abcd99yyyzzz85a5",
-    "channel": "C1H9RESGL"
-}
+// A TypeScript fixture, not JSON: production ignores **/*.json by default
+// (default-kodus-config.yml ignorePaths), so it never reviews a JSON fixture
+// and no memory would decide the case.
+const SLACK_FIXTURE = `export const workspace = {
+    team: 'T024BE7LD',
+    botToken: '${FAKE_SLACK_TOKEN}',
+    signingSecret: '8f742231b10e8888abcd99yyyzzz85a5',
+    channel: 'C1H9RESGL',
+};
 `;
 
 const CASES = [
@@ -136,10 +139,10 @@ const CASES = [
         memories: [fixtures],
         prTitle: 'Add Slack workspace fixture',
         prBody: 'Fixture for the Slack notifier tests.',
-        before: { 'test/fixtures/slack-workspace.json': null },
+        before: { 'test/fixtures/slack-workspace.ts': null },
         repo: {
-            'test/fixtures/slack-workspace.json': SLACK_FIXTURE,
-            'test/slack-notifier.test.ts': `import workspace from './fixtures/slack-workspace.json';
+            'test/fixtures/slack-workspace.ts': SLACK_FIXTURE,
+            'test/slack-notifier.test.ts': `import { workspace } from './fixtures/slack-workspace';
 import { notify } from '../src/slack-notifier';
 
 it('posts to the channel', async () => {
@@ -151,7 +154,7 @@ it('posts to the channel', async () => {
 }
 `,
         },
-        expect: [{ quiet: 'test/fixtures/slack-workspace.json', about: SECRET }],
+        expect: [{ quiet: 'test/fixtures/slack-workspace.ts', about: SECRET }],
     },
     {
         id: 'fixtures-live-key-in-source',
@@ -174,7 +177,7 @@ export async function charge(amount: number) {
     return { apiKey };
 }
 `,
-            'test/fixtures/slack-workspace.json': SLACK_FIXTURE,
+            'test/fixtures/slack-workspace.ts': SLACK_FIXTURE,
         },
         expect: [{ flag: 'src/payments/checkout.ts', at: 'sk_live_', about: SECRET }],
     },

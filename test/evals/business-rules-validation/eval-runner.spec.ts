@@ -230,45 +230,29 @@ describe('business-rules-validation eval runner', () => {
         const result = await runBlueprint<BusinessRulesContext>({
             steps,
             context: initialContext,
-            runLLMStep: async (_step: LLMStep, ctx: BusinessRulesContext) => ({
-                ...(fixture.input.userLanguage
-                    ? (() => {
-                          expect(ctx.userLanguage).toBe(
-                              fixture.input.userLanguage,
-                          );
-                          return {};
-                      })()
-                    : {}),
-                ...ctx,
-                validationResult: {
-                    needsMoreInfo: fixture.expectedOutcome.needsMoreInfo,
-                    mode:
-                        fixture.expectedOutcome.mode ??
-                        (fixture.expectedOutcome.needsMoreInfo
-                            ? 'limitation_response'
-                            : 'full_analysis'),
-                    reason:
-                        fixture.expectedOutcome.reason ??
-                        (fixture.expectedOutcome.needsMoreInfo
-                            ? 'task_context_missing'
-                            : 'analysis_ready'),
-                    taskContextStatus:
-                        fixture.expectedOutcome.taskContextStatus ??
-                        ctx.analysisEligibility?.taskContextStatus,
-                    prDiffStatus:
-                        fixture.expectedOutcome.prDiffStatus ??
-                        ctx.analysisEligibility?.prDiffStatus,
-                    summary: resolveFixtureSummary(fixture, ctx.userLanguage),
-                    missingInfo:
-                        fixture.expectedOutcome.needsMoreInfo === true
-                            ? resolveFixtureSummary(fixture, ctx.userLanguage)
-                            : '',
-                },
-                formattedResponse: resolveFixtureSummary(
-                    fixture,
-                    ctx.userLanguage,
-                ),
-            }),
+            // The analyzer's model call is the one step this test does not run.
+            // It hands the context back with a neutral result built from what
+            // the production steps before it decided, so nothing asserted below
+            // is something this stub wrote: the eligibility, the task quality and
+            // the resolved task context come from production code only.
+            runLLMStep: async (_step: LLMStep, ctx: BusinessRulesContext) => {
+                if (fixture.input.userLanguage) {
+                    expect(ctx.userLanguage).toBe(fixture.input.userLanguage);
+                }
+                return {
+                    ...ctx,
+                    validationResult: {
+                        needsMoreInfo: ctx.analysisEligibility?.mode === 'limitation_response',
+                        mode: ctx.analysisEligibility?.mode ?? 'full_analysis',
+                        reason: ctx.analysisEligibility?.reason ?? 'analysis_ready',
+                        taskContextStatus: ctx.analysisEligibility?.taskContextStatus,
+                        prDiffStatus: ctx.analysisEligibility?.prDiffStatus,
+                        summary: '',
+                        missingInfo: '',
+                    },
+                    formattedResponse: '',
+                };
+            },
         });
 
         for (const expected of fixture.expectedTrajectory) {
@@ -295,26 +279,26 @@ describe('business-rules-validation eval runner', () => {
             }
         }
 
-        expect(result.context.validationResult?.needsMoreInfo).toBe(
+        // What production decided before the analyzer: whether it may run, in
+        // which mode and why, from the task and the diff it resolved.
+        const eligibility = result.context.analysisEligibility;
+        expect(eligibility).toBeDefined();
+        expect(eligibility?.mode === 'limitation_response').toBe(
             fixture.expectedOutcome.needsMoreInfo,
         );
         if (fixture.expectedOutcome.mode) {
-            expect(result.context.validationResult?.mode).toBe(
-                fixture.expectedOutcome.mode,
-            );
+            expect(eligibility?.mode).toBe(fixture.expectedOutcome.mode);
         }
         if (fixture.expectedOutcome.reason) {
-            expect(result.context.validationResult?.reason).toBe(
-                fixture.expectedOutcome.reason,
-            );
+            expect(eligibility?.reason).toBe(fixture.expectedOutcome.reason);
         }
         if (fixture.expectedOutcome.taskContextStatus) {
-            expect(result.context.validationResult?.taskContextStatus).toBe(
+            expect(eligibility?.taskContextStatus).toBe(
                 fixture.expectedOutcome.taskContextStatus,
             );
         }
         if (fixture.expectedOutcome.prDiffStatus) {
-            expect(result.context.validationResult?.prDiffStatus).toBe(
+            expect(eligibility?.prDiffStatus).toBe(
                 fixture.expectedOutcome.prDiffStatus,
             );
         }
@@ -328,37 +312,5 @@ describe('business-rules-validation eval runner', () => {
                 );
             }
         }
-
-        if (fixture.expectedOutcome.summaryContains?.length) {
-            const summarySource =
-                result.context.validationResult?.summary ??
-                result.context.formattedResponse ??
-                '';
-            for (const token of fixture.expectedOutcome.summaryContains) {
-                expect(summarySource.toLowerCase()).toContain(
-                    token.toLowerCase(),
-                );
-            }
-        }
     });
 });
-
-function resolveFixtureSummary(
-    fixture: EvalFixture,
-    userLanguage: string | undefined,
-): string {
-    if (fixture.expectedOutcome.summaryText) {
-        return fixture.expectedOutcome.summaryText;
-    }
-
-    const isPortuguese = userLanguage?.toLowerCase().startsWith('pt');
-    if (fixture.expectedOutcome.needsMoreInfo) {
-        return isPortuguese
-            ? 'Preciso de mais contexto da task'
-            : 'Need task information';
-    }
-
-    return isPortuguese
-        ? `Resumo da validação para ${fixture.name}`
-        : `Validation summary for ${fixture.name}`;
-}

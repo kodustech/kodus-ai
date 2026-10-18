@@ -245,6 +245,7 @@ async function scoreSubmission({ submission, dataset, judge, onProgress, concurr
     const totalMatched = scored.reduce((s, c) => s + c.metrics.matched, 0);
     const totalFindings = scored.reduce((a, c) => a + (c.metrics.findings || 0), 0);
     const totalTpFindings = scored.reduce((a, c) => a + (c.metrics.tpFindings || 0), 0);
+    const totalFp = totalFindings - totalTpFindings;
     const usage = scored.reduce(
         (acc, c) => {
             acc.inputTokens += c.usage?.inputTokens || 0;
@@ -269,10 +270,12 @@ async function scoreSubmission({ submission, dataset, judge, onProgress, concurr
             // micro = TP/(TP+FP) agregado no bench inteiro. E a convencao que
             // Martian e Alibaba publicam; macro fica ao lado para continuidade,
             // mas o ranking deve usar micro.
-            precisionMicro: totalFindings ? totalTpFindings / totalFindings : null,
+            // Same formula as each case's: matched known bugs over themselves plus
+            // the findings that match none.
+            precisionMicro: totalMatched + totalFp ? totalMatched / (totalMatched + totalFp) : null,
             precisionMacro: mean(scored.map((c) => c.metrics.precision)),
             f1Micro: (() => {
-                const p = totalFindings ? totalTpFindings / totalFindings : null;
+                const p = totalMatched + totalFp ? totalMatched / (totalMatched + totalFp) : null;
                 const r = totalGoldens ? totalMatched / totalGoldens : null;
                 return p !== null && r !== null && p + r ? (2 * p * r) / (p + r) : null;
             })(),
