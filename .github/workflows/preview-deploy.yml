@@ -209,6 +209,12 @@ jobs:
                   # An E2B key for previews only: without it reviews fall back
                   # to the local sandbox, which never runs custom agent CLIs.
                   PREVIEW_E2B_KEY: ${{ secrets.PREVIEW_E2B_KEY }}
+                  # An OpenAI key for previews only, used for embeddings (the
+                  # dedup guard): without it every merge with low word overlap
+                  # is vetoed, so a preview dedups unlike production. The same
+                  # variable also enables the managed OpenAI models, so use a
+                  # key with a spending limit.
+                  PREVIEW_OPENAI_EMBEDDINGS_KEY: ${{ secrets.PREVIEW_OPENAI_EMBEDDINGS_KEY }}
                   HEAD_REF: ${{ steps.target.outputs.branch }}
                   PROFILES: ${{ steps.decide.outputs.profiles }}
               run: |
@@ -273,6 +279,17 @@ jobs:
                     echo "E2B: reviews use the isolated sandbox"
                   else
                     echo "::notice::PREVIEW_E2B_KEY is not set — reviews use the local sandbox and custom agent CLIs are skipped"
+                  fi
+                  if [ -n "$PREVIEW_OPENAI_EMBEDDINGS_KEY" ]; then
+                    grep -v '^API_OPEN_AI_API_KEY=' .env > "$RUNNER_TEMP/env.no-openai"
+                    {
+                      cat "$RUNNER_TEMP/env.no-openai"
+                      echo "API_OPEN_AI_API_KEY=$PREVIEW_OPENAI_EMBEDDINGS_KEY"
+                    } > .env
+                    rm -f "$RUNNER_TEMP/env.no-openai"
+                    echo "OpenAI: the dedup guard has embeddings"
+                  else
+                    echo "::notice::PREVIEW_OPENAI_EMBEDDINGS_KEY is not set — the dedup guard runs without embeddings and vetoes low-overlap merges"
                   fi
                   # billing exists in the cloud shape only
                   case " $PROFILES " in *" cloud "*)
