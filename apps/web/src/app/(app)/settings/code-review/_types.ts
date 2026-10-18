@@ -234,15 +234,25 @@ export type FormattedCodeReviewBaseConfig = Omit<
     configs: FormattedCodeReviewConfig;
 };
 
-export interface FormattedGlobalCodeReviewConfig extends Omit<
-    AutomationCodeReviewConfigType,
-    "configs" | "repositories"
-> {
+export interface FormattedGlobalCodeReviewConfig
+    extends
+        Omit<AutomationCodeReviewConfigType, "configs" | "repositories">,
+        CustomAgentsRevisions {
     configs: FormattedCodeReviewConfig & {
         showToggleCodeReviewVersion: boolean;
     }; // TODO: remove this flag when we launch v2
     repositories: FormattedRepositoryCodeReviewConfig[];
 }
+
+/**
+ * The revision of the custom agents and knowledge a level resolves to, as
+ * the server read them. Sent back with a save of either list, which the
+ * server refuses if the list changed since.
+ */
+export type CustomAgentsRevisions = {
+    customAgentsRevision?: string;
+    knowledgeRevision?: string;
+};
 
 /**
  * Health of the kodus-config.yml overlay for one scope. The file is read live
@@ -270,7 +280,7 @@ export type FormattedRepositoryCodeReviewConfig = Omit<
     configs: FormattedCodeReviewConfig;
     directories: FormattedDirectoryCodeReviewConfig[];
     kodusConfigFile?: KodusConfigFileOverlay;
-};
+} & CustomAgentsRevisions;
 
 export type FormattedDirectoryCodeReviewConfig = Omit<
     CodeReviewDirectoryConfig,
@@ -278,7 +288,7 @@ export type FormattedDirectoryCodeReviewConfig = Omit<
 > & {
     configs: FormattedCodeReviewConfig;
     kodusConfigFile?: KodusConfigFileOverlay;
-};
+} & CustomAgentsRevisions;
 
 export enum BehaviourForNewCommits {
     NONE = "none",

@@ -22,6 +22,11 @@ import {
     getChangedConfigMask,
     pickChangedConfig,
 } from "../_utils/changed-config";
+import {
+    CodeReviewSettingsConflictError,
+    expectedCustomAgentsRevisions,
+    withoutListRevisions,
+} from "../_utils/settings-save-conflict";
 import { mergeFormattedCodeReviewConfigForScope } from "../_utils/settings-shell";
 
 type SavePreparationResult = {
@@ -89,7 +94,7 @@ export const useCodeReviewSettingsMutation = (params: {
         });
     };
 
-    const invalidateRelatedQueries = () => {
+    const invalidateRelatedQueries = (awaitConfigRefetch = false) => {
         queryClient.invalidateQueries({
             queryKey: generateQueryKey(PARAMETERS_PATHS.CODE_REVIEW_SCOPES, {
                 params: { teamId },
@@ -110,7 +115,7 @@ export const useCodeReviewSettingsMutation = (params: {
             }),
             refetchType: "all",
         });
-        void queryClient.invalidateQueries({
+        const configRefetch = queryClient.invalidateQueries({
             queryKey: generateQueryKey(
                 PARAMETERS_PATHS.GET_CODE_REVIEW_PARAMETER,
                 {
@@ -128,6 +133,8 @@ export const useCodeReviewSettingsMutation = (params: {
             }),
             refetchType: "all",
         });
+
+        return awaitConfigRefetch ? configRefetch : Promise.resolve();
     };
 
     const saveSettings = async (
@@ -147,17 +154,33 @@ export const useCodeReviewSettingsMutation = (params: {
         // Nothing in the code-review config changed (e.g. only the language,
         // which `prepare` already saved).
         if (Object.keys(changedConfig).length === 0) {
-            form.reset(prepared.savedFormData);
+            form.reset(withoutListRevisions(prepared.savedFormData));
             invalidateRelatedQueries();
             return {};
         }
+
+        // A save of the custom agents or knowledge names the revision of
+        // each list it was made from; the server refuses it if the list
+        // changed since.
+        const expectedRevisions = expectedCustomAgentsRevisions(
+            formattedConfig,
+            changedConfig,
+        );
 
         const result = await createOrUpdateCodeReviewParameter(
             changedConfig,
             teamId,
             repositoryId,
             directoryId,
+            undefined,
+            { expectedRevisions },
         );
+
+        // Someone else saved the lists this save was made from: nothing was
+        // written, and the form keeps the user's edits.
+        if ((result as { error?: unknown })?.error === 409) {
+            throw new CodeReviewSettingsConflictError();
+        }
 
         if ((result as { error?: string })?.error) {
             throw new Error(
@@ -165,14 +188,20 @@ export const useCodeReviewSettingsMutation = (params: {
             );
         }
 
+        const savedFormData = withoutListRevisions(prepared.savedFormData);
+        // A save of the lists changed their revisions: resolve once the
+        // config carrying the new ones is loaded, or the next edit would
+        // start from the old ones and be refused as if someone else saved.
+        const awaitConfigRefetch = expectedRevisions !== undefined;
+
         if (isCentralizedPrResponse(result)) {
-            form.reset(prepared.savedFormData);
-            invalidateRelatedQueries();
+            form.reset(savedFormData);
+            await invalidateRelatedQueries(awaitConfigRefetch);
             return { centralizedPr: result };
         }
 
-        form.reset(prepared.savedFormData);
-        invalidateRelatedQueries();
+        form.reset(savedFormData);
+        await invalidateRelatedQueries(awaitConfigRefetch);
 
         return {};
     };

@@ -37,6 +37,7 @@ import { useUnsavedChangesGuard } from "src/core/hooks/use-unsaved-changes-guard
 import { useCustomAgentsForm } from "../_custom-agents/use-custom-agents-form";
 import { CentralizedConfigReadOnlyAlert } from "../../_components/centralized-config-readonly-alert";
 import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedback";
+import { customAgentsSaveErrorMessage } from "../../_utils/settings-save-conflict";
 import { useFeatureFlags } from "../../../_components/context";
 import { KnowledgeStatusChips } from "../agents/[agentId]/_components/knowledge-card";
 
@@ -134,7 +135,10 @@ function SkillsContent() {
             console.error("Error saving skills and docs:", error);
             toast({
                 title: "Error",
-                description: "Couldn't save. Check the limits and try again.",
+                description: customAgentsSaveErrorMessage(
+                    error,
+                    "Couldn't save. Check the limits and try again.",
+                ),
                 variant: "danger",
             });
         }

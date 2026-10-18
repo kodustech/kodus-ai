@@ -12,11 +12,21 @@ import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { useCodeReviewSettingsMutation } from "../../_hooks/use-code-review-settings-mutation";
 import type { CodeReviewFormType } from "../../_types";
 import {
+    loadedListRevision,
+    type RevisionedListField,
+} from "../../_utils/settings-save-conflict";
+import {
     useCodeReviewRouteParams,
     useCurrentConfigLevel,
 } from "../../../_hooks";
 
-type FieldNode<T> = { value?: T; level?: string } | undefined;
+/**
+ * A list as the form holds it. `revision` is set on the first edit to the
+ * revision of the list the edit started from, and travels with the draft
+ * (see settings-save-conflict.ts).
+ */
+type FieldNode<T> =
+    { value?: T; level?: string; revision?: string } | undefined;
 
 /**
  * The custom agents and the skills and docs they link, read from and written
@@ -57,23 +67,26 @@ export const useCustomAgentsForm = () => {
         (key) => key !== "customAgents" && key !== "knowledge",
     );
 
-    const setAgents = useCallback(
-        (next: CustomAgent[]) =>
+    const setList = useCallback(
+        (field: RevisionedListField, next: unknown[]) =>
             form.setValue(
-                "customAgents" as never,
-                { value: next, level } as never,
+                field as never,
+                {
+                    value: next,
+                    level,
+                    revision: loadedListRevision(form.getValues(), field),
+                } as never,
                 { shouldDirty: true },
             ),
         [form, level],
     );
+    const setAgents = useCallback(
+        (next: CustomAgent[]) => setList("customAgents", next),
+        [setList],
+    );
     const setKnowledge = useCallback(
-        (next: KnowledgeItem[]) =>
-            form.setValue(
-                "knowledge" as never,
-                { value: next, level } as never,
-                { shouldDirty: true },
-            ),
-        [form, level],
+        (next: KnowledgeItem[]) => setList("knowledge", next),
+        [setList],
     );
     const updateAgent = useCallback(
         (id: string, patch: (agent: CustomAgent) => CustomAgent) => {
@@ -92,7 +105,11 @@ export const useCustomAgentsForm = () => {
         [form, setAgents],
     );
 
-    /** Saves only the agents and knowledge on screen. */
+    /**
+     * Saves only the agents and knowledge on screen. The save names the
+     * revision each list was loaded at: if someone else changed a list
+     * since, it is refused and the form keeps the edits.
+     */
     const save = useCallback(
         (next?: { agents?: CustomAgent[]; knowledge?: KnowledgeItem[] }) => {
             if (next?.agents) setAgents(next.agents);

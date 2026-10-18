@@ -37,6 +37,7 @@ import {
 } from "../../_custom-agents/use-custom-agents-form";
 import { CentralizedConfigReadOnlyAlert } from "../../../_components/centralized-config-readonly-alert";
 import { getCentralizedPrToastPayload } from "../../../_utils/centralized-pr-feedback";
+import { customAgentsSaveErrorMessage } from "../../../_utils/settings-save-conflict";
 import { useFeatureFlags } from "../../../../_components/context";
 import {
     HowItComments,
@@ -131,8 +132,10 @@ function AgentContent() {
             console.error("Error saving custom agent:", error);
             toast({
                 title: "Error",
-                description:
+                description: customAgentsSaveErrorMessage(
+                    error,
                     "Couldn't save the agent. Check the fields marked above and try again.",
+                ),
                 variant: "danger",
             });
         }
@@ -154,7 +157,10 @@ function AgentContent() {
             console.error("Error deleting custom agent:", error);
             toast({
                 title: "Error",
-                description: "Couldn't delete the agent. Try again.",
+                description: customAgentsSaveErrorMessage(
+                    error,
+                    "Couldn't delete the agent. Try again.",
+                ),
                 variant: "danger",
             });
         }

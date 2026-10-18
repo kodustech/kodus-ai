@@ -20,6 +20,7 @@ import GeneratingConfig from "../../_components/generating-config";
 import { useCodeReviewSettingsMutation } from "../../_hooks/use-code-review-settings-mutation";
 import { type CodeReviewFormType } from "../../_types";
 import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedback";
+import { customAgentsSaveErrorMessage } from "../../_utils/settings-save-conflict";
 import {
     useDefaultCodeReviewConfig,
     useFeatureFlags,
@@ -108,8 +109,10 @@ function ReviewScopeContent() {
             console.error("Error saving settings:", error);
             toast({
                 title: "Error",
-                description:
+                description: customAgentsSaveErrorMessage(
+                    error,
                     "An error occurred while saving the settings. Please try again.",
+                ),
                 variant: "danger",
             });
         }

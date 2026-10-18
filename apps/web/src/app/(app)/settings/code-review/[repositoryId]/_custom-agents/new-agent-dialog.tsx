@@ -26,6 +26,7 @@ import type {
 import { FolderGit2Icon } from "lucide-react";
 import { cn } from "src/core/utils/components";
 
+import { customAgentsSaveErrorMessage } from "../../_utils/settings-save-conflict";
 import { agentPageHref, useCustomAgentsForm } from "./use-custom-agents-form";
 
 /**
@@ -90,7 +91,10 @@ export const NewAgentDialog = ({
             console.error("Error creating custom agent:", error);
             toast({
                 title: "Error",
-                description: "Couldn't create the agent. Try again.",
+                description: customAgentsSaveErrorMessage(
+                    error,
+                    "Couldn't create the agent. Try again.",
+                ),
                 variant: "danger",
             });
         } finally {
