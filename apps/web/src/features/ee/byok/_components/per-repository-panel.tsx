@@ -8,6 +8,7 @@ import {
     type ListModelOverridesResult,
 } from "@services/organizationParameters/fetch";
 import {
+    BotIcon,
     Building2Icon,
     ChevronDownIcon,
     ChevronRightIcon,
@@ -18,52 +19,8 @@ import {
 import { SkeletonRows } from "@components/system/page-skeletons";
 
 import { providerFromModel } from "../_utils";
+import { groupOverrides } from "./per-repository-overrides";
 import { ProviderAvatar } from "./provider-avatar";
-
-type FolderOverride = { id: string; name: string; model: string };
-type RepoGroup = {
-    id: string;
-    name: string;
-    model?: string;
-    folders: FolderOverride[];
-};
-
-/** Group the flat override list into repositories with their per-folder children.
- *  A repo is a "monorepo" here when it carries folder-scoped overrides. `global`
- *  scope is the org default (shown elsewhere) and skipped. */
-const groupOverrides = (
-    result: ListModelOverridesResult | null,
-): RepoGroup[] => {
-    const byRepo = new Map<string, RepoGroup>();
-    for (const o of result?.overrides ?? []) {
-        if (o.scope === "global") continue;
-        const repoId = o.repositoryId ?? o.repositoryName ?? "unknown";
-        let repo = byRepo.get(repoId);
-        if (!repo) {
-            repo = {
-                id: repoId,
-                name: o.repositoryName ?? o.repositoryId ?? "repository",
-                folders: [],
-            };
-            byRepo.set(repoId, repo);
-        }
-        if (o.scope === "repository") {
-            repo.model = o.model;
-        } else if (o.scope === "directory") {
-            repo.folders.push({
-                // Index-suffixed fallback so two folders that both lack id AND
-                // name still get distinct React keys.
-                id:
-                    o.directoryId ??
-                    o.directoryName ??
-                    `${repoId}-dir-${repo.folders.length}`,
-                name: o.directoryName ?? o.directoryId ?? "folder",
-                model: o.model,
-            });
-        }
-    }
-    return [...byRepo.values()];
-};
 
 /** id -> friendly label/provider, so the read-only mirror shows the same model
  *  name the rest of the routing screen does (e.g. "Kimi K2.7 Code") instead of
@@ -160,7 +117,8 @@ export const PerRepositoryPanel = ({
                         </span>
                         <span className="text-text-tertiary max-w-prose text-xs">
                             Models assigned per repository — and per folder for
-                            monorepos. Configure these in Code Review Settings;
+                            monorepos — plus the custom agents that pin their
+                            own model. Configure these in Code Review Settings;
                             this view reflects what&apos;s set there.
                         </span>
                     </div>
@@ -181,8 +139,9 @@ export const PerRepositoryPanel = ({
             ) : repos.length === 0 ? (
                 <div className="border-card-lv3/40 text-text-tertiary rounded-lg border border-dashed px-4 py-6 text-center text-sm text-pretty">
                     No per-repository models yet — every repository uses the
-                    models above. Assign a model to a specific repository or
-                    folder in Code Review Settings to see it here.
+                    models above. Assign a model to a specific repository,
+                    folder or custom agent in Code Review Settings to see it
+                    here.
                 </div>
             ) : (
                 <div className="border-card-lv3/40 divide-card-lv3/30 flex flex-col divide-y overflow-hidden rounded-lg border">
@@ -247,6 +206,43 @@ export const PerRepositoryPanel = ({
                                                 </span>
                                                 <ModelCell
                                                     model={f.model}
+                                                    models={models}
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {repo.agents.length > 0 && (
+                                    <div className="border-card-lv3/30 flex flex-col border-t">
+                                        {repo.agents.map((a) => (
+                                            <div
+                                                key={a.id}
+                                                className="grid grid-cols-1 gap-y-1 sm:grid-cols-[minmax(0,1fr)_16rem] items-center gap-4 py-2 pr-3 pl-3">
+                                                <span className="flex min-w-0 items-center gap-2 pl-8">
+                                                    <BotIcon className="text-text-tertiary size-3.5 shrink-0" />
+                                                    {a.href ? (
+                                                        <Link
+                                                            href={a.href}
+                                                            className="text-text-secondary hover:text-text-primary truncate text-sm">
+                                                            {a.agentName}
+                                                        </Link>
+                                                    ) : (
+                                                        <span className="text-text-secondary truncate text-sm">
+                                                            {a.agentName}
+                                                        </span>
+                                                    )}
+                                                    <span className="text-text-tertiary shrink-0 text-xs">
+                                                        {a.step === "check"
+                                                            ? "custom agent · finding check"
+                                                            : "custom agent"}
+                                                        {a.folderName
+                                                            ? ` · ${a.folderName}`
+                                                            : ""}
+                                                    </span>
+                                                </span>
+                                                <ModelCell
+                                                    model={a.model}
                                                     models={models}
                                                 />
                                             </div>

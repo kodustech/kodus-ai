@@ -1,4 +1,5 @@
 import {
+    collectCustomAgentModelOverrides,
     collectModelOverrides,
     clearModelOverrides,
 } from './model-overrides.util';
@@ -157,5 +158,91 @@ describe('clearModelOverrides', () => {
         // Leaving byokModelId behind would keep the override alive (id wins).
         expect(c.repositories[0].configs.byokModelId).toBe('');
         expect(c.repositories[0].configs.byokModel).toBe('');
+    });
+});
+
+describe('collectCustomAgentModelOverrides (#2172)', () => {
+    const agent = (
+        id: string,
+        models?: { run?: string; check?: string },
+    ) => ({ id, name: `Agent ${id}`, models });
+
+    const cfg = {
+        configs: {
+            customAgents: [agent('g1', { run: 'model-global' })],
+        },
+        repositories: [
+            {
+                id: 'repo-1',
+                name: 'acme/api',
+                configs: {
+                    customAgents: [
+                        agent('a1', { run: 'model-a', check: ' model-b ' }),
+                        agent('a2'),
+                        agent('a3', { run: '', check: '   ' }),
+                    ],
+                },
+                directories: [
+                    {
+                        id: 'dir-1',
+                        name: 'payments',
+                        configs: {
+                            customAgents: [agent('d1', { check: 'model-c' })],
+                        },
+                    },
+                ],
+            },
+            { id: 'repo-2', name: 'acme/web', configs: {} },
+        ],
+    };
+
+    it('lists every agent that pins a model, with where it lives and which step', () => {
+        expect(collectCustomAgentModelOverrides(cfg)).toEqual([
+            {
+                scope: 'global',
+                agentId: 'g1',
+                agentName: 'Agent g1',
+                step: 'run',
+                model: 'model-global',
+            },
+            {
+                scope: 'repository',
+                repositoryId: 'repo-1',
+                repositoryName: 'acme/api',
+                agentId: 'a1',
+                agentName: 'Agent a1',
+                step: 'run',
+                model: 'model-a',
+            },
+            {
+                scope: 'repository',
+                repositoryId: 'repo-1',
+                repositoryName: 'acme/api',
+                agentId: 'a1',
+                agentName: 'Agent a1',
+                step: 'check',
+                model: 'model-b',
+            },
+            {
+                scope: 'directory',
+                repositoryId: 'repo-1',
+                repositoryName: 'acme/api',
+                directoryId: 'dir-1',
+                directoryName: 'payments',
+                agentId: 'd1',
+                agentName: 'Agent d1',
+                step: 'check',
+                model: 'model-c',
+            },
+        ]);
+    });
+
+    it('returns nothing for a config without agents', () => {
+        expect(collectCustomAgentModelOverrides(undefined)).toEqual([]);
+        expect(
+            collectCustomAgentModelOverrides({
+                configs: { customAgents: 'not-an-array' },
+            }),
+        ).toEqual([]);
     });
 });
