@@ -10,6 +10,7 @@ import {
     cliSandboxIdentity,
     isValidDomain,
     matchesAllowedPrefix,
+    normalizeCliArgs,
     planCliInstall,
     resolveCliTimeoutSec,
     shellJoin,
@@ -27,7 +28,33 @@ const cli = (overrides: Partial<CliToolConfig> = {}): CliToolConfig => ({
     ...overrides,
 });
 
+describe('normalizeCliArgs', () => {
+    it('splits a prefix the model sent as one argument', () => {
+        expect(
+            normalizeCliArgs(['check --format json', 'src/a.ts'], cli()),
+        ).toEqual(['check', '--format', 'json', 'src/a.ts']);
+    });
+
+    it('leaves an argument that is not a prefix alone, spaces included', () => {
+        expect(normalizeCliArgs(['rules', 'my file.ts'], cli())).toEqual([
+            'rules',
+            'my file.ts',
+        ]);
+    });
+});
+
 describe('matchesAllowedPrefix', () => {
+    it('lets a prefix ending in "/" cover any path under it', () => {
+        const scoped = cli({ allowedPrefixes: ['scan scripts/'] });
+        expect(matchesAllowedPrefix(['scan', 'scripts/deploy.sh'], scoped)).toBe(
+            true,
+        );
+        expect(matchesAllowedPrefix(['scan', 'src/app.ts'], scoped)).toBe(false);
+        expect(
+            matchesAllowedPrefix(['scan', 'scripts/../etc/passwd'], scoped),
+        ).toBe(false);
+    });
+
     it('accepts argv that starts with an allowed prefix, token by token', () => {
         expect(
             matchesAllowedPrefix(

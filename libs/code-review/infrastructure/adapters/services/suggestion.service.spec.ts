@@ -221,4 +221,27 @@ describe('SuggestionService — transformCommentResultsToPrLevelSuggestions', ()
             'The whole explanation, every sentence of it.',
         );
     });
+
+    it("keeps the custom agent of a single-comment agent's findings", () => {
+        const agent = { id: 'ledger', name: 'Ledger', color: '#304FFE' };
+        const [saved] = svc().transformCommentResultsToPrLevelSuggestions([
+            {
+                comment: {
+                    type: 'pr_level',
+                    suggestion: {
+                        id: 's-2',
+                        suggestionContent: 'Body.',
+                        oneSentenceSummary: 'Title',
+                        label: 'custom_agent',
+                        severity: 'high',
+                        customAgent: agent,
+                    },
+                },
+                deliveryStatus: DeliveryStatus.SENT,
+                codeReviewFeedbackData: { commentId: 11, pullRequestReviewId: null },
+            },
+        ]);
+
+        expect(saved.customAgent).toEqual(agent);
+    });
 });

@@ -72,26 +72,72 @@ export function tokenizePrefix(prefix: string): string[] {
     return prefix.trim().split(/\s+/).filter(Boolean);
 }
 
+/** An allowed prefix as argv tokens, without a leading binary or CLI name. */
+export function prefixTokens(
+    raw: string,
+    cli: Pick<CliToolConfig, 'binary' | 'name'>,
+): string[] {
+    const tokens = tokenizePrefix(raw);
+    return tokens.length > 0 &&
+        (tokens[0] === cli.binary || tokens[0] === cli.name)
+        ? tokens.slice(1)
+        : tokens;
+}
+
+/**
+ * Models often send an allowed prefix as ONE argument ("check --format
+ * json"). When an argument's words start an allowed prefix, it is split into
+ * them; any other argument keeps its spaces (a file name may have them).
+ */
+export function normalizeCliArgs(
+    args: readonly string[],
+    cli: Pick<CliToolConfig, 'allowedPrefixes' | 'binary' | 'name'>,
+): string[] {
+    const prefixes = (cli.allowedPrefixes ?? []).map((raw) =>
+        prefixTokens(raw, cli),
+    );
+    const out: string[] = [];
+    for (const arg of args) {
+        const words = tokenizePrefix(arg);
+        const at = out.length;
+        const startsAPrefix =
+            words.length > 1 &&
+            prefixes.some((tokens) =>
+                words.every((word, i) => tokens[at + i] === word),
+            );
+        out.push(...(startsAPrefix ? words : [arg]));
+    }
+    return out;
+}
+
+function tokenMatches(token: string, arg: string | undefined): boolean {
+    if (arg === undefined) return false;
+    if (arg === token) return true;
+    // "scripts/" covers any path under it, never one that climbs out.
+    return (
+        token.endsWith('/') &&
+        arg.startsWith(token) &&
+        !arg.split('/').includes('..')
+    );
+}
+
 /**
  * Whether argv starts with one of the allowed prefixes, token for token.
  * A prefix may spell the binary (or CLI name) first; it is ignored, since the
- * binary is never part of the agent's argv.
+ * binary is never part of the agent's argv. A token ending in "/" matches any
+ * path below that directory.
  */
 export function matchesAllowedPrefix(
     args: readonly string[],
     cli: Pick<CliToolConfig, 'allowedPrefixes' | 'binary' | 'name'>,
 ): boolean {
     for (const raw of cli.allowedPrefixes ?? []) {
-        let tokens = tokenizePrefix(raw);
-        if (
-            tokens.length > 0 &&
-            (tokens[0] === cli.binary || tokens[0] === cli.name)
-        ) {
-            tokens = tokens.slice(1);
-        }
+        const tokens = prefixTokens(raw, cli);
         if (!tokens.length) continue;
         if (tokens.length > args.length) continue;
-        if (tokens.every((token, i) => args[i] === token)) return true;
+        if (tokens.every((token, i) => tokenMatches(token, args[i]))) {
+            return true;
+        }
     }
     return false;
 }

@@ -21,6 +21,8 @@ import type {
 import {
     buildRunCommand,
     matchesAllowedPrefix,
+    normalizeCliArgs,
+    prefixTokens,
     resolveCliTimeoutSec,
     validateCliArgs,
 } from './cli-command';
@@ -96,15 +98,18 @@ export async function executeRunCli(
     if (argsError) return `Error: ${argsError}.`;
     // Models often repeat the binary as argv[0]; it is never an argument.
     const given = input.args as string[];
-    const args =
+    const args = normalizeCliArgs(
         given[0] === cli.binary || given[0] === cli.name
             ? given.slice(1)
-            : given;
+            : given,
+        cli,
+    );
 
     if (!matchesAllowedPrefix(args, cli)) {
-        return `Error: these arguments are not allowed for ${cli.name}. args must start with one of: ${cli.allowedPrefixes
-            .map((p) => `\`${p}\``)
-            .join(', ')}.`;
+        // As argv arrays: shown as one string, models sent it as one argument.
+        return `Error: these arguments are not allowed for ${cli.name}. args must start with one of these argument lists: ${cli.allowedPrefixes
+            .map((p) => JSON.stringify(prefixTokens(p, cli)))
+            .join(', ')} — each element is one argument; a "dir/" element accepts any path under it.`;
     }
 
     // Decrypted here, for this one process, and never kept. A CLI that runs
