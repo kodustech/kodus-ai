@@ -4,7 +4,7 @@ import "@testing-library/jest-dom";
 import type { CustomAgent } from "@services/custom-agents/types";
 import { render, screen } from "@testing-library/react";
 
-import { WhatItDoes } from "./agent-sections";
+import { RunsOn, WhatItDoes } from "./agent-sections";
 
 jest.mock("@services/organizationParameters/fetch", () => ({
     getBYOK: jest.fn(),
@@ -54,5 +54,38 @@ describe("WhatItDoes", () => {
             />,
         );
         expect(screen.queryByRole("alert")).toBeNull();
+    });
+});
+
+describe("RunsOn", () => {
+    it("explains that brackets and parentheses also match literally", () => {
+        render(
+            <RunsOn
+                agent={{
+                    ...agent,
+                    scope: { include: ["src/app/(shop)/[id]/**"] },
+                }}
+                canEdit
+                onChange={jest.fn()}
+            />,
+        );
+        expect(screen.getByRole("note")).toHaveTextContent(
+            "src/app/(shop)/[id]/**",
+        );
+        expect(screen.getByRole("note")).toHaveTextContent(/literal/i);
+    });
+
+    it("shows no note for plain globs", () => {
+        render(
+            <RunsOn
+                agent={{
+                    ...agent,
+                    scope: { include: ["src/**"], exclude: ["**/*.spec.ts"] },
+                }}
+                canEdit
+                onChange={jest.fn()}
+            />,
+        );
+        expect(screen.queryByRole("note")).toBeNull();
     });
 });

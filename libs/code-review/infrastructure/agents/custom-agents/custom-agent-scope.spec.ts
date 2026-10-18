@@ -62,6 +62,34 @@ describe('filesInAgentScope', () => {
         ]);
     });
 
+    it('matches Next.js route folders written literally', () => {
+        const routes = [
+            { filename: 'src/app/(shop)/[id]/page.tsx' },
+            { filename: 'src/app/(shop)/cart/page.tsx' },
+            { filename: 'src/app/about/page.tsx' },
+        ];
+        expect(
+            filesInAgentScope(
+                agent({ scope: { include: ['src/app/(shop)/[id]/**'] } }),
+                routes,
+            ).map((f) => f.filename),
+        ).toEqual(['src/app/(shop)/[id]/page.tsx']);
+        expect(
+            filesInAgentScope(
+                agent({ scope: { exclude: ['src/app/(shop)/**'] } }),
+                routes,
+            ).map((f) => f.filename),
+        ).toEqual(['src/app/about/page.tsx']);
+    });
+
+    it('still reads brackets as a glob class when that matches', () => {
+        const scoped = filesInAgentScope(
+            agent({ scope: { include: ['src/[ab]/*.ts'] } }),
+            [{ filename: 'src/a/x.ts' }, { filename: 'src/c/x.ts' }],
+        );
+        expect(scoped.map((f) => f.filename)).toEqual(['src/a/x.ts']);
+    });
+
     it('takes every file when the agent lists no include glob', () => {
         expect(filesInAgentScope(agent(), files)).toHaveLength(3);
     });

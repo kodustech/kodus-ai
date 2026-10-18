@@ -131,6 +131,12 @@ export const WhatItDoes = ({
     );
 };
 
+/** Globs holding `(` or `[`, which are glob syntax as well as path text. */
+const globsWithBrackets = (agent: CustomAgent) =>
+    [...(agent.scope.include ?? []), ...(agent.scope.exclude ?? [])].filter(
+        (glob) => /[([]/.test(glob),
+    );
+
 export const RunsOn = ({
     agent,
     canEdit,
@@ -139,38 +145,48 @@ export const RunsOn = ({
     agent: CustomAgent;
     canEdit: boolean;
     onChange: Patch;
-}) => (
-    <Section
-        title="Runs on"
-        description="Globs over the files a pull request changes. The agent runs only when one matches; with no include it runs on every pull request.">
-        <Field label="Include" hint="e.g. src/payments/**, **/*.sql">
-            <TagInput
-                tags={agent.scope.include ?? []}
-                disabled={!canEdit}
-                placeholder="Add a glob and press Enter"
-                onTagsChange={(include) =>
-                    onChange((current) => ({
-                        ...current,
-                        scope: { ...current.scope, include },
-                    }))
-                }
-            />
-        </Field>
-        <Field label="Exclude" hint="e.g. **/*.test.ts, **/generated/**">
-            <TagInput
-                tags={agent.scope.exclude ?? []}
-                disabled={!canEdit}
-                placeholder="Add a glob and press Enter"
-                onTagsChange={(exclude) =>
-                    onChange((current) => ({
-                        ...current,
-                        scope: { ...current.scope, exclude },
-                    }))
-                }
-            />
-        </Field>
-    </Section>
-);
+}) => {
+    const bracketed = globsWithBrackets(agent);
+    return (
+        <Section
+            title="Runs on"
+            description="Globs over the files a pull request changes. The agent runs only when one matches; with no include it runs on every pull request.">
+            <Field label="Include" hint="e.g. src/payments/**, **/*.sql">
+                <TagInput
+                    tags={agent.scope.include ?? []}
+                    disabled={!canEdit}
+                    placeholder="Add a glob and press Enter"
+                    onTagsChange={(include) =>
+                        onChange((current) => ({
+                            ...current,
+                            scope: { ...current.scope, include },
+                        }))
+                    }
+                />
+            </Field>
+            <Field label="Exclude" hint="e.g. **/*.test.ts, **/generated/**">
+                <TagInput
+                    tags={agent.scope.exclude ?? []}
+                    disabled={!canEdit}
+                    placeholder="Add a glob and press Enter"
+                    onTagsChange={(exclude) =>
+                        onChange((current) => ({
+                            ...current,
+                            scope: { ...current.scope, exclude },
+                        }))
+                    }
+                />
+            </Field>
+            {bracketed.length > 0 && (
+                <p role="note" className="text-text-secondary text-xs">
+                    {bracketed.join(", ")}: parentheses and brackets are glob
+                    syntax, so these also match as literal path text, as in
+                    Next.js route folders like (shop) or [id].
+                </p>
+            )}
+        </Section>
+    );
+};
 
 const SEVERITIES: Array<{ value: CustomAgentSeverity | "any"; label: string }> =
     [

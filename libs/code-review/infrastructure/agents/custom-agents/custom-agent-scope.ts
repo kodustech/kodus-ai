@@ -32,12 +32,27 @@ export function filesInAgentScope<T extends { filename: string }>(
             .map((g) => g.slice(1))
             .filter(Boolean),
     ];
+    const includeAll = withLiteralBrackets(include);
+    const excludeAll = withLiteralBrackets(exclude);
     return changedFiles.filter(
         (file) =>
             (include.length === 0 ||
-                isFileMatchingGlob(file.filename, include)) &&
-            !isFileMatchingGlob(file.filename, exclude),
+                isFileMatchingGlob(file.filename, includeAll)) &&
+            !isFileMatchingGlob(file.filename, excludeAll),
     );
+}
+
+/**
+ * Each glob, plus its copy with `(`, `)`, `[` and `]` escaped. Those are glob
+ * syntax, so a Next.js route folder written as is, `src/app/(shop)/[id]/**`,
+ * matched no file; the escaped copy matches the path literally while the
+ * original keeps its meaning as a glob.
+ */
+function withLiteralBrackets(patterns: string[]): string[] {
+    return patterns.flatMap((p) => {
+        const literal = p.replace(/[()[\]]/g, '\\$&');
+        return literal === p ? [p] : [p, literal];
+    });
 }
 
 /**
