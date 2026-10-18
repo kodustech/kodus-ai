@@ -72,6 +72,10 @@ function createMocks() {
         getTypeIntegration: jest.fn().mockResolvedValue(null),
     };
 
+    const permissionValidationService = {
+        resolveTaskSlot: jest.fn().mockResolvedValue(undefined),
+    };
+
     const useCase = new ExecuteCliReviewUseCase(
         converter as any,
         pipelineStrategy as any,
@@ -82,6 +86,7 @@ function createMocks() {
         kodyRulesService as any,
         kodyRulesValidationService as any,
         pipelineObserver as any,
+        permissionValidationService as any,
     );
 
     return {
@@ -95,6 +100,7 @@ function createMocks() {
         kodyRulesService,
         kodyRulesValidationService,
         pipelineObserver,
+        permissionValidationService,
     };
 }
 
