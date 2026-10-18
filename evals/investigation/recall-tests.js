@@ -20,10 +20,11 @@
  *
  * An unknown set name fails: it never measures the default set instead.
  *
- * RECALL_REPO_INSTRUCTIONS=<file.json> gives each case the coding-agent
- * instructions recorded for it ({ [caseId]: { repoInstructions } }, the shape
- * the agent stage collects), as a review with the setting on would read them.
- * Cases with no instruction files run without, like a repository that has none.
+ * RECALL_REPO_INSTRUCTIONS=<file.json> puts on each case's target branch the
+ * coding-agent instruction files recorded for it ({ [caseId]: { repoInstructions,
+ * targetBranchFiles } }). The review reads them only when the team turns the
+ * setting on (--team-config=evals/repo-instructions/team-config.json). Cases with
+ * no instruction files run without, like a repository that has none.
  */
 const fs = require('fs');
 const path = require('path');

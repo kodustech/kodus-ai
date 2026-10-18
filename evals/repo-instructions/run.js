@@ -28,6 +28,10 @@ const fs = require('fs');
 const path = require('path');
 
 const { buildCases, casesFor, CASE_SETS, DECOY } = require('./cases');
+const { readTeamConfig } = require('../shared/team-config');
+
+// The team's "Use coding-agent instructions in reviews", saved as a team saves it.
+const TEAM_CONFIG = path.join(__dirname, 'team-config.json');
 const { catalog } = require('./catalog');
 const { TIER0 } = require('../shared/tier0-models');
 const { countTokens, tokensUsed } = require('../shared/eval-kit');
@@ -137,6 +141,15 @@ function scoreOff(findings) {
     };
 }
 
+// One arm of a case: the same repository, with the CLAUDE.md on its target
+// branch, and the team's setting on (the team config) or off (none).
+function armOf(testCase, arm) {
+    return {
+        vars: { ...testCase.vars, caseId: `${testCase.caseId}:${arm}` },
+        teamConfig: arm === 'on' ? readTeamConfig(TEAM_CONFIG) : null,
+    };
+}
+
 const ratio = (a, b) => (b > 0 ? Number((a / b).toFixed(3)) : null);
 
 function summarize(rows) {
@@ -179,20 +192,23 @@ async function main() {
     const arms = args.arm === 'both' ? ['on', 'off'] : [args.arm];
 
     const InvestigationAgentProvider = require('../investigation/agent-provider');
-    const provider = new InvestigationAgentProvider({
-        config: { label: `${args.model}-repo-instructions`, provider: 'tier0', model: args.model },
-    });
+    const providerFor = (teamConfig) =>
+        new InvestigationAgentProvider({
+            config: { label: `${args.model}-repo-instructions`, provider: 'tier0', model: args.model },
+            teamConfig: teamConfig ? teamConfig.configs : null,
+        });
+    const teamConfigOn = readTeamConfig(TEAM_CONFIG);
+    const providers = { on: providerFor(teamConfigOn), off: providerFor(null) };
 
     console.log(`════ repo-instructions · model=${args.model} · set=${args.set} · arms=${arms.join(',')} · cases=${cases.length} · decoy="${DECOY}" ════`);
 
     const tasks = cases.flatMap((testCase) => arms.map((arm) => ({ testCase, arm })));
     const rows = [];
     const runTask = async ({ testCase, arm }) => {
-        const vars = { ...testCase.vars, caseId: `${testCase.caseId}:${arm}` };
-        if (arm === 'off') delete vars.repoInstructions;
+        const { vars } = armOf(testCase, arm);
         let result;
         try {
-            result = await provider.callApi(JSON.stringify(vars), { vars }, {});
+            result = await providers[arm].callApi(JSON.stringify(vars), { vars }, {});
         } catch (error) {
             result = { error: error instanceof Error ? error.message : String(error) };
         }
@@ -239,6 +255,8 @@ async function main() {
         question: evalQuestion('evals/repo-instructions'),
         model: args.model,
         set: args.set,
+        // What the on arm saved over the team's config.
+        teamConfig: { hash: teamConfigOn.hash, configs: teamConfigOn.configs },
         runs: 1,
         metric: {
             name: 'violation sites the review posts with the setting on',
@@ -302,4 +320,4 @@ if (require.main === module) {
     );
 }
 
-module.exports = { scoreOn, summarize };
+module.exports = { scoreOn, summarize, armOf };

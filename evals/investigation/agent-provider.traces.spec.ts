@@ -67,13 +67,15 @@ describe('investigation agent provider — coding-agent instructions', () => {
         ).toEqual(targetBranchFiles);
     });
 
-    it('turns the setting on only when the case gives instruction files', () => {
+    // Files on the target branch are the repository's; the setting is the
+    // team's, given as a team config (--team-config), like any other key.
+    it('leaves the setting off until the team config turns it on', () => {
+        expect(internals.teamOf(caseData).codeReviewConfig).toBeNull();
         expect(
-            internals.teamOf(caseData).codeReviewConfig.configs
-                .repoInstructionsEnabled,
+            internals.teamOf(caseData, { repoInstructionsEnabled: true })
+                .codeReviewConfig.configs.repoInstructionsEnabled,
         ).toBe(true);
-        const { repoInstructions: _, ...off } = caseData;
-        expect(internals.teamOf(off).codeReviewConfig).toBeNull();
-        expect(internals.prOf(off).targetBranchFiles).toEqual({});
+        const { repoInstructions: _, ...noFiles } = caseData;
+        expect(internals.prOf(noFiles).targetBranchFiles).toEqual({});
     });
 });

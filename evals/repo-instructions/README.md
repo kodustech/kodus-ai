@@ -10,7 +10,7 @@ The generalist reads the coding-agent instructions that cover a pull request's c
 
 ## Cases
 
-Built at run time by `evals/repo-instructions/cases.js` from the committed kody-rules GitHub cases (`evals/kody-rules/github-cases.json`): real merged PRs whose violations of a convention are enumerated line by line, with the PR as the platform returns it. Each case's target branch gets a `CLAUDE.md` that states the convention the PR breaks, plus a decoy instruction (pnpm, lockfiles) the diff never touches; the team turns the setting on. The diffs, files and violation sites are real; the instruction text is written by the builder.
+Built at run time by `evals/repo-instructions/cases.js` from the committed kody-rules GitHub cases (`evals/kody-rules/github-cases.json`): real merged PRs whose violations of a convention are enumerated line by line, with the PR as the platform returns it. Each case's target branch gets a `CLAUDE.md` that states the convention the PR breaks, plus a decoy instruction (pnpm, lockfiles) the diff never touches. Both arms review that same repository; the on arm saves `team-config.json` (`repoInstructionsEnabled: true`) over the team's config, the way `--team-config` does, and the off arm leaves the setting off. The diffs, files and violation sites are real; the instruction text is written by the builder.
 
 Sets (`CASE_SETS` in `cases.js`): `controlled`, one case per repository and convention, the nightly and every model's weekly run; `full`, every case, on demand.
 

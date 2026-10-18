@@ -1,6 +1,6 @@
 // The gated number scores what the review ships, after its severity and
 // quantity filters; what the finder reported before them is a diagnostic.
-const { scoreOn, summarize } = require('./run');
+const { scoreOn, summarize, armOf } = require('./run');
 
 const testCase = {
     caseId: 'repo-instructions:x',
@@ -47,5 +47,31 @@ describe('repo-instructions scoring', () => {
             loopOccurrenceRecall: 1,
             shippedRate: 0,
         });
+    });
+});
+
+// Both arms review the same repository, with the CLAUDE.md on its target
+// branch; only the team's setting differs.
+describe('repo-instructions arms', () => {
+    const testCase = {
+        caseId: 'repo-instructions:x',
+        vars: {
+            caseId: 'repo-instructions:x',
+            repoInstructions: { files: [{ path: 'CLAUDE.md', content: 'x' }] },
+        },
+    };
+
+    it('turns the setting on through the team config in the on arm only', () => {
+        const on = armOf(testCase, 'on');
+        const off = armOf(testCase, 'off');
+
+        expect(on.teamConfig.configs).toEqual({ repoInstructionsEnabled: true });
+        expect(off.teamConfig).toBeNull();
+        expect(on.vars.repoInstructions).toEqual(testCase.vars.repoInstructions);
+        expect(off.vars.repoInstructions).toEqual(testCase.vars.repoInstructions);
+        expect([on.vars.caseId, off.vars.caseId]).toEqual([
+            'repo-instructions:x:on',
+            'repo-instructions:x:off',
+        ]);
     });
 });

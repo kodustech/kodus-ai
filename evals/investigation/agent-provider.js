@@ -75,11 +75,11 @@ function reviewOptionsFromEnv() {
 
 // What the team set, from the case's data: its language, its memories as a
 // member writes them (stored by production's write, shared/review-stage.js
-// teamStore), the review options and prompt overrides it saved, and "Use
-// coding-agent instructions in reviews" when the case gives the target branch
-// instruction files (prOf). A run's `--team-config` (run-recall.js,
-// shared/team-config.js) is saved over the case's own keys, as a team saving
-// those keys would.
+// teamStore), and the review options and prompt overrides it saved. A run's
+// `--team-config` (run-recall.js, shared/team-config.js) is saved over the
+// case's own keys, as a team saving those keys would: "Use coding-agent
+// instructions in reviews" is one of them (evals/repo-instructions/team-config.json).
+// The instruction files a case gives are the repository's (prOf), on either way.
 function teamOf(caseData, teamConfig = null) {
     if (process.env.RECALL_HEAVY === '1') {
         throw new NotAProductionRoute('RECALL_HEAVY asks for a mode the review enables behind a release gate the eval has no org for');
@@ -91,7 +91,6 @@ function teamOf(caseData, teamConfig = null) {
         ...(reviewOptions ? { reviewOptions } : {}),
         ...(v2PromptOverrides ? { v2PromptOverrides } : {}),
         ...(caseData.reviewMode ? { reviewMode: caseData.reviewMode } : {}),
-        ...(Object.keys(instructionFilesOf(caseData)).length ? { repoInstructionsEnabled: true } : {}),
         ...(teamConfig || {}),
     };
     return {
