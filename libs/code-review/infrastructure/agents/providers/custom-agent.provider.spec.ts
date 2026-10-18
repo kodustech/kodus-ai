@@ -435,6 +435,65 @@ describe('CustomAgentProvider — knowledge and tools', () => {
         expect(executeTool).toHaveBeenCalledTimes(2);
     });
 
+    it('names its team system tools for the recall pass, and none without plugins', async () => {
+        const mcpManager = {
+            getConnections: jest.fn(async (_org: any, format?: boolean) =>
+                format
+                    ? [
+                          {
+                              name: 'Tracker',
+                              url: 'https://mcp.example.test',
+                              integrationId: 'int-1',
+                          },
+                      ]
+                    : [
+                          {
+                              organizationId: 'org-1',
+                              integrationId: 'int-1',
+                              appName: 'Tracker',
+                          },
+                      ],
+            ),
+        };
+        const adapter = {
+            connect: jest.fn(async () => {}),
+            getTools: jest.fn(async () => [
+                {
+                    name: 'get_issue',
+                    description: 'Read an issue',
+                    inputSchema: { type: 'object', properties: {} },
+                    annotations: { readOnlyHint: true },
+                },
+            ]),
+            executeTool: jest.fn(),
+            disconnect: jest.fn(async () => {}),
+        };
+        const factory = new CustomAgentProviderFactory(
+            {} as any,
+            {} as any,
+            undefined,
+            undefined,
+            mcpManager as any,
+            () => adapter as any,
+        );
+
+        await factory
+            .create(
+                config({
+                    tools: {
+                        mcp: [{ integrationId: 'int-1', tools: ['get_issue'] }],
+                    },
+                }),
+            )
+            .execute(input());
+        await provider().execute(input());
+
+        expect(runLoopMock.mock.calls[0][0].teamSystemTools).toEqual([
+            'Tracker__get_issue',
+        ]);
+        expect(runLoopMock.mock.calls[1][0].teamSystemTools).toBeUndefined();
+    });
+
     it('offers no runCli for CLIs installed for another agent', async () => {
         await provider().execute(
             input({
@@ -469,6 +528,11 @@ describe('buildCustomAgentPrompt', () => {
         );
         expect(withPlugins).toContain('<TeamSystems>');
         expect(withPlugins).toMatch(/ticket|issue|work item/);
+        // A requirement the change breaks is reported even when the code
+        // never mentions the record: the record is the evidence.
+        expect(withPlugins).toContain(
+            'is a finding even when the code never mentions it',
+        );
 
         expect(buildCustomAgentPrompt(config())).not.toContain('<TeamSystems>');
         expect(

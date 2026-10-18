@@ -63,6 +63,8 @@ import { RunToolCache } from '@libs/code-review/infrastructure/agents/adapters/r
 /** Tools an agent adds to its run, and how to release them afterwards. */
 export interface AgentRunToolset {
     tools: AgentTool[];
+    /** Which of `tools` read the team's own systems (MCP). */
+    teamSystemTools?: string[];
     close(): Promise<void>;
 }
 
@@ -675,6 +677,9 @@ export abstract class BaseCodeReviewAgentProvider {
                     previousDecisions: input.previousDecisions,
                     conventionGuides: this.getConventionGuides(input),
                     teamInstructions: this.getTeamInstructions(),
+                    ...(agentTools.teamSystemTools?.length && {
+                        teamSystemTools: agentTools.teamSystemTools,
+                    }),
                     // HEAVY opt-in (`--heavy`) — forwarded explicitly, same reason
                     // as skipHeavyPasses above: loopParams is built field-by-field,
                     // so without this line the resample passes never run.

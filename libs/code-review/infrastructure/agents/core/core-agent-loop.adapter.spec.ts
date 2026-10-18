@@ -1178,6 +1178,52 @@ describe('contract matrix — E. N-model policy (strict json_schema vs fallback)
     // (the runner uses the SAME LLM.run door), so the contract is pinned at the
     // recovery unit above rather than duplicated as a flaky e2e assertion.
 
+    // Team systems (#2172): AgentLoopInput.teamSystemTools reaches the
+    // synthesis rescue, which asks about requirements a consulted system states.
+    it('threads teamSystemTools to the recall pass prompt, and nothing without them', async () => {
+        const recallPrompts = async (over: Record<string, unknown>) => {
+            const prompts: string[] = [];
+            const doGenerate = (async (opts: any) => {
+                prompts.push(JSON.stringify(opts?.prompt ?? ''));
+                return {
+                    content: [
+                        {
+                            type: 'tool-call',
+                            toolCallId: 'f',
+                            toolName: 'submitResult',
+                            input: JSON.stringify({
+                                reasoning: 'nothing',
+                                suggestions: [],
+                            }),
+                        },
+                    ],
+                    finishReason: 'tool-calls',
+                    usage: { inputTokens: 5, outputTokens: 5 },
+                    warnings: [],
+                };
+            }) as any;
+            await runAgentLoopViaCore(
+                makeInput(new MockLanguageModelV3({ doGenerate }), {
+                    reviewMode: undefined,
+                    ...over,
+                }),
+                secrets,
+            );
+            return prompts;
+        };
+        const question =
+            'Did a team system you consulted state a requirement this change breaks?';
+
+        const withSystems = await recallPrompts({
+            teamSystemTools: ['Tracker__get_issue'],
+        });
+        const without = await recallPrompts({});
+
+        expect(withSystems.length).toBeGreaterThan(1);
+        expect(withSystems.some((p) => p.includes(question))).toBe(true);
+        expect(without.some((p) => p.includes(question))).toBe(false);
+    });
+
     // Previous review decisions (issue #1313): proves the REAL wiring end to
     // end — AgentLoopInput.previousDecisions -> runFinderWithVerify ->
     // LlmVerifier -> verifierPromptFor — not just the unit-level forwarding

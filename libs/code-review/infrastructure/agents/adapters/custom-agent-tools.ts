@@ -50,6 +50,8 @@ export interface CustomAgentToolDeps {
 
 export interface CustomAgentToolset {
     tools: AgentTool[];
+    /** Names of the read-only MCP tools among `tools`. */
+    teamSystemTools: string[];
     close(): Promise<void>;
 }
 
@@ -77,6 +79,7 @@ export async function buildCustomAgentTools(
     deps: CustomAgentToolDeps,
 ): Promise<CustomAgentToolset> {
     const tools: AgentTool[] = [];
+    const teamSystemTools: string[] = [];
     const closers: Array<() => Promise<void>> = [];
 
     // ast-grep needs the neutral config written before any run (see the tool),
@@ -115,6 +118,7 @@ export async function buildCustomAgentTools(
                 cache: deps.mcp.cache,
             });
             tools.push(...mcp.tools);
+            teamSystemTools.push(...mcp.tools.map((t) => t.name));
             closers.push(() => mcp.close());
         } catch (error) {
             logger.warn({
@@ -129,6 +133,7 @@ export async function buildCustomAgentTools(
 
     return {
         tools,
+        teamSystemTools,
         async close() {
             await Promise.allSettled(closers.map((c) => c()));
         },

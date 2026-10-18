@@ -454,6 +454,10 @@ export interface AgentLoopInput {
     /** Custom agents only: the team's instructions, the text a rule cited
      *  from `TeamInstructions` is quote-checked against. */
     teamInstructions?: string;
+    /** Custom agents only: the names of its team system (read-only MCP)
+     *  tools. Set → the recall pass also asks whether a system it consulted
+     *  states a requirement the change breaks. Unset for every other agent. */
+    teamSystemTools?: string[];
     /** Reasoning effort level from BYOK config. Mapped to provider-specific
      *  providerOptions (anthropic.thinking, google.thinkingConfig, etc). */
     reasoningEffort?: ReasoningEffort;

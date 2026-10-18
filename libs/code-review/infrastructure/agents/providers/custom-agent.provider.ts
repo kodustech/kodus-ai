@@ -62,6 +62,7 @@ export function buildCustomAgentPrompt(agent: CustomAgentConfig): string {
   <TeamSystems>
     Tools named \`System__tool\` read the team's own systems (trackers, wikis, monitoring). They are read-only.
     Consult them when the change or its description points to something recorded there: a ticket, issue or work item, an incident, a design decision. Check the change against what you find, and cite it in the finding.
+    A requirement recorded there that the change breaks or leaves out is a finding even when the code never mentions it: the record is the evidence.
     Do not search them speculatively when nothing in the change points there.
   </TeamSystems>`
         : '';
@@ -231,7 +232,7 @@ export class CustomAgentProvider extends BaseCodeReviewAgentProvider {
                 error,
                 metadata: logContext,
             });
-            return { tools: [], close: async () => {} };
+            return { tools: [], teamSystemTools: [], close: async () => {} };
         });
 
         const runCli = buildRunCliAgentTool({
@@ -242,6 +243,7 @@ export class CustomAgentProvider extends BaseCodeReviewAgentProvider {
 
         return {
             tools: runCli ? [...toolset.tools, runCli] : toolset.tools,
+            teamSystemTools: toolset.teamSystemTools,
             close: () => toolset.close(),
         };
     }

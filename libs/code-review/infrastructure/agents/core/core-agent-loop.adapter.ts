@@ -288,6 +288,7 @@ export async function runAgentLoopViaCore(
             // run at all (not fast/self-contained); harmless otherwise.
             heavy: !!input.heavy && !skipHeavyPasses,
             previousDecisions: input.previousDecisions,
+            teamSystemTools: input.teamSystemTools,
             ...(readGuide && {
                 conventionCheck: {
                     readGuide,

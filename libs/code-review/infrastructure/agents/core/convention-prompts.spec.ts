@@ -158,3 +158,81 @@ describe('synthesis rescue with linked guides', () => {
         expect(withGuides).toContain('kind "convention"');
     });
 });
+
+describe('synthesis rescue — team systems (#2172)', () => {
+    const TRACKER_TOOL = 'Tracker__get_issue';
+
+    function stateWithCalls(
+        calls: Array<{ name: string; input: unknown }>,
+    ): RunState {
+        return {
+            artifacts: [
+                {
+                    type: 'submitResult',
+                    payload: { reasoning: 'r', suggestions: [] },
+                },
+            ],
+            steps: [{ index: 0, message: { toolCalls: calls } }],
+            usage: { inputTokens: 1, outputTokens: 1 },
+            status: 'done',
+        } as any;
+    }
+
+    async function rescuePrompt(
+        finderState: RunState,
+        teamSystemTools?: string[],
+    ): Promise<string> {
+        const run = jest.fn(async () => finderState);
+        await runRecallPasses(
+            { reasoning: 'r', suggestions: [] },
+            {
+                runner: { run } as any,
+                finderSpec: {} as any,
+                finderState,
+                userPrompt: 'review',
+                teamSystemTools,
+            },
+            { runId: 'rescue' },
+        );
+        return (run.mock.calls[0] as any[])[1].prompt;
+    }
+
+    const consulted = stateWithCalls([
+        { name: 'readFile', input: { path: 'src/valve.ts' } },
+        { name: TRACKER_TOOL, input: { key: 'VALVE-12' } },
+    ]);
+
+    it('asks whether a consulted team system states a requirement the change breaks', async () => {
+        const plain = await rescuePrompt(consulted);
+        const withSystems = await rescuePrompt(consulted, [TRACKER_TOOL]);
+
+        expect(withSystems.startsWith(plain)).toBe(true);
+        expect(withSystems).toContain(
+            'Did a team system you consulted state a requirement this change breaks?',
+        );
+        expect(withSystems).toContain(
+            `<ConsultedTeamSystems>\n- ${TRACKER_TOOL}({"key":"VALVE-12"})\n</ConsultedTeamSystems>`,
+        );
+        // Not a code-evidence question: the record is the evidence.
+        expect(withSystems).toMatch(/even when the code never mentions it/);
+    });
+
+    it('leaves the rescue prompt of an agent without team systems unchanged', async () => {
+        const plain = await rescuePrompt(consulted);
+
+        expect(await rescuePrompt(consulted, [])).toBe(plain);
+        expect(plain).not.toMatch(/team system/i);
+        expect(plain).toMatch(/submit an empty suggestions array\.$/);
+    });
+
+    it('says so when no team system was consulted yet', async () => {
+        const prompt = await rescuePrompt(
+            stateWithCalls([{ name: 'readFile', input: { path: 'a.ts' } }]),
+            [TRACKER_TOOL],
+        );
+
+        expect(prompt).toContain(
+            '<ConsultedTeamSystems>\nNone yet.\n</ConsultedTeamSystems>',
+        );
+    });
+});

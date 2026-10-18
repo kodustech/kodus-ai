@@ -609,6 +609,8 @@ export interface RunFinderWithVerifyParams {
      *  convention verifier instead of HV2. Absent → every finding takes HV2,
      *  exactly as before. */
     conventionCheck?: ConventionCheckParams;
+    /** A custom agent's team system (MCP) tools; see RecallPassesParams. */
+    teamSystemTools?: string[];
 }
 
 export interface ConventionCheckParams {
@@ -755,6 +757,7 @@ export async function runFinderWithVerify(
             agentName: params.agentName,
             recoverProse: params.recoverProse,
             conventionGuides: params.conventionCheck?.guideFiles,
+            teamSystemTools: params.teamSystemTools,
         },
         ctx,
     );
@@ -1140,6 +1143,10 @@ interface RecallPassesParams {
     /** Guides linked to a custom agent: the synthesis rescue also asks for
      *  missed violations of them, not only missed bugs. */
     conventionGuides?: string[];
+    /** A custom agent's team system (MCP) tools: the synthesis rescue also
+     *  asks whether one it consulted states a requirement the change breaks.
+     *  Unset or empty for every other agent, whose prompt stays unchanged. */
+    teamSystemTools?: string[];
 }
 
 const ZERO_RECALL_USAGE: VerifyUsage = {
@@ -1210,6 +1217,7 @@ export async function runRecallPasses(
                 toolCalls,
                 findings.suggestions,
                 params.conventionGuides,
+                params.teamSystemTools,
             ),
             'synthesis-rescue',
         );
@@ -1328,6 +1336,7 @@ function buildSynthesisPrompt(
     toolCalls: Array<{ tool: string; args: unknown }>,
     current: FinderSuggestion[],
     conventionGuides?: string[],
+    teamSystemTools?: string[],
 ): string {
     const inspectedList = inspected.size
         ? [...inspected].join('\n')
@@ -1359,7 +1368,33 @@ Your task:
 - Do not add variants or restatements of existing findings.
 - Do not add speculative risks.
 - If there are concrete missed bugs, submit them.
-- If there is no clearly missed bug, submit an empty suggestions array.${formatMissedConventionsTask(conventionGuides)}`;
+- If there is no clearly missed bug, submit an empty suggestions array.${formatMissedConventionsTask(conventionGuides)}${formatTeamSystemsTask(teamSystemTools, toolCalls)}`;
+}
+
+/** Custom agents with team system (MCP) tools: the rescue also asks whether a
+ *  record they read states a requirement the change breaks. The finder only
+ *  reports what it sees in the code, so a requirement the code never mentions
+ *  was left out (#2172). Empty for every other agent, so their rescue prompt
+ *  is unchanged. */
+function formatTeamSystemsTask(
+    teamSystemTools: string[] | undefined,
+    toolCalls: Array<{ tool: string; args: unknown }>,
+): string {
+    if (!teamSystemTools?.length) return '';
+    const names = new Set(teamSystemTools);
+    const consulted = toolCalls
+        .filter((tc) => names.has(tc.tool))
+        .map((tc) => `- ${investigationSummary([tc])}`);
+    return `
+
+<ConsultedTeamSystems>
+${[...new Set(consulted)].join('\n') || 'None yet.'}
+</ConsultedTeamSystems>
+
+Did a team system you consulted state a requirement this change breaks?
+- Check what those records require (a ticket's acceptance criteria, a recorded decision, an incident's follow-up) against the changed code. Call the tool again to re-read a record; the answer is kept for this review.
+- A requirement the change contradicts or leaves out is a finding even when the code never mentions it. Report it on the changed code it concerns, and cite the record (system, id and the requirement's own words) as the evidence.
+- A requirement that does not apply to this change is not a violation.`;
 }
 
 /** Custom agents with linked guides: the rescue also looks for rules of those
