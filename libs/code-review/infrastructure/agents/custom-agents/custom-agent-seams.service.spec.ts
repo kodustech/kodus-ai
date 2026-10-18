@@ -90,85 +90,187 @@ describe('CustomAgentTryRunnerService', () => {
         })),
     };
 
-    const setup = (files: Record<string, string> = {}) => {
-        const execute = jest.fn(async (input: any) => {
-            input.onAgentProgress?.({
-                agentName: 'x',
-                status: 'completed',
-                toolCalls: [
-                    { tool: 'loadSkill', args: '{"name":"ledger-posting"}' },
-                ],
-            });
-            return {
-                suggestions: [
-                    {
-                        relevantFile: 'src/ledger/refund.ts',
-                        oneSentenceSummary: 'One-sided refund',
-                        severity: 'high',
-                    },
-                ],
-                discardedByVerify: [
-                    {
-                        relevantFile: 'src/ledger/refund.ts',
-                        oneSentenceSummary: 'Refuted',
-                        severity: 'low',
-                    },
-                ],
-                agentName: 'x',
-                turnsUsed: 1,
-                durationMs: 1,
-            };
-        });
-        const factory = { create: jest.fn(() => ({ execute })) };
-        const cm = codeManagement(files);
+    const CLI_WARNING = {
+        kind: 'CLI_INSTALL_FAILED',
+        reason: 'cli_install_failed',
+        contextWindowTokens: 0,
+        modelName: '',
+        detail: 'Ledger reviewer: CLI "dupfinder" unavailable (install failed); the agent ran without it',
+    };
+
+    const output = {
+        suggestions: [
+            {
+                relevantFile: 'src/ledger/refund.ts',
+                oneSentenceSummary: 'One-sided refund',
+                severity: 'high',
+            },
+        ],
+        discardedByVerify: [
+            {
+                relevantFile: 'src/ledger/refund.ts',
+                oneSentenceSummary: 'Refuted',
+                severity: 'low',
+            },
+        ],
+        agentName: 'custom-agent:ledger-reviewer',
+        turnsUsed: 1,
+        durationMs: 1,
+    };
+
+    /**
+     * The review's own pieces, faked at their edges: the sandbox stage hands
+     * back a checkout (or none), the orchestrator runs the agent.
+     */
+    const setup = (opts: { checkout?: boolean; orchestrate?: any } = {}) => {
+        const checkout = opts.checkout ?? true;
+        const sandbox = {
+            type: 'e2b',
+            sandboxId: 'sbx-1',
+            repoDir: '/repo',
+            baseBranch: 'main',
+            remoteCommands: { grep: jest.fn() },
+            // Every path reads as absent on the target branch.
+            run: jest.fn(async (_command: string) => ({
+                stdout: '',
+                stderr: '',
+                exitCode: 0,
+            })),
+            readFile: jest.fn(),
+            writeFile: jest.fn(),
+            cleanup: jest.fn(async () => {}),
+        };
+        const installed = [{ agentId: 'ledger-agent', name: 'dupfinder' }];
+        const createSandboxStage = {
+            execute: jest.fn(async (context: any) =>
+                checkout
+                    ? {
+                          ...context,
+                          sandboxHandle: sandbox,
+                          customAgentClis: {
+                              byAgentId: { 'ledger-agent': installed },
+                              warnings: [CLI_WARNING],
+                          },
+                      }
+                    : context,
+            ),
+        };
+        const orchestrator = {
+            execute: jest.fn(
+                opts.orchestrate ??
+                    (async (input: any) => {
+                        input.onAgentProgress?.({
+                            agentName: 'x',
+                            status: 'completed',
+                            toolCalls: [{ tool: 'runCli', args: '{}' }],
+                        });
+                        return {
+                            suggestions: output.suggestions,
+                            agentResults: [output],
+                            failures: [],
+                            incomplete: [],
+                            customAgentRuns: [],
+                            totalDurationMs: 1,
+                            warnings: [],
+                        };
+                    }),
+            ),
+        };
+        const codeBaseConfig = {
+            getConfig: jest.fn(async () => ({
+                languageResultPrompt: 'pt-BR',
+                reviewMode: 'normal',
+                byokModelId: 'repo-model',
+                customAgents: [],
+                knowledge: [],
+            })),
+        };
+        const cm = {
+            ...codeManagement(),
+            getTypeIntegration: jest.fn(async () => 'github'),
+            getPullRequestByNumber: jest.fn(async () => ({
+                title: 'Book refunds',
+                base: { ref: 'main' },
+                head: { ref: 'feature/refunds' },
+            })),
+        };
         const runner = new CustomAgentTryRunnerService(
             parameters as any,
             cm as any,
-            factory as any,
+            codeBaseConfig as any,
+            createSandboxStage as any,
+            orchestrator as any,
         );
-        return { runner, execute, factory, cm };
+        return {
+            runner,
+            sandbox,
+            installed,
+            createSandboxStage,
+            orchestrator,
+            codeBaseConfig,
+        };
     };
 
-    it('refuses a pull request URL of another repository', async () => {
-        const { runner, execute } = setup();
-
-        await expect(
-            runner.runCustomAgentOnPullRequest({
-                organizationAndTeamData: org,
-                repositoryId: 'repo-1',
-                prUrl: 'https://git.example.test/acme/billing/pull/42',
-                agent: agent(),
-                knowledge: [],
-            }),
-        ).rejects.toBeInstanceOf(BadRequestException);
-        expect(execute).not.toHaveBeenCalled();
-    });
-
-    it('skips without running when no changed file is in scope', async () => {
-        const { runner, execute } = setup();
-
-        const trace = await runner.runCustomAgentOnPullRequest({
-            organizationAndTeamData: org,
-            repositoryId: 'repo-1',
-            prUrl: 'https://git.example.test/acme/ledger/pull/42',
-            agent: agent({ scope: { include: ['src/payroll/**'] } }),
-            knowledge: [],
-        });
-
-        expect(trace.status).toBe('skipped');
-        expect(execute).not.toHaveBeenCalled();
-    });
-
-    it('runs the agent on its files with its knowledge and reports what it did', async () => {
-        const { runner, execute } = setup({
-            '.skills/ledger-posting/SKILL.md': SKILL,
-        });
-
-        const trace = await runner.runCustomAgentOnPullRequest({
+    const run = (runner: CustomAgentTryRunnerService, over: any = {}) =>
+        runner.runCustomAgentOnPullRequest({
             organizationAndTeamData: org,
             repositoryId: 'repo-1',
             prUrl: 'https://git.example.test/acme/ledger/pull/42',
             agent: agent(),
+            knowledge: [],
+            ...over,
+        });
+
+    it('refuses a pull request URL of another repository', async () => {
+        const { runner, orchestrator, createSandboxStage } = setup();
+
+        await expect(
+            run(runner, {
+                prUrl: 'https://git.example.test/acme/billing/pull/42',
+            }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(createSandboxStage.execute).not.toHaveBeenCalled();
+        expect(orchestrator.execute).not.toHaveBeenCalled();
+    });
+
+    it('skips without a sandbox or a run when no changed file is in scope', async () => {
+        const { runner, orchestrator, createSandboxStage } = setup();
+
+        const trace = await run(runner, {
+            agent: agent({ scope: { include: ['src/payroll/**'] } }),
+        });
+
+        expect(trace.status).toBe('skipped');
+        expect(createSandboxStage.execute).not.toHaveBeenCalled();
+        expect(orchestrator.execute).not.toHaveBeenCalled();
+    });
+
+    it("opens the review's sandbox for this pull request, installing only this agent's CLIs", async () => {
+        const { runner, createSandboxStage } = setup();
+
+        await run(runner);
+
+        const context = createSandboxStage.execute.mock.calls[0][0];
+        expect(context.platformType).toBe('github');
+        expect(context.branch).toBe('feature/refunds');
+        expect(context.pullRequest).toEqual(
+            expect.objectContaining({ number: 42, base: { ref: 'main' } }),
+        );
+        expect(context.repository).toEqual(
+            expect.objectContaining({ id: 'repo-1', name: 'acme/ledger' }),
+        );
+        expect(context.codeReviewConfig.customAgents).toEqual([agent()]);
+        expect(context.onlyCustomAgent).toBe('ledger-reviewer');
+        expect(context.changedFiles.map((f: any) => f.filename)).toEqual([
+            'src/ledger/refund.ts',
+            'src/billing/invoice.ts',
+        ]);
+    });
+
+    it('runs the agent through the review orchestrator with the sandbox, its CLIs and the repository config', async () => {
+        const { runner, orchestrator, sandbox, installed } = setup();
+
+        await run(runner, {
             knowledge: [
                 {
                     path: '.skills/ledger-posting',
@@ -178,24 +280,99 @@ describe('CustomAgentTryRunnerService', () => {
             ],
         });
 
-        const input = execute.mock.calls[0][0];
-        expect(input.changedFiles.map((f: any) => f.filename)).toEqual([
-            'src/ledger/refund.ts',
-        ]);
-        expect(input.changedFiles[0].patchWithLinesStr).toContain('refund');
+        const input = orchestrator.execute.mock.calls[0][0];
+        expect(input.customAgents).toEqual([agent()]);
+        expect(input.onlyCustomAgent).toBe('ledger-reviewer');
         expect(input.prNumber).toBe(42);
         expect(input.baseBranch).toBe('main');
-        expect(input.knowledge.skills.map((s: any) => s.name)).toEqual([
-            'ledger-posting',
-        ]);
+        expect(input.changedFiles[0].patchWithLinesStr).toContain('refund');
+        // The same tools a review offers: the checkout and runCli.
+        expect(input.remoteCommands).toBe(sandbox.remoteCommands);
+        expect(input.customAgentTooling).toEqual({
+            sandbox,
+            installedClis: { 'ledger-agent': installed },
+        });
+        // The repository's config, as the review reads it.
+        expect(input.languageResultPrompt).toBe('pt-BR');
+        expect(input.byokModelId).toBe('repo-model');
+        // Skills and docs read from the target branch in the checkout, the
+        // source the quote check reads.
+        expect(input.knowledgeReader).toBeDefined();
+        expect(input.knowledgeByTarget.get('ledger-agent')).toBeDefined();
+        expect(
+            sandbox.run.mock.calls.some(([command]) =>
+                command.includes('refs/remotes/origin/main'),
+            ),
+        ).toBe(true);
+    });
+
+    it('reports what the agent did, with the warnings a review would carry, and releases the sandbox', async () => {
+        const { runner, sandbox } = setup();
+
+        const trace = await run(runner, {
+            knowledge: [
+                {
+                    path: '.skills/ledger-posting',
+                    kind: 'skill',
+                    linkedTo: [{ agentId: 'ledger-agent' }],
+                },
+            ],
+        });
+
         expect(trace.status).toBe('completed');
-        expect(trace.skillsOpened).toEqual([
-            { path: '.skills/ledger-posting/SKILL.md' },
-        ]);
+        expect(trace.toolCalls.map((call) => call.tool)).toEqual(['runCli']);
         expect(trace.findings).toEqual([
             expect.objectContaining({ verdict: 'kept', wouldPost: true }),
             expect.objectContaining({ verdict: 'dropped', wouldPost: false }),
         ]);
+        expect(trace.warnings).toEqual(
+            expect.arrayContaining([
+                { kind: 'CLI_INSTALL_FAILED', detail: CLI_WARNING.detail },
+                expect.objectContaining({ kind: 'SKILL_NOT_FOUND' }),
+            ]),
+        );
+        expect(sandbox.cleanup).toHaveBeenCalled();
+    });
+
+    it('says the run read only the diff when the sandbox could not be opened', async () => {
+        const { runner, orchestrator } = setup({ checkout: false });
+
+        const trace = await run(runner);
+
+        expect(orchestrator.execute.mock.calls[0][0].remoteCommands).toBe(
+            undefined,
+        );
+        expect(trace.warnings).toEqual([
+            expect.objectContaining({ kind: 'SANDBOX_UNAVAILABLE' }),
+        ]);
+    });
+
+    it('fails with the reason when the agent failed, and still releases the sandbox', async () => {
+        const { runner, sandbox } = setup({
+            orchestrate: async () => ({
+                suggestions: [],
+                agentResults: [],
+                failures: [
+                    {
+                        agentName: 'custom-agent:ledger-reviewer',
+                        category: 'custom-agent:ledger-reviewer',
+                        error: new Error('model refused the key'),
+                        durationMs: 0,
+                        customAgent: { id: 'ledger-agent' },
+                    },
+                ],
+                incomplete: [],
+                customAgentRuns: [],
+                totalDurationMs: 1,
+                warnings: [],
+            }),
+        });
+
+        const trace = await run(runner);
+
+        expect(trace.status).toBe('failed');
+        expect(trace.reason).toBe('model refused the key');
+        expect(sandbox.cleanup).toHaveBeenCalled();
     });
 });
 

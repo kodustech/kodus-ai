@@ -10,12 +10,13 @@ import {
     CustomAgentToolCatalogService,
     CustomAgentTryRunnerService,
 } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-seams.service';
-import { CustomAgentProviderFactory } from '@libs/code-review/infrastructure/agents/providers/custom-agent.provider';
+import { CodeReviewPipelineModule } from '@libs/code-review/pipeline/code-review-pipeline.module';
 import { PermissionValidationModule } from '@libs/ee/shared/permission-validation.module';
 import { McpCoreModule } from '@libs/mcp-server/mcp-core.module';
 import { ParametersModule } from '@libs/organization/modules/parameters.module';
 import { PlatformModule } from '@libs/platform/modules/platform.module';
 
+import { CodebaseModule } from './codebase.module';
 import { ReviewKnowledgeModule } from './review-knowledge.module';
 
 /**
@@ -30,9 +31,12 @@ import { ReviewKnowledgeModule } from './review-knowledge.module';
         forwardRef(() => PermissionValidationModule),
         forwardRef(() => McpCoreModule),
         ReviewKnowledgeModule,
+        // Try it runs the review's own pieces: the repository config, the
+        // sandbox stage (CLI install) and the review orchestrator.
+        forwardRef(() => CodebaseModule),
+        forwardRef(() => CodeReviewPipelineModule),
     ],
     providers: [
-        CustomAgentProviderFactory,
         CustomAgentKnowledgeReaderService,
         CustomAgentToolCatalogService,
         CustomAgentTryRunnerService,

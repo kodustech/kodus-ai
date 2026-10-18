@@ -27,14 +27,26 @@ import {
     type BaseBranchReader,
     type KnowledgeCodeManagementPort,
 } from '@libs/code-review/infrastructure/agents/knowledge/base-branch-reader';
-import {
-    KnowledgeResolver,
-    locateSkill,
-} from '@libs/code-review/infrastructure/agents/knowledge/knowledge-resolver';
+import { locateSkill } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-resolver';
 import { LOAD_SKILL_TOOL } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-tools';
 import { RepositorySkillDetectionService } from '@libs/code-review/infrastructure/agents/knowledge/skill-detection.service';
 import { parseSkillMarkdown } from '@libs/code-review/infrastructure/agents/knowledge/skill-validator';
-import { CustomAgentProviderFactory } from '@libs/code-review/infrastructure/agents/providers/custom-agent.provider';
+import { resolveReviewKnowledge } from '@libs/code-review/infrastructure/agents/knowledge/review-knowledge';
+import { ReviewOrchestratorService } from '@libs/code-review/infrastructure/agents/review-orchestrator.service';
+import { resolveAdaptiveProfile } from '@libs/code-review/infrastructure/agents/engine/adaptive-fit';
+import {
+    buildSandboxUnavailableWarning,
+    dedupReviewWarnings,
+    type ReviewWarning,
+} from '@libs/code-review/infrastructure/agents/engine/review-warnings';
+import {
+    CODE_BASE_CONFIG_SERVICE_TOKEN,
+    type ICodeBaseConfigService,
+} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
+import type { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
+import { buildOrchestratorInput } from '@libs/code-review/pipeline/stages/build-orchestrator-input';
+import { CreateSandboxStage } from '@libs/code-review/pipeline/stages/create-sandbox.stage';
+import { resolveContextWindow } from '@libs/llm/model-context-window';
 import type {
     AgentProgressEvent,
     ReviewAgentOutput,
@@ -55,7 +67,7 @@ import {
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 
-import { filesInAgentScope } from './custom-agent-scope';
+import { customAgentSlug, filesInAgentScope } from './custom-agent-scope';
 
 const logger = createLogger('CustomAgentSeams');
 
@@ -418,12 +430,27 @@ export function buildTryTrace(params: {
     };
 }
 
+/** The PR's source branch, from the provider's own pull request shape. */
+function headBranchOf(pr: any): string | undefined {
+    const raw =
+        pr?.head?.ref ??
+        pr?.sourceRefName ??
+        pr?.source_branch ??
+        pr?.source?.branch?.name ??
+        pr?.headRef;
+    return typeof raw === 'string' && raw
+        ? raw.replace(/^refs\/heads\//, '')
+        : undefined;
+}
+
 /**
  * Runs one custom agent on a pull request for the settings screen's Try it,
- * without posting or storing anything (#2172). The run reads the PR through
- * the provider API: skills, docs and the agent's read-only MCP tools are
- * there; tools that need the review sandbox (repository search, astGrep,
- * runCli) are not.
+ * without posting or storing anything (#2172). It takes the review's own
+ * path: the repository's review config, the review sandbox (E2B when
+ * configured) with this agent's CLIs installed, skills and docs read from the
+ * target branch, and the review orchestrator, which runs the agent through
+ * the harness (finder, quote check, convention verifier, HV2) on the model a
+ * review would use. Only the posting is left out.
  */
 @Injectable()
 export class CustomAgentTryRunnerService implements ICustomAgentTryRunner {
@@ -431,7 +458,10 @@ export class CustomAgentTryRunnerService implements ICustomAgentTryRunner {
         @Inject(PARAMETERS_SERVICE_TOKEN)
         private readonly parametersService: IParametersService,
         private readonly codeManagementService: CodeManagementService,
-        private readonly providerFactory: CustomAgentProviderFactory,
+        @Inject(CODE_BASE_CONFIG_SERVICE_TOKEN)
+        private readonly codeBaseConfigService: ICodeBaseConfigService,
+        private readonly createSandboxStage: CreateSandboxStage,
+        private readonly reviewOrchestrator: ReviewOrchestratorService,
     ) {}
 
     async runCustomAgentOnPullRequest(params: {
@@ -484,8 +514,7 @@ export class CustomAgentTryRunnerService implements ICustomAgentTryRunner {
                 ? convertToHunksWithLinesNumbers(file.patch, file)
                 : undefined,
         }));
-        const inScope = filesInAgentScope(agent, changedFiles);
-        if (!inScope.length) {
+        if (!filesInAgentScope(agent, changedFiles).length) {
             return {
                 status: 'skipped',
                 reason: 'No changed file matches the agent scope',
@@ -502,45 +531,153 @@ export class CustomAgentTryRunnerService implements ICustomAgentTryRunner {
                 organizationAndTeamData,
                 repository,
             }));
-        const reader = readerFor(
-            this.codeManagementService,
+        const platformType =
+            await this.codeManagementService.getTypeIntegration(
+                organizationAndTeamData,
+            );
+        const reviewRepository = {
+            ...repository,
+            fullName:
+                (stored as { fullName?: string }).fullName ||
+                (pr as any)?.base?.repo?.full_name ||
+                repository.name,
+            defaultBranch:
+                (stored as { defaultBranch?: string }).defaultBranch ||
+                baseBranch,
+        };
+
+        // The repository's review config, as ResolveConfigStage reads it,
+        // with this agent (saved or not) and its knowledge in place.
+        const config = await this.codeBaseConfigService.getConfig(
             organizationAndTeamData,
-            repository,
-            baseBranch,
+            reviewRepository,
+            changedFiles as any,
         );
-        const knowledge = await new KnowledgeResolver(reader).resolve({
-            items: params.knowledge,
-            target: { agentId: agent.id },
-            changedFiles: changedFiles.map((file) => file.filename),
-        });
+        const slug = customAgentSlug(agent.name);
+        let context = {
+            organizationAndTeamData,
+            platformType,
+            repository: reviewRepository,
+            branch: headBranchOf(pr),
+            pullRequest: {
+                number: prNumber,
+                title: (pr as { title?: string }).title,
+                body: (pr as { body?: string }).body,
+                base: { ref: baseBranch },
+            },
+            changedFiles,
+            codeReviewConfig: {
+                ...config,
+                customAgents: [agent],
+                knowledge: params.knowledge,
+            },
+            // `@kody -v <slug>`: this agent alone, enabled or not.
+            onlyCustomAgent: slug,
+        } as unknown as CodeReviewPipelineContext;
+
+        // The review's sandbox and CLI install. On failure the stage leaves
+        // no sandbox and the run reads only the diff, as a review would.
+        context = await this.createSandboxStage.execute(context);
+        const sandbox = context.sandboxHandle;
 
         const events: AgentProgressEvent[] = [];
+        const warnings: ReviewWarning[] = [
+            ...(context.customAgentClis?.warnings ?? []),
+        ];
         try {
-            const output = await this.providerFactory.create(agent).execute({
-                organizationAndTeamData,
-                changedFiles: inScope as any,
-                prNumber,
-                repositoryId: repository.id,
-                repositoryFullName: repository.name,
-                prTitle: (pr as { title?: string }).title,
-                prBody: (pr as { body?: string }).body,
+            const hasCheckout =
+                !!sandbox?.remoteCommands && sandbox.type !== 'null';
+            if (!hasCheckout && !context.sandboxSuperseded) {
+                warnings.push(
+                    buildSandboxUnavailableWarning({
+                        modelName: agent.models?.run || 'unknown',
+                    }),
+                );
+            }
+
+            const knowledge = await resolveReviewKnowledge({
+                items: params.knowledge,
+                customAgents: [agent],
+                changedFiles,
                 baseBranch,
-                remoteCommands: undefined,
-                languageResultPrompt:
-                    (configValue?.configs as { languageResultPrompt?: string })
-                        ?.languageResultPrompt ?? 'en-US',
-                reviewMode: 'normal',
-                knowledge,
-                knowledgeReader: reader,
-                onAgentProgress: (event) => events.push(event),
+                sandbox,
+                codeManagement: this
+                    .codeManagementService as unknown as KnowledgeCodeManagementPort,
+                organizationAndTeamData,
+                repository,
+                logContext: CustomAgentTryRunnerService.name,
             });
-            return buildTryTrace({
-                agent,
-                output,
-                events,
-                startedAt,
-                skills: knowledge.skills,
+            warnings.push(...knowledge.warnings);
+
+            // No resolved slot here (ValidateConfigStage does not run), so the
+            // profile is sized by the override name, as the stage falls back.
+            const adaptiveProfile = resolveAdaptiveProfile(
+                resolveContextWindow({
+                    modelName: config?.byokModelId?.trim()
+                        ? ''
+                        : config?.byokModel?.trim() || '',
+                }),
+            );
+            const result = await this.reviewOrchestrator.execute({
+                ...buildOrchestratorInput(context, {
+                    changedFiles: changedFiles as any,
+                    prNumber,
+                    repositoryId: repository.id,
+                    reviewOptions: config?.reviewOptions || {
+                        bug: true,
+                        security: true,
+                        performance: true,
+                    },
+                    onAgentProgress: (event) => events.push(event),
+                    gitHubToken: undefined,
+                    callGraph: '',
+                    adaptiveProfile,
+                    heavy: false,
+                }),
+                customAgents: [agent],
+                onlyCustomAgent: slug,
+                knowledgeByTarget: knowledge.byTarget,
+                knowledgeReader: knowledge.reader,
+                customAgentTooling: {
+                    sandbox,
+                    installedClis: context.customAgentClis?.byAgentId,
+                },
             });
+            const runWarnings = toTryWarnings([
+                ...warnings,
+                ...(result.warnings ?? []),
+            ]);
+
+            const failure = result.failures.find(
+                (f) => f.customAgent?.id === agent.id,
+            );
+            const output = result.agentResults[0];
+            if (failure || !output) {
+                const friendly = [...events]
+                    .reverse()
+                    .find(
+                        (event) => event.errorFriendlyMessage,
+                    )?.errorFriendlyMessage;
+                return {
+                    ...this.failed(
+                        startedAt,
+                        friendly ??
+                            failure?.error.message ??
+                            'The agent did not run',
+                    ),
+                    warnings: runWarnings,
+                };
+            }
+            return {
+                ...buildTryTrace({
+                    agent,
+                    output,
+                    events,
+                    startedAt,
+                    skills: knowledge.byTarget?.get(agent.id)?.skills,
+                }),
+                warnings: runWarnings,
+            };
         } catch (error) {
             logger.warn({
                 message: 'Custom agent Try it run failed',
@@ -552,15 +689,21 @@ export class CustomAgentTryRunnerService implements ICustomAgentTryRunner {
                     prNumber,
                 },
             });
-            const friendly = [...events]
-                .reverse()
-                .find(
-                    (event) => event.errorFriendlyMessage,
-                )?.errorFriendlyMessage;
-            return this.failed(
-                startedAt,
-                friendly ??
-                    (error instanceof Error ? error.message : String(error)),
+            return {
+                ...this.failed(
+                    startedAt,
+                    error instanceof Error ? error.message : String(error),
+                ),
+                warnings: toTryWarnings(warnings),
+            };
+        } finally {
+            // Releases the lease, as the pipeline observer does after a review.
+            await sandbox?.cleanup?.().catch((error) =>
+                logger.warn({
+                    message: 'Could not release the Try it sandbox',
+                    context: CustomAgentTryRunnerService.name,
+                    error,
+                }),
             );
         }
     }
@@ -575,4 +718,14 @@ export class CustomAgentTryRunnerService implements ICustomAgentTryRunner {
             durationMs: Date.now() - startedAt,
         };
     }
+}
+
+/** Review warnings as the Try it result shows them. */
+function toTryWarnings(
+    warnings: ReviewWarning[],
+): NonNullable<CustomAgentTryTrace['warnings']> {
+    return dedupReviewWarnings(warnings).map((w) => ({
+        kind: w.kind,
+        ...(w.detail ? { detail: w.detail } : {}),
+    }));
 }
