@@ -1,7 +1,6 @@
 import {
     agentFromSkill,
     agentUsageLine,
-    canAddAgent,
     cliIssues,
     createAgentFromTemplate,
     CUSTOM_AGENT_LIMITS,
@@ -22,6 +21,7 @@ import {
     setKnowledgeLink,
     settingsSummary,
     TAG_COLORS,
+    withoutAgent,
     withoutSecretValues,
 } from "./drafts";
 import type { CliToolConfig, CustomAgent, KnowledgeItem } from "./types";
@@ -95,15 +95,6 @@ describe("custom agent drafts", () => {
             linkedTo: [{ agentId: agent.id }],
         });
         expect(agent.presentation).not.toHaveProperty("mode");
-    });
-
-    it("stops adding agents at the limit", () => {
-        const agents = Array.from(
-            { length: CUSTOM_AGENT_LIMITS.maxAgents },
-            (_, index) => ({ id: `a${index}` }) as CustomAgent,
-        );
-        expect(canAddAgent(agents.slice(1))).toBe(true);
-        expect(canAddAgent(agents)).toBe(false);
     });
 
     it("describes an agent by the first line of its instructions", () => {
@@ -546,6 +537,33 @@ describe("custom agent drafts", () => {
         });
     });
 
+    it("removes an agent and only its links to skills and docs", () => {
+        const agents = [
+            { id: "a" } as CustomAgent,
+            { id: "b" } as CustomAgent,
+        ];
+        const knowledge: KnowledgeItem[] = [
+            {
+                path: ".claude/skills/money",
+                kind: "skill",
+                linkedTo: ["main", { agentId: "a" }, { agentId: "b" }],
+            },
+            { path: "docs/a.md", kind: "doc", linkedTo: [{ agentId: "a" }] },
+        ];
+
+        const next = withoutAgent(agents, knowledge, "a");
+
+        expect(next.agents.map((agent) => agent.id)).toEqual(["b"]);
+        expect(next.knowledge).toEqual([
+            {
+                path: ".claude/skills/money",
+                kind: "skill",
+                linkedTo: ["main", { agentId: "b" }],
+            },
+            { path: "docs/a.md", kind: "doc", linkedTo: [] },
+        ]);
+    });
+
     describe("summaries", () => {
         const base = (): CustomAgent => ({
             ...createAgentFromTemplate("blank", []),
@@ -614,6 +632,29 @@ describe("custom agent drafts", () => {
                     },
                 ),
             ).toEqual(["Model: Model One", "Check: m2"]);
+        });
+
+        it("names a plugin from its id when its connection is not listed", () => {
+            const agent: CustomAgent = {
+                ...base(),
+                tools: {
+                    mcp: [
+                        { integrationId: "linear-default", tools: ["*"] },
+                        { integrationId: "kodus-issues-default", tools: ["*"] },
+                        {
+                            integrationId:
+                                "3f2b6c1e-8a4d-4c2b-9e1f-0a1b2c3d4e5f",
+                            tools: ["*"],
+                        },
+                    ],
+                    cli: [],
+                },
+            };
+            expect(settingsSummary(agent).slice(0, 3)).toEqual([
+                "Linear",
+                "Git Issues",
+                "Plugin",
+            ]);
         });
     });
 });

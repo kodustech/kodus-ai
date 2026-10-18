@@ -335,8 +335,6 @@ export const reviewOptionsSchema = z.object({
  * Limits are enforced on save (DTO) and again when the config is resolved.
  */
 export const CUSTOM_AGENT_LIMITS = {
-    /** Agents per resolved config (repository or directory). */
-    maxAgents: 5,
     /** CLI tools per agent. */
     maxCliTools: 3,
     /** Skills linked per target (main review or one agent). */
@@ -454,7 +452,6 @@ export const customAgentConfigSchema = z.object({
  *  secrets and model overrides all name an agent by its id. */
 export const customAgentsSchema = z
     .array(customAgentConfigSchema)
-    .max(CUSTOM_AGENT_LIMITS.maxAgents)
     .superRefine((agents, ctx) => {
         const duplicate = firstDuplicate(agents.map((a) => a.id));
         if (duplicate !== undefined) {

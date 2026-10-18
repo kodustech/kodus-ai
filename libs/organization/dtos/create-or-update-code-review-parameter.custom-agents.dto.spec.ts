@@ -79,17 +79,11 @@ describe('CreateOrUpdateCodeReviewParameterDto — custom agents', () => {
         expect(flat).toBe('[]');
     });
 
-    it(`rejects more than ${CUSTOM_AGENT_LIMITS.maxAgents} agents`, async () => {
-        const agents = Array.from(
-            { length: CUSTOM_AGENT_LIMITS.maxAgents + 1 },
-            (_, i) => agent({ id: `agent-${i}` }),
+    it('accepts any number of agents', async () => {
+        const agents = Array.from({ length: 12 }, (_, i) =>
+            agent({ id: `agent-${i}` }),
         );
-        expect(await validateConfig({ customAgents: agents })).toContain(
-            'arrayMaxSize',
-        );
-        expect(await validateConfig({ customAgents: agents.slice(0, 5) })).toBe(
-            '[]',
-        );
+        expect(await validateConfig({ customAgents: agents })).toBe('[]');
     });
 
     it(`rejects more than ${CUSTOM_AGENT_LIMITS.maxCliTools} CLIs on one agent`, async () => {

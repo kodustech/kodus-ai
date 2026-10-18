@@ -1,8 +1,5 @@
 import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
-import {
-    CUSTOM_AGENT_LIMITS,
-    type CustomAgentConfig,
-} from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import type { CustomAgentConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
 /**
  * Custom review agents (#2172): which agents run on a review, and on which
@@ -41,8 +38,8 @@ export function filesInAgentScope<T extends { filename: string }>(
 }
 
 /**
- * The agents a review dispatches. A normal review runs the enabled ones, at
- * most `maxAgents`. `@kody -v <slug>` asks for one agent by its slug; it runs
+ * The agents a review dispatches. A normal review runs every enabled one.
+ * `@kody -v <slug>` asks for one agent by its slug; it runs
  * even while disabled, so a team can try an agent before turning it on.
  */
 export function selectCustomAgents(
@@ -57,9 +54,7 @@ export function selectCustomAgents(
         const match = agents.find((a) => customAgentSlug(a.name) === wanted);
         return match ? [match] : [];
     }
-    return agents
-        .filter((a) => a.enabled)
-        .slice(0, CUSTOM_AGENT_LIMITS.maxAgents);
+    return agents.filter((a) => a.enabled);
 }
 
 // The `@kody -v <slug>` parser lives with the other PR comment commands; the

@@ -899,7 +899,6 @@ class CodeReviewConfigWithoutLLMProviderDto {
 
     @IsOptional()
     @IsArray()
-    @ArrayMaxSize(CUSTOM_AGENT_LIMITS.maxAgents)
     @ValidateBy({
         name: 'uniqueCustomAgentIds',
         validator: {

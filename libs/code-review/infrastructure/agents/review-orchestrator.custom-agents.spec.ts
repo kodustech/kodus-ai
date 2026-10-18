@@ -212,7 +212,7 @@ describe('ReviewOrchestratorService — custom agents', () => {
         expect(customCalls.get('agent-1')!.maxSteps).toBe(4);
     });
 
-    it('caps the agents a review runs at the configured limit', async () => {
+    it('runs every enabled agent, with no cap on how many', async () => {
         const { service, factory } = setup();
 
         await service.execute(
@@ -223,7 +223,7 @@ describe('ReviewOrchestratorService — custom agents', () => {
             }),
         );
 
-        expect(factory.create).toHaveBeenCalledTimes(5);
+        expect(factory.create).toHaveBeenCalledTimes(7);
     });
 
     it('runs only the requested agent on `@kody -v <slug>`, even when disabled', async () => {

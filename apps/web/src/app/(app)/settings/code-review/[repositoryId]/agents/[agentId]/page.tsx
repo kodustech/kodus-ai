@@ -17,6 +17,7 @@ import { Spinner } from "@components/ui/spinner";
 import { toast } from "@components/ui/toaster/use-toast";
 import {
     pullRequestPlan,
+    withoutAgent,
     withoutSecretValues,
 } from "@services/custom-agents/drafts";
 import {
@@ -147,18 +148,7 @@ function AgentContent() {
             return;
         }
         try {
-            const nextKnowledge = knowledge.map((item) => ({
-                ...item,
-                linkedTo: item.linkedTo.filter(
-                    (target) =>
-                        typeof target === "string" ||
-                        target.agentId !== agent.id,
-                ),
-            }));
-            await save({
-                agents: agents.filter((entry) => entry.id !== agent.id),
-                knowledge: nextKnowledge,
-            });
+            await save(withoutAgent(agents, knowledge, agent.id));
             router.push(reviewScopeHref);
         } catch (error) {
             console.error("Error deleting custom agent:", error);

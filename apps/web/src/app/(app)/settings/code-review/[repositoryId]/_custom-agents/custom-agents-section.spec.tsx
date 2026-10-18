@@ -7,7 +7,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { FormProvider, useForm } from "react-hook-form";
 
+import { shouldBlockCodeReviewLayoutNavigation } from "../_utils/layout-dirty-state";
 import { CustomAgentsSection } from "./custom-agents-section";
+import { useCustomAgentsForm } from "./use-custom-agents-form";
 
 const agent: CustomAgent = {
     id: "ledger",
@@ -72,14 +74,30 @@ jest.mock("@services/organizationParameters/fetch", () => ({
     getBYOK: async () => null,
 }));
 
+// Like the settings layout: it owns the form and computes its leave guard from
+// the root `formState`, so it only sees what re-renders the form's root.
 const Form = ({ children }: { children: ReactNode }) => {
     const form = useForm<any>({
+        mode: "all",
         defaultValues: {
             customAgents: { value: [agent], level: "repository" },
             knowledge: { value: [], level: "repository" },
         },
     });
-    return <FormProvider {...form}>{children}</FormProvider>;
+    const { dirtyFields } = form.formState;
+    return (
+        <FormProvider {...form}>
+            {children}
+            <span data-testid="layout-blocks">
+                {String(
+                    shouldBlockCodeReviewLayoutNavigation({
+                        dirtyFields: dirtyFields as Record<string, unknown>,
+                        formIsSubmitting: false,
+                    }),
+                )}
+            </span>
+        </FormProvider>
+    );
 };
 
 const renderSection = () => {
@@ -122,5 +140,55 @@ describe("CustomAgentsSection", () => {
         await flush();
 
         expect(screen.getByLabelText("Instructions")).toBeInTheDocument();
+    });
+});
+
+const FormProbe = () => {
+    const { agents, isDirty, updateAgent, reset } = useCustomAgentsForm();
+    return (
+        <div>
+            <span data-testid="name">{agents[0]?.name}</span>
+            <span data-testid="dirty">{String(isDirty)}</span>
+            <button
+                onClick={() =>
+                    updateAgent("ledger", (current) => ({
+                        ...current,
+                        name: "Edited",
+                    }))
+                }>
+                edit
+            </button>
+            <button onClick={reset}>reset</button>
+        </div>
+    );
+};
+
+describe("useCustomAgentsForm", () => {
+    it("reset brings back the saved agents and clears the unsaved state", async () => {
+        render(
+            <QueryClientProvider client={new QueryClient()}>
+                <Form>
+                    <FormProbe />
+                </Form>
+            </QueryClientProvider>,
+        );
+
+        fireEvent.click(screen.getByText("edit"));
+        await flush();
+        expect(screen.getByTestId("name")).toHaveTextContent("Edited");
+        expect(screen.getByTestId("dirty")).toHaveTextContent("true");
+        expect(screen.getByTestId("layout-blocks")).toHaveTextContent("true");
+
+        fireEvent.click(screen.getByText("reset"));
+        await flush();
+        expect(screen.getByTestId("name")).toHaveTextContent(
+            "Ledger reviewer",
+        );
+        expect(screen.getByTestId("dirty")).toHaveTextContent("false");
+        // The settings layout guard reads the same form: it must let the
+        // user leave once the edit is undone.
+        expect(screen.getByTestId("layout-blocks")).toHaveTextContent(
+            "false",
+        );
     });
 });

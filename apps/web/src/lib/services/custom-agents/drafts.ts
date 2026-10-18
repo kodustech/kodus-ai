@@ -10,7 +10,6 @@ import type {
 
 /** Mirrors CUSTOM_AGENT_LIMITS on the backend. */
 export const CUSTOM_AGENT_LIMITS = {
-    maxAgents: 5,
     maxCliTools: 3,
     maxSkills: 20,
     maxDocs: 10,
@@ -296,9 +295,6 @@ export const nameCollisionHint = (name: string): string | null => {
     return `Kody already has a ${category} category; a distinct name (e.g. ${category} reviewer) tells their comments apart.`;
 };
 
-export const canAddAgent = (agents: Pick<CustomAgent, "id">[]) =>
-    agents.length < CUSTOM_AGENT_LIMITS.maxAgents;
-
 export const describeAgent = (agent: Pick<CustomAgent, "instructions">) => {
     const line = (agent.instructions ?? "")
         .split("\n")
@@ -332,6 +328,26 @@ export const isLinked = (
     item: Pick<KnowledgeItem, "linkedTo"> | undefined,
     target: KnowledgeLinkTarget,
 ) => !!item?.linkedTo.some((entry) => sameTarget(entry, target));
+
+/**
+ * Drops an agent and its links to skills and docs. The items themselves stay
+ * registered, like `setKnowledgeLink` leaves them, for the main review or
+ * another agent to keep following.
+ */
+export const withoutAgent = (
+    agents: CustomAgent[],
+    knowledge: KnowledgeItem[],
+    agentId: string,
+): { agents: CustomAgent[]; knowledge: KnowledgeItem[] } => ({
+    agents: agents.filter((agent) => agent.id !== agentId),
+    knowledge: knowledge.map((item) => ({
+        ...item,
+        linkedTo: item.linkedTo.filter(
+            (target) =>
+                typeof target === "string" || target.agentId !== agentId,
+        ),
+    })),
+});
 
 /**
  * Links or unlinks one skill or doc. An item stays registered with no links,
@@ -461,6 +477,29 @@ export const pullRequestPlan = (
     return `${when} — ${steps.join(", ")}.`;
 };
 
+const PLUGIN_NAMES_BY_ID: Record<string, string> = {
+    "kodus-issues-default": "Git Issues",
+};
+
+/**
+ * A readable plugin name when its connection is not listed (unreachable, or
+ * not loaded yet): the built-in ids read as words (`linear-default` →
+ * "Linear"); an opaque id reads as "Plugin" rather than leaking into the row.
+ */
+const pluginNameFromId = (integrationId: string): string => {
+    if (PLUGIN_NAMES_BY_ID[integrationId]) {
+        return PLUGIN_NAMES_BY_ID[integrationId];
+    }
+    const match = /^([a-z][a-z0-9]*(?:-[a-z0-9]+)*)-default$/.exec(
+        integrationId,
+    );
+    if (!match) return "Plugin";
+    return match[1]
+        .split("-")
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(" ");
+};
+
 /**
  * The settings edited on the agent's own page, as short chips for its row:
  * plugins, CLIs and models.
@@ -477,7 +516,7 @@ export const settingsSummary = (
         ...(agent.tools.mcp ?? []).map(
             (plugin) =>
                 names.pluginName?.(plugin.integrationId) ??
-                plugin.integrationId,
+                pluginNameFromId(plugin.integrationId),
         ),
         ...(agent.tools.cli ?? []).map((cli) => `${cli.name || "Unnamed"} CLI`),
     ];

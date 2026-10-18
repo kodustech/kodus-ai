@@ -119,9 +119,29 @@ export const useCustomAgentsForm = () => {
         [form, saveSettings, setAgents, setKnowledge],
     );
 
+    // Not `resetField`: it acts only on registered fields, and these two are
+    // written with `setValue`, so the edit stayed; and a field-level reset
+    // does not re-render the settings layout, whose leave guard then kept the
+    // user on the page. A form reset that puts back only these two saved
+    // values, keeps every other field as it is and recomputes dirtiness
+    // against the saved config reaches every subscriber.
     const reset = useCallback(() => {
-        form.resetField("customAgents" as never);
-        form.resetField("knowledge" as never);
+        const saved = form.formState.defaultValues ?? {};
+        form.reset(
+            {
+                ...form.getValues(),
+                customAgents: saved.customAgents,
+                knowledge: saved.knowledge,
+            } as CodeReviewFormType,
+            {
+                keepDefaultValues: true,
+                keepErrors: true,
+                keepTouched: true,
+                keepIsValid: true,
+                keepSubmitCount: true,
+                keepIsSubmitted: true,
+            },
+        );
     }, [form]);
 
     return {

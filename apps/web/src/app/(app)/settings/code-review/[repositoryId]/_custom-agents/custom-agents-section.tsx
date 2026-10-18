@@ -16,11 +16,11 @@ import TagInput from "@components/ui/tag-input";
 import { Textarea } from "@components/ui/textarea";
 import {
     agentUsageLine,
-    canAddAgent,
     CUSTOM_AGENT_LIMITS,
     describeAgent,
     followsLine,
     settingsSummary,
+    withoutAgent,
     withoutSecretValues,
 } from "@services/custom-agents/drafts";
 import {
@@ -29,7 +29,7 @@ import {
     useSettled,
 } from "@services/custom-agents/hooks";
 import type { CustomAgent } from "@services/custom-agents/types";
-import { ArrowRightIcon, PlusIcon } from "lucide-react";
+import { ArrowRightIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { cn } from "src/core/utils/components";
 
 import { useByokModels } from "../agents/[agentId]/_components/agent-sections";
@@ -59,11 +59,19 @@ const AgentInlineConfig = ({
         teamId,
         repositoryId,
         directoryId,
+        agents,
         knowledge,
+        setAgents,
         setKnowledge,
         updateAgent,
     } = useCustomAgentsForm();
     const byok = useByokModels();
+    // A form edit like any other: it lands on Save settings and Reset undoes it.
+    const remove = () => {
+        const next = withoutAgent(agents, knowledge, agent.id);
+        setAgents(next.agents);
+        setKnowledge(next.knowledge);
+    };
     // Typed secrets never go to the draft check, only the fact they exist.
     const draft = useSettled(withoutSecretValues(agent));
     const settledKnowledge = useSettled(knowledge);
@@ -170,12 +178,27 @@ const AgentInlineConfig = ({
                         <Chip key={chip}>{chip}</Chip>
                     ))}
                 </span>
-                <Link
-                    href={agentPageHref(repositoryId, agent.id, directoryId)}
-                    className="text-text-secondary hover:text-text-primary ml-auto flex items-center gap-1.5 text-xs">
-                    More settings
-                    <ArrowRightIcon className="size-3.5" />
-                </Link>
+                <span className="ml-auto flex items-center gap-3">
+                    {canEdit && (
+                        <Button
+                            size="xs"
+                            variant="cancel"
+                            leftIcon={<Trash2Icon />}
+                            onClick={remove}>
+                            Delete
+                        </Button>
+                    )}
+                    <Link
+                        href={agentPageHref(
+                            repositoryId,
+                            agent.id,
+                            directoryId,
+                        )}
+                        className="text-text-secondary hover:text-text-primary flex items-center gap-1.5 text-xs">
+                        More settings
+                        <ArrowRightIcon className="size-3.5" />
+                    </Link>
+                </span>
             </div>
         </div>
     );
@@ -245,24 +268,11 @@ export const CustomAgentsSection = ({ canEdit }: { canEdit: boolean }) => {
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
-                    {!canAddAgent(agents) && (
-                        <span
-                            id="custom-agents-limit"
-                            className="text-text-tertiary text-xs">
-                            {agents.length}/{CUSTOM_AGENT_LIMITS.maxAgents}{" "}
-                            agents
-                        </span>
-                    )}
                     <Button
                         size="sm"
                         variant="secondary"
                         leftIcon={<PlusIcon />}
-                        aria-describedby={
-                            canAddAgent(agents)
-                                ? undefined
-                                : "custom-agents-limit"
-                        }
-                        disabled={!canEdit || !canAddAgent(agents)}
+                        disabled={!canEdit}
                         onClick={() => setDialogOpen(true)}>
                         New agent
                     </Button>
