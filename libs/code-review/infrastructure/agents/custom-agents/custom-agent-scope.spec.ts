@@ -41,6 +41,27 @@ describe('filesInAgentScope', () => {
         { filename: 'web/app.tsx' },
     ];
 
+    it('reads a `!` include glob as an exclusion', () => {
+        // Teams write negations next to their includes; matching any
+        // pattern let `!` patterns add nothing and exclude nothing.
+        const scoped = filesInAgentScope(
+            agent({ scope: { include: ['src/**/*.ts', '!**/*.spec.ts'] } }),
+            files,
+        );
+        expect(scoped.map((f) => f.filename)).toEqual(['src/ledger/post.ts']);
+    });
+
+    it('takes every file when the only include globs are negations', () => {
+        const scoped = filesInAgentScope(
+            agent({ scope: { include: ['!web/**'] } }),
+            files,
+        );
+        expect(scoped.map((f) => f.filename)).toEqual([
+            'src/ledger/post.ts',
+            'src/ledger/post.spec.ts',
+        ]);
+    });
+
     it('takes every file when the agent lists no include glob', () => {
         expect(filesInAgentScope(agent(), files)).toHaveLength(3);
     });

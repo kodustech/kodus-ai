@@ -27,8 +27,17 @@ export function filesInAgentScope<T extends { filename: string }>(
 ): T[] {
     const globs = (list?: string[]) =>
         (list ?? []).map((g) => (g ?? '').trim()).filter(Boolean);
-    const include = globs(agent.scope?.include);
-    const exclude = globs(agent.scope?.exclude);
+    // A `!glob` written among the includes is an exclusion: matched as a
+    // pattern of its own it matches every other file and widens the scope.
+    const includeGlobs = globs(agent.scope?.include);
+    const include = includeGlobs.filter((g) => !g.startsWith('!'));
+    const exclude = [
+        ...globs(agent.scope?.exclude),
+        ...includeGlobs
+            .filter((g) => g.startsWith('!'))
+            .map((g) => g.slice(1))
+            .filter(Boolean),
+    ];
     return changedFiles.filter(
         (file) =>
             (include.length === 0 ||
