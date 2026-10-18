@@ -181,6 +181,41 @@ const uniqueId = (base: string, existing: Pick<CustomAgent, "id">[]) => {
     return `${base}-${index}`;
 };
 
+/**
+ * Mirrors `customAgentSlug` on the backend: the name as `@kody -v <slug>`
+ * and run names spell it. Two agents with the same slug can't be told apart,
+ * so the server refuses to save them.
+ */
+export const agentSlug = (name: string): string =>
+    (name || "")
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "") || "agent";
+
+/** `base`, or `base 2`, `base 3`… : the first whose slug no agent uses. */
+const uniqueName = (base: string, existing: Pick<CustomAgent, "name">[]) => {
+    const taken = new Set(existing.map((agent) => agentSlug(agent.name)));
+    if (!taken.has(agentSlug(base))) return base;
+    let index = 2;
+    while (taken.has(agentSlug(`${base} ${index}`))) index += 1;
+    return `${base} ${index}`;
+};
+
+/** Why `agent`'s name can't be saved next to `agents`; null when it can. */
+export const agentNameError = (
+    agent: Pick<CustomAgent, "id" | "name">,
+    agents: Pick<CustomAgent, "id" | "name">[],
+): string | null => {
+    const slug = agentSlug(agent.name);
+    const other = agents.find(
+        (entry) => entry.id !== agent.id && agentSlug(entry.name) === slug,
+    );
+    if (!other) return null;
+    return `Another agent, "${other.name}", already answers to @kody -v ${slug}. Choose a different name.`;
+};
+
 const blankAgent = (params: {
     id: string;
     name: string;
@@ -231,7 +266,7 @@ export const createAgentFromTemplate = (
     );
     return blankAgent({
         id: uniqueId(template.id === "blank" ? "agent" : template.id, existing),
-        name: template.name,
+        name: uniqueName(template.name, existing),
         color: taken ? nextTagColor(existing) : template.color,
         instructions: template.instructions,
         include: template.include,
@@ -305,7 +340,7 @@ export const agentFromSkill = (
     const skillName = candidate.name ?? skillFolderName(candidate.path);
     const agent = blankAgent({
         id: uniqueId(slugify(skillName), existing),
-        name: reviewerName(skillName),
+        name: uniqueName(reviewerName(skillName), existing),
         color: nextTagColor(existing),
         instructions: `Review the change against the team's "${skillName}" skill: load it, follow its rules and references, and report where the change departs from them. Cite the rule you apply.`,
     });

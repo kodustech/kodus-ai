@@ -1,21 +1,15 @@
 import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
-import type { CustomAgentConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import {
+    customAgentSlug,
+    type CustomAgentConfig,
+} from '@libs/core/infrastructure/config/types/general/codeReview.type';
+
+export { customAgentSlug };
 
 /**
  * Custom review agents (#2172): which agents run on a review, and on which
  * of its files.
  */
-
-/** The agent's name as a command and run-name token: `Data Contracts` → `data-contracts`. */
-export function customAgentSlug(name: string): string {
-    const slug = (name || '')
-        .normalize('NFKD')
-        .replace(/[̀-ͯ]/g, '')
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '');
-    return slug || 'agent';
-}
 
 /**
  * The changed files an agent reviews: those its `include` globs match (every
@@ -63,7 +57,16 @@ export function selectCustomAgents(
         const match = agents.find((a) => customAgentSlug(a.name) === wanted);
         return match ? [match] : [];
     }
-    return agents.filter((a) => a.enabled);
+    // A save refuses two agents sharing a slug; a config saved before that
+    // check runs the first, since run names and usage are keyed by slug.
+    const seen = new Set<string>();
+    return agents.filter((a) => {
+        if (!a.enabled) return false;
+        const slug = customAgentSlug(a.name);
+        if (seen.has(slug)) return false;
+        seen.add(slug);
+        return true;
+    });
 }
 
 // The `@kody -v <slug>` parser lives with the other PR comment commands; the

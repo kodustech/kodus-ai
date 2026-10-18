@@ -113,6 +113,18 @@ describe('selectCustomAgents', () => {
         expect(picked.map((a) => a.id)).toEqual(['1']);
     });
 
+    it('runs only the first of two agents sharing a slug', () => {
+        const twins = [
+            agent({ id: '1', name: 'Ledger Rules' }),
+            agent({ id: '2', name: 'ledger rules' }),
+            agent({ id: '3', name: 'Other' }),
+        ];
+        expect(selectCustomAgents(twins).map((a) => a.id)).toEqual(['1', '3']);
+        expect(
+            selectCustomAgents(twins, 'ledger-rules').map((a) => a.id),
+        ).toEqual(['1']);
+    });
+
     it('runs nothing for an unknown slug', () => {
         expect(selectCustomAgents([agent()], 'nope')).toEqual([]);
     });

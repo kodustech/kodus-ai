@@ -21,7 +21,10 @@ import {
 } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import type { CustomAgentRun } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-summary';
 import type { ResolvedKnowledge } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-resolver';
-import { KNOWLEDGE_MAIN_REVIEW_TARGET } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import {
+    customAgentSlugClashMessage,
+    KNOWLEDGE_MAIN_REVIEW_TARGET,
+} from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import {
     ReviewAgentInput,
     ReviewAgentOutput,
@@ -238,6 +241,16 @@ export class ReviewOrchestratorService {
         // Custom agents run next to the built-in ones, each on the files its
         // globs match. One whose globs match nothing is recorded, not run.
         if (this.customAgentFactory) {
+            // A save refuses two agents sharing a slug; one saved before that
+            // check still loads, and only the first of the two runs.
+            const slugClash = customAgentSlugClashMessage(customAgents ?? []);
+            if (slugClash) {
+                this.logger.warn({
+                    message: `Custom agent slug clash, running the first only: ${slugClash}`,
+                    context: ReviewOrchestratorService.name,
+                    metadata: { prNumber: input.prNumber },
+                });
+            }
             for (const agent of selectCustomAgents(
                 customAgents,
                 onlyCustomAgent,

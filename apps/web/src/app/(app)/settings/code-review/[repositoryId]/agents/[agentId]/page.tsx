@@ -16,6 +16,7 @@ import { Page } from "@components/ui/page";
 import { Spinner } from "@components/ui/spinner";
 import { toast } from "@components/ui/toaster/use-toast";
 import {
+    agentNameError,
     pullRequestPlan,
     withoutAgent,
     withoutSecretValues,
@@ -74,6 +75,9 @@ function AgentContent() {
         repositoryId,
     );
     const agent = agents.find((entry) => entry.id === agentId);
+    // Two agents with one command name can't be told apart; the server
+    // refuses the save, so the page does too.
+    const nameError = agent ? agentNameError(agent, agents) : null;
     const isGlobal = repositoryId === "global";
 
     const status = useCustomAgentsStatus({
@@ -116,6 +120,7 @@ function AgentContent() {
     });
 
     const onSave = async () => {
+        if (nameError) return;
         try {
             const result = await save();
             if (result?.centralizedPr) {
@@ -221,7 +226,7 @@ function AgentContent() {
                     <Page.SaveActions
                         isDirty={isDirty}
                         isSaving={isSubmitting}
-                        canSave={canEdit}
+                        canSave={canEdit && !nameError}
                         onReset={reset}
                         onSave={onSave}
                     />
@@ -256,6 +261,7 @@ function AgentContent() {
                             report={resolve.data}
                             canEdit={canEdit}
                             onChange={patch}
+                            nameError={nameError}
                         />
                         <RunsOn
                             agent={agent}

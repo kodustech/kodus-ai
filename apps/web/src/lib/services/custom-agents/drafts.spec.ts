@@ -1,5 +1,7 @@
 import {
     agentFromSkill,
+    agentNameError,
+    agentSlug,
     agentUsageLine,
     cliIssues,
     createAgentFromTemplate,
@@ -462,6 +464,55 @@ describe("custom agent drafts", () => {
             expect(second.presentation.tag.color).not.toBe(
                 first.presentation.tag.color,
             );
+        });
+
+        it("names a new agent so its command name is unique", () => {
+            const first = createAgentFromTemplate("blank", []);
+            const second = createAgentFromTemplate("blank", [first]);
+            const third = createAgentFromTemplate("blank", [first, second]);
+            expect([first.name, second.name, third.name]).toEqual([
+                "New agent",
+                "New agent 2",
+                "New agent 3",
+            ]);
+            // A rename can take the slug a suffix would give.
+            const renamed = { ...second, name: "new-agent" };
+            expect(createAgentFromTemplate("blank", [renamed]).name).toBe(
+                "New agent 2",
+            );
+        });
+
+        it("names an imported agent so its command name is unique", () => {
+            const skill = {
+                path: ".claude/skills/e2e",
+                kind: "skill" as const,
+                name: "create-e2e-tests",
+                kodyRuleSource: false,
+            };
+            const { agent: first } = agentFromSkill(skill, []);
+            const { agent: second } = agentFromSkill(skill, [first]);
+            expect(second.name).toBe("E2E tests reviewer 2");
+        });
+
+        it("derives the command name the backend uses", () => {
+            expect(agentSlug("Data Contracts")).toBe("data-contracts");
+            expect(agentSlug("  Café — Rules!! ")).toBe("cafe-rules");
+            expect(agentSlug("!!!")).toBe("agent");
+        });
+
+        it("refuses a name whose command name another agent uses", () => {
+            const first = createAgentFromTemplate("architecture", []);
+            const second = {
+                ...createAgentFromTemplate("blank", [first]),
+                name: "architecture!",
+            };
+            expect(agentNameError(second, [first, second])).toBe(
+                'Another agent, "Architecture", already answers to @kody -v architecture. Choose a different name.',
+            );
+            expect(agentNameError(first, [first])).toBeNull();
+            expect(
+                agentNameError({ ...second, name: "Arch 2" }, [first, second]),
+            ).toBeNull();
         });
 
         it("hints when a name repeats a native category, ignoring case", () => {

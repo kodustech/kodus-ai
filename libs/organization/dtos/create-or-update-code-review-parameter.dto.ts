@@ -33,6 +33,7 @@ import {
     GroupingModeSuggestions,
     KNOWLEDGE_MAIN_REVIEW_TARGET,
     KnowledgeItem,
+    customAgentSlugClashMessage,
     firstDuplicate,
     knowledgeLinkProblems,
     LimitationType,
@@ -910,6 +911,18 @@ class CodeReviewConfigWithoutLLMProviderDto {
                 !Array.isArray(agents) ||
                 firstDuplicate(agents.map((a) => a?.id)) === undefined,
             defaultMessage: () => 'customAgents ids must be unique',
+        },
+    })
+    @ValidateBy({
+        name: 'uniqueCustomAgentSlugs',
+        validator: {
+            validate: (agents: unknown) =>
+                !Array.isArray(agents) ||
+                customAgentSlugClashMessage(agents) === undefined,
+            defaultMessage: (args) =>
+                (Array.isArray(args?.value)
+                    ? customAgentSlugClashMessage(args.value)
+                    : undefined) ?? 'customAgents names must be unique',
         },
     })
     @ValidateNested({ each: true })

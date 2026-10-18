@@ -40,11 +40,14 @@ export const Section = ({
 export const Field = ({
     label,
     hint,
+    error,
     children,
     htmlFor,
 }: PropsWithChildren<{
     label: string;
     hint?: ReactNode;
+    /** Shown instead of the hint while the value can't be saved. */
+    error?: ReactNode;
     htmlFor?: string;
 }>) => (
     <div className="flex flex-col gap-1.5">
@@ -54,7 +57,16 @@ export const Field = ({
             {label}
         </label>
         {children}
-        {hint && <span className="text-text-tertiary text-xs">{hint}</span>}
+        {error ? (
+            <span
+                role="alert"
+                id={htmlFor ? `${htmlFor}-error` : undefined}
+                className="text-danger text-xs">
+                {error}
+            </span>
+        ) : (
+            hint && <span className="text-text-tertiary text-xs">{hint}</span>
+        )}
     </div>
 );
 

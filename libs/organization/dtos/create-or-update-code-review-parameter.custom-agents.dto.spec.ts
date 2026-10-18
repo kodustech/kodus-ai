@@ -101,7 +101,7 @@ describe('CreateOrUpdateCodeReviewParameterDto — custom agents', () => {
 
     it('accepts any number of agents', async () => {
         const agents = Array.from({ length: 12 }, (_, i) =>
-            agent({ id: `agent-${i}` }),
+            agent({ id: `agent-${i}`, name: `Ledger reviewer ${i}` }),
         );
         expect(await validateConfig({ customAgents: agents })).toBe('[]');
     });
@@ -349,6 +349,19 @@ describe('CreateOrUpdateCodeReviewParameterDto — custom agents', () => {
             customAgents: [agent(), agent({ name: 'Ledger reviewer 2' })],
         });
         expect(flat).toContain('uniqueCustomAgentIds');
+    });
+
+    it('rejects two agents whose names give the same command name', async () => {
+        const flat = await validateConfig({
+            customAgents: [
+                agent(),
+                agent({ id: 'agent-ledger-2', name: 'ledger  REVIEWER' }),
+            ],
+        });
+        expect(flat).toContain('uniqueCustomAgentSlugs');
+        expect(flat).toContain(
+            'agents \\"Ledger reviewer\\" and \\"ledger  REVIEWER\\" share the command name \\"ledger-reviewer\\"; rename one',
+        );
     });
 
     it('rejects an empty agent id', async () => {

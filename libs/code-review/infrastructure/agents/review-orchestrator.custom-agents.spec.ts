@@ -250,6 +250,34 @@ describe('ReviewOrchestratorService — custom agents', () => {
         ]);
     });
 
+    it('runs the first of two saved agents sharing a slug, and logs the clash', async () => {
+        const { service, factory } = setup();
+        const warn = jest
+            .spyOn((service as any).logger, 'warn')
+            .mockImplementation(() => undefined);
+
+        const out = await service.execute(
+            inputFor({
+                customAgents: [
+                    agentConfig(),
+                    agentConfig({ id: 'agent-2', name: 'ledger rules' }),
+                ],
+            }),
+        );
+
+        expect(factory.create.mock.calls.map(([c]) => c.id)).toEqual([
+            'agent-1',
+        ]);
+        expect(out.customAgentRuns.map((r: any) => r.id)).toEqual(['agent-1']);
+        expect(warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.stringContaining(
+                    'share the command name "ledger-rules"',
+                ),
+            }),
+        );
+    });
+
     it('reports a failed agent with the custom agent it belongs to', async () => {
         const { service } = setup(() => {
             throw new Error('provider down');

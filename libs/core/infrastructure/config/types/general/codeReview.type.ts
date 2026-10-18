@@ -479,8 +479,51 @@ export const customAgentConfigSchema = z.object({
     presentation: customAgentPresentationSchema,
 });
 
+/** The agent's name as a command and run-name token: `Data Contracts` → `data-contracts`. */
+export function customAgentSlug(name: string): string {
+    const slug = (name || '')
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    return slug || 'agent';
+}
+
+/**
+ * The first two agents whose names give the same slug. `@kody -v <slug>`,
+ * run names and usage attribution all name an agent by its slug, so two
+ * agents sharing one cannot be told apart.
+ */
+export function customAgentSlugClash(
+    agents: readonly { name?: string }[],
+): { slug: string; names: [string, string] } | undefined {
+    const firstBySlug = new Map<string, string>();
+    for (const agent of agents ?? []) {
+        const name = agent?.name ?? '';
+        const slug = customAgentSlug(name);
+        const earlier = firstBySlug.get(slug);
+        if (earlier !== undefined) {
+            return { slug, names: [earlier, name] };
+        }
+        firstBySlug.set(slug, name);
+    }
+    return undefined;
+}
+
+/** The save error for a slug clash, or undefined when every slug is unique. */
+export function customAgentSlugClashMessage(
+    agents: readonly { name?: string }[],
+): string | undefined {
+    const clash = customAgentSlugClash(agents);
+    return clash
+        ? `agents "${clash.names[0]}" and "${clash.names[1]}" share the command name "${clash.slug}"; rename one`
+        : undefined;
+}
+
 /** The agents of one config level: ids are unique, since findings, links,
- *  secrets and model overrides all name an agent by its id. */
+ *  secrets and model overrides all name an agent by its id; slugs are
+ *  unique, since `@kody -v` and run names name an agent by its slug. */
 export const customAgentsSchema = z
     .array(customAgentConfigSchema)
     .superRefine((agents, ctx) => {
@@ -490,6 +533,10 @@ export const customAgentsSchema = z
                 code: 'custom',
                 message: `agent id "${duplicate}" is used twice`,
             });
+        }
+        const slugClash = customAgentSlugClashMessage(agents);
+        if (slugClash) {
+            ctx.addIssue({ code: 'custom', message: slugClash });
         }
     });
 

@@ -37,12 +37,15 @@ export const WhatItDoes = ({
     report,
     canEdit,
     onChange,
+    nameError,
 }: {
     agent: CustomAgent;
     knowledge: KnowledgeItem[];
     report?: CustomAgentResolveReport;
     canEdit: boolean;
     onChange: Patch;
+    /** Why the name can't be saved (another agent has its command name). */
+    nameError?: string | null;
 }) => {
     const linked = knowledge.filter((item) =>
         item.linkedTo.some(
@@ -63,11 +66,16 @@ export const WhatItDoes = ({
             <Field
                 label="Name"
                 htmlFor="agent-name"
-                hint={nameCollisionHint(agent.name) ?? undefined}>
+                hint={nameCollisionHint(agent.name) ?? undefined}
+                error={nameError ?? undefined}>
                 <Input
                     id="agent-name"
                     size="md"
                     value={agent.name}
+                    aria-invalid={nameError ? true : undefined}
+                    aria-describedby={
+                        nameError ? "agent-name-error" : undefined
+                    }
                     disabled={!canEdit}
                     maxLength={60}
                     onChange={(e) =>

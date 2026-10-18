@@ -2,6 +2,7 @@ import {
     CUSTOM_AGENT_LIMITS,
     customAgentConfigSchema,
     customAgentsSchema,
+    customAgentSlugClash,
     knowledgeLinkProblems,
 } from './codeReview.type';
 
@@ -100,6 +101,35 @@ describe('custom agent config schemas', () => {
             customAgentsSchema.safeParse([agent('ledger'), agent('billing')])
                 .success,
         ).toBe(true);
+    });
+
+    it('refuses two agents whose names give the same command name', () => {
+        const first = { ...agent('ledger'), name: 'Data Contracts' };
+        const second = { ...agent('billing'), name: 'data-contracts' };
+        const result = customAgentsSchema.safeParse([first, second]);
+        expect(result.success).toBe(false);
+        expect(result.error?.issues[0]?.message).toBe(
+            'agents "Data Contracts" and "data-contracts" share the command name "data-contracts"; rename one',
+        );
+        expect(
+            customAgentsSchema.safeParse([
+                first,
+                { ...second, name: 'Data Contracts 2' },
+            ]).success,
+        ).toBe(true);
+    });
+
+    it('names the first slug clash, or none', () => {
+        expect(
+            customAgentSlugClash([
+                { name: 'A' },
+                { name: 'Ledger' },
+                { name: 'LEDGER!' },
+            ]),
+        ).toEqual({ slug: 'ledger', names: ['Ledger', 'LEDGER!'] });
+        expect(customAgentSlugClash([{ name: 'A' }, { name: 'B' }])).toBe(
+            undefined,
+        );
     });
 
     it('names knowledge links to agents that do not exist', () => {
