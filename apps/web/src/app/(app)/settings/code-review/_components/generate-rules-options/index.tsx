@@ -234,8 +234,6 @@ export const GenerateRulesOptions = () => {
                                 <Section.Content className="text-text-secondary text-sm font-normal">
                                     Kody will analyse closed PRs and suggest
                                     rules automatically.
-                                    {isGlobal &&
-                                        " This is the default for every repository that doesn't set its own."}
                                 </Section.Content>
                             </Section.Root>
 
