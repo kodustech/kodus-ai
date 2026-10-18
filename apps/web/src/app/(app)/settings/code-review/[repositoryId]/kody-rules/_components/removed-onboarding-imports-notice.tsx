@@ -6,6 +6,7 @@ import { Button } from "@components/ui/button";
 import { Card } from "@components/ui/card";
 import { useSuspenseKodyRulesCheckSyncStatus } from "@services/kodyRules/hooks";
 import { XIcon } from "lucide-react";
+import { createSerializer, parseAsString } from "nuqs";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 
 import { useCodeReviewConfig } from "../../../../_components/context";
@@ -15,6 +16,8 @@ const dismissedKey = (teamId: string) =>
     `kody-rules:removed-onboarding-imports-dismissed:${teamId}`;
 
 const DISMISS_EVENT = "kody-rules:removed-onboarding-imports-dismissed";
+
+const withDirectory = createSerializer({ directoryId: parseAsString });
 
 const subscribe = (onChange: () => void) => {
     window.addEventListener("storage", onChange);
@@ -83,7 +86,10 @@ export const RemovedOnboardingImportsNotice = () => {
                     variant="primary"
                     onClick={() =>
                         router.push(
-                            `/settings/code-review/${repositoryId}/review-scope${directoryId ? `?directoryId=${directoryId}` : ""}`,
+                            withDirectory(
+                                `/settings/code-review/${repositoryId}/review-scope`,
+                                { directoryId: directoryId ?? null },
+                            ),
                         )
                     }>
                     Open What to review
