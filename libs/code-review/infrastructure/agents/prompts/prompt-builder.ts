@@ -43,6 +43,14 @@ const SCOPE_CROSS_FILE_EXTRA = `
     CROSS-FILE: when the bug spans files, set relevantFile/relevantLinesStart/relevantLinesEnd to the CHANGED line that TRIGGERS it (the modified call, usage, import, or signature) — NOT the unchanged file where the symptom surfaces — and explain the cross-file effect in suggestionContent.
     NEVER emit a placeholder, guessed, "unknown", or non-diff path for relevantFile. If you cannot anchor the finding to a specific changed line present in this diff, OMIT the finding entirely.`;
 
+const CROSS_REPO_GOAL = `Your goal is to find CROSS-BOUNDARY defects: a field name, key derivation, value encoding, state/status value, or config that does not match what the OTHER side of the boundary (another service, the frontend/backend counterpart, a sibling integration adapter, a shared helper) actually produces or expects.
+
+    For every external field/key/status the changed code reads or writes, find who produces or consumes it and verify the shapes match. Check shared helpers and sibling adapters/finders of the same boundary.`;
+
+/** A custom agent keeps to its own instructions: the linked repositories are
+ *  evidence for that lane, not a second assignment. */
+const CROSS_REPO_GOAL_OWN_LANE = `Use the linked repositories as evidence for what YOUR instructions ask you to review: when a rule you were given depends on the other side of a boundary (another service, the frontend/backend counterpart, a shared helper), read that side to confirm or dismiss the finding. Do not report boundary mismatches your instructions do not cover.`;
+
 /**
  * Cross-repo boundary directive (#1576). Only rendered when the deterministic
  * boundary gate armed `linkedRepoAccess` for this review (config alone is not
@@ -50,6 +58,7 @@ const SCOPE_CROSS_FILE_EXTRA = `
  */
 export function formatCrossRepoBoundarySection(
     input: Pick<ReviewAgentInput, 'linkedRepoAccess'>,
+    options: { ownLane?: boolean } = {},
 ): string {
     const links = input.linkedRepoAccess?.list() ?? [];
     if (!links.length) return '';
@@ -66,9 +75,7 @@ export function formatCrossRepoBoundarySection(
     Linked repositories available via tools (pass repo="<fullName>" to grep/readFile/listDir):
 ${linkLines}
 
-    Your goal is to find CROSS-BOUNDARY defects: a field name, key derivation, value encoding, state/status value, or config that does not match what the OTHER side of the boundary (another service, the frontend/backend counterpart, a sibling integration adapter, a shared helper) actually produces or expects.
-
-    For every external field/key/status the changed code reads or writes, find who produces or consumes it and verify the shapes match. Check shared helpers and sibling adapters/finders of the same boundary.
+    ${options.ownLane ? CROSS_REPO_GOAL_OWN_LANE : CROSS_REPO_GOAL}
 
     Judgment rules:
       - Only emit a finding with CONFIRMED counterpart evidence (linked-repo file + the mismatching shape). Hedged "this literal must match the backend" comments are noise — do not emit them.
@@ -94,6 +101,11 @@ export interface PromptAgentMeta {
     conventionGuides?: string[];
     /** Skills catalog and linked docs for this agent's target (#2172). */
     knowledgeSection?: string;
+}
+
+/** Custom agents carry their guides (possibly none); built-in agents do not. */
+function hasOwnLane(meta: PromptAgentMeta): boolean {
+    return meta.conventionGuides !== undefined;
 }
 
 /** The knowledge section goes inside the agent block, after everything the
@@ -626,7 +638,7 @@ function buildSystemPromptBody(input: ReviewAgentInput, meta: PromptAgentMeta): 
     Trace impact through callers — symptom can appear elsewhere, but the cause must be in the diff.
     readFile and grep return the FULL file, including code this PR did NOT touch. Those surrounding lines are context for understanding only — they are NOT part of the diff. Before reporting, confirm the line you cite appears as an added/modified line in the diff hunks; if a pattern you noticed (e.g. a rename, a legacy field, a pre-existing bug) is only visible via readFile and is not in the diff, do NOT report it as introduced by this PR.${SCOPE_CROSS_FILE_EXTRA}
   </Scope>
-${formatCrossRepoBoundarySection(input) || ''}
+${formatCrossRepoBoundarySection(input, { ownLane: hasOwnLane(meta) }) || ''}
 ${overridesSection}${formatConventionFindingRules(meta.conventionGuides)}
 
 ${memoryRulesSection}
@@ -648,7 +660,9 @@ export function buildCompactSystemPrompt(input: ReviewAgentInput, meta: PromptAg
         const categoryLabel = meta.categoryLabel;
         const overridesSection = formatOverrides(input, meta);
         const memoryRulesSection = formatMemoryRules(input.memoryRules);
-        const crossRepoSection = formatCrossRepoBoundarySection(input);
+        const crossRepoSection = formatCrossRepoBoundarySection(input, {
+            ownLane: hasOwnLane(meta),
+        });
         const langLabel = resolveLanguageLabel(input.languageResultPrompt);
         const langLine = langLabel
             ? `\n  Write all review output in ${langLabel}.`
