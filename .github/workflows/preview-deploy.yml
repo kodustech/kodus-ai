@@ -201,6 +201,11 @@ jobs:
                   # JWT and crypto keys and mint sessions without logging in.
                   PREVIEW_SECRET_SEED_BASE: ${{ secrets.PREVIEW_SECRET_SEED }}
                   PREVIEW_BILLING_ENV: ${{ secrets.PREVIEW_BILLING_ENV }}
+                  # A Langfuse key pair for previews only, never the vault's:
+                  # the neutralizer blanks that one like every credential.
+                  PREVIEW_LANGFUSE_PUBLIC_KEY: ${{ secrets.PREVIEW_LANGFUSE_PUBLIC_KEY }}
+                  PREVIEW_LANGFUSE_SECRET_KEY: ${{ secrets.PREVIEW_LANGFUSE_SECRET_KEY }}
+                  PREVIEW_LANGFUSE_BASE_URL: ${{ vars.PREVIEW_LANGFUSE_BASE_URL }}
                   HEAD_REF: ${{ steps.target.outputs.branch }}
                   PROFILES: ${{ steps.decide.outputs.profiles }}
               run: |
@@ -235,6 +240,25 @@ jobs:
                   fi
                   # ...and then nothing real survives into a public environment
                   ./scripts/preview/neutralize-preview-env.sh .env .env.template
+                  # Tracing with the preview's own Langfuse key, when one is
+                  # configured: reviews on a preview land in the "preview"
+                  # environment. The neutralized LANGFUSE_* lines go first so
+                  # no duplicate decides which value wins.
+                  if [ -n "$PREVIEW_LANGFUSE_PUBLIC_KEY" ] && [ -n "$PREVIEW_LANGFUSE_SECRET_KEY" ]; then
+                    grep -v '^LANGFUSE_' .env > "$RUNNER_TEMP/env.no-langfuse"
+                    {
+                      cat "$RUNNER_TEMP/env.no-langfuse"
+                      echo "LANGFUSE_TRACING=true"
+                      echo "LANGFUSE_PUBLIC_KEY=$PREVIEW_LANGFUSE_PUBLIC_KEY"
+                      echo "LANGFUSE_SECRET_KEY=$PREVIEW_LANGFUSE_SECRET_KEY"
+                      echo "LANGFUSE_BASE_URL=${PREVIEW_LANGFUSE_BASE_URL:-https://us.cloud.langfuse.com}"
+                      echo "LANGFUSE_ENVIRONMENT=preview"
+                    } > .env
+                    rm -f "$RUNNER_TEMP/env.no-langfuse"
+                    echo "Langfuse: tracing to the preview environment"
+                  else
+                    echo "::notice::PREVIEW_LANGFUSE_PUBLIC_KEY/SECRET_KEY are not set — this preview sends no traces"
+                  fi
                   # billing exists in the cloud shape only
                   case " $PROFILES " in *" cloud "*)
                     printf '%s\n' "$PREVIEW_BILLING_ENV" > "$RUNNER_TEMP/preview-billing.env"
