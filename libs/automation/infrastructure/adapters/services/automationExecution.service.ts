@@ -127,6 +127,10 @@ export class AutomationExecutionService implements IAutomationExecutionService {
         return result;
     }
 
+    touchInProgress(uuid: string): Promise<void> {
+        return this.automationExecutionRepository.touchInProgress(uuid);
+    }
+
     delete(uuid: string): Promise<void> {
         return this.automationExecutionRepository.delete(uuid);
     }

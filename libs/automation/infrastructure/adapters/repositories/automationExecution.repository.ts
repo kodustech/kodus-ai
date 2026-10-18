@@ -153,6 +153,15 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
         }
     }
 
+    async touchInProgress(uuid: string): Promise<void> {
+        // Scoped to IN_PROGRESS so a late beat can never touch a row that
+        // already reached a terminal status.
+        await this.automationExecutionRepository.update(
+            { uuid, status: AutomationStatus.IN_PROGRESS },
+            { updatedAt: new Date() },
+        );
+    }
+
     async delete(uuid: string): Promise<void> {
         try {
             await this.automationExecutionRepository.delete(uuid);

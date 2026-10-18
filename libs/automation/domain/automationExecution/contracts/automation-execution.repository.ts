@@ -83,6 +83,10 @@ export interface IAutomationExecutionRepository {
         cutoffDate: Date,
         limit?: number,
     ): Promise<AutomationExecutionEntity[]>;
+    // Liveness heartbeat: bumps `updatedAt` of a still-IN_PROGRESS row so
+    // the "review already running" gate can tell a live run from one whose
+    // process died without a terminal update.
+    touchInProgress(uuid: string): Promise<void>;
     findByPeriodAndTeamAutomationId(
         startDate: Date,
         endDate: Date,
