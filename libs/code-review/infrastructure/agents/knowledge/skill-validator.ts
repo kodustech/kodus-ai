@@ -10,7 +10,8 @@ import {
  * YAML frontmatter with `name` and `description`, then a Markdown body.
  *
  * - `name`: 1-64 chars, lowercase letters, digits and single hyphens, no
- *   leading or trailing hyphen, equal to the skill's folder name.
+ *   leading or trailing hyphen. When it differs from a valid folder name the
+ *   folder name is used and a note says so.
  * - `description`: 1-1024 chars, required.
  * - body: kept under 500 lines and ~5k tokens; longer bodies are cut and
  *   flagged so the review says it read a partial skill.
@@ -85,11 +86,21 @@ export function parseSkillMarkdown(
         errors.push(
             'name must use lowercase letters, digits and single hyphens, without a leading or trailing hyphen',
         );
-    } else if (options.expectedName && name !== options.expectedName) {
+    } else if (
+        options.expectedName &&
+        name !== options.expectedName &&
+        !SKILL_NAME_PATTERN.test(options.expectedName)
+    ) {
         errors.push(
             `name "${name}" must match its folder name "${options.expectedName}"`,
         );
     }
+    // A name that differs from a valid folder name is read under the folder
+    // name: the folder is what the agent config points at.
+    const renamedFrom =
+        name && options.expectedName && name !== options.expectedName
+            ? name
+            : undefined;
 
     const description =
         typeof fields.description === 'string' ? fields.description.trim() : '';
@@ -104,6 +115,11 @@ export function parseSkillMarkdown(
     if (errors.length) return { ok: false, errors };
 
     const notes: string[] = [];
+    if (renamedFrom) {
+        notes.push(
+            `name "${renamedFrom}" differs from its folder "${options.expectedName}"; using the folder name`,
+        );
+    }
     const { body, truncated } = capBody(match[2].trim());
     if (truncated) {
         notes.push(
@@ -122,7 +138,7 @@ export function parseSkillMarkdown(
     return {
         ok: true,
         skill: {
-            name,
+            name: renamedFrom ? options.expectedName : name,
             description,
             body,
             bodyTruncated: truncated,

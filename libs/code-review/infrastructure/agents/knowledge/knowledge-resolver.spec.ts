@@ -130,8 +130,8 @@ describe('KnowledgeResolver', () => {
     it('warns SKILL_NOT_FOUND and SKILL_INVALID without failing', async () => {
         const files = baseFiles();
         files['.claude/skills/bad-name/SKILL.md'] = skillMarkdown(
-            'other-name',
-            'Mismatched.',
+            'bad-name',
+            '',
         );
         const resolver = new KnowledgeResolver(
             new InMemoryBaseBranchReader(files),
@@ -159,7 +159,7 @@ describe('KnowledgeResolver', () => {
             ['SKILL_NOT_FOUND', '.claude/skills/missing'],
             ['SKILL_INVALID', '.claude/skills/bad-name'],
         ]);
-        expect(result.warnings[1].detail).toMatch(/bad-name/);
+        expect(result.warnings[1].detail).toMatch(/description is required/);
     });
 
     it('warns SKILL_CHANGED_IN_PR when the PR edits a linked skill or doc', async () => {

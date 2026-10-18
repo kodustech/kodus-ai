@@ -50,15 +50,29 @@ describe('parseSkillMarkdown', () => {
         expect(result.ok).toBe(true);
     });
 
-    it('rejects a name that differs from the folder', () => {
+    it('uses the folder name, with a note, when the name differs from it', () => {
+        // Published skills ship this way; refusing them left the agent
+        // without its skill over a label.
         const result = parseSkillMarkdown(
             skill('name: invoice-errors\ndescription: Something.'),
             { expectedName: 'ledger-errors' },
         );
 
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.skill.name).toBe('ledger-errors');
+        expect(result.notes.join(' ')).toMatch(
+            /name "invoice-errors" differs from its folder "ledger-errors"/,
+        );
+    });
+
+    it('rejects a differing name when the folder is not a valid name either', () => {
+        const result = parseSkillMarkdown(
+            skill('name: invoice-errors\ndescription: Something.'),
+            { expectedName: 'Ledger_Errors' },
+        );
+
         expect(result.ok).toBe(false);
-        if (result.ok) return;
-        expect(result.errors.join(' ')).toMatch(/ledger-errors/);
     });
 
     it('requires a description of at most 1024 characters', () => {
