@@ -273,7 +273,7 @@ async function main() {
         try {
             args.team = readTeamConfig(args.teamConfig);
         } catch (error) {
-            console.error(error.message);
+            console.error(`finder-recall on ${args.model}: not measured: ${error instanceof Error ? error.message : String(error)}`);
             process.exit(2);
         }
     }
@@ -366,7 +366,7 @@ async function main() {
         tests = await buildTests();
     } catch (error) {
         // An unknown set, or a set naming a case with no dataset: nothing to measure.
-        console.error(error.message);
+        console.error(`finder-recall on ${args.model}, set ${args.set}: not measured: ${error instanceof Error ? error.message : String(error)}`);
         process.exit(2);
     }
     let selectedTests = Number.isFinite(args.limit)

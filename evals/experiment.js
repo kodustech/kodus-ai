@@ -338,25 +338,26 @@ function phaseVerdict(phase, evals) {
 }
 
 // `sameCode`: a --team-config experiment runs one commit on both sides, so an
-// unchanged step is the point, not a reason to stop.
+// unchanged step is the point, not a reason to stop. `worse`: something got
+// worse (not merely "not better"), which a decision over several models vetoes.
 function decide(phases, versions, { sameCode = false } = {}) {
-    if (!sameCode && versions.base.step === versions.candidate.step) return { decision: 'no change in this step', reason: 'the branch did not change a production file this step loads' };
-    if (Object.values(phases).some((p) => p.verdict === 'not measured')) return { decision: 'not measured', reason: 'an eval did not measure on both sides' };
+    if (!sameCode && versions.base.step === versions.candidate.step) return { decision: 'no change in this step', reason: 'the branch did not change a production file this step loads', worse: false };
+    if (Object.values(phases).some((p) => p.verdict === 'not measured')) return { decision: 'not measured', reason: 'an eval did not measure on both sides', worse: false };
     const reg = phases.regression;
     if (reg && reg.verdict === 'regression') {
         const which = reg.evals.filter((e) => e.comparison.verdict === 'worse' || (e.role === 'guard' && e.rule !== 'interval' && e.comparison.worse.length));
-        return { decision: 'does not ship', reason: `it broke something: ${which.map((e) => `${e.id}${e.comparison.worse.length ? ` (${e.comparison.worse.length} case${e.comparison.worse.length === 1 ? '' : 's'} worse)` : ''}`).join(', ')}` };
+        return { decision: 'does not ship', reason: `it broke something: ${which.map((e) => `${e.id}${e.comparison.worse.length ? ` (${e.comparison.worse.length} case${e.comparison.worse.length === 1 ? '' : 's'} worse)` : ''}`).join(', ')}`, worse: true };
     }
     const dec = phases.decision;
-    if (!dec) return { decision: 'no regression', reason: 'nothing got worse on the controlled set; the decision phase, on the extended set, decides an improvement' };
+    if (!dec) return { decision: 'no regression', reason: 'nothing got worse on the controlled set; the decision phase, on the extended set, decides an improvement', worse: false };
     const primary = dec.evals[0];
     const onSet = !dec.set || dec.set === 'full' ? 'on the extended set' : `on the set ${dec.set}`;
     const decWorse = dec.evals.filter((e) => e.role === 'guard' && e.comparison.verdict === 'worse');
-    if (decWorse.length) return { decision: 'does not ship', reason: `${onSet}, ${decWorse.map((e) => e.id).join(', ')} got worse beyond its interval` };
-    if (dec.verdict === 'better') return { decision: 'ships', reason: `nothing got worse, and ${primary.id} is better ${onSet} beyond its interval` };
+    if (decWorse.length) return { decision: 'does not ship', reason: `${onSet}, ${decWorse.map((e) => e.id).join(', ')} got worse beyond its interval`, worse: true };
+    if (dec.verdict === 'better') return { decision: 'ships', reason: `nothing got worse, and ${primary.id} is better ${onSet} beyond its interval`, worse: false };
     const tokens = (side) => (primary.sides[side].usage.in || 0) + (primary.sides[side].usage.out || 0);
-    if (dec.verdict === 'tie' && tokens('candidate') < tokens('base')) return { decision: 'ships', reason: `nothing got worse, ${primary.id} ties and the candidate uses fewer tokens` };
-    return { decision: 'does not ship', reason: dec.verdict === 'worse' ? `${primary.id} is worse ${onSet} beyond its interval` : `${primary.id} is not better ${onSet}, and the candidate is not cheaper` };
+    if (dec.verdict === 'tie' && tokens('candidate') < tokens('base')) return { decision: 'ships', reason: `nothing got worse, ${primary.id} ties and the candidate uses fewer tokens`, worse: false };
+    return { decision: 'does not ship', reason: dec.verdict === 'worse' ? `${primary.id} is worse ${onSet} beyond its interval` : `${primary.id} is not better ${onSet}, and the candidate is not cheaper`, worse: dec.verdict === 'worse' };
 }
 
 // The experiment in one table per phase, for a job summary or a PR.
@@ -401,19 +402,20 @@ function blobsAt(sha, files) {
 }
 
 // A recorded experiment that measured exactly this, so it need not run again:
-// the same model, runs, evals (their tree), decision set and team config,
+// the same model, runs, evals (their tree), decision set (a private one by its
+// content), team config and review environment (reviewEnv),
 // every phase asked for answered (none missing or not measured), and the same
 // content of every step file it recorded on both sides. A record without any of
 // these is not reused. `reuse` is what the run recorded for this (the panel
 // passes it back as written); a record from before it measured the extended
 // set with no team config.
-function measuredAlready(recorded, { phaseIds, model, runs, evalsTree, set = 'full', teamConfigHash = null }, blobsOf) {
+function measuredAlready(recorded, { phaseIds, model, runs, evalsTree, set = 'full', teamConfigHash = null, env = envHashOf({}) }, blobsOf) {
     return (recorded || []).find((x) => {
         const blobs = x.step_blobs;
         if (!blobs || !blobs.base || !blobs.candidate || !Object.keys(blobs.candidate).length) return false;
         const r = x.reuse && typeof x.reuse === 'object' ? x.reuse : { model: x.model, runs: x.runs, evals_tree: x.evals_tree, set: 'full', team_config_hash: null };
         if (r.model !== model || r.runs !== runs || !r.evals_tree || r.evals_tree !== evalsTree) return false;
-        if ((r.set ?? 'full') !== set || (r.team_config_hash ?? null) !== teamConfigHash) return false;
+        if ((r.set ?? 'full') !== set || (r.team_config_hash ?? null) !== teamConfigHash || (r.env ?? envHashOf({})) !== env) return false;
         const verdicts = x.phase_verdicts || {};
         if (!phaseIds.every((p) => (x.phases || []).includes(p) && verdicts[p] && verdicts[p] !== 'not measured')) return false;
         const same = (want, side) => {
@@ -461,6 +463,19 @@ function setOf(plan, value) {
 // measured beside the candidate's.
 const BASE_REUSE_DAYS = 7;
 const DEFAULT_CACHE_DIR = path.join(os.homedir(), '.cache', 'kodus-evals', 'experiment-base');
+// What a run reads from the environment besides its arguments and changes what
+// it measures (the finder's categories and reasoning effort, the judge and its
+// effort): part of what a base run, and a recorded experiment, measured. Never
+// keys, tokens or URLs.
+const reviewEnv = (env = process.env) =>
+    Object.fromEntries(
+        Object.entries(env)
+            .filter(([k]) => /^(RECALL_|JUDGE_|FINDER_)/.test(k) && !/(KEY|TOKEN|SECRET|URL|DUMP)$/.test(k))
+            .sort(([a], [b]) => a.localeCompare(b)),
+    );
+const envHashOf = (env) => hash(Object.entries(env).map(([k, v]) => `${k}=${v}`));
+// A set as a reuse must match it: a private one by its content too.
+const setIdentity = (set) => (set.private ? `${set.id}@${set.hash}` : set.id);
 const baseCacheFile = (dir, parts) => path.join(dir, `${crypto.createHash('sha1').update(canonical(parts)).digest('hex')}.json`);
 
 function reusableBase(dir, parts, blobsOf, now = Date.now()) {
@@ -481,6 +496,14 @@ function keepBase(dir, parts, rec) {
     }
 }
 
+// Whether a model's experiment found something worse: what its decision says
+// (decide), or, for a record from before it said so, what its verdicts show
+// (a regression, a worse main eval, or "better" that did not ship: a guard).
+function modelWorse(decision, verdicts = {}) {
+    if (typeof decision.worse === 'boolean') return decision.worse;
+    return verdicts.regression === 'regression' || verdicts.decision === 'worse' || (verdicts.decision === 'better' && decision.decision === 'does not ship');
+}
+
 // One decision over several models (--models). Each customer runs one model,
 // so a loss on any of them ships to its customers: it ships when no model got
 // worse and one is better (or every one ties and is cheaper).
@@ -490,7 +513,7 @@ function decideAcrossModels(perModel) {
     const notMeasured = perModel.filter((m) => m.decision.decision === 'not measured' || Object.values(verdicts(m)).includes('not measured'));
     if (notMeasured.length) return { decision: 'not measured', reason: `not measured on ${named(notMeasured)}` };
     if (perModel.every((m) => m.decision.decision === 'no change in this step')) return { decision: 'no change in this step', reason: 'the branch did not change a production file this step loads' };
-    const worse = perModel.filter((m) => verdicts(m).regression === 'regression' || verdicts(m).decision === 'worse' || (verdicts(m).decision === 'better' && m.decision.decision === 'does not ship'));
+    const worse = perModel.filter((m) => modelWorse(m.decision, verdicts(m)));
     if (worse.length) return { decision: 'does not ship', reason: `worse on ${named(worse)}` };
     if (perModel.every((m) => !verdicts(m).decision)) return { decision: 'no regression', reason: `nothing got worse on ${named(perModel)}; the decision phase decides an improvement` };
     const better = perModel.filter((m) => verdicts(m).decision === 'better');
@@ -544,7 +567,7 @@ async function measureModel(ctx) {
             for (const side of ['base', 'candidate']) {
                 for (const entry of entries) {
                     const extra = side === 'candidate' && team ? [`--team-config=${team.file}`] : [];
-                    const parts = { eval: entry.id, args: [...entry.run, ...extra], model, round, evals: ctx.evalsTree, lock: ctx.lockBlob, set: set.private ? set.hash : null };
+                    const parts = { eval: entry.id, args: [...entry.run, ...extra], model, round, evals: ctx.evalsTree, lock: ctx.lockBlob, set: set.private ? set.hash : null, env: reviewEnv() };
                     const kept = side === 'base' && !ctx.freshBase ? reusableBase(ctx.cacheDir, parts, (files) => blobsAt(baseSha, files)) : null;
                     if (kept) {
                         console.log(`  ${side.padEnd(9)} ${entry.id} run ${round}: reused from ${kept.savedAt}`);
@@ -648,7 +671,7 @@ async function measureModel(ctx) {
         exits,
     };
     fs.writeFileSync(path.join(out, 'experiment.json'), `${JSON.stringify(experiment, null, 2)}\n`);
-    const reuse = { model, runs, evals_tree: ctx.evalsTree, set: set.id, team_config_hash: team ? team.hash : null };
+    const reuse = { model, runs, evals_tree: ctx.evalsTree, set: setIdentity(set), team_config_hash: team ? team.hash : null, env: envHashOf(reviewEnv()), worse: decision.worse };
     const rows = Object.entries(phases).flatMap(([phase, p]) =>
         p.evals.map((e) => ({
             name: `experiments.${slug(step)}.${phase}.${slug(e.id)}.${name}`,
@@ -717,6 +740,22 @@ async function measureModel(ctx) {
     return { model, name, verdicts: Object.fromEntries(Object.entries(phases).map(([id, p]) => [id, p.verdict])), decision, summary };
 }
 
+// Each model measured on its own: one that fails is recorded as not measured,
+// and the others still count.
+async function measureEach(models, measure, { step, nameOf }) {
+    const done = [];
+    for (const model of models) {
+        try {
+            done.push(await measure(model));
+        } catch (error) {
+            const reason = error instanceof Error ? error.message : String(error);
+            console.error(`experiment ${step} on ${model} (${nameOf(model)}): not measured: ${error instanceof Error ? error.stack : reason}`);
+            done.push({ model, name: nameOf(model), verdicts: {}, decision: { decision: 'not measured', reason: `${model}: ${reason}`, worse: false }, summary: `### Experiment: ${step} · ${nameOf(model)}\n\nNot measured on ${model}: ${reason}\n` });
+        }
+    }
+    return done;
+}
+
 async function main() {
     const args = parseArgs(process.argv.slice(2));
     if (args.affected) {
@@ -771,7 +810,7 @@ async function main() {
         set = setOf(plan, args.set);
         if (args['team-config'] !== undefined) team = readTeamConfig(String(args['team-config']));
     } catch (error) {
-        console.error(error.message);
+        console.error(`experiment --step=${step} (models ${models.join(', ')}): ${error instanceof Error ? error.message : String(error)}`);
         return 2;
     }
     if (team) {
@@ -839,24 +878,24 @@ async function main() {
     const perModel = [];
     const pending = [];
     for (const model of models) {
-        const identity = { phaseIds, model, runs, evalsTree, set: set.id, teamConfigHash: team ? team.hash : null };
+        const identity = { phaseIds, model, runs, evalsTree, set: setIdentity(set), teamConfigHash: team ? team.hash : null, env: envHashOf(reviewEnv()) };
         const hit = recorded && measuredAlready(recorded, identity, (side, files) => blobsAt(side === 'base' ? baseSha : head, files));
         if (hit) {
             console.log(`${model}: measured already on ${hit.ts}: ${hit.decision} — ${hit.reason}`);
-            perModel.push({ model, name: hit.experiment, verdicts: hit.phase_verdicts || {}, decision: { decision: hit.decision, reason: hit.reason }, summary: reusedSummary(step, hit.experiment, hit, phaseIds) });
+            perModel.push({ model, name: hit.experiment, verdicts: hit.phase_verdicts || {}, decision: { decision: hit.decision, reason: hit.reason, worse: hit.reuse?.worse }, summary: reusedSummary(step, hit.experiment, hit, phaseIds) });
         } else {
             if (args['if-new']) console.log(`${model}: ${recorded === null ? 'the panel could not say whether this code was measured' : 'not measured yet'}: running it`);
             pending.push(model);
         }
     }
 
+    // The base checkout is set up inside the same cleanup as the runs: a setup
+    // that fails halfway leaves no folder behind.
     let baseDir = ROOT;
-    if (pending.length && !team) {
-        baseDir = path.join(out, 'base-tree');
-        git(['worktree', 'add', '--detach', baseDir, baseSha]);
-    }
     try {
-        if (baseDir !== ROOT) {
+        if (pending.length && !team) {
+            baseDir = path.join(out, 'base-tree');
+            git(['worktree', 'add', '--detach', baseDir, baseSha]);
             fs.symlinkSync(fs.realpathSync(path.join(ROOT, 'node_modules')), path.join(baseDir, 'node_modules'));
             // The EE config is gitignored; production code reads it at import time.
             // So are the local .env files the evals load (agent-provider.js): both sides get the same keys.
@@ -864,9 +903,8 @@ async function main() {
                 if (fs.existsSync(path.join(ROOT, file))) fs.copyFileSync(path.join(ROOT, file), path.join(baseDir, file));
             }
         }
-        for (const model of pending) {
-            perModel.push(await measureModel({ ...ctx, model, name: models.length > 1 ? `${group}-${slug(model)}` : group, baseDir, out: models.length > 1 ? path.join(out, slug(model)) : out }));
-        }
+        const nameOf = (model) => (models.length > 1 ? `${group}-${slug(model)}` : group);
+        perModel.push(...(await measureEach(pending, (model) => measureModel({ ...ctx, model, name: nameOf(model), baseDir, out: models.length > 1 ? path.join(out, slug(model)) : out }), { step, nameOf })));
     } finally {
         if (baseDir !== ROOT) {
             try {
@@ -920,4 +958,4 @@ if (require.main === module) {
         });
 }
 
-module.exports = { main, runName, measuredAlready, compare, comparisonOf, deriveRuns, perCase, decide, decideAcrossModels, phaseVerdict, affectedSteps, setOf, reusableBase, keepBase, finderResult, PHASES, STEP_EVALS, BASE_REUSE_DAYS };
+module.exports = { main, runName, measuredAlready, compare, comparisonOf, deriveRuns, perCase, decide, decideAcrossModels, modelWorse, measureEach, reviewEnv, envHashOf, setIdentity, phaseVerdict, affectedSteps, setOf, reusableBase, keepBase, finderResult, PHASES, STEP_EVALS, BASE_REUSE_DAYS };
