@@ -282,6 +282,10 @@ describe('astGrep tool', () => {
                 RULES,
             );
             expect(r.output).toContain('[no-raw-sql]');
+            expect(r.output).toContain(
+                "1 match for the agent's rules over the changed files:",
+            );
+            expect(r.output).not.toContain('undefined');
         });
 
         it('reads the rule file from the target branch and scans only the changed files', async () => {
@@ -319,6 +323,9 @@ describe('astGrep tool', () => {
                 'src/orders/cart.ts',
             ]);
             expect(r.output).toContain('[no-raw-sql] Use the query builder');
+            expect(r.output).toContain(
+                '1 match for the rules in tools/review-rules.yml (target branch) over the changed files:',
+            );
             expect(r.meta).toMatchObject({ mode: 'rules', matches: 1 });
         });
 

@@ -318,7 +318,9 @@ export function buildAstGrepTool(
                             ...files,
                         ],
                         'rules',
-                        `for the rules in ${deps.rulesPath} (target branch) over the changed files`,
+                        deps.rules?.trim()
+                            ? "for the agent's rules over the changed files"
+                            : `for the rules in ${deps.rulesPath} (target branch) over the changed files`,
                     );
                 }
 
