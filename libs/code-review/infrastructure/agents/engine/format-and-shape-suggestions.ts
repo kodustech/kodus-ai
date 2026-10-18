@@ -8,6 +8,7 @@ import {
 } from '@libs/code-review/infrastructure/agents/engine/strip-review-scaffolding';
 import {
     customAgentWriting,
+    languageNamedInWriting,
     type CustomAgentsById,
 } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-presentation';
 
@@ -82,6 +83,9 @@ export async function formatAndShapeSuggestions(
         }
         let count = 0;
         for (const [agentWriting, voiceTargets] of targetsByWriting) {
+            const namedLanguage = agentWriting
+                ? languageNamedInWriting(agentWriting)
+                : undefined;
             const formatted = await formatSuggestionContent(
                 voiceTargets.map((i) => ({
                     title: suggestions[i].oneSentenceSummary || '',
@@ -100,8 +104,13 @@ export async function formatAndShapeSuggestions(
                             ? writingGuidelines.text
                             : undefined),
                     byokConfig: options.byokConfig,
-                    languageResultPrompt: options.languageResultPrompt,
-                    languageIsDefault: agentWriting !== undefined,
+                    // A language the voice names wins outright; left as a
+                    // mere default, the team's language won on findings the
+                    // finder had already written in it.
+                    languageResultPrompt:
+                        namedLanguage ?? options.languageResultPrompt,
+                    languageIsDefault:
+                        agentWriting !== undefined && !namedLanguage,
                     // The agent's voice may name another language than the
                     // team's; the title has to follow it.
                     rewriteTitle: agentWriting !== undefined,

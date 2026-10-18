@@ -146,6 +146,39 @@ export function customAgentWriting(
     return writing || undefined;
 }
 
+/** Language names as a writing instruction spells them, by locale code. */
+const WRITING_LANGUAGES: ReadonlyArray<[string, RegExp]> = [
+    ['es', /espa[ñn]ol|spanish|castellano|espanhol/],
+    ['pt', /portugu[eêé]se?|portuguese/],
+    ['en', /english|ingl[eéê]s|englisch|anglais/],
+    ['fr', /fran[cç]ais|french|franc[eé]s|franz[öo]sisch/],
+    ['de', /deutsch|german|alem[aã]n?o?/],
+    ['it', /italiano|italian|italien/],
+    ['ja', /japanese|japon[eéê]s|日本語/],
+    ['zh', /chinese|chin[eêé]s|中文/],
+    ['ko', /korean|coreano|한국어/],
+];
+
+/**
+ * The language a custom agent's writing instructions ask for, as a locale
+ * code: "Escribe en español" gives `es`. Only a language named after "in",
+ * "en", "em", "auf" or "au", so a passing mention ("the English name of the
+ * currency") names none.
+ */
+export function languageNamedInWriting(writing: string): string | undefined {
+    const text = writing.toLowerCase();
+    for (const [code, name] of WRITING_LANGUAGES) {
+        const asked = new RegExp(
+            `(?:^|[^\\p{L}])(?:in|en|em|auf|au)\\s+(?:${name.source})`,
+            'u',
+        );
+        if (asked.test(text)) {
+            return code;
+        }
+    }
+    return undefined;
+}
+
 /**
  * A custom agent finding inside the agent's lane: it applies the team rule
  * the agent was asked for, and quotes it.
