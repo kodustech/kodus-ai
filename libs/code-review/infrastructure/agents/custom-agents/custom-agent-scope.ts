@@ -69,6 +69,27 @@ export function selectCustomAgents(
     });
 }
 
+/**
+ * The reply to `@kody -v <slug>` when no configured agent answers to the
+ * slug, listing the slugs that do; undefined when one does.
+ */
+export function unknownCustomAgentReply(
+    agents: readonly Pick<CustomAgentConfig, 'name'>[] | undefined,
+    onlySlug: string,
+): string | undefined {
+    const wanted = customAgentSlug(onlySlug);
+    const slugs = [
+        ...new Set((agents ?? []).map((a) => customAgentSlug(a.name))),
+    ];
+    if (slugs.includes(wanted)) {
+        return undefined;
+    }
+    const known = slugs.length
+        ? `Agents: ${slugs.map((slug) => `\`${slug}\``).join(', ')}.`
+        : 'It has no custom agents.';
+    return `No custom agent named \`${onlySlug}\` on this repository. ${known}`;
+}
+
 // The `@kody -v <slug>` parser lives with the other PR comment commands; the
 // webhook handlers read it there.
 export { parseCustomAgentCommand } from '@libs/common/utils/codeManagement/codeCommentMarkers';

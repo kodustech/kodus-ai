@@ -37,6 +37,7 @@ import {
     shouldReviewBranches,
 } from '@libs/code-review/infrastructure/adapters/services/branchReview.service';
 import { routeCodeReviewModel } from './route-code-review-model';
+import { unknownCustomAgentReply } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 
 @Injectable()
 export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -76,6 +77,24 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                         message: AutomationMessage.NO_CONFIG_IN_CONTEXT,
                     };
                 });
+            }
+
+            // `@kody -v <slug>` naming no agent would run an empty review;
+            // answer on the PR with the agents there are, and stop.
+            if (context.onlyCustomAgent) {
+                const reply = unknownCustomAgentReply(
+                    context.codeReviewConfig.customAgents,
+                    context.onlyCustomAgent,
+                );
+                if (reply) {
+                    await this.replyUnknownCustomAgent(context, reply);
+                    return this.updateContext(context, (draft) => {
+                        draft.statusInfo = {
+                            status: AutomationStatus.SKIPPED,
+                            message: AutomationMessage.UNKNOWN_CUSTOM_AGENT,
+                        };
+                    });
+                }
             }
 
             //TODO: revisar logica
@@ -452,6 +471,27 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                 error,
             });
             return [];
+        }
+    }
+
+    private async replyUnknownCustomAgent(
+        context: CodeReviewPipelineContext,
+        body: string,
+    ): Promise<void> {
+        try {
+            await this.codeManagementService.createSingleIssueComment({
+                organizationAndTeamData: context.organizationAndTeamData,
+                repository: context.repository,
+                prNumber: context.pullRequest.number,
+                body,
+            });
+        } catch (error) {
+            this.logger.error({
+                message: `Failed to reply to an unknown custom agent on PR #${context.pullRequest.number}`,
+                context: ValidateConfigStage.name,
+                error,
+                metadata: { onlyCustomAgent: context.onlyCustomAgent },
+            });
         }
     }
 

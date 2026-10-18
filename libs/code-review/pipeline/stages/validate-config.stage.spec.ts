@@ -370,3 +370,125 @@ describe('ValidateConfigStage — base branch scope', () => {
         });
     });
 });
+
+describe('ValidateConfigStage — @kody -v naming no agent', () => {
+    let stage: ValidateConfigStage;
+    let createSingleIssueComment: jest.Mock;
+
+    const agent = (id: string, name: string, enabled = true) => ({
+        id,
+        name,
+        enabled,
+        instructions: '',
+        scope: {},
+        tools: {},
+        presentation: {
+            tag: { color: 'blue' },
+            format: 'inline',
+            suggestedFix: 'when-confident',
+        },
+    });
+
+    const buildContext = (
+        onlyCustomAgent: string | undefined,
+        customAgents: unknown[],
+    ): CodeReviewPipelineContext =>
+        ({
+            origin: 'command',
+            platformType: 'github',
+            teamAutomationId: 'team-automation-id',
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            repository: { id: 'repo-1', name: 'repo' },
+            pullRequest: {
+                number: 7,
+                title: 'feat: ledger',
+                isDraft: false,
+                base: { ref: 'main' },
+                head: { ref: 'feature' },
+            },
+            onlyCustomAgent,
+            codeReviewConfig: {
+                automatedReviewActive: true,
+                ignoredTitleKeywords: [],
+                baseBranches: [],
+                runOnDraft: true,
+                customAgents,
+            },
+        }) as unknown as CodeReviewPipelineContext;
+
+    beforeEach(async () => {
+        createSingleIssueComment = jest.fn().mockResolvedValue({ id: 'c1' });
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [
+                ValidateConfigStage,
+                {
+                    provide: AUTOMATION_EXECUTION_SERVICE_TOKEN,
+                    useValue: {
+                        findLatestExecutionByFilters: jest
+                            .fn()
+                            .mockResolvedValue(null),
+                    },
+                },
+                {
+                    provide: ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
+                    useValue: { findByKey: jest.fn().mockResolvedValue(null) },
+                },
+                {
+                    provide: CodeManagementService,
+                    useValue: { createSingleIssueComment },
+                },
+            ],
+        }).compile();
+        stage = module.get<ValidateConfigStage>(ValidateConfigStage);
+    });
+
+    it('answers on the PR with the agents it has, and skips the review', async () => {
+        const result = await stage.execute(
+            buildContext('ledgr', [
+                agent('1', 'Ledger Rules'),
+                agent('2', 'Data Contracts', false),
+            ]),
+        );
+
+        expect(createSingleIssueComment).toHaveBeenCalledWith(
+            expect.objectContaining({
+                prNumber: 7,
+                body: 'No custom agent named `ledgr` on this repository. Agents: `ledger-rules`, `data-contracts`.',
+            }),
+        );
+        expect(result.statusInfo).toEqual({
+            status: 'skipped',
+            message: 'No custom agent matches the @kody -v command.',
+        });
+    });
+
+    it('says so when the repository has no custom agents', async () => {
+        await stage.execute(buildContext('ledger', []));
+
+        expect(createSingleIssueComment).toHaveBeenCalledWith(
+            expect.objectContaining({
+                body: 'No custom agent named `ledger` on this repository. It has no custom agents.',
+            }),
+        );
+    });
+
+    it('runs the review when the slug names an agent, enabled or not', async () => {
+        const result = await stage.execute(
+            buildContext('data-contracts', [
+                agent('2', 'Data Contracts', false),
+            ]),
+        );
+
+        expect(createSingleIssueComment).not.toHaveBeenCalled();
+        expect(result.statusInfo?.status).not.toBe('skipped');
+    });
+
+    it('leaves a review without -v alone', async () => {
+        await stage.execute(buildContext(undefined, []));
+
+        expect(createSingleIssueComment).not.toHaveBeenCalled();
+    });
+});
