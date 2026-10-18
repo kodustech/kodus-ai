@@ -22,6 +22,7 @@ import {
     buildCustomAgentMcpTools,
     type CustomAgentMcpServer,
 } from './custom-agent-mcp.tools';
+import type { RunToolCache } from './run-tool-cache';
 
 const logger = createLogger('custom-agent-tools');
 
@@ -40,6 +41,8 @@ export interface CustomAgentToolDeps {
         callTimeoutMs?: number;
         /** Arguments filled in server-side per connection (see `buildCustomAgentMcpTools`). */
         boundArgs?: Record<string, Record<string, unknown>>;
+        /** Call results kept for the review run (see `RunToolCache`). */
+        cache?: RunToolCache;
     };
     /** Review identifiers (organization, team, repository, PR, agent) for logs. */
     logContext?: Record<string, unknown>;
@@ -109,6 +112,7 @@ export async function buildCustomAgentTools(
                 createAdapter: deps.mcp.createAdapter,
                 callTimeoutMs: deps.mcp.callTimeoutMs,
                 boundArgs: deps.mcp.boundArgs,
+                cache: deps.mcp.cache,
             });
             tools.push(...mcp.tools);
             closers.push(() => mcp.close());

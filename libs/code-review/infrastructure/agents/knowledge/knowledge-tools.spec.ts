@@ -1,3 +1,4 @@
+import { RunToolCache } from '@libs/code-review/infrastructure/agents/adapters/run-tool-cache';
 import { InMemoryBaseBranchReader, skillMarkdown } from './knowledge.fixtures';
 import {
     renderKnowledgeDocs,
@@ -226,5 +227,66 @@ describe('knowledge tools', () => {
         );
 
         expect(result.isError).toBe(true);
+    });
+});
+
+describe('knowledge tools — repeated reads in one review run (#2172)', () => {
+    const codes = `${SKILL_DIR}/references/codes.md`;
+    const readsOf = (reader: InMemoryBaseBranchReader, path: string) =>
+        reader.reads.filter((p) => p === path).length;
+
+    it('reads a skill file once when the finder, the recall pass and a verifier all open it', async () => {
+        const { tool, reader } = await setup();
+        const input = { skill: 'ledger-errors', path: 'references/codes.md' };
+
+        const first = await tool('readSkillFile').execute(input, ctx);
+        const again = await tool('readSkillFile').execute(
+            { skill: 'ledger-errors', path: './references/codes.md' },
+            ctx,
+        );
+
+        expect(again.output).toBe(first.output);
+        expect(readsOf(reader, codes)).toBe(1);
+    });
+
+    it('shares the review run cache it is given', async () => {
+        const { reader, knowledge } = await setup();
+        const cache = new RunToolCache();
+        const input = { skill: 'ledger-errors', path: 'references/codes.md' };
+
+        for (let batch = 0; batch < 2; batch++) {
+            const tools = buildKnowledgeTools(knowledge, reader, cache);
+            await tools
+                .find((t) => t.name === 'readSkillFile')!
+                .execute(input, ctx);
+        }
+
+        expect(readsOf(reader, codes)).toBe(1);
+    });
+
+    it('does not keep a failed read', async () => {
+        const { reader, knowledge } = await setup();
+        const flaky = {
+            ref: reader.ref,
+            listFiles: reader.listFiles.bind(reader),
+            matchFiles: reader.matchFiles.bind(reader),
+            readFile: jest
+                .fn()
+                .mockResolvedValueOnce({
+                    status: 'refused',
+                    reason: 'git down',
+                })
+                .mockImplementation((p: string) => reader.readFile(p)),
+        };
+        const read = buildKnowledgeTools(knowledge, flaky).find(
+            (t) => t.name === 'readSkillFile',
+        )!;
+        const input = { skill: 'ledger-errors', path: 'references/codes.md' };
+
+        expect((await read.execute(input, ctx)).isError).toBe(true);
+        const ok = await read.execute(input, ctx);
+
+        expect(ok.output).toBe('LEDGER-001 insufficient funds');
+        expect(flaky.readFile).toHaveBeenCalledTimes(2);
     });
 });

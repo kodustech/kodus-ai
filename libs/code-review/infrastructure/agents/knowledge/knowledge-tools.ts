@@ -1,8 +1,12 @@
-import type { AgentTool } from '@libs/agent-harness/domain/contracts/tool.contract';
+import type {
+    AgentTool,
+    ToolResult,
+} from '@libs/agent-harness/domain/contracts/tool.contract';
 import {
     estimateTokens,
     tokensToChars,
 } from '@libs/code-review/infrastructure/adapters/services/utils/token-estimator';
+import { RunToolCache } from '@libs/code-review/infrastructure/agents/adapters/run-tool-cache';
 
 import type { BaseBranchReader } from './base-branch-reader';
 import { resolveInsideFolder } from './knowledge-path';
@@ -15,6 +19,11 @@ import type { ResolvedKnowledge } from './knowledge-resolver';
  * a file only when it is in the skill folder's listing, which was taken from
  * the target branch and leaves out symlinks, so neither a `..` path nor a
  * symlink reaches anything outside the skill.
+ *
+ * A file read is kept for the review run (`cache`, keyed by ref, skill and
+ * file), since the finder, the recall pass and the verifiers each open it
+ * again. `loadSkill` is not cached: it renders the skill already resolved in
+ * memory and reads nothing.
  */
 
 export const LOAD_SKILL_TOOL = 'loadSkill';
@@ -25,6 +34,7 @@ const MAX_SKILL_FILE_TOKENS = 5000;
 export function buildKnowledgeTools(
     knowledge: ResolvedKnowledge | undefined,
     reader: BaseBranchReader,
+    cache: RunToolCache = new RunToolCache(),
 ): AgentTool[] {
     const skills = knowledge?.skills ?? [];
     if (!skills.length) return [];
@@ -107,28 +117,39 @@ export function buildKnowledgeTools(
                 };
             }
 
-            const read = await reader.readFile(full);
-            if (read.status !== 'ok') {
-                return {
-                    output:
-                        read.status === 'missing'
-                            ? `"${relative}" was not found on ${reader.ref}.`
-                            : `"${relative}" cannot be read: ${read.reason}.`,
-                    isError: true,
-                };
-            }
-            const content =
-                estimateTokens(read.content) > MAX_SKILL_FILE_TOKENS
-                    ? `${read.content.slice(0, tokensToChars(MAX_SKILL_FILE_TOKENS))}\n\n[... truncated ...]`
-                    : read.content;
-            return {
-                output: relative.startsWith('scripts/')
-                    ? `(script shown as reference; it is never run)\n${content}`
-                    : content,
-                meta: { skill: skill.name, path: relative },
-            };
+            return cache.getOrRun(
+                ['skill-file', reader.ref, skill.name, relative],
+                () => readSkillFileContent(skill.name, full, relative),
+            );
         },
     };
+
+    async function readSkillFileContent(
+        skillName: string,
+        full: string,
+        relative: string,
+    ): Promise<ToolResult> {
+        const read = await reader.readFile(full);
+        if (read.status !== 'ok') {
+            return {
+                output:
+                    read.status === 'missing'
+                        ? `"${relative}" was not found on ${reader.ref}.`
+                        : `"${relative}" cannot be read: ${read.reason}.`,
+                isError: true,
+            };
+        }
+        const content =
+            estimateTokens(read.content) > MAX_SKILL_FILE_TOKENS
+                ? `${read.content.slice(0, tokensToChars(MAX_SKILL_FILE_TOKENS))}\n\n[... truncated ...]`
+                : read.content;
+        return {
+            output: relative.startsWith('scripts/')
+                ? `(script shown as reference; it is never run)\n${content}`
+                : content,
+            meta: { skill: skillName, path: relative },
+        };
+    }
 
     return [loadSkill, readSkillFile];
 }

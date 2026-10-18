@@ -16,6 +16,7 @@ import {
     mcpToolExposedName,
     type CustomAgentMcpServer,
 } from '@libs/code-review/infrastructure/agents/adapters/custom-agent-mcp.tools';
+import { RunToolCache } from '@libs/code-review/infrastructure/agents/adapters/run-tool-cache';
 
 const ctx = { runId: 'r' } as any;
 
@@ -448,5 +449,152 @@ describe('buildCustomAgentMcpTools', () => {
         expect(
             mcpToolExposedName('A'.repeat(80), 'b'.repeat(80)).length,
         ).toBeLessThanOrEqual(64);
+    });
+});
+
+describe('buildCustomAgentMcpTools — repeated calls in one review run (#2172)', () => {
+    const selections = [
+        { integrationId: 'int-tracker', tools: ['get_ticket'] },
+    ];
+
+    it('runs an identical call once across passes, whatever the key order', async () => {
+        const adapter = fakeAdapter([
+            tool('get_ticket', { readOnlyHint: true }),
+        ]);
+        const set = await buildCustomAgentMcpTools({
+            selections,
+            servers: [TRACKER],
+            createAdapter: () => adapter,
+        });
+
+        const first = await set.tools[0].execute({ id: '1', depth: 2 }, ctx);
+        // The recall pass and a verifier ask again with a fresh history.
+        const second = await set.tools[0].execute({ depth: 2, id: '1' }, ctx);
+        await set.call('Tracker__get_ticket', { id: '1', depth: 2 }, ctx);
+
+        expect(adapter.executeTool).toHaveBeenCalledTimes(1);
+        expect(second.output).toBe(first.output);
+        expect(second.isError).toBe(false);
+    });
+
+    it('runs different arguments separately', async () => {
+        const adapter = fakeAdapter([
+            tool('get_ticket', { readOnlyHint: true }),
+        ]);
+        const set = await buildCustomAgentMcpTools({
+            selections,
+            servers: [TRACKER],
+            createAdapter: () => adapter,
+        });
+
+        await set.tools[0].execute({ id: '1' }, ctx);
+        await set.tools[0].execute({ id: '2' }, ctx);
+
+        expect(adapter.executeTool).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not keep a failed call: the next identical call runs again', async () => {
+        const executeTool = jest
+            .fn()
+            .mockRejectedValueOnce(new Error('upstream 500'))
+            .mockResolvedValueOnce({ isError: true, content: [] })
+            .mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] });
+        const adapter = fakeAdapter(
+            [tool('get_ticket', { readOnlyHint: true })],
+            executeTool,
+        );
+        const set = await buildCustomAgentMcpTools({
+            selections,
+            servers: [TRACKER],
+            createAdapter: () => adapter,
+        });
+
+        expect((await set.tools[0].execute({ id: '1' }, ctx)).isError).toBe(
+            true,
+        );
+        expect((await set.tools[0].execute({ id: '1' }, ctx)).isError).toBe(
+            true,
+        );
+        const ok = await set.tools[0].execute({ id: '1' }, ctx);
+        await set.tools[0].execute({ id: '1' }, ctx);
+
+        expect(ok.output).toBe('ok');
+        expect(executeTool).toHaveBeenCalledTimes(3);
+    });
+
+    it('shares the review run cache it is given across toolsets of the same run', async () => {
+        const cache = new RunToolCache();
+        const first = fakeAdapter([tool('get_ticket', { readOnlyHint: true })]);
+        const second = fakeAdapter([
+            tool('get_ticket', { readOnlyHint: true }),
+        ]);
+        // Two batches of one chunked review build two toolsets.
+        const a = await buildCustomAgentMcpTools({
+            selections,
+            servers: [TRACKER],
+            createAdapter: () => first,
+            cache,
+        });
+        const b = await buildCustomAgentMcpTools({
+            selections,
+            servers: [TRACKER],
+            createAdapter: () => second,
+            cache,
+        });
+
+        await a.tools[0].execute({ id: '1' }, ctx);
+        await b.tools[0].execute({ id: '1' }, ctx);
+
+        expect(first.executeTool).toHaveBeenCalledTimes(1);
+        expect(second.executeTool).not.toHaveBeenCalled();
+    });
+
+    it('never serves one connection the answer of another', async () => {
+        const cache = new RunToolCache();
+        const tracker = fakeAdapter([
+            tool('get_ticket', { readOnlyHint: true }),
+        ]);
+        const other = fakeAdapter([tool('get_ticket', { readOnlyHint: true })]);
+        const a = await buildCustomAgentMcpTools({
+            selections,
+            servers: [TRACKER],
+            createAdapter: () => tracker,
+            cache,
+        });
+        // Same server name and tool, another connection (another tenant's).
+        const b = await buildCustomAgentMcpTools({
+            selections: [{ integrationId: 'int-other', tools: ['get_ticket'] }],
+            servers: [{ ...TRACKER, integrationId: 'int-other' }],
+            createAdapter: () => other,
+            cache,
+        });
+
+        await a.tools[0].execute({ id: '1' }, ctx);
+        await b.tools[0].execute({ id: '1' }, ctx);
+
+        expect(tracker.executeTool).toHaveBeenCalledTimes(1);
+        expect(other.executeTool).toHaveBeenCalledTimes(1);
+    });
+
+    it('keys on the bound arguments too', async () => {
+        const cache = new RunToolCache();
+        const one = fakeAdapter([tool('get_ticket', { readOnlyHint: true })]);
+        const two = fakeAdapter([tool('get_ticket', { readOnlyHint: true })]);
+        const build = (adapter: ReturnType<typeof fakeAdapter>, org: string) =>
+            buildCustomAgentMcpTools({
+                selections,
+                servers: [TRACKER],
+                createAdapter: () => adapter,
+                cache,
+                boundArgs: { 'int-tracker': { organizationId: org } },
+            });
+        const a = await build(one, 'org-a');
+        const b = await build(two, 'org-b');
+
+        await a.tools[0].execute({ id: '1' }, ctx);
+        await b.tools[0].execute({ id: '1' }, ctx);
+
+        expect(one.executeTool).toHaveBeenCalledTimes(1);
+        expect(two.executeTool).toHaveBeenCalledTimes(1);
     });
 });

@@ -15,6 +15,7 @@ import {
     loadCustomAgentMcpServers,
     sandboxFileWriter,
 } from '@libs/code-review/infrastructure/agents/adapters/custom-agent-tools';
+import { RunToolCache } from '@libs/code-review/infrastructure/agents/adapters/run-tool-cache';
 import { buildRunCliAgentTool } from '@libs/code-review/infrastructure/agents/custom-agent-cli/run-cli.tool';
 
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
@@ -125,6 +126,12 @@ export interface CustomAgentToolServices {
  */
 export class CustomAgentProvider extends BaseCodeReviewAgentProvider {
     private readonly slug: string;
+    /**
+     * Read-only tool results (MCP calls, skill files) of this agent in this
+     * review. The provider is built per review and agent, so the cache never
+     * crosses either, and the batches of a chunked review share it.
+     */
+    private readonly runToolCache = new RunToolCache();
 
     constructor(
         private readonly agent: CustomAgentConfig,
@@ -157,6 +164,10 @@ export class CustomAgentProvider extends BaseCodeReviewAgentProvider {
 
     protected getTeamInstructions(): string | undefined {
         return this.agent.instructions || undefined;
+    }
+
+    protected getRunToolCache(): RunToolCache {
+        return this.runToolCache;
     }
 
     /**
@@ -210,6 +221,7 @@ export class CustomAgentProvider extends BaseCodeReviewAgentProvider {
                               org,
                               input.repositoryFullName,
                           ),
+                          cache: this.runToolCache,
                       }
                     : undefined,
         }).catch((error) => {

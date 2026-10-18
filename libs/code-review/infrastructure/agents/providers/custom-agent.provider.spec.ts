@@ -361,6 +361,80 @@ describe('CustomAgentProvider — knowledge and tools', () => {
         expect(close).toHaveBeenCalled();
     });
 
+    it('runs an MCP call once per review and agent, and again in another review', async () => {
+        const mcpManager = {
+            getConnections: jest.fn(async (_org: any, format?: boolean) =>
+                format
+                    ? [
+                          {
+                              name: 'Tracker',
+                              url: 'https://mcp.example.test',
+                              integrationId: 'int-1',
+                          },
+                      ]
+                    : [
+                          {
+                              organizationId: 'org-1',
+                              integrationId: 'int-1',
+                              appName: 'Tracker',
+                          },
+                      ],
+            ),
+        };
+        const executeTool = jest.fn(async () => ({
+            content: [
+                { type: 'text', text: 'LEDGER-7: post through the journal' },
+            ],
+        }));
+        const adapter = {
+            connect: jest.fn(async () => {}),
+            getTools: jest.fn(async () => [
+                {
+                    name: 'get_issue',
+                    description: 'Read an issue',
+                    inputSchema: { type: 'object', properties: {} },
+                    annotations: { readOnlyHint: true },
+                },
+            ]),
+            executeTool,
+            disconnect: jest.fn(async () => {}),
+        };
+        const factory = new CustomAgentProviderFactory(
+            {} as any,
+            {} as any,
+            undefined,
+            undefined,
+            mcpManager as any,
+            () => adapter as any,
+        );
+        const agent = config({
+            tools: { mcp: [{ integrationId: 'int-1', tools: ['get_issue'] }] },
+        });
+        const ctx = { runId: '9:custom' } as any;
+        const askTracker = async () => {
+            const [, secrets] = runLoopMock.mock.calls.at(-1);
+            const tool = secrets.extraTools.find(
+                (t: any) => t.name === 'Tracker__get_issue',
+            );
+            // Finder, then recall pass, then a verifier.
+            for (let pass = 0; pass < 3; pass++) {
+                await tool.execute({ key: 'LEDGER-7' }, ctx);
+            }
+        };
+
+        const review = factory.create(agent);
+        // Two batches of one chunked review run the same provider.
+        await review.execute(input());
+        await askTracker();
+        await review.execute(input());
+        await askTracker();
+        expect(executeTool).toHaveBeenCalledTimes(1);
+
+        await factory.create(agent).execute(input());
+        await askTracker();
+        expect(executeTool).toHaveBeenCalledTimes(2);
+    });
+
     it('offers no runCli for CLIs installed for another agent', async () => {
         await provider().execute(
             input({
@@ -396,9 +470,7 @@ describe('buildCustomAgentPrompt', () => {
         expect(withPlugins).toContain('<TeamSystems>');
         expect(withPlugins).toMatch(/ticket|issue|work item/);
 
-        expect(buildCustomAgentPrompt(config())).not.toContain(
-            '<TeamSystems>',
-        );
+        expect(buildCustomAgentPrompt(config())).not.toContain('<TeamSystems>');
         expect(
             buildCustomAgentPrompt(
                 config({ tools: { mcp: [{ integrationId: 'x', tools: [] }] } }),

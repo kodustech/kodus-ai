@@ -21,6 +21,10 @@
  * listed from (two servers may share a tool name). The model sees
  * `Server__tool`: provider tool names only allow `[A-Za-z0-9_-]`, so the
  * `Server:tool` form is kept for the description.
+ *
+ * A successful call is kept for the review run (`cache`, keyed by connection,
+ * tool and arguments): the finder, the recall pass and the verifiers ask the
+ * same question with fresh histories, and the answer does not change.
  */
 import type {
     AgentTool,
@@ -40,6 +44,7 @@ import {
     type MCPServerConfig,
     type MCPToolRaw,
 } from '@libs/mcp-server/mcp-adapter';
+import { RunToolCache, stableKey } from './run-tool-cache';
 
 const logger = createLogger('custom-agent-mcp-tools');
 
@@ -217,7 +222,10 @@ export async function buildCustomAgentMcpTools(params: {
      * plugins. They are hidden from the model and always win over its input.
      */
     boundArgs?: Record<string, Record<string, unknown>>;
+    /** Results kept for the review run; one per toolset when not given. */
+    cache?: RunToolCache;
 }): Promise<CustomAgentMcpToolset> {
+    const cache = params.cache ?? new RunToolCache();
     const createAdapter = params.createAdapter ?? createMCPAdapter;
     const callTimeoutMs = params.callTimeoutMs ?? DEFAULT_MCP_CALL_TIMEOUT_MS;
     const connectTimeoutMs =
@@ -227,6 +235,7 @@ export async function buildCustomAgentMcpTools(params: {
         string,
         {
             adapter: MCPAdapter;
+            integrationId: string;
             server: string;
             tool: string;
             bound?: Record<string, unknown>;
@@ -295,6 +304,7 @@ export async function buildCustomAgentMcpTools(params: {
             if (allowed.has(exposed)) continue;
             allowed.set(exposed, {
                 adapter,
+                integrationId: selection.integrationId,
                 server: server.name,
                 tool: raw.name,
                 bound,
@@ -327,12 +337,24 @@ export async function buildCustomAgentMcpTools(params: {
                 isError: true,
             };
         }
+        const finalArgs = {
+            ...((args ?? {}) as Record<string, unknown>),
+            ...entry.bound,
+        };
+        return cache.getOrRun(
+            ['mcp', entry.integrationId, entry.tool, stableKey(finalArgs)],
+            () => execute(entry, finalArgs, ctx),
+        );
+    }
+
+    async function execute(
+        entry: { adapter: MCPAdapter; server: string; tool: string },
+        finalArgs: Record<string, unknown>,
+        ctx?: ToolContext,
+    ): Promise<ToolResult> {
         try {
             const result = await withTimeout(
-                entry.adapter.executeTool(entry.tool, {
-                    ...((args ?? {}) as Record<string, unknown>),
-                    ...entry.bound,
-                }),
+                entry.adapter.executeTool(entry.tool, finalArgs),
                 callTimeoutMs,
                 `MCP ${entry.server}:${entry.tool}`,
                 ctx?.signal,

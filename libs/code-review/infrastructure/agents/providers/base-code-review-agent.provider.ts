@@ -58,6 +58,7 @@ import { AgentProgressReporter } from '@libs/code-review/infrastructure/agents/c
 import type { AgentTool } from '@libs/agent-harness/domain/contracts/tool.contract';
 import { renderKnowledgeSection } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-prompt';
 import { buildKnowledgeTools } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-tools';
+import { RunToolCache } from '@libs/code-review/infrastructure/agents/adapters/run-tool-cache';
 
 /** Tools an agent adds to its run, and how to release them afterwards. */
 export interface AgentRunToolset {
@@ -169,6 +170,16 @@ export abstract class BaseCodeReviewAgentProvider {
     /** Unset for every built-in agent; a custom agent returns its
      *  instructions, so a rule quoted from them can pass the quote check. */
     protected getTeamInstructions(): string | undefined {
+        return undefined;
+    }
+
+    /**
+     * Where read-only tool results are kept for this review run. Unset by
+     * default, so a provider shared across reviews (every built-in agent)
+     * gets a fresh cache per execute; a provider built per review returns
+     * its own, so the batches of a chunked review share it.
+     */
+    protected getRunToolCache(): RunToolCache | undefined {
         return undefined;
     }
 
@@ -584,6 +595,7 @@ export abstract class BaseCodeReviewAgentProvider {
                     ? buildKnowledgeTools(
                           input.knowledge,
                           input.knowledgeReader,
+                          this.getRunToolCache() ?? new RunToolCache(),
                       )
                     : [];
             const extraTools = [...knowledgeTools, ...agentTools.tools];
