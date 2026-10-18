@@ -81,6 +81,7 @@ import {
     type CustomAgentsById,
 } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-presentation';
 import { summarizeCustomAgentRuns } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-summary';
+import { customAgentSlug } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import type { CustomAgentConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import {
     bothFromAnalyzers,
@@ -639,6 +640,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 executionUuid,
                 prNumber,
                 repositoryId,
+                new Map(
+                    (context.codeReviewConfig?.customAgents ?? []).map(
+                        (agent) => [customAgentSlug(agent.name), agent.name],
+                    ),
+                ),
             );
 
             // Generate call graph context from AST graph in DB (via kodus-graph in E2B sandbox)
@@ -2972,6 +2978,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         executionUuid: string | undefined,
         prNumber: number | undefined,
         repositoryId: string | undefined,
+        customAgentNames?: ReadonlyMap<string, string>,
     ): (event: AgentProgressEvent) => void {
         // Track accumulated tool calls per agent for the final entry
         const agentToolCalls = new Map<
@@ -2981,7 +2988,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
 
         return (event: AgentProgressEvent) => {
             const stageName = this.getAgentStageName(event);
-            const label = this.formatAgentLabel(event);
+            const label = this.formatAgentLabel(event, customAgentNames);
 
             // Fire-and-forget — don't block the agent loop
             this.writeAgentTrace(
@@ -2997,9 +3004,15 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     }
 
     private getAgentStageName(event: AgentProgressEvent): string {
-        const baseName =
-            event.agentCategory ||
-            event.agentName.replace('kodus-', '').replace('-review-agent', '');
+        // Custom agents share one category; keyed by it, every one of them
+        // wrote to the same timeline entry.
+        const customSlug = customAgentSlugOf(event);
+        const baseName = customSlug
+            ? `custom-agent-${customSlug}`
+            : event.agentCategory ||
+              event.agentName
+                  .replace('kodus-', '')
+                  .replace('-review-agent', '');
 
         if (
             event.agentReplicaTotal &&
@@ -3012,10 +3025,15 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         return `AgentReview::${baseName}`;
     }
 
-    private formatAgentLabel(event: AgentProgressEvent): string {
+    private formatAgentLabel(
+        event: AgentProgressEvent,
+        /** Custom agent names by slug, so the timeline names each one. */
+        customAgentNames?: ReadonlyMap<string, string>,
+    ): string {
         const name =
             event.agentCategory ||
             event.agentName.replace('kodus-', '').replace('-review-agent', '');
+        const customSlug = customAgentSlugOf(event);
         const icon =
             name === 'bug'
                 ? 'Bug'
@@ -3028,6 +3046,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                       : name === 'kody_rules'
                         ? 'Rules'
                         : 'Performance';
+        // "<icon> Agent" for the built-in agents; a custom agent by its name
+        // (it fell through to "Performance Agent" before).
+        const title = customSlug
+            ? customAgentNames?.get(customSlug) || customSlug
+            : `${icon} Agent`;
         const replicaSuffix =
             event.agentReplicaTotal &&
             event.agentReplicaTotal > 1 &&
@@ -3049,13 +3072,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
 
         switch (event.status) {
             case 'started':
-                return `${icon} Agent${replicaSuffix} — investigating...`;
+                return `${title}${replicaSuffix} — investigating...`;
             case 'batch_started':
-                return `${icon} Agent${replicaSuffix}${batchSuffix} — starting (${event.batchFiles ?? 0} files)`;
+                return `${title}${replicaSuffix}${batchSuffix} — starting (${event.batchFiles ?? 0} files)`;
             case 'batch_completed':
-                return `${icon} Agent${replicaSuffix}${batchSuffix} — ${event.findings ?? 0} findings ${duration}`;
+                return `${title}${replicaSuffix}${batchSuffix} — ${event.findings ?? 0} findings ${duration}`;
             case 'investigating':
-                return `${icon} Agent${replicaSuffix}${batchSuffix} — step ${event.step}, ${event.toolCalls?.length ?? 0} tool calls`;
+                return `${title}${replicaSuffix}${batchSuffix} — step ${event.step}, ${event.toolCalls?.length ?? 0} tool calls`;
             case 'completed': {
                 const suffix =
                     event.source === 'second-chance'
@@ -3063,14 +3086,14 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         : event.source === 'generate-object'
                           ? ' (structured by fallback)'
                           : '';
-                return `${icon} Agent${replicaSuffix} — ${event.findings ?? 0} findings ${duration}${suffix}`;
+                return `${title}${replicaSuffix} — ${event.findings ?? 0} findings ${duration}${suffix}`;
             }
             case 'error': {
                 if (event.finishReason === 'timeout') {
-                    return `${icon} Agent${replicaSuffix}${batchSuffix} — timed out after ${duration} (${event.step ?? 0} steps)`;
+                    return `${title}${replicaSuffix}${batchSuffix} — timed out after ${duration} (${event.step ?? 0} steps)`;
                 }
                 if (event.finishReason === 'max-steps') {
-                    return `${icon} Agent${replicaSuffix}${batchSuffix} — hit step limit (${event.step ?? 0} steps, no findings)`;
+                    return `${title}${replicaSuffix}${batchSuffix} — hit step limit (${event.step ?? 0} steps, no findings)`;
                 }
                 // Prefer the classified sentence ("The configured model is not
                 // available on the provider…") over the raw provider string,
@@ -3083,10 +3106,10 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         ? `${event.errorName ? `${event.errorName}: ` : ''}${event.errorMessage.substring(0, 180)}${event.errorMessage.length > 180 ? '…' : ''}`
                         : '');
                 const errSummary = reason ? ` — ${reason}` : '';
-                return `${icon} Agent${replicaSuffix}${batchSuffix} — failed ${duration}${errSummary}`;
+                return `${title}${replicaSuffix}${batchSuffix} — failed ${duration}${errSummary}`;
             }
             default:
-                return `${icon} Agent${replicaSuffix}`;
+                return `${title}${replicaSuffix}`;
         }
     }
 
@@ -3633,4 +3656,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         }
         return summary;
     }
+}
+
+/** A custom agent's run is named `kodus-custom-agent-<slug>`. */
+const CUSTOM_AGENT_RUN_PREFIX = 'kodus-custom-agent-';
+
+function customAgentSlugOf(event: AgentProgressEvent): string | undefined {
+    return event.agentName?.startsWith(CUSTOM_AGENT_RUN_PREFIX)
+        ? event.agentName.slice(CUSTOM_AGENT_RUN_PREFIX.length) || undefined
+        : undefined;
 }
