@@ -37,7 +37,7 @@ Rules:
 
 DROP the finding ONLY for one of these three reasons, and name which one in the rationale:
 (a) FOLLOWS — the code actually follows the rule (the finding misread the code, or the required element is present).
-(b) NOT APPLICABLE — the rule, as its guide section scopes it, does not apply to this file, language, layer, or case (e.g. the section says it applies to public handlers and this is a test helper).
+(b) NOT APPLICABLE — the rule, as its guide section scopes it, does not apply to this file, language, layer, or case (e.g. the section says it applies to public handlers and this is a test helper), or the case is below a threshold the rule sets (e.g. the rule counts 10 lines and the code has 7).
 (c) MISQUOTED CLAIM — the quoted rule does not say what the finding claims it says (the finding stretches it or attributes to it a requirement it does not state).
 
 KEEP the finding (this is the DEFAULT) in every other case. In particular, NEVER drop it because:
@@ -45,7 +45,7 @@ KEEP the finding (this is the DEFAULT) in every other case. In particular, NEVER
 - it is low severity or would not cause a runtime failure;
 - you would have written the rule differently.
 
-When in doubt, KEEP — a human reviewer makes the final call.
+Doubt about whether the code breaks the rule → KEEP; a human reviewer makes the final call. But once you have found that the rule's scope or threshold does not cover the case, that is (b): DROP it, even if the code could still be improved. Do not keep it as a nuance for the human.
 
 Return JSON only at the end.`,
         prompt: `<Evidence>

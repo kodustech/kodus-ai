@@ -25,4 +25,15 @@ describe('buildConventionVerifierPrompt', () => {
         );
         expect(prompt.match(/<\/Evidence>/g)).toHaveLength(1);
     });
+
+    // A verifier that found the rule's scope or threshold not met kept the
+    // finding as a "nuance for a human" under "when in doubt, KEEP".
+    it('treats a scope or threshold the case does not meet as NOT APPLICABLE, not doubt', () => {
+        const { system } = buildConventionVerifierPrompt('x', 0);
+        expect(system).toMatch(/below a threshold the rule sets/i);
+        expect(system).toMatch(
+            /scope or threshold does not cover the case, that is \(b\)/i,
+        );
+        expect(system).not.toMatch(/^When in doubt, KEEP/m);
+    });
 });
