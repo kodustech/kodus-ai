@@ -166,8 +166,10 @@ export const RunsOn = ({
 
 const SEVERITIES: Array<{ value: CustomAgentSeverity | "any"; label: string }> =
     [
-        { value: "any", label: "Any" },
-        { value: "low", label: "Low" },
+        // Unset follows the team's "Minimum severity to post", as the
+        // review applies it; "Low" is the way to post everything.
+        { value: "any", label: "Team minimum" },
+        { value: "low", label: "Low (everything)" },
         { value: "medium", label: "Medium" },
         { value: "high", label: "High" },
         { value: "critical", label: "Critical" },

@@ -70,7 +70,7 @@ export function renderLoadedSkill(skill: ResolvedSkill, ref: string): string {
         `# Skill: ${skill.name}`,
         '',
         `This skill describes how the team does the following: ${oneLine(skill.description)}`,
-        'Check whether the change follows it. When it does not, cite this skill and the section (heading) you are applying, quoting the rule.',
+        'Check whether the change follows it. When it does not, cite the file you read the rule from (this SKILL.md, or the skill file you opened) and the section (heading) you are applying, quoting the rule.',
         `Read from \`${skill.path}\` on \`${ref}\`.`,
         '',
         skill.body,

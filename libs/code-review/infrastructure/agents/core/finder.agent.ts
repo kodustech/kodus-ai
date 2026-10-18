@@ -40,6 +40,7 @@ import {
     isProvenByAstGrep,
     type AstGrepOutputLog,
     type ConventionCheckRejected,
+    type GuideDirLister,
     type GuideFileReader,
 } from '@libs/code-review/infrastructure/agents/core/convention-check';
 import { buildToolEvidenceSummary } from '@libs/code-review/infrastructure/agents/core/agent-anomalies';
@@ -613,6 +614,9 @@ export interface RunFinderWithVerifyParams {
 export interface ConventionCheckParams {
     /** Reads a guide as it is on the PR's target branch. */
     readGuide: GuideFileReader;
+    /** Lists a skill's files on the target branch, so a rule quoted from a
+     *  file beside SKILL.md is found there. */
+    listGuideDir?: GuideDirLister;
     /** Guides linked to this agent. Non-empty → only these may be quoted, and
      *  the recall pass asks for missed violations of them. */
     guideFiles?: string[];
@@ -1014,6 +1018,7 @@ async function routeByKind(
         candidates.filter((s) => !provenSet.has(s)),
         check.readGuide,
         check.guideFiles ?? [],
+        check.listGuideDir,
     );
     if (quoted.rejected.length > 0) {
         finderLogger.log({
@@ -1366,6 +1371,6 @@ ${guides.map((g) => `- ${g}`).join('\n')}
 
 This agent also enforces the team guides above:
 - Also look for MISSED VIOLATIONS of these guides in the changed code — a rule the change breaks that no current finding reports.
-- For each, set kind "convention" and source { file, section, quote }, where quote is the rule's exact sentence copied verbatim from the guide (read it with the tools; never paraphrase or invent a rule).
+- For each, set kind "convention" and source { file, section, quote }, where file is the file you read the rule from (a skill's SKILL.md or the skill file you opened) and quote is the rule's exact sentence copied verbatim from it (read it with the tools; never paraphrase or invent a rule).
 - A rule that does not cover this file or case is not a violation.`;
 }

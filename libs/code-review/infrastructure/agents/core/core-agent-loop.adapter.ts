@@ -53,6 +53,7 @@ import { buildProviderOptions } from '@libs/llm/reasoning-options';
 import { buildAgentAnomalies } from '@libs/code-review/infrastructure/agents/core/agent-anomalies';
 import {
     AstGrepOutputLog,
+    makeTargetBranchGuideLister,
     makeTargetBranchGuideReader,
     recordAstGrepOutputs,
 } from '@libs/code-review/infrastructure/agents/core/convention-check';
@@ -290,6 +291,10 @@ export async function runAgentLoopViaCore(
             ...(readGuide && {
                 conventionCheck: {
                     readGuide,
+                    listGuideDir: makeTargetBranchGuideLister(
+                        secrets.remoteCommands,
+                        input.baseBranch,
+                    ),
                     guideFiles: input.conventionGuides,
                     astGrepLog,
                 },

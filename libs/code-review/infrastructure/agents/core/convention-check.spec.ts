@@ -15,6 +15,7 @@ import {
     findQuoteSection,
     isLinkedGuide,
     isProvenByAstGrep,
+    makeTargetBranchGuideLister,
     makeTargetBranchGuideReader,
     normalizeQuoteText,
     QUOTE_NOT_FOUND,
@@ -82,6 +83,77 @@ describe('findQuoteSection', () => {
                 'Handlers should always log the zone before opening.',
             ),
         ).toBeNull();
+    });
+});
+
+describe('checkConventionQuotes in a skill with rule files', () => {
+    const SKILL = '.claude/skills/valve-rules/SKILL.md';
+    const RULE = '.claude/skills/valve-rules/rules/zones.md';
+    const OTHER = '.claude/skills/pump-rules/rules/zones.md';
+    const files = {
+        [SKILL]: '# Valve rules\n\nRead the file under rules/ that matches the change.\n',
+        [RULE]: '# Zones\n\n## Opening\n\nA valve opens only after its zone lock is held.\n',
+        [OTHER]: '# Pumps\n\nA pump starts only after its circuit is armed.\n',
+    };
+    const list = jest.fn(async (dir: string) =>
+        Object.keys(files).filter((f) => f.startsWith(`${dir}/`)),
+    );
+
+    it('finds a quote cited to SKILL.md in the skill file it came from', async () => {
+        const r = await checkConventionQuotes(
+            [
+                conv('A valve opens only after its zone lock is held.', {
+                    source: {
+                        file: SKILL,
+                        section: 'Opening',
+                        quote: 'A valve opens only after its zone lock is held.',
+                    },
+                }),
+            ],
+            reader(files),
+            [SKILL],
+            list,
+        );
+        expect(r.rejected).toEqual([]);
+        expect(r.passed[0].sectionText).toContain('## Opening');
+        expect(r.passed[0].finding.source?.file).toBe(RULE);
+        expect(list).toHaveBeenCalledWith('.claude/skills/valve-rules');
+    });
+
+    it('never takes a quote from another skill', async () => {
+        const r = await checkConventionQuotes(
+            [
+                conv('A pump starts only after its circuit is armed.', {
+                    source: {
+                        file: SKILL,
+                        section: 'Pumps',
+                        quote: 'A pump starts only after its circuit is armed.',
+                    },
+                }),
+            ],
+            reader(files),
+            [SKILL],
+            list,
+        );
+        expect(r.passed).toEqual([]);
+        expect(r.rejected[0].reason).toBe(QUOTE_NOT_FOUND);
+    });
+
+    it('keeps rejecting without a lister', async () => {
+        const r = await checkConventionQuotes(
+            [
+                conv('A valve opens only after its zone lock is held.', {
+                    source: {
+                        file: SKILL,
+                        section: 'Opening',
+                        quote: 'A valve opens only after its zone lock is held.',
+                    },
+                }),
+            ],
+            reader(files),
+            [SKILL],
+        );
+        expect(r.passed).toEqual([]);
     });
 });
 
@@ -464,5 +536,60 @@ describe('makeTargetBranchGuideReader', () => {
         expect(
             makeTargetBranchGuideReader({ exec: jest.fn() } as any, undefined),
         ).toBeUndefined();
+    });
+});
+
+describe('makeTargetBranchGuideLister', () => {
+    it('lists a skill directory on origin/<base>, not files only on the PR head', async () => {
+        const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'guide-list-'));
+        const git = (...args: string[]) =>
+            execFileSync('git', args, { cwd: repo, stdio: 'pipe' }).toString();
+        try {
+            git('init', '-q', '-b', 'main');
+            git('config', 'user.email', 'dev@example.test');
+            git('config', 'user.name', 'Dev');
+            git('config', 'commit.gpgsign', 'false');
+            const skill = path.join(repo, '.claude/skills/valve-rules');
+            fs.mkdirSync(path.join(skill, 'rules'), { recursive: true });
+            fs.writeFileSync(path.join(skill, 'SKILL.md'), '# Valve rules');
+            fs.writeFileSync(path.join(skill, 'rules/zones.md'), '# Zones');
+            git('add', '-A');
+            git('commit', '-q', '-m', 'base');
+            git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+            git('checkout', '-q', '-b', 'feature');
+            fs.writeFileSync(path.join(skill, 'rules/head-only.md'), '# New');
+            git('add', '-A');
+            git('commit', '-q', '-m', 'head');
+
+            const exec = async (command: string) => {
+                try {
+                    const stdout = execSync(command, {
+                        cwd: repo,
+                        shell: '/bin/sh',
+                        stdio: 'pipe',
+                    }).toString();
+                    return { stdout, stderr: '', exitCode: 0 };
+                } catch (error: any) {
+                    return {
+                        stdout: '',
+                        stderr: String(error.stderr ?? ''),
+                        exitCode: error.status ?? 1,
+                    };
+                }
+            };
+            const list = makeTargetBranchGuideLister({ exec } as any, 'main')!;
+
+            expect((await list('.claude/skills/valve-rules')).sort()).toEqual([
+                '.claude/skills/valve-rules/SKILL.md',
+                '.claude/skills/valve-rules/rules/zones.md',
+            ]);
+            expect(await list('../etc')).toEqual([]);
+        } finally {
+            fs.rmSync(repo, { recursive: true, force: true });
+        }
+    });
+
+    it('is undefined without exec or base branch', () => {
+        expect(makeTargetBranchGuideLister(undefined, 'main')).toBeUndefined();
     });
 });

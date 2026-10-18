@@ -190,4 +190,23 @@ describe('mapAgentFindings', () => {
         expect(r.discardedByVerify).toHaveLength(1);
         expect(r.discardedByVerify[0].label).toBe('bug');
     });
+
+    it('counts a convention finding whose quote failed as discarded by verification', () => {
+        const r = mapAgentFindings(
+            {
+                findings: { suggestions: [] },
+                droppedByVerify: [
+                    { suggestionContent: 'b', relevantFile: 'src/a.ts' },
+                ],
+                droppedByQuoteCheck: [
+                    { suggestionContent: 'c', relevantFile: 'src/b.ts' },
+                ],
+            },
+            ctx(),
+        );
+        expect(r.discardedByVerify.map((s) => s.suggestionContent)).toEqual([
+            'b',
+            'c',
+        ]);
+    });
 });

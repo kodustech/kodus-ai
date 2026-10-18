@@ -134,6 +134,7 @@ export interface MappableAgentResult {
     discardedBySeverity?: RawFinding[];
     droppedByVerify?: RawFinding[];
     unverifiedByVerify?: RawFinding[];
+    droppedByQuoteCheck?: RawFinding[];
 }
 
 export interface FindingMapperContext {
@@ -347,7 +348,13 @@ export function mapAgentFindings(
     return {
         suggestions,
         discardedBySeverity: mapDiscarded(agentResult.discardedBySeverity),
-        discardedByVerify: mapDiscarded(agentResult.droppedByVerify),
+        // A convention finding whose quoted rule is not in the guide was
+        // checked and refuted like a verify drop; counted apart it vanished
+        // from the agent's "dropped by verification" figure.
+        discardedByVerify: mapDiscarded([
+            ...(agentResult.droppedByVerify ?? []),
+            ...(agentResult.droppedByQuoteCheck ?? []),
+        ]),
         discardedByVerifyError: mapDiscarded(agentResult.unverifiedByVerify),
         droppedForPath,
     };

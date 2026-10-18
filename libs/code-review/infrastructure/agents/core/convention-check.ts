@@ -25,6 +25,12 @@ import type { FinderSuggestion } from '@libs/code-review/infrastructure/agents/c
  *  file does not exist there (or cannot be read). */
 export type GuideFileReader = (file: string) => Promise<string | null>;
 
+/** Lists the files under a directory on the PR's target branch. */
+export type GuideDirLister = (dir: string) => Promise<string[]>;
+
+/** Skill files a rule can be quoted from: prose, not scripts or data. */
+const SKILL_TEXT_FILE = /\.(md|mdx|markdown|txt)$/i;
+
 export const QUOTE_NOT_FOUND = 'quote-not-found' as const;
 
 /** Name of the structural-search tool whose matches count as proof. */
@@ -204,11 +210,19 @@ export function isLinkedGuide(
  * `guideFiles`, when non-empty, restricts the quotable files to the guides
  * linked to this agent: a sentence from an arbitrary repository file is not a
  * team rule.
+ *
+ * A large skill keeps its rules in files beside SKILL.md (`rules/`,
+ * `references/`), and the agent tends to cite the skill rather than the file
+ * it read the rule from. With `listGuideDir`, a quote missing from a cited
+ * SKILL.md is looked up in that same skill's text files, and the finding is
+ * re-pointed at the file that holds it. Other skills and repository files
+ * never count.
  */
 export async function checkConventionQuotes(
     candidates: readonly FinderSuggestion[],
     readGuide: GuideFileReader,
     guideFiles: readonly string[] = [],
+    listGuideDir?: GuideDirLister,
 ): Promise<ConventionCheckResult> {
     const passed: ConventionCheckPassed[] = [];
     const rejected: ConventionCheckRejected[] = [];
@@ -250,13 +264,50 @@ export async function checkConventionQuotes(
             continue;
         }
         const sectionText = findQuoteSection(content, quote);
-        if (sectionText == null) {
-            reject(finding, `quote not found in ${file} on the target branch`);
+        if (sectionText != null) {
+            passed.push({ finding, sectionText });
             continue;
         }
-        passed.push({ finding, sectionText });
+        const inSkill = await findInSkillFiles(file, quote, read, listGuideDir);
+        if (inSkill) {
+            passed.push({
+                finding: {
+                    ...finding,
+                    source: { ...finding.source!, file: inSkill.file },
+                },
+                sectionText: inSkill.sectionText,
+            });
+            continue;
+        }
+        reject(finding, `quote not found in ${file} on the target branch`);
     }
     return { passed, rejected };
+}
+
+async function findInSkillFiles(
+    cited: string,
+    quote: string,
+    read: (file: string) => Promise<string | null>,
+    listGuideDir: GuideDirLister | undefined,
+): Promise<{ file: string; sectionText: string } | null> {
+    if (!listGuideDir || !/(^|\/)SKILL\.md$/i.test(cited)) return null;
+    const dir = cited.replace(/\/?SKILL\.md$/i, '');
+    if (!dir) return null;
+    const files = await listGuideDir(dir).catch(() => [] as string[]);
+    for (const raw of files) {
+        const file = stripLeading(raw);
+        if (
+            file === cited ||
+            !file.startsWith(`${dir}/`) ||
+            !SKILL_TEXT_FILE.test(file)
+        ) {
+            continue;
+        }
+        const content = await read(file);
+        const sectionText = content && findQuoteSection(content, quote);
+        if (sectionText) return { file, sectionText };
+    }
+    return null;
 }
 
 /**
@@ -280,6 +331,28 @@ export function makeTargetBranchGuideReader(
             `git show ${shellQuote(`refs/remotes/origin/${baseBranch}:${path}`)}`,
         );
         return r.exitCode === 0 ? r.stdout : null;
+    };
+}
+
+/**
+ * Lists a directory as it is on the PR's target branch, from the same ref the
+ * guide reader uses, so a file the PR adds to a skill is never quotable.
+ */
+export function makeTargetBranchGuideLister(
+    remoteCommands: RemoteCommands | undefined,
+    baseBranch: string | undefined,
+): GuideDirLister | undefined {
+    const exec = remoteCommands?.exec;
+    if (!exec || !baseBranch) return undefined;
+    return async (dir: string) => {
+        const path = stripLeading(dir).replace(/\/+$/, '');
+        if (!path || path.split('/').includes('..')) return [];
+        const r = await exec(
+            `git ls-tree -r --name-only ${shellQuote(`refs/remotes/origin/${baseBranch}`)} -- ${shellQuote(`${path}/`)}`,
+        );
+        return r.exitCode === 0
+            ? r.stdout.split('\n').map((line) => line.trim()).filter(Boolean)
+            : [];
     };
 }
 
