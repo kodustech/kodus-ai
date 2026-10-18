@@ -856,6 +856,57 @@ describe('CommentManagerService — pure helpers', () => {
         });
     });
 
+    describe('generatePullRequestFinishSummaryMarkdown — comments that could not be posted', () => {
+        const svcFor = () =>
+            new CommentManagerService(
+                {} as any,
+                { processTemplate: async () => '' } as any,
+                {} as any,
+                {} as any,
+                {} as any,
+            ) as any;
+        const result = (deliveryStatus: string) => ({
+            comment: { suggestion: { relevantFile: 'a.ts' } },
+            deliveryStatus,
+        });
+        const summary = (commentResults: any[], prLevel: any[] = []) =>
+            svcFor().generatePullRequestFinishSummaryMarkdown(
+                { organizationId: 'org' },
+                42,
+                commentResults,
+                { languageResultPrompt: LanguageValue.ENGLISH },
+                prLevel,
+                false,
+            );
+
+        it('says the comments could not be posted when every delivery failed', async () => {
+            const body = await summary(
+                [result('failed'), result('failed_lines_mismatch')],
+                [result('failed')],
+            );
+
+            expect(body).not.toContain('No issues were found');
+            expect(body).toContain('3');
+            expect(body).toMatch(/could not be posted/);
+        });
+
+        it('keeps the completed summary when the comments were posted', async () => {
+            const sent = await summary([result('sent'), result('failed')]);
+            const before = await summary([result('sent')]);
+
+            expect(sent).not.toMatch(/could not be posted/);
+            expect(sent.split('<!-- kody-codereview-')[0]).toBe(
+                before.split('<!-- kody-codereview-')[0],
+            );
+        });
+
+        it('keeps the no-issues summary when the review found nothing', async () => {
+            const body = await summary([]);
+
+            expect(body).not.toMatch(/could not be posted/);
+        });
+    });
+
     describe('generatePullRequestFinishSummaryMarkdown — skipped rules reach the PR body (KRC-16)', () => {
         // messageProcessor is constructor arg #2; the config block calls it.
         const withProcessor = () =>

@@ -1073,7 +1073,15 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
             // endReviewMessage template — those say "review completed", which
             // would be a lie. Force the default summary path so the
             // `withErrors` variant renders the real reason.
-            let commentBody = reviewFailed ? undefined : finalCommentBody;
+            // Same when no comment could be posted: a template written for a
+            // finished review would hide that the findings never reached it.
+            const nothingDelivered =
+                countUndeliveredComments(codeSuggestions) > 0 &&
+                !codeSuggestions?.some(
+                    (c) => c?.deliveryStatus === DeliveryStatus.SENT,
+                );
+            let commentBody =
+                reviewFailed || nothingDelivered ? undefined : finalCommentBody;
 
             if (!commentBody || commentBody === '') {
                 commentBody = await this.generateLastReviewCommenBody(
@@ -1940,6 +1948,13 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
             ).length;
 
             const hasComments = hasPrLevelComments || hasFileComments;
+            // Comments the review produced but the platform refused (a rate
+            // limit, an outage). With none posted, "no issues found" would
+            // call a review with findings clean.
+            const undelivered = countUndeliveredComments(
+                commentResults,
+                prLevelCommentResults,
+            );
 
             // Failure variant takes priority: when the agent engine flagged
             // the review as failed (critical errors on the pipeline) we
@@ -1996,7 +2011,15 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                 resultText =
                     hasComments || singleAgentRun
                         ? translation.withComments
-                        : translation.withoutComments;
+                        : undelivered > 0
+                          ? (
+                                translation.withUndeliveredComments ??
+                                getTranslationsForLanguageByCategory(
+                                    LanguageValue.ENGLISH,
+                                    TranslationsCategory.PullRequestFinishSummaryMarkdown,
+                                )?.withUndeliveredComments
+                            )?.replace(/\{\{count\}\}/g, String(undelivered))
+                          : translation.withoutComments;
 
                 if (reviewHasPartialErrors) {
                     const notice = this.resolvePartialErrorsNotice(language);
@@ -3144,4 +3167,17 @@ ${reviewOptions}
 
         return chunks;
     }
+}
+
+/** Comments the platform refused to post, file-level and PR-level. */
+function countUndeliveredComments(
+    ...results: Array<CommentResult[] | undefined>
+): number {
+    return results
+        .flat()
+        .filter(
+            (c) =>
+                c?.deliveryStatus === DeliveryStatus.FAILED ||
+                c?.deliveryStatus === DeliveryStatus.FAILED_LINES_MISMATCH,
+        ).length;
 }
