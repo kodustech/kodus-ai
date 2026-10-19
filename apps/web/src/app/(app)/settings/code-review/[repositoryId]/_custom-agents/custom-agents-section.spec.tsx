@@ -434,8 +434,8 @@ describe("CustomAgentsList — at a directory", () => {
 
     it("gives a new agent an id and a name no repository agent it runs next to has", async () => {
         // An own agent with the id of an inherited one replaces it here, so
-        // a new agent that took "agent" made the repository's vanish.
-        const migrations = { ...agent, id: "agent", name: "New agent" };
+        // a new agent that took "new-agent" made the repository's vanish.
+        const migrations = { ...agent, id: "new-agent", name: "New agent" };
         render(
             <QueryClientProvider client={new QueryClient()}>
                 <Form agentsNode={{ value: [migrations], level: "repository" }}>
@@ -450,10 +450,10 @@ describe("CustomAgentsList — at a directory", () => {
         await flush();
 
         const [created] = savedAgents();
-        expect(created.id).toBe("agent-2");
+        expect(created.id).toBe("new-agent-2");
         expect(created.name).toBe("New agent 2");
         expect(push).toHaveBeenLastCalledWith(
-            "/settings/code-review/repo-1/agents/agent-2?directoryId=dir-1",
+            "/settings/code-review/repo-1/agents/new-agent-2?directoryId=dir-1",
         );
     });
 

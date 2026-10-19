@@ -266,9 +266,15 @@ export const createAgentFromTemplate = (
     const taken = existing.some(
         (agent) => agent.presentation.tag.color === template.color,
     );
+    const name = uniqueName(template.name, existing);
     return blankAgent({
-        id: uniqueId(template.id === "blank" ? "agent" : template.id, existing),
-        name: uniqueName(template.name, existing),
+        // A blank agent's id follows its name ("new-agent"), so its page URL
+        // reads like the agent; a template's id names the template.
+        id: uniqueId(
+            template.id === "blank" ? slugify(name) : template.id,
+            existing,
+        ),
+        name,
         color: taken ? nextTagColor(existing) : template.color,
         instructions: template.instructions,
         include: template.include,
