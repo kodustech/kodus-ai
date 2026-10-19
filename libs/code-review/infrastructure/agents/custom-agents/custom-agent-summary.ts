@@ -23,7 +23,9 @@ export interface CustomAgentRun {
         | 'deleted-files'
         | 'failed'
         | 'incomplete';
-    /** Findings the verify pass refuted (or could not judge). */
+    /** Findings the checks refuted: the verify pass (or could not judge),
+     *  and the quote check on rules the finding claimed to cite. Shown as
+     *  "Dropped by checks", since both reasons count here. */
     droppedByVerify: number;
 }
 
@@ -189,8 +191,8 @@ export function formatCustomAgentsSummary(
     const table = rows.length
         ? [
               withSeverity
-                  ? '| Agent | Status | Posted | Dropped by verification | Below minimum severity |'
-                  : '| Agent | Status | Posted | Dropped by verification |',
+                  ? '| Agent | Status | Posted | Dropped by checks | Below minimum severity |'
+                  : '| Agent | Status | Posted | Dropped by checks |',
               withSeverity
                   ? '| --- | --- | --- | --- | --- |'
                   : '| --- | --- | --- | --- |',

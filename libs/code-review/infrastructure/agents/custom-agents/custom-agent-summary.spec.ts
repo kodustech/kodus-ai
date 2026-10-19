@@ -88,7 +88,7 @@ describe('summarizeCustomAgentRuns — findings under the minimum severity', () 
         expect(summaries[0].belowSeverity).toBe(1);
         const markdown = formatCustomAgentsSummary(summaries);
         expect(markdown).toContain(
-            '| Agent | Status | Posted | Dropped by verification | Below minimum severity |',
+            '| Agent | Status | Posted | Dropped by checks | Below minimum severity |',
         );
         expect(markdown).toContain('| Terraform | ran | 0 | 0 | 1 |');
     });
@@ -98,7 +98,7 @@ describe('summarizeCustomAgentRuns — findings under the minimum severity', () 
             summarizeCustomAgentRuns([run('ran')], [], undefined, []),
         );
         expect(markdown).toContain(
-            '| Agent | Status | Posted | Dropped by verification |\n| --- | --- | --- | --- |',
+            '| Agent | Status | Posted | Dropped by checks |\n| --- | --- | --- | --- |',
         );
         expect(markdown).not.toContain('Below minimum severity');
     });

@@ -528,7 +528,7 @@ describe('custom agents summary', () => {
             ),
         );
         expect(markdown).toContain(
-            '| Agent | Status | Posted | Dropped by verification |',
+            '| Agent | Status | Posted | Dropped by checks |',
         );
         expect(markdown).not.toMatch(/shadow|mode/i);
     });
