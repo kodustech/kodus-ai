@@ -692,6 +692,7 @@ export class CustomAgentTryRunnerService implements ICustomAgentTryRunner {
                 organizationAndTeamData,
                 repository,
                 logContext: CustomAgentTryRunnerService.name,
+                prNumber,
             });
             warnings.push(...knowledge.warnings);
 

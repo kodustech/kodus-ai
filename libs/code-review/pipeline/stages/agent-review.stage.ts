@@ -467,6 +467,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             organizationAndTeamData: context.organizationAndTeamData,
             repository: context.repository,
             logContext: this.stageName,
+            prNumber: context.pullRequest?.number,
         });
     }
 
