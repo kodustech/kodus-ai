@@ -208,6 +208,24 @@ describe('checkConventionQuotes in a skill with rule files', () => {
 });
 
 describe('checkConventionQuotes', () => {
+    it('passes a finding that names a conflicting second source in its text', async () => {
+        // The finding applies one rule (its source) and only mentions the
+        // other guide's rule in its text, as the prompt asks on a conflict.
+        const quote = 'Handlers return `ValveResult`, never a bare boolean.';
+        const r = await checkConventionQuotes(
+            [
+                conv(quote, {
+                    suggestionContent:
+                        'The sources disagree: docs/guides/legacy-valves.md says "Handlers may return true when the valve opened." Applied docs/guides/valve-api.md because it is the newer guide.',
+                }),
+            ],
+            reader({ [GUIDE]: GUIDE_TEXT }),
+            [GUIDE, 'docs/guides/legacy-valves.md'],
+        );
+        expect(r.rejected).toEqual([]);
+        expect(r.passed).toHaveLength(1);
+    });
+
     describe("a rule quoted from the agent's own instructions", () => {
         const INSTRUCTIONS =
             'Valve rules:\n- Every valve handler must log the zone id before it opens a valve.\n- Close valves in a finally block.';

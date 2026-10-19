@@ -217,6 +217,27 @@ describe('custom agent — lane focus', () => {
     });
 });
 
+describe('custom agent — conflicting sources', () => {
+    const CONFLICT = 'When two sources give conflicting rules for this code';
+
+    it('asks an agent with guides to name the disagreement, not pick silently', () => {
+        for (const given of [
+            input(),
+            input({ adaptiveProfile: { compactPrompt: true } }),
+        ]) {
+            const system = buildSystemPrompt(given, security);
+            expect(system).toContain(CONFLICT);
+            expect(system).toContain('never apply one silently');
+            expect(system).toContain('report the conflict itself');
+        }
+    });
+
+    it('stays out of the prompts of an agent without guides and of the generalist', () => {
+        expect(buildSystemPrompt(input(), e2e)).not.toContain(CONFLICT);
+        expect(buildSystemPrompt(input(), generalist)).not.toContain(CONFLICT);
+    });
+});
+
 describe('custom agent — shared system-prompt prefix', () => {
     it('two custom agents share everything up to their Role', () => {
         const a = buildSystemPrompt(input(), e2e);

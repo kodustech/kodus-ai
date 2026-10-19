@@ -126,7 +126,9 @@ function withKnowledgeSection(prompt: string, section?: string): string {
  * Tells a custom agent how to report a finding that applies one of its linked
  * team guides: `kind: "convention"` plus the guide's exact sentence. The quote
  * is checked word for word against the guide on the PR's target branch before
- * anything is posted, so a paraphrase is dropped (convention-check.ts). Empty
+ * anything is posted, so a paraphrase is dropped (convention-check.ts). Two
+ * linked sources can disagree; the agent says so in the finding's text rather
+ * than picking one unseen, because `source` holds one quote only. Empty
  * without guides, so every other agent's prompt is unchanged.
  */
 export function formatConventionFindingRules(guides?: string[]): string {
@@ -140,6 +142,7 @@ ${guides.map((g) => `      - ${g}`).join('\n')}
       - source.section: the heading of the section the rule is in;
       - source.quote: the rule's exact sentence, copied verbatim from the guide — never paraphrase, summarize, merge sentences, or invent a rule. The quote is checked word for word against the guide; a finding whose quote is not found there is discarded.
     A rule from a guide is a real finding even when it is about naming, structure, documentation, or a required element — the team chose to enforce it. Report it only when the changed code breaks the rule in a case the guide says it covers.
+    When two sources give conflicting rules for this code (two guides, or a guide and your instructions), never apply one silently: the source stays the one rule you applied, and the finding's text says the sources disagree, names the other file with its rule quoted, and why you applied this one. If you cannot decide, report the conflict itself, sourced to one of the two rules.
     Every other finding (a defect not drawn from a guide) sets kind "bug" and no source.
   </TeamGuides>`;
 }
