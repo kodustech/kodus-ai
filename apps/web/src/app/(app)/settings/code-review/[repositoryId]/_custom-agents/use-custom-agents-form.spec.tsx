@@ -81,7 +81,7 @@ const Form = ({ children }: { children: ReactNode }) => {
 };
 
 const Probe = () => {
-    const { agents, updateAgent, save } = useCustomAgentsForm();
+    const { agents, updateAgent, save, reset } = useCustomAgentsForm();
     return (
         <div>
             <span data-testid="names">
@@ -97,6 +97,16 @@ const Probe = () => {
                 edit
             </button>
             <button onClick={() => void save()}>save</button>
+            <button
+                onClick={() =>
+                    updateAgent("ledger", (agent) => ({
+                        ...agent,
+                        name: "Temporary",
+                    }))
+                }>
+                edit again
+            </button>
+            <button onClick={reset}>reset</button>
         </div>
     );
 };
@@ -170,6 +180,30 @@ describe("useCustomAgentsForm — concurrent edits", () => {
         expect(
             prepared.codeReviewConfig.customAgents.map((a: any) => a.id),
         ).toEqual(["ledger", "audit"]);
+    });
+});
+
+describe("useCustomAgentsForm — reset", () => {
+    it("goes back to the last saved agents, not the ones the page loaded", async () => {
+        renderProbe();
+        fireEvent.click(screen.getByText("edit"));
+        await flush();
+        // What the settings layout does after a save: the saved config
+        // becomes the form's defaults.
+        await act(async () => {
+            formRef.reset(
+                loaded([{ ...ledger, name: "Edited here" }], "agents-r2"),
+            );
+        });
+
+        fireEvent.click(screen.getByText("edit again"));
+        await flush();
+        expect(screen.getByTestId("names")).toHaveTextContent("Temporary");
+
+        fireEvent.click(screen.getByText("reset"));
+        await flush();
+        expect(screen.getByTestId("names")).toHaveTextContent("Edited here");
+        expect(formRef.formState.isDirty).toBe(false);
     });
 });
 

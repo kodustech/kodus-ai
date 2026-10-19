@@ -143,7 +143,11 @@ export const useCustomAgentsForm = () => {
     // values, keeps every other field as it is and recomputes dirtiness
     // against the saved config reaches every subscriber.
     const reset = useCallback(() => {
-        const saved = form.formState.defaultValues ?? {};
+        // The control holds the live defaults: `formState.defaultValues` is
+        // the last render's snapshot and still held the page-load agents
+        // after a save, so Reset brought back the version before it.
+        const saved = (form.control._defaultValues ??
+            {}) as Partial<CodeReviewFormType>;
         form.reset(
             {
                 ...form.getValues(),
