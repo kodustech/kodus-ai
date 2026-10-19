@@ -31,6 +31,8 @@ const doc: KnowledgeItem = {
 const setKnowledge = jest.fn();
 const save = jest.fn();
 let mockReport: unknown;
+let mockCustomAgents = true;
+const resolveCustomAgent = jest.fn();
 
 jest.mock("../_custom-agents/use-custom-agents-form", () => ({
     reviewScopeHref: () => "/settings/code-review/repo-1/review-scope",
@@ -53,7 +55,10 @@ jest.mock("../_custom-agents/use-custom-agents-form", () => ({
 }));
 
 jest.mock("@services/custom-agents/hooks", () => ({
-    useResolveCustomAgent: () => ({ isLoading: false, data: mockReport }),
+    useResolveCustomAgent: (params: unknown) => {
+        resolveCustomAgent(params);
+        return { isLoading: false, data: mockReport };
+    },
 }));
 
 jest.mock("@services/permissions/hooks", () => ({
@@ -61,7 +66,7 @@ jest.mock("@services/permissions/hooks", () => ({
 }));
 
 jest.mock("../../../_components/context", () => ({
-    useFeatureFlags: () => ({ customAgents: true }),
+    useFeatureFlags: () => ({ customAgents: mockCustomAgents }),
 }));
 
 jest.mock("src/core/hooks/use-unsaved-changes-guard", () => ({
@@ -87,6 +92,26 @@ describe("Skills & docs page at a directory", () => {
         expect(setKnowledge).toHaveBeenCalledWith([
             { ...doc, linkedTo: [{ agentId: "valves" }] },
         ]);
+    });
+});
+
+describe("Skills & docs page without the custom agents flag", () => {
+    beforeEach(() => {
+        mockCustomAgents = false;
+        resolveCustomAgent.mockClear();
+    });
+    afterEach(() => {
+        mockCustomAgents = true;
+    });
+
+    it("shows no linking or save controls and reads nothing from the repository", () => {
+        render(<SkillsAndDocsPage />);
+
+        expect(screen.queryByRole("checkbox")).toBeNull();
+        expect(screen.queryByRole("button", { name: /save/i })).toBeNull();
+        expect(resolveCustomAgent).toHaveBeenCalledWith(
+            expect.objectContaining({ enabled: false }),
+        );
     });
 });
 
