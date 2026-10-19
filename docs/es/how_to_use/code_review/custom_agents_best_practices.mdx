@@ -1,0 +1,92 @@
+---
+title: "Buenas Prácticas"
+description: "Escribe agentes personalizados que encuentren problemas reales en tus pull requests y se mantengan en silencio el resto del tiempo."
+tag: 'beta'
+---
+
+<Callout icon="alien" iconType="regular">Los agentes personalizados están en beta. El comportamiento y las pantallas aún pueden cambiar.</Callout>
+
+## Un agente por tema
+
+Un agente que revisa arquitectura, seguridad y cobertura de pruebas a la vez tiene instrucciones vagas y produce hallazgos vagos. Divídelo: un agente por tema, cada uno con sus propios archivos, guías y etiqueta. La etiqueta le dice al equipo quién habla, y la tabla **Custom agents** del comentario final muestra cuál hace ruido.
+
+## Escribe instrucciones enfocadas
+
+Escribe las instrucciones como un brief para un revisor que conoce el código. Cubre tres cosas:
+
+1. **Qué buscar**, en concreto: "imports de `src/domain` en `src/http`", no "problemas de arquitectura".
+2. **Qué ignorar**: estilo, nombres, cosas que ya cubre otro agente o Kody.
+3. **Qué prueba necesita un hallazgo**: "nombra el archivo que muestra el patrón existente", "muestra el camino desde el origen hasta el destino", "cita la regla de `docs/ledger.md`".
+
+El agente reporta solo lo que piden sus instrucciones, y el verificador descarta todo lo que está fuera de ese foco. Un hallazgo que las instrucciones no piden es un hallazgo que no verás.
+
+<Tabs>
+  <Tab title="Vaga">
+    ```text
+    Review the code for quality and best practices.
+    ```
+  </Tab>
+  <Tab title="Enfocada">
+    ```text
+    Flag code in src/http/** that imports from src/infra/** directly.
+    Handlers reach infrastructure only through the ports in src/domain/ports.
+    Ignore tests, generated code and naming.
+    For each finding, name the port the handler should use, or say that
+    none exists yet.
+    ```
+  </Tab>
+</Tabs>
+
+## Di qué prueba necesita un hallazgo
+
+Los hallazgos se verifican antes de publicarse. Dale al agente algo que pueda probar:
+
+- **Una regla en una guía**: vincula el doc o la skill y pide al agente que cite la regla. La cita se verifica en la guía de la rama de destino.
+- **Un resultado de CLI**: las líneas de salida de la CLI que nombran el archivo van al comentario como evidencia.
+- **Una regla de ast-grep**: una coincidencia cuenta como prueba por sí sola, sin verificación del modelo.
+
+Una regla que solo existe en la cabeza de alguien no se puede citar, así que escríbela en las instrucciones o en un doc.
+
+## Haz los globs explícitos
+
+- Define **Files** con el código que le importa al agente: `src/payments/**`, no vacío. Un agente sin globs se ejecuta en todo pull request.
+- Usa **Except** para pruebas, fixtures y código generado.
+- Nombra los archivos explícitamente cuando están en tus rutas ignoradas y el agente igual debe leerlos: `package.json`, `infra/**/*.tf`. Un glob amplio como `**/*.ts` no llega a archivos ignorados.
+- En un directorio, los globs siguen empezando en la raíz del repositorio.
+
+## ¿Skill o doc?
+
+| Usa un **doc** cuando | Usa una **skill** cuando |
+| --- | --- |
+| La guía es corta y aplica a todo cambio que revisa el agente. | Hay muchas reglas, o reglas que aplican solo a algunos cambios. |
+| Quieres que se lea completa, siempre. | Quieres que el agente la abra solo cuando el cambio la necesita, con sus archivos de referencia. |
+
+Los docs cuentan contra un presupuesto de 20.000 tokens por agente. Un manual largo funciona mejor como skill con archivos de referencia.
+
+## Prueba en un pull request real antes de activarlo
+
+Un agente nuevo empieza apagado. Antes de activarlo:
+
+1. Elige un pull request reciente que toque los archivos del agente, idealmente uno en el que sepas qué diría un buen revisor.
+2. Ejecuta **Try it**. Lee las llamadas a herramientas, las skills que abrió y cada hallazgo.
+3. Ajusta las instrucciones, los globs o la severidad mínima, y vuelve a ejecutar.
+4. Actívalo cuando los comentarios que se publicarían sean los que quieres ver en un pull request.
+
+`@kody -v <nombre>` hace lo mismo en un pull request real, publicando los comentarios, mientras el agente sigue apagado.
+
+## Lee los motivos de descarte
+
+Los hallazgos descartados te dicen qué corregir en el agente:
+
+| Motivo | Qué cambiar |
+| --- | --- |
+| Cita no encontrada | La guía en la rama de destino no tiene ese texto. Vincula la guía correcta, o pon la regla en las instrucciones. |
+| Fuera del foco del agente | Las instrucciones no lo piden. Agrégalo, o déjaselo a Kody. |
+| Sin respaldo en el código | El agente adivinó. Pide pruebas concretas en las instrucciones. |
+| Por debajo de la severidad mínima, o sobre el límite de comentarios | Filtrado esperado. Baja el mínimo si quieres ver más. |
+
+## Mantén el volumen adecuado
+
+- Define **Max comments per pull request** en agentes que pueden producir muchos hallazgos, como un agente de código duplicado. Se conservan los más graves.
+- Usa **One PR comment** para agentes cuyos hallazgos se leen mejor juntos, como un reporte de cobertura.
+- Usa **Suggested fix: Never** cuando un fix sería una suposición, como mover algo de arquitectura.

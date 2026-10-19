@@ -1,0 +1,111 @@
+---
+title: "Agente de código duplicado con jscpd"
+description: "Un agente personalizado que ejecuta jscpd en el sandbox y señala el código que un pull request copia en lugar de reutilizar."
+icon: "clone"
+---
+
+## Por qué una CLI
+
+Un modelo que lee un diff no puede saber que las 30 líneas que acaba de leer ya existen tres carpetas más allá. [jscpd](https://github.com/kucherenko/jscpd) sí: recorre el checkout y reporta cada clon con ambas ubicaciones. Este agente lo ejecuta, conserva los clones que introdujo el pull request y publica cada uno con la propia salida de jscpd como evidencia.
+
+El ejemplo es un servicio de facturación en TypeScript. Ajusta rutas y umbrales a tu repositorio.
+
+## Paso 1 — Crea el agente
+
+En **Code review → What to review → Custom agents**, haz clic en **New agent → Templates → Blank**. En su página, completa **Instructions**:
+
+```text Name
+Duplicate code
+```
+
+```text Instructions
+Find code this pull request adds or changes that duplicates code already in the repository.
+
+Run jscpd on the directories the pull request changes, then read both copies of each clone it reports.
+
+Report a clone only when:
+- one of its copies is in a file this pull request changes, and
+- both copies do the same thing (same logic, not just similar boilerplate), and
+- the duplicated block is at least 10 lines.
+
+Ignore tests, fixtures, migrations, generated code, imports and type declarations.
+
+For each finding, name both locations and say what to extract or reuse: an existing function when one copy already is one, or a new shared helper otherwise.
+```
+
+## Paso 2 — Define los archivos
+
+En **Files & knowledge**:
+
+| Campo | Valor |
+| --- | --- |
+| **Files** | `src/**` |
+| **Except** | `**/*.test.ts`, `**/*.spec.ts`, `**/__fixtures__/**`, `**/generated/**`, `src/db/migrations/**` |
+
+## Paso 3 — Agrega la CLI
+
+En **Tools → CLIs**, haz clic en **Add CLI**:
+
+| Campo | Valor |
+| --- | --- |
+| **Name** | `jscpd` |
+| **Binary** | `jscpd` |
+| **Install** | `npm i -g jscpd@4.0.5` |
+| **Allowed command prefixes** | `jscpd --reporters console` |
+| **Allowed domains** | *(vacío: jscpd no necesita red)* |
+| **Runs project code** | Apagado: jscpd lee archivos, no los ejecuta |
+| **Secrets** | *(ninguno)* |
+
+**Usage**:
+
+```markdown
+jscpd finds copy-pasted code across the repository.
+
+Call it with the console reporter, the thresholds, and the directories the pull request changes:
+
+--reporters console --min-lines 10 --min-tokens 70 --ignore **/*.test.ts,**/generated/** src/billing src/invoices
+
+There is no shell: do not quote arguments. Each clone prints both copies as `path [startLine:col - endLine:col]`.
+Read both copies before reporting a clone.
+```
+
+## Paso 4 — Comentarios
+
+En **Comments & model**:
+
+| Campo | Valor | Por qué |
+| --- | --- | --- |
+| **Format** | Inline comments | Cada clon cae en las líneas copiadas. |
+| **Minimum severity** | Team minimum | |
+| **Max comments per pull request** | `5` | Un copy-paste grande puede producir muchos clones; se conservan los más graves. |
+| **Suggested fix** | Never | El fix es un refactor entre archivos, no un cambio de línea. |
+| **How it writes** | `Two sentences: where the other copy is, and what to reuse or extract.` | |
+
+Haz clic en **Save**.
+
+## Paso 5 — Try it
+
+Pega el enlace de un pull request que copie una función y haz clic en **Run agent**. Revisa:
+
+- Las llamadas a herramientas muestran la llamada a `jscpd` y su salida.
+- El **Comment** de cada hallazgo conservado termina con un bloque **Evidence** que cita las líneas de jscpd que nombran el archivo:
+
+```markdown
+**Evidence** (`jscpd`):
+> - src/billing/invoice.ts [12:1 - 41:2] (29 lines, 212 tokens)
+> src/billing/credit-note.ts [8:1 - 37:2]
+```
+
+Si **Warnings** dice que la CLI no se pudo instalar, revisa el comando de instalación. Las CLIs necesitan el sandbox de E2B; sin él, el agente se ejecuta sin jscpd.
+
+Activa el agente cuando los hallazgos sean los que quieres.
+
+## Checklist
+
+- [ ] Instalación fijada a una versión exacta
+- [ ] El prefijo permitido empieza con un flag, no solo con el binario
+- [ ] Pruebas y código generado en **Except** y en el `--ignore` de jscpd
+- [ ] **Max comments per pull request** definido
+- [ ] Probado en un pull request con una copia conocida
+
+Para cada campo, consulta [Skills, docs y herramientas](/es/how_to_use/code_review/custom_agents_knowledge_and_tools#clis-del-equipo).

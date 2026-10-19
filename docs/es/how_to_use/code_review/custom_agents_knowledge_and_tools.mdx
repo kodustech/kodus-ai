@@ -1,0 +1,165 @@
+---
+title: "Skills, Docs y Herramientas"
+description: "Dale a un agente personalizado las guías de tu repositorio, plugins de solo lectura, las CLIs de tu equipo y reglas de ast-grep."
+tag: 'beta'
+---
+
+<Callout icon="alien" iconType="regular">Los agentes personalizados están en beta. El comportamiento y las pantallas aún pueden cambiar.</Callout>
+
+## Skills & docs
+
+Las skills y los docs son guías que ya viven en tu repositorio. Kodus no las copia: las lee de la **rama de destino del pull request** en cada revisión. Así, los cambios en esa rama aplican sin volver a la configuración, y un pull request no puede cambiar la regla que lo evalúa.
+
+| | Skill | Doc |
+| --- | --- | --- |
+| Qué es | Una carpeta con un `SKILL.md` (o un único archivo `.md` de agente) | Una guía en Markdown |
+| Cómo la lee el agente | La abre bajo demanda, cuando el cambio la necesita, junto con sus archivos de referencia | La carga completa, en cada revisión |
+| Ideal para | Muchas reglas, o reglas para una parte del código | Una guía corta que aplica a todo cambio que revisa el agente |
+
+Los scripts dentro de una skill se muestran al agente como texto y nunca se ejecutan.
+
+### Dónde las encuentra Kodus
+
+Las **skills** se detectan en:
+
+- `.claude/skills/*/SKILL.md`
+- `.claude/agents/*.md`
+- `.agents/skills/*/SKILL.md`
+- `.github/skills/*/SKILL.md`
+
+Un `SKILL.md` empieza con un frontmatter YAML con `name` (letras minúsculas, dígitos y guiones, igual al nombre de su carpeta) y `description`. Una skill sin ellos aparece como "Not a valid skill", con el motivo. El agente lee `SKILL.md` (hasta 500 líneas, unos 5.000 tokens) y los archivos junto a él, hasta una carpeta por debajo, como `references/payments.md`.
+
+```markdown .claude/skills/ledger-rules/SKILL.md
+---
+name: ledger-rules
+description: How the ledger service records, reverses and reconciles entries.
+---
+
+# Ledger rules
+
+- Every write to `entries` goes through `LedgerWriter`; never insert directly.
+- A reversal is a new entry, never an UPDATE of the original.
+
+See references/reconciliation.md for the nightly job.
+```
+
+Los **docs** se sugieren a partir de `CONTRIBUTING.md`, `ARCHITECTURE.md`, `CONVENTIONS.md`, `STYLEGUIDE.md` y `docs/**/*.md` (hasta 30). También puedes agregar cualquier ruta a mano: un archivo con extensión es un doc; una carpeta (o un `SKILL.md` dentro de una) es una skill.
+
+### Vincularlas
+
+Hay dos lugares para vincular una skill o un doc:
+
+- **En la página del agente**, en **Files & knowledge → Skills & docs**: **Add skill or doc** lista lo que el agente puede seguir, o usa **Add by path**.
+- **En la página Skills & docs** (el enlace junto a **Custom agents** en What to review): todas las skills y docs registradas, con una casilla para **Main review** y para cada agente. Vincular a **Main review** le da la guía a la revisión propia de Kody.
+
+En el nivel global, la página Skills & docs solo acepta rutas escritas a mano. Cada repositorio se lee por separado; abre la configuración de un repositorio para ver si cada ruta existe ahí.
+
+<Warning>
+  Un archivo marcado como **Also a Kody Rules source** ya alimenta las Kody Rules. Vincularlo también a un agente puede hacer que la misma regla comente dos veces.
+</Warning>
+
+### Presupuestos
+
+Por agente, y para la revisión principal:
+
+| Límite | Valor |
+| --- | --- |
+| Skills | 20 |
+| Docs | 10 |
+| Tokens de docs | 20.000 |
+
+La página Skills & docs avisa cuando un agente o la revisión principal supera un límite. En una revisión, los docs que exceden el presupuesto se recortan u omiten, y la revisión registra un aviso.
+
+### Cómo las usan los hallazgos
+
+Un hallazgo de convención debe **citar** la regla que aplica. Kodus verifica la cita en la guía tal como está en la rama de destino y descarta el hallazgo cuando la cita no está. El comentario publicado cita la regla:
+
+```markdown
+**Rule** (`docs/ledger.md`):
+> A reversal is a new entry, never an UPDATE of the original.
+```
+
+## Plugins (MCP)
+
+Los agentes pueden consultar los plugins instalados en tu workspace: un gestor de tareas, una wiki, el monitoreo. En **Tools → Plugins**, activa un plugin para el agente y mantén **Use every tool**, o usa **Customize** para elegir la lista.
+
+Solo se ofrecen herramientas de lectura; las de escritura nunca. Un plugin que marca sus herramientas como de solo lectura se toma al pie de la letra. Para uno que no las marca, una herramienta solo califica cuando su nombre lleva un verbo de lectura (get, list, search, read, find…) y ningún verbo de escritura. Una revisión nunca crea un ticket ni publica un mensaje en nombre de tu equipo.
+
+El agente consulta un plugin cuando el cambio apunta a algo registrado ahí, como un ticket en la descripción del pull request, y cita lo que encontró. Consulta [Plugins](/es/how_to_use/code_review/plugins) para instalar uno.
+
+## CLIs del equipo
+
+Un agente puede ejecutar hasta **3** herramientas de línea de comandos de tu equipo: un detector de código duplicado, un verificador de esquemas, un linter interno. Las CLIs solo se ejecutan en el sandbox aislado de E2B, dentro del checkout del repositorio. En cualquier otro sandbox la CLI no se instala y el agente se ejecuta sin ella.
+
+En **Tools → CLIs**, haz clic en **Add CLI**:
+
+| Campo | Notas |
+| --- | --- |
+| **Name** | Cómo se refieren a ella el agente y los comentarios. |
+| **Binary** | Lo que llama el agente, p. ej. `jscpd`. |
+| **Install** | Un único comando de gestor de paquetes, fijado a una versión exacta o un digest. Se ejecuta una vez en el sandbox antes de la revisión. |
+| **Allowed command prefixes** | Toda llamada debe empezar con uno de estos. Un prefijo nombra un subcomando o flag después del binario, p. ej. `ledgerctl check`. Un token que termina en `/` cubre cualquier ruta debajo de él. |
+| **Allowed domains** | Hosts a los que puede acceder la CLI. Todo lo demás se bloquea. |
+| **Usage** | Markdown que lee el agente para saber cuándo y cómo llamarla. |
+| **Runs project code** | Actívalo para pruebas, builds o linters que cargan el repositorio. Una CLI así nunca recibe secretos. |
+| **Secrets** | Variables de entorno (p. ej. `LEDGER_TOKEN`) que existen solo en el entorno de esta CLI, enmascaradas en su salida, nunca en el prompt. Son de solo escritura: una vez guardadas se muestran como **Stored · hidden**. |
+
+**Reglas de instalación.** Instaladores admitidos: `npm`, `pnpm`, `yarn`, `pip`, `pip3`, `pipx`, `uv`, `go`, `cargo`. Todo paquete debe estar fijado (`tool@1.2.3`, `tool==1.2.3` o `tool@sha256:…`). Se rechazan etiquetas como `@latest`, rangos de versión, URLs, fuentes Git, rutas locales y sintaxis de shell.
+
+<CodeGroup>
+```bash npm
+npm i -g jscpd@4.0.5
+```
+
+```bash pip
+pip install sqlfluff==3.2.5
+```
+
+```bash go
+go install github.com/acme/ledgerctl@v1.4.2
+```
+</CodeGroup>
+
+**Cómo se ejecutan las llamadas.** El agente pasa argumentos, nunca un comando de shell: pipes, redirecciones, globs y variables se pasan literalmente. Una llamada que no empieza con un prefijo permitido se rechaza. Cada CLI se ejecuta con su propio usuario, con un timeout, y su salida tiene un tamaño máximo.
+
+Cuando un hallazgo viene de una CLI, el comentario muestra las líneas de salida de la CLI que nombran el archivo:
+
+```markdown
+**Evidence** (`jscpd`):
+> - src/billing/invoice.ts [12:1 - 41:2] (29 lines, 212 tokens)
+> src/billing/credit-note.ts [8:1 - 37:2]
+```
+
+<Note>
+  Si la instalación falla, el agente se ejecuta sin esa CLI y la ejecución registra el aviso. **Try it** lo muestra en **Warnings**.
+</Note>
+
+## Reglas de ast-grep
+
+En **Tools → Advanced → Structural search (ast-grep rules)**, dale al agente reglas de [ast-grep](https://ast-grep.github.io), de una de estas formas:
+
+- **Inline**: el YAML de la regla. Separa varias reglas con `---`. Cada una necesita un `id` y una `rule`.
+- **Un archivo de reglas**: una sola línea con la ruta de un archivo `.yml` o `.yaml` del repositorio, leído de la rama de destino del pull request.
+
+```yaml
+id: no-float-money
+language: typescript
+message: Parse amounts with Money.parse, never parseFloat
+rule:
+  pattern: parseFloat($A)
+```
+
+Las reglas se ejecutan sobre los archivos cambiados del pull request. Una coincidencia es prueba: un hallazgo que cita una regla que coincidió en ese archivo durante la ejecución omite la verificación de la cita y la verificación del modelo. Las reglas tienen un límite de 64.000 bytes. La ayuda del campo lista las reglas que encontró y reporta las reglas sin `id` o sin `rule`.
+
+El agente también tiene búsqueda estructural libre en el repositorio, sin ninguna regla configurada.
+
+## Relacionado
+
+<CardGroup cols={2}>
+  <Card title="Agentes Personalizados" icon="robot" href="/es/how_to_use/code_review/custom_agents">
+    Niveles, la página del agente, Try it y cómo se ejecutan los agentes en una revisión.
+  </Card>
+  <Card title="Código duplicado con jscpd" icon="clone" href="/es/cookbook/custom-agent-duplicate-code">
+    Un agente completo con una CLI del equipo.
+  </Card>
+</CardGroup>

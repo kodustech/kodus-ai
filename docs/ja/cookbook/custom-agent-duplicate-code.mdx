@@ -1,0 +1,111 @@
+---
+title: "jscpd で重複コードを検出するエージェント"
+description: "サンドボックスで jscpd を実行し、再利用せずにコピーされたコードを指摘するカスタムエージェント。"
+icon: "clone"
+---
+
+## なぜ CLI か
+
+diff を読むモデルには、今読んだ 30 行が 3 フォルダー先にすでに存在することはわかりません。[jscpd](https://github.com/kucherenko/jscpd) にはわかります。チェックアウトをスキャンし、すべてのクローンを両方の場所とともに報告します。このエージェントは jscpd を実行し、プルリクエストが持ち込んだクローンを残し、jscpd 自身の出力を証拠として各クローンを投稿します。
+
+例は TypeScript の請求サービスです。パスとしきい値はリポジトリに合わせて調整してください。
+
+## ステップ1 — エージェントを作成する
+
+**Code review → What to review → Custom agents** で **New agent → Templates → Blank** をクリックします。ページで **Instructions** を入力します。
+
+```text Name
+Duplicate code
+```
+
+```text Instructions
+Find code this pull request adds or changes that duplicates code already in the repository.
+
+Run jscpd on the directories the pull request changes, then read both copies of each clone it reports.
+
+Report a clone only when:
+- one of its copies is in a file this pull request changes, and
+- both copies do the same thing (same logic, not just similar boilerplate), and
+- the duplicated block is at least 10 lines.
+
+Ignore tests, fixtures, migrations, generated code, imports and type declarations.
+
+For each finding, name both locations and say what to extract or reuse: an existing function when one copy already is one, or a new shared helper otherwise.
+```
+
+## ステップ2 — ファイルを設定する
+
+**Files & knowledge** で：
+
+| フィールド | 値 |
+| --- | --- |
+| **Files** | `src/**` |
+| **Except** | `**/*.test.ts`, `**/*.spec.ts`, `**/__fixtures__/**`, `**/generated/**`, `src/db/migrations/**` |
+
+## ステップ3 — CLI を追加する
+
+**Tools → CLIs** で **Add CLI** をクリックします。
+
+| フィールド | 値 |
+| --- | --- |
+| **Name** | `jscpd` |
+| **Binary** | `jscpd` |
+| **Install** | `npm i -g jscpd@4.0.5` |
+| **Allowed command prefixes** | `jscpd --reporters console` |
+| **Allowed domains** | *（空：jscpd はネットワーク不要）* |
+| **Runs project code** | オフ：jscpd はファイルを読むだけで実行しません |
+| **Secrets** | *（なし）* |
+
+**Usage**：
+
+```markdown
+jscpd finds copy-pasted code across the repository.
+
+Call it with the console reporter, the thresholds, and the directories the pull request changes:
+
+--reporters console --min-lines 10 --min-tokens 70 --ignore **/*.test.ts,**/generated/** src/billing src/invoices
+
+There is no shell: do not quote arguments. Each clone prints both copies as `path [startLine:col - endLine:col]`.
+Read both copies before reporting a clone.
+```
+
+## ステップ4 — コメント
+
+**Comments & model** で：
+
+| フィールド | 値 | 理由 |
+| --- | --- | --- |
+| **Format** | Inline comments | 各クローンがコピーされた行に付きます。 |
+| **Minimum severity** | Team minimum | |
+| **Max comments per pull request** | `5` | 大きなコピーは多くのクローンを生みます。重大度の高いものが残ります。 |
+| **Suggested fix** | Never | 修正は 1 行の変更ではなく、ファイルをまたぐリファクタリングです。 |
+| **How it writes** | `Two sentences: where the other copy is, and what to reuse or extract.` | |
+
+**Save** をクリックします。
+
+## ステップ5 — Try it
+
+関数をコピーしているプルリクエストのリンクを貼り、**Run agent** をクリックします。確認すること：
+
+- ツール呼び出しに `jscpd` の呼び出しとその出力が表示される。
+- 保持された各指摘の **Comment** の最後に、ファイルを名指しする jscpd の行を引用した **Evidence** ブロックがある：
+
+```markdown
+**Evidence** (`jscpd`):
+> - src/billing/invoice.ts [12:1 - 41:2] (29 lines, 212 tokens)
+> src/billing/credit-note.ts [8:1 - 37:2]
+```
+
+**Warnings** に CLI をインストールできなかったと表示されたら、インストールコマンドを確認してください。CLI には E2B サンドボックスが必要で、それがない場合エージェントは jscpd なしで実行されます。
+
+指摘が望みどおりになったら、エージェントをオンにします。
+
+## チェックリスト
+
+- [ ] インストールが正確なバージョンに固定されている
+- [ ] 許可プレフィックスがバイナリだけでなくフラグから始まっている
+- [ ] テストと生成コードが **Except** と jscpd の `--ignore` の両方にある
+- [ ] **Max comments per pull request** を設定した
+- [ ] 既知のコピーを含むプルリクエストで試した
+
+各フィールドの詳細は [Skills、docs、ツール](/ja/how_to_use/code_review/custom_agents_knowledge_and_tools#team-clis) を参照してください。
