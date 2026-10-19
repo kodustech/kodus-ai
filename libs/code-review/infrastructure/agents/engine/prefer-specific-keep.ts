@@ -65,7 +65,21 @@ export function isSameSpot(a: Located, b: Located): boolean {
 export function preferSpecificKeep(
     groups: DedupGroup[],
     suggestions: Partial<CodeSuggestion>[],
+    unique: readonly number[] = [],
 ): DedupGroup[] {
+    // The model may list an index in `unique` or in more than one group, which
+    // the schema accepts. Such an index is published before this group is
+    // read, and as the keep it would absorb the original one without the
+    // content guard: only an index the model put in this group alone moves.
+    const seen = new Map<number, number>();
+    const count = (index: number) =>
+        seen.set(index, (seen.get(index) ?? 0) + 1);
+    unique.forEach(count);
+    for (const group of groups) {
+        count(group.keep);
+        (group.duplicates ?? []).forEach(count);
+    }
+
     return groups.map((group) => {
         const keep = suggestions[group.keep];
         if (!keep || isAnalyzerSuggestion(keep)) {
@@ -80,7 +94,8 @@ export function preferSpecificKeep(
                 !dup ||
                 !contains(keep, dup) ||
                 span(dup) >= span(keep) ||
-                !canReplace(dup, keep)
+                !canReplace(dup, keep) ||
+                seen.get(index) !== 1
             ) {
                 continue;
             }

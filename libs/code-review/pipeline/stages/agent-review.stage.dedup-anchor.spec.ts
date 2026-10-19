@@ -167,4 +167,46 @@ describe('AgentReviewStage — dedup anchor (#2157)', () => {
         );
         expect(published[0].suggestionContent).not.toContain('Also found in');
     });
+
+    // Review of #2181: the model may list a duplicate in `unique` too, which
+    // the schema accepts. Promoting it made the group's keep an index already
+    // published, so the stage absorbed the original keep without the content
+    // guard and a different bug on the wider range disappeared.
+    it('keeps the content guard when the narrower duplicate is also in unique', async () => {
+        const bugA = {
+            ...onTheFunction,
+            relevantLinesStart: 10,
+            relevantLinesEnd: 30,
+            oneSentenceSummary: 'Token is logged in plain text',
+            suggestionContent: 'The auth token is written to the request log.',
+            existingCode: 'log(req)',
+        };
+        const bugB = {
+            ...onTheLoop,
+            relevantLinesStart: 20,
+            relevantLinesEnd: 21,
+        };
+        runSpy.mockImplementation((async (req: any) =>
+            req.spanName === 'code-review::dedup'
+                ? { groups: [{ keep: 0, duplicates: [1] }], unique: [1] }
+                : { verdicts: [] }) as any);
+        (AgentReviewStage.prototype as any).resolveDedupMerge.mockResolvedValue(
+            {
+                honor: false,
+                reason: 'different bugs',
+                score: 0,
+            },
+        );
+        const { stage, reviewOrchestrator } = makeStage();
+        reviewOrchestrator.execute.mockResolvedValue(envelope([bugA, bugB]));
+
+        const result = await (stage as any).executeStage(makeContext());
+        const published = (result.fileAnalysisResults ?? []).flatMap(
+            (f: any) => f.validSuggestionsToAnalyze ?? [],
+        );
+
+        expect(published.map((s: any) => s.existingCode).sort()).toEqual(
+            [bugA.existingCode, bugB.existingCode].sort(),
+        );
+    });
 });

@@ -5,6 +5,10 @@
 import { TITLE_PROMPT_SPEC } from '@libs/common/utils/codeManagement/suggestion-title';
 import { normalizeEnvelope } from '@libs/llm/structured-output-repair';
 
+/** Words in a suggestion body under the default guidelines: asked of the
+ *  formatter here, held by formatAndShapeSuggestions on its fallback. */
+export const BODY_WORD_BUDGET = 50;
+
 export interface SuggestionToFormat {
     /** Shown above the body in the comment; the body must not repeat it. */
     title?: string;
@@ -58,7 +62,7 @@ export function buildFormatPrompt(
 
     const lengthOrTeam = customGuidelines
         ? `\nThe team has provided custom writing guidelines. Follow them for tone and length — they take priority over the default rules above.\n${customGuidelines}\n\nThese rules apply regardless of the team's guidelines:\n${shapeRules}`
-        : `\n- Write at most 2 short sentences and 50 words in all: one on the impact, one on what to change.`;
+        : `\n- Write at most 2 short sentences and ${BODY_WORD_BUDGET} words in all: one on the impact, one on what to change.`;
 
     return `You are a code review comment editor. Each suggestion is shown in the pull request as a title followed by the text you write.
 

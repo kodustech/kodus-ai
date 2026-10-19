@@ -2406,6 +2406,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             }> = preferSpecificKeep(
                 preferAnalyzerKeep(normalizedDedup?.groups || [], suggestions),
                 suggestions,
+                normalizedDedup?.unique || [],
             );
             const unique: number[] = normalizedDedup?.unique || [];
 

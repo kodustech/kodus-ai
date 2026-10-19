@@ -127,6 +127,34 @@ describe('preferSpecificKeep', () => {
         ).toEqual([{ keep: 2, duplicates: [0, 1] }]);
     });
 
+    // Review of #2181: an index the model also put in `unique`, or in another
+    // group, is already published by then; making it the keep would absorb
+    // the original keep without the content guard.
+    it.each([
+        ['also in unique', [{ keep: 0, duplicates: [1] }], [1]],
+        [
+            'also in another group',
+            [
+                { keep: 0, duplicates: [1] },
+                { keep: 1, duplicates: [2] },
+            ],
+            [],
+        ],
+    ])(
+        'leaves the model keep when the narrower duplicate is %s',
+        (_, groups, unique) => {
+            const suggestions = [
+                at('a.ts', 10, 30),
+                at('a.ts', 20, 21),
+                at('b.ts', 1, 2),
+            ];
+
+            expect(preferSpecificKeep(groups, suggestions, unique)[0]).toEqual(
+                groups[0],
+            );
+        },
+    );
+
     it('never displaces a scanner finding', () => {
         const scanner = at('a.ts', 1, 40, {
             evidence: { source: ANALYZER_SOURCE } as CodeSuggestion['evidence'],
