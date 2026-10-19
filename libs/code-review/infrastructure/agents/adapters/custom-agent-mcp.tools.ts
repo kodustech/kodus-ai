@@ -242,7 +242,11 @@ export async function buildCustomAgentMcpTools(params: {
         }
     >();
     const tools: AgentTool[] = [];
-    const adapters: MCPAdapter[] = [];
+    const adapters: Array<{
+        adapter: MCPAdapter;
+        server: string;
+        integrationId: string;
+    }> = [];
     const unavailable: string[] = [];
 
     for (const selection of params.selections ?? []) {
@@ -267,7 +271,11 @@ export async function buildCustomAgentMcpTools(params: {
                 defaultTimeout: callTimeoutMs,
                 maxRetries: 0,
             });
-            adapters.push(adapter);
+            adapters.push({
+                adapter,
+                server: server.name,
+                integrationId: selection.integrationId,
+            });
             await withTimeout(
                 adapter.connect(),
                 connectTimeoutMs,
@@ -377,16 +385,21 @@ export async function buildCustomAgentMcpTools(params: {
             // Bounded like connect: a close that never settles would hold the
             // review. The timeout only stops waiting; the adapter is dropped.
             await Promise.allSettled(
-                adapters.map((a) =>
+                adapters.map(({ adapter, server, integrationId }) =>
                     withTimeout(
-                        a.disconnect(),
+                        adapter.disconnect(),
                         connectTimeoutMs,
-                        'MCP disconnect',
+                        `MCP ${server} disconnect`,
                     ).catch((error) =>
                         logger.warn({
                             message: 'MCP disconnect failed or timed out',
                             context: 'buildCustomAgentMcpTools',
                             error,
+                            metadata: {
+                                server,
+                                integrationId,
+                                connectTimeoutMs,
+                            },
                         }),
                     ),
                 ),

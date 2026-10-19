@@ -718,6 +718,12 @@ export class CustomAgentTryRunnerService implements ICustomAgentTryRunner {
                     message: 'Could not release the Try it sandbox',
                     context: CustomAgentTryRunnerService.name,
                     error,
+                    metadata: {
+                        organizationId: organizationAndTeamData.organizationId,
+                        teamId: organizationAndTeamData.teamId,
+                        repositoryId: repository.id,
+                        prNumber,
+                    },
                 }),
             );
         }

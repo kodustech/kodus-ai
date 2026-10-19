@@ -487,10 +487,17 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
             });
         } catch (error) {
             this.logger.error({
-                message: `Failed to reply to an unknown custom agent on PR #${context.pullRequest.number}`,
+                message: `Failed to reply to an unknown custom agent on PR #${context.pullRequest?.number}`,
                 context: ValidateConfigStage.name,
                 error,
-                metadata: { onlyCustomAgent: context.onlyCustomAgent },
+                metadata: {
+                    onlyCustomAgent: context.onlyCustomAgent,
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
+                    teamId: context.organizationAndTeamData?.teamId,
+                    repositoryId: context.repository?.id,
+                    prNumber: context.pullRequest?.number,
+                },
             });
         }
     }

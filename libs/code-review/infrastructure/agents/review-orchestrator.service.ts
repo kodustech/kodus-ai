@@ -249,7 +249,13 @@ export class ReviewOrchestratorService {
                 this.logger.warn({
                     message: `Custom agent slug clash, running the first only: ${slugClash}`,
                     context: ReviewOrchestratorService.name,
-                    metadata: { prNumber: input.prNumber },
+                    metadata: {
+                        organizationId:
+                            agentInput.organizationAndTeamData?.organizationId,
+                        teamId: agentInput.organizationAndTeamData?.teamId,
+                        repositoryId: agentInput.repositoryId,
+                        prNumber: input.prNumber,
+                    },
                 });
             }
             for (const agent of selectCustomAgents(
