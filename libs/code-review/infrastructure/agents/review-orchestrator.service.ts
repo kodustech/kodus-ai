@@ -35,17 +35,28 @@ export interface OrchestratorAgentFailure {
 }
 
 /**
- * An agent that returned, but was cut short by its time or step budget rather
- * than finishing its investigation. Not a failure (it may still have produced
+ * An agent that returned, but was cut short (out of steps, or its turn
+ * truncated by the provider) rather than finishing its investigation. Not a failure (it may still have produced
  * findings) — but its silence is not evidence of clean code, so the pipeline
  * must not read it as one.
  */
 export interface OrchestratorAgentIncomplete {
     agentName: string;
     category: string;
-    finishReason: 'timeout' | 'max-steps';
+    finishReason: 'max-steps' | 'truncated';
     suggestionsFound: number;
     durationMs: number;
+}
+
+/**
+ * An agent whose findings could not all be verified: the verifier's model call
+ * failed, so those findings were not published (#2171). Like a cut-short
+ * agent, its review is not complete.
+ */
+export interface OrchestratorAgentUnverified {
+    agentName: string;
+    category: string;
+    unverifiedCount: number;
 }
 
 export interface OrchestratorOutput {
@@ -54,6 +65,8 @@ export interface OrchestratorOutput {
     failures: OrchestratorAgentFailure[];
     /** Agents that ran to their budget ceiling instead of to completion. */
     incomplete: OrchestratorAgentIncomplete[];
+    /** Agents that left findings unverified because the verify call failed. */
+    unverified?: OrchestratorAgentUnverified[];
     totalDurationMs: number;
     /** Fidelity warnings collected across all per-agent fan-out, deduped
      *  by (kind, modelName, contextWindowTokens). Empty array when no
@@ -168,6 +181,7 @@ export class ReviewOrchestratorService {
                 agentResults: [],
                 failures: [],
                 incomplete: [],
+                unverified: [],
                 totalDurationMs: Date.now() - startTime,
                 warnings: [],
             };
@@ -233,6 +247,7 @@ export class ReviewOrchestratorService {
         const allSuggestions: Partial<CodeSuggestion>[] = [];
         const failures: OrchestratorAgentFailure[] = [];
         const incomplete: OrchestratorAgentIncomplete[] = [];
+        const unverified: OrchestratorAgentUnverified[] = [];
 
         for (let i = 0; i < results.length; i++) {
             const result = results[i];
@@ -247,8 +262,8 @@ export class ReviewOrchestratorService {
                         agentName,
                         category: result.value.agentCategory ?? agentName,
                         finishReason:
-                            result.value.finishReason === 'timeout'
-                                ? 'timeout'
+                            result.value.finishReason === 'truncated'
+                                ? 'truncated'
                                 : 'max-steps',
                         suggestionsFound: result.value.suggestions.length,
                         durationMs: result.value.durationMs,
@@ -263,6 +278,16 @@ export class ReviewOrchestratorService {
                             finishReason: result.value.finishReason,
                             durationMs: result.value.durationMs,
                         },
+                    });
+                }
+
+                const unverifiedCount =
+                    result.value.discardedByVerifyError?.length ?? 0;
+                if (unverifiedCount > 0) {
+                    unverified.push({
+                        agentName,
+                        category: result.value.agentCategory ?? agentName,
+                        unverifiedCount,
                     });
                 }
 
@@ -327,6 +352,7 @@ export class ReviewOrchestratorService {
             agentResults,
             failures,
             incomplete,
+            unverified,
             totalDurationMs,
             warnings,
         };

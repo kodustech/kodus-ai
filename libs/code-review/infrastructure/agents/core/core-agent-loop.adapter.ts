@@ -31,6 +31,7 @@ import { estimateOverheadTokens } from '@libs/agent-harness/infrastructure/compr
 import { DiffCoverageLedger } from '@libs/code-review/infrastructure/agents/adapters/diff-coverage-ledger.adapter';
 import { buildFinderToolRegistry } from '@libs/code-review/infrastructure/agents/adapters/finder-tools.adapter';
 import {
+    FINDER_DONE_TOOL,
     buildFinderAgentSpec,
     runFinderWithVerify,
     recoverFindingsFromProse,
@@ -40,6 +41,11 @@ import {
     buildFindingsFromVerify,
     summarizeFunnel,
 } from '@libs/code-review/infrastructure/agents/core/review-finding';
+import {
+    sanitizeFindingsResult,
+    type FindingsOutput,
+} from '@libs/code-review/infrastructure/agents/core/findings-schema';
+import { normalizeEnvelope } from '@libs/llm/structured-output-repair';
 import { createLogger } from '@libs/core/log/logger';
 import {
     type AgentLoopInput,
@@ -180,6 +186,28 @@ export function finderRunEnvironment(
             usageRunName: input.usageRunName,
         },
     };
+}
+
+/**
+ * A submitResult payload that arrived whole: the findings schema accepts it
+ * and recovery dropped none of its items. On a cut turn a dropped item means
+ * the result was damaged; the valid items still ship, the run is partial.
+ */
+function isWholeResult(
+    payload: unknown,
+    telemetryMetadata?: { organizationId?: string },
+): boolean {
+    const clean = sanitizeFindingsResult(
+        payload as FindingsOutput,
+        telemetryMetadata,
+    );
+    if (!clean) return false;
+    const raw = normalizeEnvelope(payload, 'suggestions', [
+        'findings',
+        'codeSuggestions',
+    ]) as { suggestions?: unknown };
+    const sent = Array.isArray(raw?.suggestions) ? raw.suggestions.length : 0;
+    return clean.suggestions.length === sent;
 }
 
 export async function runAgentLoopViaCore(
@@ -338,7 +366,8 @@ export async function runAgentLoopViaCore(
         (fu.cacheReadTokens ?? 0) + vu.cacheReadTokens + ru.cacheReadTokens;
 
     // Verify funnel made observable: before = kept + dropped, after = kept.
-    const verifiedBefore = r.kept.length + r.droppedByVerify.length;
+    const verifiedBefore =
+        r.kept.length + r.droppedByVerify.length + r.unverified.length;
     const verification: VerificationTraceSummary | null =
         verifiedBefore === 0
             ? null
@@ -346,6 +375,7 @@ export async function runAgentLoopViaCore(
                   beforeCount: verifiedBefore,
                   afterCount: r.kept.length,
                   droppedByVerifier: r.droppedByVerify.length,
+                  unverified: r.unverified.length,
                   droppedByEvidenceFilter: 0,
                   decisions: [
                       ...r.kept.map((f, i) => ({
@@ -367,8 +397,40 @@ export async function runAgentLoopViaCore(
                           rationale: d.evidence ?? '',
                           verifierEvidence: d.verifierEvidence,
                       })),
+                      ...r.unverified.map((u, i) => ({
+                          index: r.kept.length + r.droppedByVerify.length + i,
+                          relevantFile: u.finding.relevantFile,
+                          action: 'drop' as const,
+                          parseMode: 'verify-error' as const,
+                          rationale: u.error,
+                          verifierEvidence: { strongFiles: [], weakFiles: [] },
+                      })),
                   ],
               };
+
+    // A finder run that ended without submitting a result did not finish
+    // looking: it ran out of steps, or the provider cut its turn so the tools
+    // it asked for never ran (the runner records that as `tool.skipped`). A run
+    // that answered in prose is not incomplete; prose recovery owns it (#2171).
+    // The runner makes an artifact of every requested result call, executed or
+    // not, so a turn cut while writing submitResult leaves one holding raw,
+    // unparseable input, an object that is no findings result (`{}`), or items
+    // recovery had to drop: only a result that arrived whole counts.
+    // The submitResult the review publishes: extractFindings reads the last.
+    const published = [...r.finderState.artifacts]
+        .reverse()
+        .find((a) => a.type === FINDER_DONE_TOOL);
+    const submitted =
+        !!published &&
+        isWholeResult(published.payload, input.telemetryMetadata);
+    const incompleteReason: AgentLoopOutput['incompleteReason'] =
+        r.finderState.status === 'budget-exhausted'
+            ? 'budget-exhausted'
+            : !submitted &&
+                r.finderState.status !== 'error' &&
+                r.finderState.trace.some((e) => e.kind === 'tool.skipped')
+              ? 'truncated'
+              : undefined;
 
     // When the finder run errored (a provider/model throw the harness caught
     // and turned into an error-status result), surface the underlying message
@@ -385,6 +447,7 @@ export async function runAgentLoopViaCore(
         steps: r.finderState.steps.length,
         toolCalls,
         finishReason: r.finderState.status,
+        ...(incompleteReason && { incompleteReason }),
         ...(errorEvent && {
             errorMessage: (errorEvent.detail?.message as string) || undefined,
             errorName: (errorEvent.detail?.name as string) || undefined,
@@ -403,6 +466,7 @@ export async function runAgentLoopViaCore(
         },
         discardedBySeverity: [],
         droppedByVerify: r.droppedByVerify.map((d) => d.finding) as any,
+        unverifiedByVerify: r.unverified.map((u) => u.finding) as any,
         coverage,
         verification,
         verificationUsage: {

@@ -822,7 +822,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         stage: this.stageName,
                         substage: `agent:${cut.agentName}`,
                         error: new Error(
-                            `Agent "${cut.agentName}" stopped at its ${cut.finishReason} limit after ${cut.durationMs}ms — the review did not complete`,
+                            cut.finishReason === 'truncated'
+                                ? `Agent "${cut.agentName}" had its turn truncated by the model provider after ${cut.durationMs}ms — the review did not complete`
+                                : `Agent "${cut.agentName}" ran out of steps after ${cut.durationMs}ms — the review did not complete`,
                         ),
                         severity: 'partial',
                         metadata: {
@@ -830,6 +832,36 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             category: cut.category,
                             finishReason: cut.finishReason,
                             suggestionsFound: cut.suggestionsFound,
+                            prNumber,
+                        },
+                    });
+                });
+            }
+
+            // An agent whose verify call failed left findings nobody judged.
+            // They were not published, so the review did not check everything
+            // it found: 'partial', same as a cut-short agent (#2171).
+            for (const gap of result.unverified || []) {
+                if (!CRITICAL_AGENTS.has(gap.agentName)) {
+                    continue;
+                }
+
+                context = this.updateContext(context, (draft) => {
+                    if (!draft.errors) {
+                        draft.errors = [];
+                    }
+                    draft.errors.push({
+                        pipelineId: context.pipelineMetadata?.pipelineId,
+                        stage: this.stageName,
+                        substage: `agent:${gap.agentName}`,
+                        error: new Error(
+                            `Agent "${gap.agentName}" could not verify ${gap.unverifiedCount} finding(s) — they were not posted and the review did not complete`,
+                        ),
+                        severity: 'partial',
+                        metadata: {
+                            agentName: gap.agentName,
+                            category: gap.category,
+                            unverifiedCount: gap.unverifiedCount,
                             prNumber,
                         },
                     });
@@ -958,6 +990,16 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             ...s,
                             priorityStatus:
                                 PriorityStatus.DISCARDED_BY_SAFEGUARD,
+                            deliveryStatus: DeliveryStatus.NOT_SENT,
+                        });
+                    }
+                }
+                if (agentResult.discardedByVerifyError?.length) {
+                    for (const s of agentResult.discardedByVerifyError) {
+                        allDiscarded.push({
+                            ...s,
+                            priorityStatus:
+                                PriorityStatus.DISCARDED_BY_VERIFY_ERROR,
                             deliveryStatus: DeliveryStatus.NOT_SENT,
                         });
                     }

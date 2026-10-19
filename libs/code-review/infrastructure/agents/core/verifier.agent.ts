@@ -179,6 +179,26 @@ export function extractVerdict(
     // files it read/grepped) to the observability trace. submitVerdict itself
     // is excluded (it's the result tool, not investigation).
     const toolCalls = collectVerifierToolCalls(state);
+    // The verifier's own run failed (provider error, 429, abort): nothing was
+    // judged. Still fail open, as the Verifier port requires, but say so —
+    // runFinderWithVerify keeps these out of the published set (#2171). A
+    // partial verdict tool call made before the failure is not trusted.
+    if (state.status === 'error') {
+        const error = state.trace.find((e) => e.kind === 'error');
+        const message =
+            (error?.detail?.message as string | undefined) ?? 'unknown error';
+        logger.warn({
+            message: `verifier run failed, finding left unverified: ${message}`,
+            context: 'VerifierAgent',
+            metadata: { parseMode: 'verify-error', ...telemetry },
+        });
+        return {
+            keep: true,
+            rationale: `verification unavailable: ${message}`,
+            toolCalls,
+            parseMode: 'verify-error',
+        };
+    }
     // SHAPE recovery (#1786): a non-strict model may wrap ({result:{keep}}),
     // rename (decision/verdict/shouldKeep), stringify, or bare-array the
     // verdict — readVerdictObject recovers the scalar `keep` before the boolean
@@ -209,6 +229,22 @@ export function extractVerdict(
             },
         });
         return { ...fromText, toolCalls, parseMode: 'text' };
+    }
+    // A run that did not finish (out of steps, stopped by a policy) and left
+    // no verdict judged nothing: unavailable, as an errored run is. One that
+    // completed and answered without a readable verdict keeps the default.
+    if (state.status !== 'completed') {
+        logger.warn({
+            message: `verifier run ended ${state.status} without a verdict, finding left unverified`,
+            context: 'VerifierAgent',
+            metadata: { parseMode: 'verify-error', ...telemetry },
+        });
+        return {
+            keep: true,
+            rationale: `verification unavailable: verifier ended ${state.status} without a verdict`,
+            toolCalls,
+            parseMode: 'verify-error',
+        };
     }
     return {
         keep: true,

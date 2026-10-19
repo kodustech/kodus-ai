@@ -604,14 +604,17 @@ describe('C. transport / fail-safe', () => {
         expect(thrown.responseBody).toBe('{"error":"unknown model"}');
     });
 
-    // Row 32 — empty success (content:'' / finish stop) is a legitimate empty
-    // review; a max-steps/tool-calls stop is a cut-short and must be flagged.
+    // Row 32 — empty success (a finder that finished and found nothing) is a
+    // legitimate empty review; a finder that ended without submitting is a
+    // cut-short and must be flagged. The loop result carries the harness
+    // RunStatus, as the adapter emits it — these rows used to mock 'tool-calls'
+    // and 'timeout', values the adapter never produces (#2171).
     it('row 32: empty-success stop → typed-empty, hitHardLimit false, finishReason stop', async () => {
         runLoopMock.mockResolvedValue(
             makeHarnessResult({
                 findings: { suggestions: [] },
                 source: 'empty',
-                finishReason: 'stop',
+                finishReason: 'stopped',
             }),
         );
         const out = await newAgent().execute(makeInput());
@@ -620,12 +623,13 @@ describe('C. transport / fail-safe', () => {
         expect(out.finishReason).toBe('stop');
     });
 
-    it('row 32: empty + tool-calls finish → cut-short flagged (hitHardLimit true, finishReason max-steps)', async () => {
+    it('row 32: empty + out of steps → cut-short flagged (hitHardLimit true, finishReason max-steps)', async () => {
         runLoopMock.mockResolvedValue(
             makeHarnessResult({
                 findings: { suggestions: [] },
                 source: 'empty',
-                finishReason: 'tool-calls',
+                finishReason: 'budget-exhausted',
+                incompleteReason: 'budget-exhausted',
             }),
         );
         const out = await newAgent().execute(makeInput());
@@ -633,17 +637,17 @@ describe('C. transport / fail-safe', () => {
         expect(out.finishReason).toBe('max-steps');
     });
 
-    it('row 32: timeout finish → finishReason timeout, hitHardLimit true', async () => {
+    it('row 32: aborted by the per-agent timeout → the agent fails, it does not read as cut short', async () => {
         runLoopMock.mockResolvedValue(
             makeHarnessResult({
                 findings: { suggestions: [] },
                 source: 'empty',
-                finishReason: 'timeout',
+                finishReason: 'error',
+                errorMessage: 'This operation was aborted',
+                errorName: 'AbortError',
             }),
         );
-        const out = await newAgent().execute(makeInput());
-        expect(out.finishReason).toBe('timeout');
-        expect(out.hitHardLimit).toBe(true);
+        await expect(newAgent().execute(makeInput())).rejects.toBeDefined();
     });
 
     // Row 33 — refusal ("I cannot help…" / content_filter): surfaces at this
@@ -1075,5 +1079,80 @@ describe('losses the run records (#2066)', () => {
         const out = await newAgent().execute(makeInput());
 
         expect(out.warnings ?? []).toEqual([]);
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// #2171 — an agent that did not finish its checks reaches the orchestrator as
+// such: incomplete runs carry hitHardLimit, unverified findings are kept apart.
+// The loop result carries the harness RunStatus, as the real adapter emits it.
+// ════════════════════════════════════════════════════════════════════════════
+describe('#2171 incomplete and unverified', () => {
+    it('a finder run that ran out of steps reaches the orchestrator as incomplete', async () => {
+        runLoopMock.mockResolvedValue(
+            makeHarnessResult({
+                findings: { reasoning: '', suggestions: [] },
+                source: 'empty',
+                finishReason: 'budget-exhausted',
+                incompleteReason: 'budget-exhausted',
+            }),
+        );
+
+        const out = await newAgent().execute(makeInput());
+
+        expect(out.hitHardLimit).toBe(true);
+        expect(out.finishReason).toBe('max-steps');
+    });
+
+    it('a finder run the provider truncated reaches the orchestrator as incomplete', async () => {
+        runLoopMock.mockResolvedValue(
+            makeHarnessResult({
+                findings: { reasoning: '', suggestions: [] },
+                source: 'empty',
+                finishReason: 'completed',
+                incompleteReason: 'truncated',
+            }),
+        );
+
+        const out = await newAgent().execute(makeInput());
+
+        expect(out.hitHardLimit).toBe(true);
+        expect(out.finishReason).toBe('truncated');
+    });
+
+    it('a finished run is not incomplete', async () => {
+        runLoopMock.mockResolvedValue(
+            makeHarnessResult({ finishReason: 'stopped' }),
+        );
+
+        const out = await newAgent().execute(makeInput());
+
+        expect(out.hitHardLimit).toBe(false);
+        expect(out.finishReason).toBe('stop');
+    });
+
+    it('unverified findings come out apart, with a VERIFY_UNAVAILABLE warning', async () => {
+        runLoopMock.mockResolvedValue(
+            makeHarnessResult({
+                finishReason: 'stopped',
+                unverifiedByVerify: [
+                    {
+                        suggestionContent: 'Unchecked claim',
+                        relevantFile: 'src/a.ts',
+                        oneSentenceSummary: 'unchecked',
+                        severity: 'high',
+                    },
+                ],
+            }),
+        );
+
+        const out = await newAgent().execute(makeInput());
+
+        expect(out.discardedByVerifyError).toHaveLength(1);
+        expect(out.discardedByVerifyError?.[0].relevantFile).toBe('src/a.ts');
+        expect(out.suggestions.map((s) => s.suggestionContent)).not.toContain(
+            'Unchecked claim',
+        );
+        expect(out.warnings?.map((w) => w.kind)).toContain('VERIFY_UNAVAILABLE');
     });
 });

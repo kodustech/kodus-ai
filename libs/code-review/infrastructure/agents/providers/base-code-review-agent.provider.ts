@@ -28,6 +28,7 @@ import {
 import { resolveContextWindow } from '@libs/llm/model-context-window';
 import {
     buildPathMismatchWarning,
+    buildVerifyUnavailableWarning,
     type ReviewWarning,
 } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import { resolveAdaptiveProfile } from '@libs/code-review/infrastructure/agents/engine/adaptive-fit';
@@ -711,16 +712,25 @@ export abstract class BaseCodeReviewAgentProvider {
                 );
             }
 
+            if (mapped.discardedByVerifyError.length > 0) {
+                agentWarnings.push(
+                    buildVerifyUnavailableWarning({
+                        count: mapped.discardedByVerifyError.length,
+                        modelName,
+                        agentName: this.getIdentity().name,
+                    }),
+                );
+            }
+
             // Emit progress: agent completed
-            // Only mark as error if the agent hit a hard limit (timeout or MAX_STEPS with tool-calls finish).
-            // source=empty with finishReason=stop is legitimate (agent investigated and found nothing).
-            const hitHardLimit =
-                agentResult.finishReason === 'timeout' ||
-                (agentResult.source === 'empty' &&
-                    agentResult.finishReason === 'tool-calls');
+            // The agent hit a hard limit when its finder ended without
+            // submitting a result: out of steps, or its turn truncated by the
+            // provider. A run that finished with nothing to report is not one.
+            // A per-agent timeout aborts the run and fails the agent above.
+            const hitHardLimit = agentResult.incompleteReason !== undefined;
             const stopReason: ReviewAgentOutput['finishReason'] =
-                agentResult.finishReason === 'timeout'
-                    ? 'timeout'
+                agentResult.incompleteReason === 'truncated'
+                    ? 'truncated'
                     : hitHardLimit
                       ? 'max-steps'
                       : 'stop';
@@ -792,6 +802,7 @@ export abstract class BaseCodeReviewAgentProvider {
                 suggestions,
                 discardedBySeverity: mapped.discardedBySeverity,
                 discardedByVerify: mapped.discardedByVerify,
+                discardedByVerifyError: mapped.discardedByVerifyError,
                 agentName: identity.name,
                 agentCategory,
                 agentReplicaIndex: input.agentReplicaIndex,

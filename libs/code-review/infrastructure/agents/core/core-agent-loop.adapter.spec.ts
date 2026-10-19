@@ -335,15 +335,27 @@ const verdictArtifact = (payload: unknown) => ({
 /** A model that finalizes with EXACTLY the given submitResult payload object
  *  (drives the off-schema shape through the real harness end-to-end). */
 function modelReturningFindings(payload: unknown) {
+    // The verifier gets a verdict: one that never answers ends unverified, and
+    // its findings are not published (#2171).
     return new MockLanguageModelV3({
-        doGenerate: (async () => ({
+        doGenerate: (async (opts: any) => ({
             content: [
-                {
-                    type: 'tool-call',
-                    toolCallId: 'f',
-                    toolName: 'submitResult',
-                    input: JSON.stringify(payload),
-                },
+                /REFUTE|verdict/.test(JSON.stringify(opts?.prompt ?? ''))
+                    ? {
+                          type: 'tool-call',
+                          toolCallId: 'v',
+                          toolName: 'submitVerdict',
+                          input: JSON.stringify({
+                              keep: true,
+                              rationale: 'ok',
+                          }),
+                      }
+                    : {
+                          type: 'tool-call',
+                          toolCallId: 'f',
+                          toolName: 'submitResult',
+                          input: JSON.stringify(payload),
+                      },
             ],
             finishReason: 'tool-calls',
             usage: { inputTokens: 1, outputTokens: 1 },
