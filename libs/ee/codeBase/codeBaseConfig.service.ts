@@ -422,11 +422,18 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
 
         const directoryDelta = directoryConfig?.configs;
 
+        // Keys the file loader dropped, kept so the review can name the ones
+        // a team writes expecting them to work (customAgents, knowledge).
+        const droppedFileKeys = new Set<string>();
+        const onDroppedKeys = (keys: string[]) =>
+            keys.forEach((key) => droppedFileKeys.add(key));
+
         const repositoryFileDelta = await this.getKodusConfigFile({
             organizationAndTeamData,
             repository,
             defaultBranch,
             overrideConfig: this.getFileOverridePreference(repoConfig),
+            onDroppedKeys,
         });
 
         // Without a directory config this read has no directory to resolve and
@@ -441,6 +448,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                       repoConfig,
                       directoryConfig,
                   ),
+                  onDroppedKeys,
               })
             : undefined;
 
@@ -470,6 +478,9 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
             directoryId,
             directoryPath,
             directoryFolders: this.getDirectoryFolders(directoryConfig),
+            ...(droppedFileKeys.size && {
+                kodusConfigFileDroppedKeys: [...droppedFileKeys],
+            }),
         } as CodeReviewConfigWithoutLLMProvider;
     }
 
@@ -710,6 +721,8 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         directoryId?: string;
         defaultBranch?: string;
         removeProperties?: boolean;
+        /** Told the top-level keys stripped from the file as unknown. */
+        onDroppedKeys?: (keys: string[]) => void;
     }): Promise<KodusConfigFile | undefined> {
         const {
             organizationAndTeamData,
@@ -754,11 +767,14 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                 : ({} as KodusConfigFile);
 
         // strip properties not in default config
+        const droppedKeys: string[] = [];
         for (const key in kodusConfigYMLfile) {
             if (!(key in this.DEFAULT_CONFIG)) {
+                droppedKeys.push(key);
                 delete kodusConfigYMLfile[key as keyof KodusConfigFile];
             }
         }
+        if (droppedKeys.length) params.onDroppedKeys?.(droppedKeys);
 
         if (removeProperties) {
             delete kodusConfigYMLfile.version;

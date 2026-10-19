@@ -1246,6 +1246,7 @@ const WARNING_KIND_LABEL: Record<ReviewWarningKind, string> = {
     CROSS_REPO_UNAVAILABLE:
         "Linked repositories not read (repository not checked out)",
     AST_GREP_UNAVAILABLE: "Custom agent ran without ast-grep",
+    CONFIG_FILE_KEY_IGNORED: "kodus-config.yml key ignored (set in the app)",
 };
 
 /**

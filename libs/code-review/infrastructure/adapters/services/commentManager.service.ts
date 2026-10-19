@@ -61,7 +61,10 @@ import { prompt_repeated_suggestion_clustering_system } from '@libs/common/utils
 import { createLogger } from '@libs/core/log/logger';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
-import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
+import {
+    formatConfigFileNotice,
+    type ReviewWarning,
+} from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import { estimateTokens, tokensToChars } from './utils/token-estimator';
 
 interface ClusteredSuggestion {
@@ -1127,6 +1130,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                 if (skippedNotice) {
                     commentBody = `${commentBody}${skippedNotice}`;
                 }
+                commentBody = `${commentBody}${formatConfigFileNotice(reviewWarnings)}`;
                 if (customAgentsSection) {
                     commentBody = `${commentBody}${customAgentsSection}`;
                 }
@@ -2054,6 +2058,9 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
             if (skippedRulesNotice) {
                 resultText = `${resultText}${skippedRulesNotice}`;
             }
+            // A kodus-config.yml key the review ignored (customAgents,
+            // knowledge) is named here too: the file's author reads the PR.
+            resultText = `${resultText}${formatConfigFileNotice(reviewWarnings)}`;
 
             // Cross-repo transparency (#1576): CodeRabbit-style line listing
             // which linked repos/refs were actually cloned and consulted.
@@ -3018,6 +3025,7 @@ ${reviewOptions}
             if (skippedNotice) {
                 commentBody = `${commentBody}${skippedNotice}`;
             }
+            commentBody = `${commentBody}${formatConfigFileNotice(reviewWarnings)}`;
         } else {
             commentBody = await this.generateLastReviewCommenBody(
                 organizationAndTeamData,

@@ -1,5 +1,6 @@
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { LanguageValue } from '@libs/core/domain/enums/language-parameter.enum';
+import { buildConfigFileKeysIgnoredWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import {
     BehaviourForExistingDescription,
     ClusteringType,
@@ -988,6 +989,26 @@ describe('CommentManagerService — pure helpers', () => {
                 );
             expect(body).not.toContain('workflow trimmed');
             expect(body).not.toContain('Kody Rule(s) were not evaluated');
+        });
+
+        it('names a kodus-config.yml key the review ignored', async () => {
+            const body =
+                await withProcessor().generatePullRequestFinishSummaryMarkdown(
+                    { organizationId: 'org' },
+                    42,
+                    [],
+                    { languageResultPrompt: LanguageValue.ENGLISH },
+                    [],
+                    false,
+                    undefined,
+                    false,
+                    undefined,
+                    undefined,
+                    [buildConfigFileKeysIgnoredWarning(['customAgents'])],
+                );
+            expect(body).toContain(
+                'kodus-config.yml: customAgents is not read from this file; configure custom agents in the app.',
+            );
         });
     });
 

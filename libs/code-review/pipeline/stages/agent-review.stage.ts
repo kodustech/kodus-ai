@@ -25,6 +25,7 @@ import {
     dedupReviewWarnings,
     buildBadFixDowngradedWarning,
     buildCallGraphFailedWarning,
+    buildConfigFileKeysIgnoredWarning,
     buildSandboxUnavailableWarning,
     crossRepoUnavailableWarning,
     type ReviewWarning,
@@ -563,6 +564,12 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 detail,
             });
         };
+        // customAgents/knowledge written in kodus-config.yml were dropped by
+        // the file loader; the review still runs, and says so on the PR.
+        const configFileWarning = buildConfigFileKeysIgnoredWarning(
+            context.codeReviewConfig?.kodusConfigFileDroppedKeys,
+        );
+        if (configFileWarning) stageWarnings.push(configFileWarning);
 
         if (adaptiveProfile.kind !== 'full') {
             this.logger.log({

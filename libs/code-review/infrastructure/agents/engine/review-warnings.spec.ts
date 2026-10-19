@@ -5,7 +5,9 @@ import {
     buildRuleContextUnavailableWarning,
     buildBadFixDowngradedWarning,
     buildCallGraphFailedWarning,
+    buildConfigFileKeysIgnoredWarning,
     buildKodyRulesPartialWarning,
+    formatConfigFileNotice,
     buildPathMismatchWarning,
     buildSandboxUnavailableWarning,
     withFallbackWarnings,
@@ -295,5 +297,43 @@ describe('crossRepoUnavailableWarning', () => {
         expect(
             crossRepoUnavailableWarning({ ...base, ...over }),
         ).toBeUndefined();
+    });
+});
+
+describe('kodus-config.yml keys set in the app', () => {
+    it('names customAgents and knowledge, in that order', () => {
+        const warning = buildConfigFileKeysIgnoredWarning([
+            'knowledge',
+            'version',
+            'customAgents',
+        ]);
+        expect(warning).toMatchObject({
+            kind: 'CONFIG_FILE_KEY_IGNORED',
+            reason: 'config_file',
+        });
+        expect(warning?.detail).toBe(
+            'kodus-config.yml: customAgents is not read from this file; configure custom agents in the app. ' +
+                'kodus-config.yml: knowledge is not read from this file; link skills and docs to a custom agent in the app.',
+        );
+    });
+
+    it('says nothing for a file without them', () => {
+        expect(buildConfigFileKeysIgnoredWarning(undefined)).toBeUndefined();
+        expect(
+            buildConfigFileKeysIgnoredWarning(['version', 'legacyTeamFlag']),
+        ).toBeUndefined();
+    });
+
+    it('renders the notice for the PR and nothing for other warnings', () => {
+        const notice = formatConfigFileNotice([
+            buildConfigFileKeysIgnoredWarning(['customAgents'])!,
+        ]);
+        expect(notice).toBe(
+            '\n\n> ⚠️ kodus-config.yml: customAgents is not read from this file; configure custom agents in the app.',
+        );
+        expect(
+            formatConfigFileNotice([w('PROMPT_COMPACTED', { detail: 'x' })]),
+        ).toBe('');
+        expect(formatConfigFileNotice(undefined)).toBe('');
     });
 });

@@ -688,6 +688,9 @@ export type CodeReviewConfig = {
     directoryId?: string;
     directoryPath?: string;
     directoryFolders?: Array<{ id: string; name: string; path: string }>;
+    /** Top-level keys of the repository's kodus-config.yml that the review
+     *  ignored (not settings of the file); set only when there were some. */
+    kodusConfigFileDroppedKeys?: string[];
     runOnDraft?: boolean;
     codeReviewVersion?: CodeReviewVersion;
     byokConfig?: NormalizedModel;

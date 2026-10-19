@@ -66,7 +66,10 @@ export type ReviewWarningKind =
     | 'CROSS_REPO_UNAVAILABLE'
     /** A custom agent would have had astGrep, but the sandbox has no ast-grep
      *  binary, so the agent ran without structural search. */
-    | 'AST_GREP_UNAVAILABLE';
+    | 'AST_GREP_UNAVAILABLE'
+    /** kodus-config.yml has a key that is configured only in the app
+     *  (customAgents, knowledge); the review ignored it. */
+    | 'CONFIG_FILE_KEY_IGNORED';
 
 export type ReviewWarningReason =
     | 'small_context_window'
@@ -94,7 +97,9 @@ export type ReviewWarningReason =
     /** A custom agent CLI failed its install or network fence. */
     | 'cli_install_failed'
     /** A review tool the agent is configured for is missing from the sandbox. */
-    | 'tool_unavailable';
+    | 'tool_unavailable'
+    /** The repository's kodus-config.yml holds a key the review does not read. */
+    | 'config_file';
 
 export interface ReviewWarning {
     kind: ReviewWarningKind;
@@ -269,6 +274,53 @@ export function buildAstGrepUnavailableWarning(params: {
         detail: `${params.agentName}: ast-grep is not installed in the sandbox; the agent ran without astGrep (structural search and its rules)`,
         agentName: params.agentName,
     };
+}
+
+/**
+ * Keys a team may write in kodus-config.yml that the review does not read
+ * there: custom agents and their skills and docs are configured in the app
+ * only. The file loader drops every unknown key; these two are named back to
+ * the team, because an agent written in the file and never run reads exactly
+ * like an agent that found nothing.
+ */
+const CONFIG_FILE_KEYS_SET_IN_APP: Record<string, string> = {
+    customAgents:
+        'kodus-config.yml: customAgents is not read from this file; configure custom agents in the app.',
+    knowledge:
+        'kodus-config.yml: knowledge is not read from this file; link skills and docs to a custom agent in the app.',
+};
+
+/** The warning for the app-only keys among `fileKeys`; undefined when the
+ *  file has none of them. */
+export function buildConfigFileKeysIgnoredWarning(
+    fileKeys: readonly string[] | undefined,
+): ReviewWarning | undefined {
+    const lines = Object.keys(CONFIG_FILE_KEYS_SET_IN_APP)
+        .filter((key) => fileKeys?.includes(key))
+        .map((key) => CONFIG_FILE_KEYS_SET_IN_APP[key]);
+    if (!lines.length) return undefined;
+    return {
+        kind: 'CONFIG_FILE_KEY_IGNORED',
+        reason: 'config_file',
+        contextWindowTokens: 0,
+        modelName: '',
+        detail: lines.join(' '),
+    };
+}
+
+/**
+ * The end-review comment's line for an ignored kodus-config.yml key. Unlike
+ * the fidelity warnings it goes on the pull request: whoever edits the file
+ * reads the review there, not in the dashboard.
+ */
+export function formatConfigFileNotice(
+    warnings: readonly ReviewWarning[] | undefined,
+): string {
+    const details = (warnings ?? [])
+        .filter((w) => w?.kind === 'CONFIG_FILE_KEY_IGNORED' && w.detail)
+        .map((w) => w.detail!);
+    if (!details.length) return '';
+    return `\n\n> ⚠️ ${details.join(' ')}`;
 }
 
 export function buildKodyRulesPartialWarning(params: {

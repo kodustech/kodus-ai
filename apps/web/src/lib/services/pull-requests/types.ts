@@ -140,7 +140,8 @@ export type ReviewWarningKind =
     | "SKILL_COMPATIBILITY"
     | "CLI_INSTALL_FAILED"
     | "CROSS_REPO_UNAVAILABLE"
-    | "AST_GREP_UNAVAILABLE";
+    | "AST_GREP_UNAVAILABLE"
+    | "CONFIG_FILE_KEY_IGNORED";
 
 export interface ReviewWarning {
     kind: ReviewWarningKind;
@@ -157,7 +158,8 @@ export interface ReviewWarning {
         | "verify_failed"
         | "knowledge"
         | "cli_install_failed"
-        | "tool_unavailable";
+        | "tool_unavailable"
+        | "config_file";
     contextWindowTokens: number;
     modelName: string;
     detail?: string;
