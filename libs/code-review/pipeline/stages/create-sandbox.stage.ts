@@ -11,6 +11,7 @@ import {
     CustomAgentCliProvisioning,
     provisionCustomAgentClis,
 } from '@libs/code-review/infrastructure/agents/custom-agent-cli/custom-agent-cli.provisioner';
+import { ignoredFilesForCustomAgents } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 
 import {
     ISandboxLeaseManager,
@@ -94,8 +95,13 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
         // catch block below logs and falls through to self-contained
         // mode — same UX as before, just opt-in upgraded for public repos.
 
-        // Guard: skip if no changed files
-        if (!context?.changedFiles?.length) {
+        // Guard: skip if no changed files, counting the ignored ones a custom
+        // agent still reviews (#2172)
+        if (
+            !context?.changedFiles?.length &&
+            !ignoredFilesForCustomAgents(context, context?.ignoredFileChanges)
+                .length
+        ) {
             this.logger.log({
                 message: `Skipping sandbox creation: no changed files for ${label}`,
                 context: this.stageName,

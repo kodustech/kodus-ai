@@ -133,3 +133,44 @@ describe('CreateSandboxStage custom agent CLIs', () => {
         expect(result.customAgentClis).toBeUndefined();
     });
 });
+
+describe('CreateSandboxStage on a PR whose changed files are all ignored', () => {
+    const ignoredFileChanges = [
+        { filename: 'package.json', status: 'modified' },
+    ];
+
+    beforeEach(() => {
+        provision.mockReset();
+        provision.mockResolvedValue({ byAgentId: {}, warnings: [] });
+    });
+
+    it('creates the sandbox when a custom agent names one of the files (#2172)', async () => {
+        const { stage, context } = build({ sandboxType: 'e2b' });
+        context.changedFiles = [];
+        context.ignoredFileChanges = ignoredFileChanges;
+        context.codeReviewConfig.customAgents = [
+            { ...agent, scope: { include: ['package.json'] } },
+        ];
+
+        const result: any = await (stage as any).executeStage(context);
+
+        expect(result.sandboxHandle).toBeDefined();
+        expect(provision).toHaveBeenCalledWith(
+            expect.objectContaining({
+                changedFiles: [],
+                ignoredFiles: ['package.json'],
+            }),
+        );
+    });
+
+    it('creates none when no custom agent names one of them', async () => {
+        const { stage, context } = build({ sandboxType: 'e2b' });
+        context.changedFiles = [];
+        context.ignoredFileChanges = ignoredFileChanges;
+
+        const result: any = await (stage as any).executeStage(context);
+
+        expect(result.sandboxHandle).toBeUndefined();
+        expect(provision).not.toHaveBeenCalled();
+    });
+});

@@ -202,5 +202,71 @@ describe('FetchChangedFilesStage', () => {
                 expect(result.ignoredFileChanges).toEqual([files[1], files[2]]);
             }
         });
+
+        it('reviews a PR whose changed files are all ignored when an agent names one', async () => {
+            mockPullRequestManagerService.getChangedFilesMetadata.mockResolvedValue(
+                files.slice(1),
+            );
+            context.codeReviewConfig.customAgents = [
+                agent(['package.json']),
+            ] as any;
+
+            const result = await stage.execute(context);
+
+            expect(result.statusInfo).toBeUndefined();
+            expect(result.changedFiles).toEqual([]);
+            expect(
+                result.ignoredFileChanges.find(
+                    (f) => f.filename === 'package.json',
+                ),
+            ).toMatchObject({ fileContent: 'content of package.json' });
+        });
+
+        it('still skips an all-ignored PR no agent names a file of', async () => {
+            mockPullRequestManagerService.getChangedFilesMetadata.mockResolvedValue(
+                files.slice(1),
+            );
+            for (const customAgents of [undefined, [agent(['**/*.json'])]]) {
+                const result = await stage.execute({
+                    ...context,
+                    codeReviewConfig: {
+                        ...context.codeReviewConfig,
+                        customAgents: customAgents as any,
+                    },
+                });
+
+                expect(result.statusInfo).toMatchObject({
+                    status: AutomationStatus.SKIPPED,
+                    message: expect.stringContaining('package.json'),
+                });
+            }
+        });
+
+        it('counts the ignored files an agent names toward the file ceiling', async () => {
+            const reviewed = Array.from({ length: 1999 }, (_, i) => ({
+                filename: `src/file-${i}.ts`,
+                status: 'modified',
+                patch: PATCH,
+            }));
+            mockPullRequestManagerService.getChangedFilesMetadata.mockResolvedValue(
+                [...reviewed, ...files.slice(1)],
+            );
+            context.codeReviewConfig.customAgents = [
+                agent(['package.json', 'infra/**/*.tf']),
+            ] as any;
+
+            const result = await stage.execute(context);
+
+            expect(result.statusInfo).toEqual({
+                status: AutomationStatus.SKIPPED,
+                message: StageMessageHelper.skippedWithReason(
+                    PipelineReasons.FILES.TOO_MANY,
+                    'Count: 2001, Limit: 2000',
+                ),
+            });
+            expect(
+                mockPullRequestManagerService.enrichFilesWithContent,
+            ).not.toHaveBeenCalled();
+        });
     });
 });

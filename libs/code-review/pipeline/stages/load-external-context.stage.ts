@@ -29,6 +29,7 @@ import {
 } from '@libs/organization/domain/organization/contracts/organization.service.contract';
 import { BuildPreviousReviewDecisionsUseCase } from '@libs/code-review/application/use-cases/previousReviewDecisions/build-previous-review-decisions.use-case';
 import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
+import { ignoredFilesForCustomAgents } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 
 @Injectable()
 export class LoadExternalContextStage
@@ -184,7 +185,15 @@ export class LoadExternalContextStage
         context: CodeReviewPipelineContext,
     ): Promise<PrDecisionRecord[] | undefined> {
         try {
-            if (!context.changedFiles?.length) {
+            // A custom agent reviewing ignored files (#2172) weighs its own
+            // past findings on them too.
+            if (
+                !context.changedFiles?.length &&
+                !ignoredFilesForCustomAgents(
+                    context,
+                    context.ignoredFileChanges,
+                ).length
+            ) {
                 return undefined;
             }
 

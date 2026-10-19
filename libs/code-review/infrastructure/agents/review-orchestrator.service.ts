@@ -180,7 +180,11 @@ export class ReviewOrchestratorService {
         const customAgentRuns: CustomAgentRun[] = [];
         // `@kody -v <slug>` runs that agent alone: the built-in agents
         // already reviewed this PR, the command asks for one more opinion.
-        const builtInAgents = !onlyCustomAgent;
+        // A PR whose changed files are all ignored has nothing for them
+        // either: only the custom agents naming some of those files review it.
+        const onlyIgnoredFiles =
+            !agentInput.changedFiles?.length && !!ignoredChangedFiles?.length;
+        const builtInAgents = !onlyCustomAgent && !onlyIgnoredFiles;
 
         const enabledCategories = [
             reviewOptions.bug !== false && 'bug',

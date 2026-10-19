@@ -13,6 +13,7 @@ import { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfac
 import { Injectable } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 
+import { reviewsOnlyIgnoredFiles } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 
 /**
@@ -425,6 +426,14 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
                 reason: 'option_off',
                 message:
                     'Business logic validation is disabled in the code review configuration.',
+            };
+        }
+
+        if (reviewsOnlyIgnoredFiles(context)) {
+            return {
+                reason: 'no_reviewed_files',
+                message:
+                    'Skipped: every changed file is ignored; only custom agents review this pull request.',
             };
         }
 

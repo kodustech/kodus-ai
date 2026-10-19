@@ -9,10 +9,7 @@ import {
     IPullRequestManagerService,
     PULL_REQUEST_MANAGER_SERVICE_TOKEN,
 } from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
-import {
-    ignoredFilesNamedByAgents,
-    selectCustomAgents,
-} from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
+import { ignoredFilesForCustomAgents } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
 import {
     convertToUnifiedDiffWithLineNumbers,
@@ -114,10 +111,17 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
                     isFileMatchingGlob(file.filename, ignorePaths),
             ) || [];
         const filesToAnalyze = filteredFiles;
+        // Ignored files a custom agent still reviews (#2172): they keep a
+        // review alive on their own and count toward its ceiling.
+        const filesForCustomAgents = ignoredFilesForCustomAgents(
+            context,
+            ignoredList,
+        );
 
         const validation = this.validateFiles(
             filesToProcess,
             filesToAnalyze,
+            filesForCustomAgents,
             ignorePaths,
             FetchChangedFilesStage.AGENT_MAX_FILES,
         );
@@ -181,6 +185,7 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
         const ignoredFileChanges = await this.withContentForCustomAgents(
             context,
             ignoredList?.filter((f) => f.status !== 'removed') || [],
+            filesForCustomAgents,
         );
 
         return this.updateContext(context, (draft) => {
@@ -200,14 +205,8 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
     private async withContentForCustomAgents(
         context: CodeReviewPipelineContext,
         ignoredFileChanges: FileChange[],
+        named: FileChange[],
     ): Promise<FileChange[]> {
-        const named = ignoredFilesNamedByAgents(
-            selectCustomAgents(
-                context.codeReviewConfig?.customAgents,
-                context.onlyCustomAgent,
-            ),
-            ignoredFileChanges,
-        );
         if (!named.length) {
             return ignoredFileChanges;
         }
@@ -229,6 +228,7 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
     private validateFiles(
         filesToProcess: FileChange[],
         filteredFiles: FileChange[],
+        filesForCustomAgents: FileChange[],
         ignorePaths: string[],
         maxFilesToAnalyze: number,
     ): IStageValidationResult {
@@ -244,7 +244,7 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
             };
         }
 
-        if (!filteredFiles || filteredFiles.length === 0) {
+        if (!filteredFiles?.length && !filesForCustomAgents.length) {
             const ignoredFileNames = filesToProcess.map((f) => f.filename);
             const messageFiles = ignoredFileNames.slice(0, 5).join(', ');
             const suffix = ignoredFileNames.length > 5 ? '...' : '';
@@ -263,18 +263,19 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
             };
         }
 
-        if (filteredFiles.length > maxFilesToAnalyze) {
+        const count = filteredFiles.length + filesForCustomAgents.length;
+        if (count > maxFilesToAnalyze) {
             return {
                 canProceed: false,
                 details: {
                     reasonCode: AutomationMessage.TOO_MANY_FILES,
                     message: StageMessageHelper.skippedWithReason(
                         PipelineReasons.FILES.TOO_MANY,
-                        `Count: ${filteredFiles.length}, Limit: ${maxFilesToAnalyze}`,
+                        `Count: ${count}, Limit: ${maxFilesToAnalyze}`,
                     ),
-                    technicalReason: `Count: ${filteredFiles.length}, Limit: ${maxFilesToAnalyze}`,
+                    technicalReason: `Count: ${count}, Limit: ${maxFilesToAnalyze}`,
                     metadata: {
-                        count: filteredFiles.length,
+                        count,
                         limit: maxFilesToAnalyze,
                     },
                 },

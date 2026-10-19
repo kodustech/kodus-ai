@@ -343,6 +343,31 @@ describe('ReviewOrchestratorService — custom agents', () => {
             ]);
         });
 
+        it('runs only the naming agent when every changed file is ignored', async () => {
+            const { service, generalist, kodyRules, factory, customCalls } =
+                setup();
+
+            const out = await service.execute(
+                inputFor({
+                    changedFiles: [],
+                    ignoredChangedFiles,
+                    customAgents: [
+                        agentConfig({ scope: { include: ['package.json'] } }),
+                    ],
+                }),
+            );
+
+            expect(generalist.execute).not.toHaveBeenCalled();
+            expect(kodyRules.execute).not.toHaveBeenCalled();
+            expect(factory.create).toHaveBeenCalledTimes(1);
+            expect(
+                customCalls.get('agent-1')!.changedFiles.map((f) => f.filename),
+            ).toEqual(['package.json']);
+            expect(out.suggestions).toEqual([
+                expect.objectContaining({ relevantFile: 'package.json' }),
+            ]);
+        });
+
         it('does not run an agent whose broad globs match only ignored files', async () => {
             const { service, factory } = setup();
 

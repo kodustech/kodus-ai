@@ -52,23 +52,57 @@ export function ignoredFilesInAgentScope<T extends { filename: string }>(
     );
 }
 
-/** The ignored files that at least one of `agents` reviews by
- *  ignoredFilesInAgentScope; empty without agents. */
-export function ignoredFilesNamedByAgents<T extends { filename: string }>(
-    agents: ReadonlyArray<Pick<CustomAgentConfig, 'scope'>>,
-    ignoredFiles: readonly T[],
+/**
+ * The ignored files a review hands to its custom agents: those at least one
+ * agent selectCustomAgents dispatches reviews by ignoredFilesInAgentScope,
+ * deleted files left out. Every stage that weighs files beyond the reviewed
+ * ones reads them here; empty without custom agents.
+ */
+export function ignoredFilesForCustomAgents<
+    T extends { filename: string; status?: string },
+>(
+    review: {
+        codeReviewConfig?: { customAgents?: CustomAgentConfig[] };
+        onlyCustomAgent?: string;
+    },
+    ignoredFiles: readonly T[] | undefined,
 ): T[] {
-    if (!agents.length || !ignoredFiles.length) {
+    const agents = selectCustomAgents(
+        review.codeReviewConfig?.customAgents,
+        review.onlyCustomAgent,
+    );
+    const existing = (ignoredFiles ?? []).filter(
+        (file) => file?.filename && file.status !== 'removed',
+    );
+    if (!agents.length || !existing.length) {
         return [];
     }
     const named = new Set(
         agents.flatMap((agent) =>
-            ignoredFilesInAgentScope(agent, ignoredFiles).map(
+            ignoredFilesInAgentScope(agent, existing).map(
                 (file) => file.filename,
             ),
         ),
     );
-    return ignoredFiles.filter((file) => named.has(file.filename));
+    return existing.filter((file) => named.has(file.filename));
+}
+
+/**
+ * Whether a review runs for its custom agents alone: every changed file is
+ * ignored and an agent names some of them (ignoredFilesForCustomAgents). The
+ * built-in reviewers and the rest of the review have no file to look at.
+ */
+export function reviewsOnlyIgnoredFiles(review: {
+    codeReviewConfig?: { customAgents?: CustomAgentConfig[] };
+    onlyCustomAgent?: string;
+    changedFiles?: readonly unknown[];
+    ignoredFileChanges?: ReadonlyArray<{ filename: string; status?: string }>;
+}): boolean {
+    return (
+        !review.changedFiles?.length &&
+        ignoredFilesForCustomAgents(review, review.ignoredFileChanges).length >
+            0
+    );
 }
 
 // Whether an include glob names its files rather than sweeping them up: it
