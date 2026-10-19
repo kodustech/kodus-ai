@@ -656,6 +656,7 @@ describe('makeTargetBranchGuideLister', () => {
             fs.mkdirSync(path.join(skill, 'rules'), { recursive: true });
             fs.writeFileSync(path.join(skill, 'SKILL.md'), '# Valve rules');
             fs.writeFileSync(path.join(skill, 'rules/zones.md'), '# Zones');
+            fs.writeFileSync(path.join(skill, 'rules/sécurité.md'), '# Sûreté');
             git('add', '-A');
             git('commit', '-q', '-m', 'base');
             git('update-ref', 'refs/remotes/origin/main', 'HEAD');
@@ -684,6 +685,7 @@ describe('makeTargetBranchGuideLister', () => {
 
             expect((await list('.claude/skills/valve-rules')).sort()).toEqual([
                 '.claude/skills/valve-rules/SKILL.md',
+                '.claude/skills/valve-rules/rules/sécurité.md',
                 '.claude/skills/valve-rules/rules/zones.md',
             ]);
             expect(await list('../etc')).toEqual([]);

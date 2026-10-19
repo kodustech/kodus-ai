@@ -381,11 +381,11 @@ export function makeTargetBranchGuideLister(
         const path = stripLeading(dir).replace(/\/+$/, '');
         if (!path || path.split('/').includes('..')) return [];
         const r = await exec(
-            `git ls-tree -r --name-only ${shellQuote(`refs/remotes/origin/${baseBranch}`)} -- ${shellQuote(`${path}/`)}`,
+            // -z: names come raw, NUL-separated; without it git quotes and
+            // octal-escapes non-ASCII paths (core.quotePath).
+            `git ls-tree -r --name-only -z ${shellQuote(`refs/remotes/origin/${baseBranch}`)} -- ${shellQuote(`${path}/`)}`,
         );
-        return r.exitCode === 0
-            ? r.stdout.split('\n').map((line) => line.trim()).filter(Boolean)
-            : [];
+        return r.exitCode === 0 ? r.stdout.split('\0').filter(Boolean) : [];
     };
 }
 
