@@ -108,6 +108,7 @@ export const WhatItDoes = ({
             <div className="flex items-center gap-3">
                 <Switch
                     id="agent-report-general-bugs"
+                    aria-label="Also report general bugs"
                     size="sm"
                     checked={agent.reportGeneralBugs === true}
                     disabled={!canEdit}
