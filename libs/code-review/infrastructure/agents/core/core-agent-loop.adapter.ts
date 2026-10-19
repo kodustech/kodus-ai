@@ -45,6 +45,7 @@ import {
     sanitizeFindingsResult,
     type FindingsOutput,
 } from '@libs/code-review/infrastructure/agents/core/findings-schema';
+import { normalizeEnvelope } from '@libs/llm/structured-output-repair';
 import { createLogger } from '@libs/core/log/logger';
 import {
     type AgentLoopInput,
@@ -185,6 +186,28 @@ export function finderRunEnvironment(
             usageRunName: input.usageRunName,
         },
     };
+}
+
+/**
+ * A submitResult payload that is a findings result. Partial recovery drops
+ * every invalid item, so a list that had items and lost them all comes back
+ * as `suggestions: []`: that is what was cut, not a review that found nothing.
+ */
+function isSubmittedResult(
+    payload: unknown,
+    telemetryMetadata?: { organizationId?: string },
+): boolean {
+    const clean = sanitizeFindingsResult(
+        payload as FindingsOutput,
+        telemetryMetadata,
+    );
+    if (!clean) return false;
+    const raw = normalizeEnvelope(payload, 'suggestions', [
+        'findings',
+        'codeSuggestions',
+    ]) as { suggestions?: unknown };
+    const sent = Array.isArray(raw?.suggestions) ? raw.suggestions.length : 0;
+    return sent === 0 || clean.suggestions.length > 0;
 }
 
 export async function runAgentLoopViaCore(
@@ -396,10 +419,7 @@ export async function runAgentLoopViaCore(
     const submitted = r.finderState.artifacts.some(
         (a) =>
             a.type === FINDER_DONE_TOOL &&
-            sanitizeFindingsResult(
-                a.payload as FindingsOutput,
-                input.telemetryMetadata,
-            ) !== null,
+            isSubmittedResult(a.payload, input.telemetryMetadata),
     );
     const incompleteReason: AgentLoopOutput['incompleteReason'] =
         r.finderState.status === 'budget-exhausted'

@@ -192,6 +192,22 @@ describe('#2171 — finder run that ends without a submitted result', () => {
         expect(out.incompleteReason).toBe('truncated');
     });
 
+    // PR #2173 review: partial recovery drops every invalid item, so a
+    // non-empty list that lost them all comes back as `suggestions: []`.
+    it('reports truncated when recovery dropped every item of a cut submitResult', async () => {
+        useModel(async () =>
+            toolCall(
+                'submitResult',
+                { reasoning: 'one candidate', suggestions: [{}] },
+                { unified: 'length', raw: 'max_tokens' },
+            ),
+        );
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(out.incompleteReason).toBe('truncated');
+    });
+
     it('a complete submitResult on a cut turn is a submitted result', async () => {
         useModel(async (opts) =>
             isVerifierCall(opts)
