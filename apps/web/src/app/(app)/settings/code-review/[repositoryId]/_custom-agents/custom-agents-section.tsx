@@ -12,6 +12,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@components/ui/dropdown-menu";
+import { Heading } from "@components/ui/heading";
 import { Switch } from "@components/ui/switch";
 import { toast } from "@components/ui/toaster/use-toast";
 import {
@@ -35,7 +36,11 @@ import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedba
 import { customAgentsSaveErrorMessage } from "../../_utils/settings-save-conflict";
 import { Chip } from "../agents/[agentId]/_components/field";
 import { NewAgentDialog } from "./new-agent-dialog";
-import { agentPageHref, useCustomAgentsForm } from "./use-custom-agents-form";
+import {
+    agentPageHref,
+    skillsPageHref,
+    useCustomAgentsForm,
+} from "./use-custom-agents-form";
 
 type Save = ReturnType<typeof useCustomAgentsForm>["save"];
 
@@ -324,5 +329,34 @@ export const NewAgentButton = ({ canEdit }: { canEdit: boolean }) => {
             </Button>
             <NewAgentDialog open={open} onOpenChange={setOpen} />
         </>
+    );
+};
+
+/**
+ * The agents on the "What to review" page, beside the categories Kody reviews:
+ * the same list as the Custom agents page.
+ */
+export const CustomAgentsSection = ({ canEdit }: { canEdit: boolean }) => {
+    const { repositoryId, directoryId } = useCustomAgentsForm();
+    return (
+        <div className="flex flex-col gap-4">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+                <div className="flex flex-col gap-1">
+                    <Heading variant="h2">Custom agents</Heading>
+                    <p className="text-text-secondary text-sm">
+                        Reviewers your team defines, each with its own
+                        instructions, files and tools. They run next to Kody on
+                        the pull requests their files match.{" "}
+                        <Link
+                            className="text-primary-light hover:underline"
+                            href={skillsPageHref(repositoryId, directoryId)}>
+                            Skills &amp; docs
+                        </Link>
+                    </p>
+                </div>
+                <NewAgentButton canEdit={canEdit} />
+            </div>
+            <CustomAgentsList canEdit={canEdit} />
+        </div>
     );
 };

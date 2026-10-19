@@ -9,7 +9,10 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { FormProvider, useForm } from "react-hook-form";
 
 import { shouldBlockCodeReviewLayoutNavigation } from "../_utils/layout-dirty-state";
-import { CustomAgentsList } from "./custom-agents-section";
+import {
+    CustomAgentsList,
+    CustomAgentsSection,
+} from "./custom-agents-section";
 import { ownListNote, useCustomAgentsForm } from "./use-custom-agents-form";
 
 const agent: CustomAgent = {
@@ -280,6 +283,29 @@ describe("CustomAgentsList", () => {
         renderList({ value: [], level: "repository" });
         await flush();
         expect(screen.getByText("No custom agents yet")).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: "New agent" }),
+        ).toBeInTheDocument();
+    });
+});
+
+describe("CustomAgentsSection", () => {
+    it("lists the agents on the What to review page, with a way to add one", async () => {
+        render(
+            <QueryClientProvider client={new QueryClient()}>
+                <Form>
+                    <CustomAgentsSection canEdit />
+                </Form>
+            </QueryClientProvider>,
+        );
+        await flush();
+
+        expect(
+            screen.getByRole("heading", { name: "Custom agents" }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("link", { name: "Ledger reviewer" }),
+        ).toBeInTheDocument();
         expect(
             screen.getByRole("button", { name: "New agent" }),
         ).toBeInTheDocument();
