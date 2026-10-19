@@ -92,7 +92,7 @@ async function runCase(c) {
     if (refusal) throw new Error(`formatter call refused: ${String(refusal?.message || refusal).slice(0, 200)}`);
     const detail = batch.findings.map((f, i) => {
         const shipped = suggestions[i].suggestionContent;
-        const failed = failedChecks(f, shipped, FALLBACK_ONLY ? { ...variant.want, only: FALLBACK_ONLY } : variant.want);
+        const failed = failedChecks(f, shipped, FALLBACK_ONLY ? { ...variant.want, only: FALLBACK_ONLY } : variant.want, suggestions[i].oneSentenceSummary);
         return { what: `${i}. ${f.relevantFile}: ${f.title.slice(0, 70)}${failed.length ? ` — ${failed.join(', ')}` : ''}`, ok: !failed.length };
     });
     return { hits: detail.filter((d) => d.ok).length, total: detail.length, detail };

@@ -7,6 +7,11 @@
 //   no-code     no fenced code block (the fix is shown separately)
 //   title       the first sentence does not repeat the title
 //   length      at most `maxSentences` sentences
+//   words       at most `maxWords` words, when the variant sets it (#2157)
+//   line-refs   no line number: the comment already sits on the lines, and a
+//               number elsewhere points at code the reader cannot see (#2157)
+//   title-cut   the title shown was not cut by code: one over the ceiling is
+//               the formatter's to rewrite (#2157)
 //   language    written in the configured language
 // The checks read the text a reviewer sees; they do not judge whether the
 // claim is still the same one.
@@ -67,33 +72,42 @@ function languageOf(text) {
     return hits >= 2 ? best : 'unknown';
 }
 
+// "line 31", "lines 20-30", "linha 12", "línea 4", "第 3 行", "assignTicket.ts:7-19".
+const LINE_REF = /\b(?:lines?|linhas?|l[ií]neas?)\s+\d+|第\s*\d+\s*行|\.[a-z]{1,5}:\d+/iu;
+
 const words4 = (s) => new Set((String(s || '').toLowerCase().match(/[\p{L}\p{N}_]{4,}/gu) || []));
 
 /**
  * The checks one formatted suggestion fails.
  * @param original  the finding as the finder wrote it ({ title, suggestionContent })
  * @param out       the text the formatter shipped
- * @param want      { language: 'en' | 'pt' | 'es' | 'zh', maxSentences, only? }
+ * @param want      { language: 'en' | 'pt' | 'es' | 'zh', maxSentences, maxWords?, only? }
  *                  `only` limits the result to the named checks
+ * @param title     the title the comment shows, when the caller has it
  */
-function failedChecks(original, out, want) {
-    const all = allFailed(original, out, want);
+function failedChecks(original, out, want, title) {
+    const all = allFailed(original, out, want, title);
     return want.only ? all.filter((c) => want.only.includes(c.replace(/ \(.*/, ''))) : all;
 }
 
-function allFailed(original, out, want) {
+function allFailed(original, out, want, shownTitle) {
     const text = String(out || '');
     if (!text.trim()) return ['empty'];
     const failed = [];
     if (LABEL.test(text)) failed.push('labels');
+    // The title the reader sees: the shipped one when the caller has it.
+    const readerTitle = shownTitle ?? original.title;
     const cited = identifiers(original.suggestionContent);
-    const shown = `${original.title || ''}\n${text}`;
+    const shown = `${readerTitle || ''}\n${text}`;
     if (cited.length && cited.filter((x) => shown.includes(x)).length < cited.length / 2) failed.push('identifiers');
     if (FENCE.test(text)) failed.push('no-code');
-    const title = words4(original.title);
+    const title = words4(readerTitle);
     const first = words4(sentences(text)[0]);
     if (title.size >= 3 && [...title].filter((w) => first.has(w)).length / title.size >= 0.8) failed.push('title');
     if (sentences(text).length > want.maxSentences) failed.push('length');
+    if (want.maxWords && (prose(text).match(/[\p{L}\p{N}_]+/gu) || []).length > want.maxWords) failed.push('words');
+    if (LINE_REF.test(text)) failed.push('line-refs');
+    if (shownTitle && shownTitle.endsWith('…') && !String(original.title || '').trim().endsWith('…')) failed.push('title-cut');
     const lang = languageOf(text);
     // 'unknown' is a text too short to tell, not a wrong language: only a
     // competing language fails.
@@ -101,4 +115,4 @@ function allFailed(original, out, want) {
     return failed;
 }
 
-module.exports = { failedChecks, identifiers, sentences, languageOf, LABEL };
+module.exports = { failedChecks, identifiers, sentences, languageOf, LABEL, LINE_REF };

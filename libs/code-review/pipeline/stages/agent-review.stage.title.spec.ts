@@ -3,6 +3,7 @@ import { AgentReviewStage } from './agent-review.stage';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { LLM } from '@libs/llm/llm';
 import { hasManagedModelKey } from '@libs/llm/managed-slot';
+import { formatSuggestionContent } from '@libs/code-review/infrastructure/agents/engine/format-suggestion-content';
 
 jest.mock(
     '@libs/code-review/infrastructure/agents/engine/classify-severity',
@@ -187,6 +188,41 @@ describe('AgentReviewStage — suggestion title', () => {
 
         expect(analyzed[0].oneSentenceSummary.length).toBeLessThanOrEqual(100);
         expect(analyzed[0].oneSentenceSummary.endsWith('…')).toBe(true);
+    });
+
+    // #2157: the title is rewritten by the formatter rather than cut, and the
+    // agent prompt carries the title the comment shows.
+    it('ships the title the formatter rewrote for a summary over the ceiling', async () => {
+        const { stage, reviewOrchestrator } = makeStage();
+        const longSummary =
+            'The user object returned by the repository lookup can be null when the account was deleted, and it is dereferenced without a guard';
+        reviewOrchestrator.execute.mockResolvedValue(
+            happyEnvelope([sugg({ oneSentenceSummary: longSummary })]),
+        );
+        (formatSuggestionContent as jest.Mock).mockResolvedValueOnce(
+            new Map([
+                [
+                    0,
+                    {
+                        suggestionContent: 'Reading name throws. Guard it.',
+                        improvedCode: '',
+                        title: 'Deleted account leaves `user` null before `user.name`',
+                    },
+                ],
+            ]),
+        );
+
+        const [analyzed] = analyzedSuggestions(await run(stage, makeContext()));
+
+        expect(
+            (formatSuggestionContent as jest.Mock).mock.calls[0][0][0],
+        ).toMatchObject({ title: longSummary, rewriteTitle: true });
+        expect(analyzed.oneSentenceSummary).toBe(
+            'Deleted account leaves `user` null before `user.name`',
+        );
+        expect(analyzed.llmPrompt.startsWith(analyzed.oneSentenceSummary)).toBe(
+            true,
+        );
     });
 
     it('titles PR-level findings too', async () => {

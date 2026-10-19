@@ -69,4 +69,70 @@ describe('formatAndShapeSuggestions', () => {
         expect(String((r.formatError as Error).message)).toBe('provider down');
         expect(s[0].suggestionContent).toBe('Plain prose. Second.');
     });
+
+    describe('title over the ceiling (#2157)', () => {
+        const LONG =
+            '`Array.prototype.forEach` does not await its async callback, so `bulkReassign` returns `{ reassigned: 0, skipped: 0 }` before any await resolves';
+
+        it("ships the formatter's title instead of cutting it", async () => {
+            formatter.mockResolvedValue(new Map([[0, { suggestionContent: 'Counts are always zero. Use for...of.', title: '`forEach` does not await its async callback' } as any]]));
+            const s = [finding({ oneSentenceSummary: LONG })];
+            const r = await formatAndShapeSuggestions(s, { writingGuidelines: DEFAULT, organizationId: 'org' });
+            expect(formatter.mock.calls[0][0][0]).toMatchObject({ title: LONG, rewriteTitle: true });
+            expect(s[0].oneSentenceSummary).toBe('`forEach` does not await its async callback');
+            expect(r.shapeCounts).toMatchObject({ titleRewritten: 1, titleCut: 0 });
+        });
+
+        it('cuts it as before when the formatter returned no title or failed', async () => {
+            for (const answer of [new Map([[0, { suggestionContent: 'Body.' } as any]]), new Map([[0, { suggestionContent: 'Body.', title: '   ' } as any]])]) {
+                formatter.mockResolvedValue(answer);
+                const s = [finding({ oneSentenceSummary: LONG })];
+                const r = await formatAndShapeSuggestions(s, { writingGuidelines: DEFAULT, organizationId: 'org' });
+                expect(s[0].oneSentenceSummary).toBe('`Array.prototype.forEach` does not await its async callback, so `bulkReassign` returns…');
+                expect(r.shapeCounts).toMatchObject({ titleRewritten: 0, titleCut: 1 });
+            }
+            formatter.mockRejectedValue(new Error('down'));
+            const s = [finding({ oneSentenceSummary: LONG })];
+            await formatAndShapeSuggestions(s, { writingGuidelines: DEFAULT, organizationId: 'org' });
+            expect(s[0].oneSentenceSummary.endsWith('returns…')).toBe(true);
+        });
+
+        it('still bounds a rewritten title that is too long', async () => {
+            formatter.mockResolvedValue(new Map([[0, { suggestionContent: 'Body.', title: `${LONG} and more` } as any]]));
+            const s = [finding({ oneSentenceSummary: LONG })];
+            await formatAndShapeSuggestions(s, { writingGuidelines: DEFAULT, organizationId: 'org' });
+            expect(s[0].oneSentenceSummary.length).toBeLessThanOrEqual(100);
+            expect(s[0].oneSentenceSummary.endsWith('…')).toBe(true);
+        });
+
+        it('drops quotes the model put around its title', async () => {
+            formatter.mockResolvedValue(new Map([[0, { suggestionContent: 'Body.', title: '"`forEach` does not await its callback"' } as any]]));
+            const s = [finding({ oneSentenceSummary: LONG })];
+            await formatAndShapeSuggestions(s, { writingGuidelines: DEFAULT, organizationId: 'org' });
+            expect(s[0].oneSentenceSummary).toBe('`forEach` does not await its callback');
+        });
+
+        it('ignores a title the formatter was not asked for', async () => {
+            formatter.mockResolvedValue(new Map([[0, { suggestionContent: 'Body.', title: 'Something else' } as any]]));
+            const s = [finding()];
+            const r = await formatAndShapeSuggestions(s, { writingGuidelines: DEFAULT, organizationId: 'org' });
+            expect(formatter.mock.calls[0][0][0]).toMatchObject({ rewriteTitle: false });
+            expect(s[0].oneSentenceSummary).toBe('Loop reads past the end of the list');
+            expect(r.shapeCounts).toMatchObject({ titleRewritten: 0, titleCut: 0 });
+        });
+
+        it("bounds an analyzer's title, which skips the formatter", async () => {
+            formatter.mockResolvedValue(new Map());
+            const s = [finding({ oneSentenceSummary: LONG, suggestionContent: '- pkg a', evidence: { source: ANALYZER_SOURCE } })];
+            await formatAndShapeSuggestions(s as any, { writingGuidelines: DEFAULT, organizationId: 'org' });
+            expect(s[0].oneSentenceSummary.length).toBeLessThanOrEqual(100);
+        });
+
+        it('drops a body opening that repeats the new title', async () => {
+            formatter.mockResolvedValue(new Map([[0, { suggestionContent: 'forEach does not await its async callback. Counts are always zero.', title: '`forEach` does not await its async callback' } as any]]));
+            const s = [finding({ oneSentenceSummary: LONG })];
+            await formatAndShapeSuggestions(s, { writingGuidelines: DEFAULT, organizationId: 'org' });
+            expect(s[0].suggestionContent).toBe('Counts are always zero.');
+        });
+    });
 });
