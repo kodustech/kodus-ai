@@ -76,7 +76,7 @@ describe('extractErrorProps (#1829)', () => {
     it('sanitizes BEFORE truncating so a long credential-shaped string is still redacted', () => {
         // A credential embedded in a URL that would have been substring()'d
         // past redaction under the old order.
-        const longUrl = 'mongodb://user:sekret@host/db?x=' + 'y'.repeat(5_000);
+        const longUrl = 'mongodb://user:sekret@host/db/' + 'y'.repeat(5_000);
         const err = new AIAPICallError(401, 'body', longUrl);
 
         const props = extractErrorProps(err);
