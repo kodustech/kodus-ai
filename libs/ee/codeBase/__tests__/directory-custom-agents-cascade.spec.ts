@@ -3,6 +3,7 @@
  * of replacing them; the same id (or knowledge path) replaces the inherited
  * entry. Fixture domain: an invented greenhouse-irrigation monorepo.
  */
+import { KnowledgeResolver } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-resolver';
 import CodeBaseConfigService from '@libs/ee/codeBase/codeBaseConfig.service';
 
 const agent = (id: string, over: Record<string, unknown> = {}) => ({
@@ -127,6 +128,40 @@ describe('custom agents at a directory', () => {
         });
 
         expect(merged.knowledge).toEqual([REPO_KNOWLEDGE[0], mine, extra]);
+    });
+
+    it("loads a directory's doc for the repository agent it links to", async () => {
+        const merged = await merge({
+            customAgents: [agent('drip')],
+            knowledge: [
+                {
+                    path: 'docs/zones.md',
+                    kind: 'doc',
+                    linkedTo: [{ agentId: 'valves' }],
+                },
+            ],
+        });
+        const reader = {
+            ref: 'main',
+            readFile: jest.fn(async () => ({
+                status: 'ok' as const,
+                content: 'Each zone closes its valve before the pump starts.',
+            })),
+            listFiles: jest.fn(async () => []),
+            matchFiles: jest.fn(async () => []),
+        };
+
+        const byTarget = await new KnowledgeResolver(reader).resolveAll({
+            items: merged.knowledge,
+            agentIds: ids(merged),
+        });
+
+        // The repository's own doc for it, then the directory's.
+        expect(byTarget.get('valves')?.docs.map((d) => d.path)).toEqual([
+            'docs/valves.md',
+            'docs/zones.md',
+        ]);
+        expect(byTarget.has('drip')).toBe(false);
     });
 
     it("keeps the repository's lists when the directory sets none", async () => {

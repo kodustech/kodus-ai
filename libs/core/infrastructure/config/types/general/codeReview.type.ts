@@ -564,17 +564,13 @@ export function firstDuplicate<T>(values: readonly T[]): T | undefined {
 }
 
 /**
- * Knowledge links that name an agent the same save does not configure. A
- * dangling link would never load, and would silently start loading if an
+ * Knowledge links that name none of `agents` (the agents the saved level
+ * runs). A dangling link would never load, and would silently start loading if an
  * agent with that id were created later.
  */
 export function knowledgeLinkProblems(
     knowledge:
-        | ReadonlyArray<{
-              path?: string;
-              linkedTo?: readonly unknown[];
-              [key: string]: unknown;
-          }>
+        | ReadonlyArray<{ path?: string; linkedTo?: readonly unknown[] }>
         | undefined,
     agents: ReadonlyArray<{ id?: string }> | undefined,
 ): string[] {

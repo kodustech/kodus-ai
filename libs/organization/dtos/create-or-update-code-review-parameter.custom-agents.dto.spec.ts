@@ -395,18 +395,32 @@ describe('CreateOrUpdateCodeReviewParameterDto — custom agents', () => {
         ).toBe('[]');
     });
 
-    it('rejects knowledge linked to an agent that is not configured', async () => {
-        const flat = await validateConfig({
-            customAgents: [agent()],
-            knowledge: [
-                {
-                    path: 'docs/ledger.md',
-                    kind: 'doc',
-                    linkedTo: [{ agentId: 'agent-missing' }],
-                },
-            ],
+    it('leaves knowledge links to the save, which knows the agents a directory inherits', async () => {
+        // At a directory the repository's agents run too, so a link to one
+        // is valid although this payload does not configure it.
+        const dto = plainToInstance(CreateOrUpdateCodeReviewParameterDto, {
+            organizationAndTeamData: { teamId: 'team-1' },
+            repositoryId: 'repo-1',
+            directoryId: 'dir-1',
+            configValue: {
+                customAgents: [agent()],
+                knowledge: [
+                    {
+                        path: 'docs/ledger.md',
+                        kind: 'doc',
+                        linkedTo: [{ agentId: 'agent-inherited' }],
+                    },
+                ],
+            },
         });
-        expect(flat).toContain('knowledgeLinksKnownAgents');
+        expect(
+            JSON.stringify(
+                await validate(dto, {
+                    whitelist: true,
+                    forbidNonWhitelisted: true,
+                }),
+            ),
+        ).toBe('[]');
     });
 
     it('accepts the revisions the screen loaded, and nothing else beside them', async () => {

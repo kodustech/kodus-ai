@@ -1,5 +1,5 @@
 import { decrypt } from '@libs/common/utils/crypto';
-import { ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 
 import { CLI_SECRET_MASK } from '@libs/code-review/domain/custom-agents/cli-secrets';
 import { customAgentsRevisionsAtLevel } from '@libs/code-review/domain/custom-agents/revision';
@@ -38,6 +38,7 @@ const buildUseCase = (
     stored: {
         globalConfigs?: Record<string, unknown>;
         otherRepositoryConfigs?: Record<string, unknown>;
+        directoryConfigs?: Record<string, unknown>;
     } = {},
 ) => {
     const createOrUpdateParametersUseCase = {
@@ -58,7 +59,23 @@ const buildUseCase = (
                             name: 'ledger',
                             isSelected: true,
                             configs: repositoryConfigs,
-                            directories: [],
+                            directories: stored.directoryConfigs
+                                ? [
+                                      {
+                                          id: 'dir-1',
+                                          name: 'postings',
+                                          isSelected: true,
+                                          configs: stored.directoryConfigs,
+                                          folders: [
+                                              {
+                                                  id: 'folder-1',
+                                                  name: 'postings',
+                                                  path: '/src/postings',
+                                              },
+                                          ],
+                                      },
+                                  ]
+                                : [],
                         },
                         {
                             id: 'repo-2',
@@ -125,8 +142,14 @@ const buildUseCase = (
             skipAuthorization: true,
         } as any);
         const stored = createOrUpdateParametersUseCase.execute.mock.calls[0][1];
-        return stored.repositories.find((repo: any) => repo.id === 'repo-1')
-            .configs;
+        const repository = stored.repositories.find(
+            (repo: any) => repo.id === 'repo-1',
+        );
+        return extra.directoryId
+            ? repository.directories.find(
+                  (dir: any) => dir.id === extra.directoryId,
+              ).configs
+            : repository.configs;
     };
 
     return { save, eventEmitter, useCase, createOrUpdateParametersUseCase };
@@ -269,6 +292,66 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — custom agents', () => {
         expect(logged).not.toContain('Every posting must balance');
         expect(logged).not.toContain('Internal ledger notes');
         expect(logged).toContain('customAgents');
+    });
+
+    describe('knowledge links', () => {
+        const auditAgent = {
+            ...ledgerAgent([]),
+            id: 'audit-agent',
+            name: 'Audit reviewer',
+        };
+        const linkedTo = (agentId: string) => [
+            { path: 'docs/postings.md', kind: 'doc', linkedTo: [{ agentId }] },
+        ];
+
+        it('refuses a link to an agent the repository does not configure', async () => {
+            const { save, createOrUpdateParametersUseCase } = buildUseCase();
+
+            const attempt = save({
+                customAgents: [ledgerAgent([])],
+                knowledge: linkedTo('agent-missing'),
+            });
+
+            await expect(attempt).rejects.toBeInstanceOf(BadRequestException);
+            await expect(attempt).rejects.toThrow(
+                'docs/postings.md links to unknown agent "agent-missing"',
+            );
+            expect(
+                createOrUpdateParametersUseCase.execute,
+            ).not.toHaveBeenCalled();
+        });
+
+        it("lets a directory link a skill or doc to the repository's agent", async () => {
+            // The directory runs the repository's agents too, so its own
+            // knowledge may name one of them.
+            const configs = await buildUseCase(
+                { customAgents: [ledgerAgent([])] },
+                { directoryConfigs: {} },
+            ).save(
+                {
+                    customAgents: [auditAgent],
+                    knowledge: linkedTo('ledger-agent'),
+                },
+                { directoryId: 'dir-1' },
+            );
+
+            expect(configs.knowledge).toEqual(linkedTo('ledger-agent'));
+        });
+
+        it('refuses a directory link to an agent that exists on neither level', async () => {
+            const attempt = buildUseCase(
+                { customAgents: [ledgerAgent([])] },
+                {
+                    directoryConfigs: {},
+                    otherRepositoryConfigs: { customAgents: [auditAgent] },
+                },
+            ).save(
+                { customAgents: [], knowledge: linkedTo('audit-agent') },
+                { directoryId: 'dir-1' },
+            );
+
+            await expect(attempt).rejects.toBeInstanceOf(BadRequestException);
+        });
     });
 
     describe('a save made from a stale copy of the lists', () => {

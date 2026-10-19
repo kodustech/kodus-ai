@@ -103,6 +103,7 @@ const Form = ({
 const Probe = () => {
     const {
         agents,
+        linkableAgents,
         inheritedAgentCount,
         setAgents,
         updateAgent,
@@ -115,8 +116,19 @@ const Probe = () => {
             <span data-testid="dirty">{isDirty ? "unsaved" : "saved"}</span>
             <span data-testid="inherited">{inheritedAgentCount}</span>
             <button onClick={() => setAgents([...agents, sprinkler])}>add</button>
+            <button
+                onClick={() =>
+                    setAgents(
+                        agents.filter((agent) => agent.id !== sprinkler.id),
+                    )
+                }>
+                remove added
+            </button>
             <span data-testid="names">
                 {agents.map((agent) => agent.name).join(",")}
+            </span>
+            <span data-testid="linkable">
+                {linkableAgents.map((agent) => agent.name).join(",")}
             </span>
             <button
                 onClick={() =>
@@ -369,10 +381,49 @@ describe("useCustomAgentsForm — at a directory", () => {
         expect(screen.getByTestId("inherited")).toHaveTextContent("2");
     });
 
+    it("is not unsaved once an agent added to a directory with none is removed again", async () => {
+        // The saved node is the repository's list, which the directory does
+        // not own: compared as it was, the empty list never matched it.
+        renderProbe({
+            customAgents: { value: [ledger, audit], level: "repository" },
+            knowledge: { value: [], level: "repository" },
+        });
+        fireEvent.click(screen.getByText("add"));
+        await flush();
+        expect(screen.getByTestId("dirty")).toHaveTextContent("unsaved");
+
+        fireEvent.click(screen.getByText("remove added"));
+        await flush();
+        expect(screen.getByTestId("dirty")).toHaveTextContent("saved");
+        expect(formRef.getValues("customAgents")).toEqual(
+            formRef.control._defaultValues.customAgents,
+        );
+    });
+
+    it("offers the repository's agents as link targets, a directory agent in place of the one it replaces", () => {
+        const zoneLedger = { ...ledger, name: "Zone ledger reviewer" };
+        renderProbe({
+            customAgents: {
+                value: [zoneLedger, drip],
+                level: "directory",
+                overriddenValue: [ledger, audit],
+                overriddenLevel: "repository",
+            },
+            knowledge: { value: [], level: "repository" },
+        });
+
+        expect(screen.getByTestId("linkable")).toHaveTextContent(
+            "Zone ledger reviewer,Audit reviewer,Drip reviewer",
+        );
+    });
+
     it("leaves the repository level as it was", async () => {
         mockLevel = "repository";
         renderProbe();
         expect(screen.getByTestId("inherited")).toHaveTextContent("0");
+        expect(screen.getByTestId("linkable")).toHaveTextContent(
+            "Ledger reviewer",
+        );
 
         fireEvent.click(screen.getByText("add"));
         fireEvent.click(screen.getByText("save"));

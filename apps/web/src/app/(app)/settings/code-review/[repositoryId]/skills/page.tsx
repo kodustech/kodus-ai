@@ -50,6 +50,7 @@ function SkillsContent() {
         repositoryId,
         directoryId,
         agents,
+        linkableAgents,
         knowledge,
         isDirty,
         isSubmitting,
@@ -90,7 +91,7 @@ function SkillsContent() {
         color?: string;
     }> = [
         { target: KNOWLEDGE_MAIN_REVIEW_TARGET, label: "Main review" },
-        ...agents.map((agent) => ({
+        ...linkableAgents.map((agent) => ({
             target: { agentId: agent.id },
             label: agent.name,
             color: agent.presentation.tag.color,
@@ -338,7 +339,7 @@ function SkillsContent() {
                                 className="text-warning text-xs">
                                 {budget.target === KNOWLEDGE_MAIN_REVIEW_TARGET
                                     ? "Main review"
-                                    : (agents.find(
+                                    : (linkableAgents.find(
                                           (agent) => agent.id === budget.target,
                                       )?.name ?? budget.target)}{" "}
                                 is over its limit ({budget.over.join(", ")}): up

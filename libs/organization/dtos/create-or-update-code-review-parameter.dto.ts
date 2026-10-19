@@ -35,7 +35,6 @@ import {
     KnowledgeItem,
     customAgentSlugClashMessage,
     firstDuplicate,
-    knowledgeLinkProblems,
     LimitationType,
     ReviewCadenceType,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
@@ -924,28 +923,8 @@ class CodeReviewConfigWithoutLLMProviderDto {
     @IsOptional()
     @IsArray()
     @KnowledgeWithinTargetLimits()
-    // The settings screen saves agents and knowledge together for one level.
-    // A payload without agents cannot be checked here; at review time a link
-    // to an agent that does not run loads nothing.
-    @ValidateBy({
-        name: 'knowledgeLinksKnownAgents',
-        validator: {
-            validate: (knowledge: unknown, args) => {
-                const agents = (args?.object as { customAgents?: unknown })
-                    ?.customAgents;
-                if (!Array.isArray(knowledge) || !Array.isArray(agents)) {
-                    return true;
-                }
-                return knowledgeLinkProblems(knowledge, agents).length === 0;
-            },
-            defaultMessage: (args) =>
-                knowledgeLinkProblems(
-                    args?.value,
-                    (args?.object as { customAgents?: { id?: string }[] })
-                        ?.customAgents,
-                ).join('; ') || 'knowledge links an unknown agent',
-        },
-    })
+    // Links to unknown agents are refused by the save, which knows the agents
+    // a directory inherits from its repository.
     @ValidateNested({ each: true })
     @Type(() => KnowledgeItemDto)
     @ApiPropertyOptional({

@@ -100,13 +100,25 @@ export const useCustomAgentsForm = () => {
         form.control._defaultValues as Record<string, unknown>
     )?.customAgents as FieldNode<CustomAgent[]>;
     const listNote = ownListNote(loadedAgents, level);
-    const inheritedAgentCount =
+    const inheritedAgents =
         level === FormattedConfigLevel.DIRECTORY
             ? ((loadedAgents?.level === FormattedConfigLevel.DIRECTORY
                   ? loadedAgents.overriddenValue
-                  : loadedAgents?.value
-              )?.length ?? 0)
-            : 0;
+                  : loadedAgents?.value) ?? [])
+            : [];
+    // What a skill or doc at this level can link to: the agents a review
+    // here runs, so at a directory the repository's too, a directory agent
+    // with an inherited id in its place (as the server merges them).
+    const linkableAgents = [
+        ...inheritedAgents.map(
+            (inherited) =>
+                agents.find((agent) => agent.id === inherited.id) ?? inherited,
+        ),
+        ...agents.filter(
+            (agent) =>
+                !inheritedAgents.some((inherited) => inherited.id === agent.id),
+        ),
+    ];
     const dirtyKeys = Object.keys(dirtyFields ?? {});
     const isDirty = dirtyKeys.some(
         (key) => key === "customAgents" || key === "knowledge",
@@ -119,7 +131,9 @@ export const useCustomAgentsForm = () => {
         (field: RevisionedListField, next: unknown[]) => {
             // An edit undone by hand puts back the saved node as it was
             // loaded: the edited node carries a revision and drops the
-            // override fields, so the same list still read as unsaved.
+            // override fields, so the same list still read as unsaved. At a
+            // directory the saved node can be the repository's, which the
+            // directory owns none of.
             const saved = (
                 form.control._defaultValues as Record<string, unknown>
             )?.[field] as FieldNode<unknown[]>;
@@ -127,7 +141,7 @@ export const useCustomAgentsForm = () => {
                 JSON.stringify(a ?? []) === JSON.stringify(b ?? []);
             form.setValue(
                 field as never,
-                (saved && same(saved.value, next)
+                (saved && same(ownList(saved, level), next)
                     ? saved
                     : {
                           value: next,
@@ -230,7 +244,8 @@ export const useCustomAgentsForm = () => {
         directoryId,
         agents,
         knowledge,
-        inheritedAgentCount,
+        linkableAgents,
+        inheritedAgentCount: inheritedAgents.length,
         level,
         listNote,
         isDirty,
