@@ -1,0 +1,65 @@
+{
+ "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "newGroup": null,
+   "reason": "Reports the reference-equality comparison between separate Dayjs objects that prevents detection of zero-length overrides."
+  },
+  {
+   "id": "S2",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "Reports computing the working-hours end bound from slotStartTime instead of slotEndTime, accepting slots past closing time."
+  },
+  {
+   "id": "S3",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "Reports the same duplicated slotStartTime calculation for the working-hours end bound."
+  },
+  {
+   "id": "S4",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "newGroup": null,
+   "reason": "Reports the same always-false Dayjs object identity comparison in the zero-length override check."
+  },
+  {
+   "id": "S5",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03",
+   "newGroup": null,
+   "reason": "Reports the date-override success return bypassing busy-period checks and allowing conflicting bookings."
+  },
+  {
+   "id": "S6",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#07",
+   "newGroup": null,
+   "reason": "Reports accepting slots when their weekday has no working-hours entry."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reports unhandled timezone conversion errors in packages/lib/slots.ts. This differs from the golden issue about discarding day rollover during conversion."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Reports an unhandled invalid organizerTimeZone in checkIfIsAvailable. This is a separate conversion site from S7 and differs from the golden local-versus-UTC day comparison issue."
+  },
+  {
+   "id": "S9",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "Reports using slotStartTime for the working-hours upper bound instead of slotEndTime."
+  },
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Reports using the global organizerTimeZone instead of each override's timezone. Correcting the timezone source would not fix the golden local-versus-UTC formatting or day-rollover problems."
+  }
+ ]
+}

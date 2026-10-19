@@ -1,0 +1,23 @@
+{
+ "caseId": "notification-rule-processing-engine-grafana-codex",
+ "items": [
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims the loader lost creating/deleting state handling when mapping Prometheus rules. This differs from the rejected provenance, type-guard, and menu-count claims."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Claims empty groups cause an undefined.map() exception due to optional chaining placement. No rejected issue describes this problem."
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Claims grouped rows display redundant location information because showLocation={false} is missing. No rejected issue describes this problem."
+  }
+ ]
+}

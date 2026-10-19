@@ -1,0 +1,11 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "S3 describes missing ADMIN-role checks in user view/manage authorization. The golden issue concerns redundant per-group authorization evaluations when global group access is granted; fixing either would not fix the other."
+  }
+ ]
+}

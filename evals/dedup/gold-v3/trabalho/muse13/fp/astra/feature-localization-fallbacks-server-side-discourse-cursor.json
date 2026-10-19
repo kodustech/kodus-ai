@@ -1,0 +1,29 @@
+{
+ "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Claims a nil default_locale raises NoMethodError in FallbackLocaleList#[] because to_sym runs before compact, matching the rejected issue."
+  },
+  {
+   "id": "S2",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Claims user-controlled regex metacharacters reach load_locale's Regexp and cause unintended locale files to load, matching the rejected issue."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims synchronous locale loading under LOAD_MUTEX and repeated fallback work increase request latency. Unlike #05, it does not claim SiteSetting.default_locale accesses the database or Redis on every lookup; the code already skips loading previously loaded locales."
+  },
+  {
+   "id": "S4",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Claims the same nil default_locale crash caused by calling to_sym before compact in FallbackLocaleList#[]."
+  }
+ ]
+}

@@ -1,0 +1,12 @@
+{
+ "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
+ "items": [
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#kimi-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "TopicView initializes without accessing topic_user (lib/topic_view.rb:31\u201371); its memoized lookup is lazy (lib/topic_view.rb:238\u2013242), so constructing the view does not cache the old notification level. The controller saves the change before serialization (app/controllers/topics_controller.rb:113\u2013115), and the serializer consequently reads the updated level (app/serializers/topic_view_serializer.rb:99\u2013101).",
+   "severity": "medium"
+  }
+ ]
+}

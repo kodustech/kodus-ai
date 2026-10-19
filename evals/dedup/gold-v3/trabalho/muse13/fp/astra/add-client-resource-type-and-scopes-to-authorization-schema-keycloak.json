@@ -1,0 +1,35 @@
+{
+ "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+   "newGroup": null,
+   "reason": "It asserts the same deletion failure caused by the removal listener calling the throwing ClientPermissionsV2.setPermissionsEnabled method. Extending the claim to roles and groups does not change the identified cause."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "It claims the role-mapping checks omit the MANAGE_CLIENTS role fallback and incorrectly deny administrators. None of the rejected issues describes that missing authorization fallback."
+  },
+  {
+   "id": "S4",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#14",
+   "newGroup": null,
+   "reason": "It asserts the same O(N) slowdown caused by getClientsWithPermission evaluating policies separately for every client resource."
+  },
+  {
+   "id": "S5",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+   "newGroup": null,
+   "reason": "It asserts the same client-deletion failure caused by ClientRemovedEvent invoking ClientPermissionsV2.setPermissionsEnabled, which throws UnsupportedOperationException."
+  },
+  {
+   "id": "S8",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+   "newGroup": null,
+   "reason": "It asserts the same client-deletion failure through the removal listener's call to the throwing V2 setPermissionsEnabled override."
+  }
+ ]
+}

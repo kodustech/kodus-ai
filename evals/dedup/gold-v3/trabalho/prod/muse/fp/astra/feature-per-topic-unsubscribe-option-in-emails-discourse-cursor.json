@@ -1,0 +1,11 @@
+{
+ "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
+ "items": [
+  {
+   "id": "S3",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "It asserts the same missing unsubscribe_url interpolation problem in other mailers using add_unsubscribe_link. The proposed fallback and mention of a broken link do not change the underlying claim."
+  }
+ ]
+}

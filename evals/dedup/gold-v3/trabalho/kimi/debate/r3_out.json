@@ -1,0 +1,16 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#kimi-01": {
+  "class": "TP",
+  "subclass": "nit",
+  "severity": "low",
+  "concede": false,
+  "text": "Agreed it is TP: the PR edits the literal (CalendarManager.ts:230 '-...organiser' -> '+...organizer'). Disagree on subclass. The diff changes one letter; the English literal and its '// TODO: i18n this string?' are identical at base, so the PR neither introduces nor worsens the localization gap, and the PR's subject (collective hosts' destinationCalendar) is unrelated. The text is only shown when hideCalendarNotes is on, and it is a short readable notice, not wrong or misleading output. Asking a spelling fix to add i18n keys is a comment a developer would not want here: nit. Rated as stated, an untranslated notice does not change what the program does or mislead anyone: low."
+ },
+ "advanced-sql-analytics-framework-grafana-codex#kimi-01": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "high",
+  "concede": false,
+  "text": "Facts agreed: parser.go:23 now uses the stub, whose RunCommands always errors (sql/db.go:16-17), so sql_command.go:32 warns with rawSQL for every expression. Partial concession on severity only: rated as stated (sensitive literals in logs, conditional), the rubric's 'security weakness that needs specific conditions' is high. Class stays FP: the comment's defect is 'raw SQL is logged verbatim', and that design is unchanged and pre-existing: at base the same Warn (sql_command.go:32) logged rawSQL for any invalid query and :38 for queries without tables, and the PR does not touch those lines. The PR's real defect is that NewSQLCommand now rejects every SQL expression with BadRequest (feature broken), a different issue; the warn-level log is a by-product of that, and the expression text is a dashboard query definition already visible to anyone who can read the dashboard, not credentials or tenant data."
+ }
+}

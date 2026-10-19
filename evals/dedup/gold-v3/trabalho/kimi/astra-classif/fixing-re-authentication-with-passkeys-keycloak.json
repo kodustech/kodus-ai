@@ -1,0 +1,12 @@
+{
+ "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+ "items": [
+  {
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#kimi-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "In services/src/main/java/org/keycloak/authentication/authenticators/browser/AbstractUsernameFormAuthenticator.java:257-259, isUserAlreadySetBeforeUsernamePasswordAuth still reads this flag; lines 129-130 use its negation to control clearing after password failure. The failure handler conditionally clears the user at lines 231-232, so the existing comment remains accurate and the claim that only the new UI helper consumes the flag is false.",
+   "severity": "low"
+  }
+ ]
+}

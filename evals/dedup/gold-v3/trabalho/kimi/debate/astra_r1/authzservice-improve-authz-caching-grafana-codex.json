@@ -1,0 +1,12 @@
+{
+ "caseId": "authzservice-improve-authz-caching-grafana-codex",
+ "items": [
+  {
+   "issueId": "authzservice-improve-authz-caching-grafana-codex#kimi-01",
+   "class": "FP",
+   "subclass": "none",
+   "severity": "medium",
+   "reply": "I change my classification to FP. In service.go:123\u2013139, cached permissions that do not grant access trigger a fresh permission fetch; they cannot serve the authorization decision. Both cached grants and explicit cached denials increment true, consistently measuring decisions served by the cache. The cache_hit label alone does not establish that this metric must count every successful underlying lookup."
+  }
+ ]
+}

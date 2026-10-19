@@ -1,0 +1,17 @@
+{
+ "caseId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor",
+ "items": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reports a runtime defect where scheme-less websites disappear because website_name is nil. Rejected issue #03 concerns missing test coverage for that case, not the runtime behavior."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Reports query and fragment omission from same-domain display text. None of the rejected claims concerns this omission."
+  }
+ ]
+}

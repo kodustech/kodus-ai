@@ -1,0 +1,17 @@
+{
+ "caseId": "advanced-query-processing-architecture-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "advanced-query-processing-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Describes the same repeated interpolation of shard-split queries in runSplitQuery, which reapplies ad hoc filters and alters the expression."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes loss of the datasource reference when replacing interpolateVariablesInQueries. This is distinct from repeated interpolation and filtering expressions before interpolation."
+  }
+ ]
+}

@@ -1,0 +1,12 @@
+{
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "items": [
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#musep-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The newly added terminate() signals shutdown but never joins the commit thread (src/sentry/remote_subscriptions/consumers/queue_consumer.py:340-342). The loop does not recheck shutdown after wait(), so an in-flight iteration can retrieve offsets and call commit_function after terminate() returns and partitions are revoked (queue_consumer.py:274-287). It eventually exits, but the missing synchronization creates a real late-commit race.",
+   "severity": "medium"
+  }
+ ]
+}

@@ -1,0 +1,23 @@
+{
+ "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Describes the same unanchored domain regex that allows an address such as user@allowed.com.evil.com to bypass the whitelist."
+  },
+  {
+   "id": "S2",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Describes the same case-sensitive blocked-email lookup that permits bypassing a block by changing capitalization."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes missing email syntax validation, which is distinct from the listed domain-matching, blocked-email, and client-side validation issues."
+  }
+ ]
+}

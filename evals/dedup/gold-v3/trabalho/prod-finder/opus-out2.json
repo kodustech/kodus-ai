@@ -1,0 +1,410 @@
+{
+ "opus|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": [
+  {
+   "id": "C1",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Mobile .custom-message-length light-theme lightness inverted from 70% to 30%."
+  },
+  {
+   "id": "C2",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Desktop user.scss .name light-theme lightness changed from 30% to 50%."
+  },
+  {
+   "id": "C3",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Mobile user.scss .name light-theme lightness changed from 30% to 50%."
+  },
+  {
+   "id": "C4",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "desktop/topic-post.scss:291 is .topic-meta-data h5 a, whose light-theme value was inverted from 30% to 70%."
+  },
+  {
+   "id": "C5",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Same desktop user.scss .name 30%->50% light-theme change."
+  },
+  {
+   "id": "C6",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Same mobile user.scss .name 30%->50% light-theme change."
+  },
+  {
+   "id": "C7",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Mobile topic-post a.star h3 light-theme lightness changed from 20% to 50%."
+  }
+ ],
+ "kimi|dual-storage-architecture-grafana-codex": [
+  {
+   "id": "C1",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Create storage failure recorded with recordLegacyDuration."
+  },
+  {
+   "id": "C2",
+   "match": "dual-storage-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Delete puts bare d.Log into the context instead of the enriched logger."
+  },
+  {
+   "id": "C3",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Delete success metric uses name instead of options.Kind as label."
+  },
+  {
+   "id": "C4",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Update storage failure recorded with recordLegacyDuration."
+  },
+  {
+   "id": "C5",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Legacy DeleteCollection goroutine records recordStorageDuration instead of legacy."
+  }
+ ],
+ "ds|implement-access-token-context-encoding-framework-keycloak": [
+  {
+   "id": "C1",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "isAccessTokenId inverts the grant shortcut comparison, so the grant type is never verified."
+  },
+  {
+   "id": "C2",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Constructor checks grantType twice instead of rawTokenId."
+  },
+  {
+   "id": "C3",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Same inverted grant-shortcut check in isAccessTokenId."
+  }
+ ],
+ "sonnet|add-html-sanitizer-for-translated-message-resources-keycloak": [
+  {
+   "id": "C1",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#10",
+   "newGroup": null,
+   "reason": "UI bundles use MessageFormat placeholders that i18next does not interpolate."
+  },
+  {
+   "id": "C2",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Lithuanian totpStep1 contains Italian text."
+  },
+  {
+   "id": "C3",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+   "newGroup": null,
+   "reason": "zh_CN totpStep1 uses Traditional Chinese."
+  }
+ ],
+ "kimi|advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": [
+  {
+   "id": "C1",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "Working-hours end computed from slotStartTime instead of slotEndTime."
+  },
+  {
+   "id": "C2",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "newGroup": null,
+   "reason": "dayjs objects compared with ===, zero-length overrides never detected."
+  },
+  {
+   "id": "C3",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03",
+   "newGroup": null,
+   "reason": "Early return true on date-override day skips busy-time check."
+  }
+ ],
+ "kimi|sms-workflow-reminder-retry-count-tracking-cal-com": [
+  {
+   "id": "C1",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
+   "newGroup": null,
+   "reason": "Unguarded retryCount update escapes the loop and aborts the cron run."
+  },
+  {
+   "id": "C2",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#07",
+   "newGroup": null,
+   "reason": "No index supports the new retryCount OR arm of deleteMany."
+  },
+  {
+   "id": "C3",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "retryCount > 1 deletion branch lacks the SMS method filter."
+  }
+ ],
+ "ds|comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+  {
+   "id": "C1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims the immediateDelete branch orphans the reminder row after a reschedule; #11 is only about misleading names, not an orphaned-row functional bug."
+  },
+  {
+   "id": "C2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Cancelled rows with null referenceId sent to SendGrid; distinct from #04 (single try around the loop), fixed by a query filter."
+  }
+ ],
+ "sonnet|async-import-of-the-appstore-packages-cal-com": [
+  {
+   "id": "C1",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Async forEach callbacks in reschedule are not awaited; errors escape try/catch."
+  },
+  {
+   "id": "C2",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Same unawaited async forEach in vital reschedule."
+  }
+ ],
+ "muse|add-html-sanitizer-for-translated-message-resources-keycloak": [
+  {
+   "id": "C1",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+   "newGroup": null,
+   "reason": "Prefix/suffix trimming can overlap and throw StringIndexOutOfBoundsException."
+  },
+  {
+   "id": "C2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Anchor-mismatch message omits key and file; no golden issue covers error-message context."
+  }
+ ],
+ "muse|fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "id": "C1",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "deleteEvent looks up destination calendar by an absent externalCalendarId, never matching."
+  },
+  {
+   "id": "C2",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#prod-01",
+   "newGroup": null,
+   "reason": "Hangout-link events.patch gets undefined calendarId when no destination matches credentialId."
+  }
+ ],
+ "kimi|add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": [
+  {
+   "id": "C1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "UpgradeTest null-strategy early return skips enabling rolling-updates; not among golden test-coverage issues."
+  },
+  {
+   "id": "C2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Same UpgradeTest early return skipping the feature enablement."
+  }
+ ],
+ "kimi|span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
+  {
+   "id": "C1",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#10",
+   "newGroup": null,
+   "reason": "_create_process_for_shard is never called."
+  },
+  {
+   "id": "C2",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#01",
+   "newGroup": null,
+   "reason": "wait_produce uses 'shards' tag while siblings use 'shard'."
+  }
+ ],
+ "ds|advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": [
+  {
+   "id": "C1",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#04",
+   "newGroup": null,
+   "reason": "Working-hours check rejects slots in split schedules when any same-day block excludes them."
+  }
+ ],
+ "ds|feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
+  {
+   "id": "C1",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "queued default timezone.now() evaluated at import time."
+  }
+ ],
+ "ds|notification-rule-processing-engine-grafana-codex": [
+  {
+   "id": "C1",
+   "match": "notification-rule-processing-engine-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Delete menu item still gated on rulerRule, missing in list view."
+  }
+ ],
+ "ds|unified-storage-performance-optimizations-grafana-codex": [
+  {
+   "id": "C1",
+   "match": "unified-storage-performance-optimizations-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Narrowed cache lock lets concurrent builds of the same key run and overwrite."
+  }
+ ],
+ "gpt|feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
+  {
+   "id": "C1",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "queued default evaluated once at import time."
+  }
+ ],
+ "gpt|optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
+  {
+   "id": "C1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": ".small-action-desc flex sizing misplaces floated buttons; no golden issue covers it."
+  }
+ ],
+ "opus|add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "C1",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "should_block? writes stats inside validation: double count and lost concurrent increments."
+  }
+ ],
+ "opus|fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "C1",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "floor(user_count/limit)+1 shows extra page; next loads empty list."
+  }
+ ],
+ "opus|optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "id": "C1",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "Redirect loop bound cut from 10000 to 1000."
+  }
+ ],
+ "sonnet|add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "C1",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Non-atomic match_count increment inside validator, double counted."
+  }
+ ],
+ "sonnet|feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+  {
+   "id": "C1",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#07",
+   "newGroup": null,
+   "reason": "macOS-only sed -i '' fails on GNU sed."
+  }
+ ],
+ "sonnet|fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "C1",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "totalPages floor+1 overcounts on exact multiples."
+  }
+ ],
+ "sonnet|sms-workflow-reminder-retry-count-tracking-cal-com": [
+  {
+   "id": "C1",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "retryCount not incremented when message or sendTo missing."
+  }
+ ],
+ "muse|add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": [
+  {
+   "id": "C1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "UpgradeTest null-strategy early return skips enabling rolling-updates; no golden issue covers it."
+  }
+ ],
+ "muse|feature-localization-fallbacks-server-side-discourse-cursor": [
+  {
+   "id": "C1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Per-lookup SiteSetting.default_locale cost; not the cache-key staleness (#06) or job fallback (#01)."
+  }
+ ],
+ "muse|sms-workflow-reminder-retry-count-tracking-cal-com": [
+  {
+   "id": "C1",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "Missing message/sendTo branch never increments retryCount."
+  }
+ ],
+ "kimi|add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "C1",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Case-sensitive email lookup bypasses block list."
+  }
+ ],
+ "kimi|database-performance-optimizations-grafana-codex": [
+  {
+   "id": "C1",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Debug cleanup logs emitted at Error level each batch."
+  }
+ ],
+ "kimi|feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": [
+  {
+   "id": "C1",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "MetricAlertDetectorHandler lacks abstract methods; instantiation raises TypeError."
+  }
+ ],
+ "kimi|notification-rule-processing-engine-grafana-codex": [
+  {
+   "id": "C1",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "Silence item shown but drawer gated on ruler rule never renders."
+  }
+ ],
+ "kimi|ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": [
+  {
+   "id": "C1",
+   "match": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02",
+   "newGroup": null,
+   "reason": "Returns original monitor.config instead of the converted copy."
+  }
+ ]
+}

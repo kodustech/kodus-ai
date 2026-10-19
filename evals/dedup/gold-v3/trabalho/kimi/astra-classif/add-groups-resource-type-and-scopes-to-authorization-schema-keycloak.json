@@ -1,0 +1,12 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#kimi-01",
+   "class": "TP",
+   "subclass": "nit",
+   "reason": "The newly added Javadoc in services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java:89 promises VIEW/MANAGE permission support without a V2 qualification, but GroupPermissions.java:286-287 checks only admin roles. GroupPermissionsV2.java:52 implements the documented permission path, so this is a documentation mismatch rather than a behavioral defect.",
+   "severity": "low"
+  }
+ ]
+}

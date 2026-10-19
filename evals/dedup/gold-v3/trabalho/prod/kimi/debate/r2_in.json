@@ -1,0 +1,55 @@
+{
+ "fix-proper-handling-of-group-memberships-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "4975fc28903a84418f546b2809370f19abf10e08",
+  "head": "060cda77729cb1c4a827560e09e89a7b22078ba9",
+  "issues": {
+   "fix-proper-handling-of-group-memberships-discourse-cursor#kimip-01": {
+    "comentarios": [
+     {
+      "gid": "kimi-kimip:S3",
+      "file": "app/controllers/admin/groups_controller.rb",
+      "lines": [
+       71,
+       75
+      ],
+      "texto": "Adding members performs one `User` query per username, so bulk additions slow linearly with the count. Load all matching users in one query with `User.where(username: usernames.split(\",\"))` before adding them to the group."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "low",
+      "text": "groups_controller.rb:71-75 in the new add_members action calls User.find_by_username per username (N+1); this is an admin-only action with small inputs, so batching is a minor optimization."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The added add_members action loops over every supplied username and calls User.find_by_username separately (app/controllers/admin/groups_controller.rb:71-74); that method executes find_by(username_lower: ...) (app/models/user.rb:175-176). Consequently, large bulk additions incur one database lookup per username, creating avoidable database round trips and latency. Batching should preserve the existing case-insensitive lookup semantics."
+     },
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "low",
+      "text": "Keep TP/nit, low. The N+1 is real in the new add_members (groups_controller.rb:71-75), but it is an admin-only action fed by a hand-typed comma-separated list, and the removed update_patch at base did the same per-username User.find_by_username loop, so the PR does not regress anything. group.add(user) still issues one write per user, so batching the lookup saves little. Minor performance with no user-visible effect = nit/low per the severity rubric.",
+      "concede": false
+     },
+     {
+      "who": "astra",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "low",
+      "text": "The per-username query exists, but base update_patch already performed the same User.find_by_username and group.add loop. The new add_members action retains that lookup logic while changing the request format to comma-separated usernames, so the reported performance issue is pre-existing under the relocation ruling. I change my classification to FP; the minor admin-path optimization warrants low severity."
+     }
+    ]
+   }
+  }
+ }
+}

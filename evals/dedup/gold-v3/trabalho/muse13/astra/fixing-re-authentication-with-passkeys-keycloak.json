@@ -1,0 +1,11 @@
+{
+ "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This describes reauthentication error-page attributes being set on a discarded form provider, losing hidden-username state. None of the golden issues concerns form-provider reuse or preservation of these attributes."
+  }
+ ]
+}

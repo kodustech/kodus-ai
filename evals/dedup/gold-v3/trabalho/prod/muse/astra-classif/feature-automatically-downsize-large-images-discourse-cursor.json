@@ -1,0 +1,12 @@
+{
+ "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+ "items": [
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#musep-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "SVG is included in the image whitelist (lib/file_helper.rb:31), so the new loop rewrites oversized SVG uploads in place (app/controllers/uploads_controller.rb:64\u201367). That invokes ImageMagick\u2019s raster resize pipeline (app/models/optimized_image.rb:126\u2013133), which does not preserve the original vector content, before Upload.create_for parses the file as SVG (app/models/upload.rb:63\u201366). This introduces a bug for oversized SVG uploads.",
+   "severity": "medium"
+  }
+ ]
+}

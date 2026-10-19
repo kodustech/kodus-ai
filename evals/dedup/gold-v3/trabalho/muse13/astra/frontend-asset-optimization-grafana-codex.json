@@ -1,0 +1,11 @@
+{
+ "caseId": "frontend-asset-optimization-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "frontend-asset-optimization-grafana-codex#01",
+   "newGroup": null,
+   "reason": "S1 explicitly identifies the missing cache re-check after acquiring the write lock, causing concurrent cold-cache callers to reload the manifest serially. Its broader discussion of Dev-mode serialization does not change this match."
+  }
+ ]
+}

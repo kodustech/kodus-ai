@@ -1,0 +1,29 @@
+{
+ "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#04",
+   "newGroup": null,
+   "reason": "Describes the same rollout incompatibility: new sorted-set commands hit existing SET keys and fail with WRONGTYPE."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes a missing end_timestamp_precise field causing KeyError in process_batch. No golden-set issue covers this input-handling problem."
+  },
+  {
+   "id": "S3",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#03",
+   "newGroup": null,
+   "reason": "Describes the same default SUM aggregation doubling duplicate payload timestamps during ZUNIONSTORE and corrupting eviction order."
+  },
+  {
+   "id": "S4",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+   "newGroup": null,
+   "reason": "Describes the same hardcoded Lua cap of 1000 ignoring the configured max_segment_spans after removal of the load-time check."
+  }
+ ]
+}

@@ -1,0 +1,90 @@
+{
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": [
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Asks for HMAC/replay protection on the shared-secret check; the issue is about accepting non-POST methods, a different fix."
+  },
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Key-size mismatch in .env.example generation command; unrelated to the HTTP-method issue."
+  }
+ ],
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "record_for_host returning false vs nil in Ruby; issue is about underscore replace in JS model path."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Per-request DB lookup performance concern; unrelated to the underscore-replace issue."
+  }
+ ],
+ "fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "S11",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Pagination clamp off-by-one in the admin controller; issue is about counter_cache not decrementing in remove_member."
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Missing MANAGE_CLIENTS role fallback in canMap* methods; issue is about per-client resource shadowing the all-clients resource in hasPermission."
+  }
+ ],
+ "database-performance-optimizations-grafana-codex": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "OFFSET window shift deleting rows that should be kept; a different consequence and fix than the loop termination condition."
+  },
+  {
+   "id": "S7",
+   "match": "database-performance-optimizations-grafana-codex#musep-01",
+   "newGroup": null,
+   "reason": "Same problem: untilDoneOrCancelled terminates on affected==0 under concurrent deletes; fix is to check fetched count."
+  }
+ ],
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "S5",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#musep-01",
+   "newGroup": null,
+   "reason": "Same problem: AuthzClient.create's one-shot global CryptoIntegration.init pins the weak Authz provider for the server."
+  }
+ ],
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Dropped ADMIN role in UserPermissionsV2 checks; issue is about O(N) group-listing authz evaluations."
+  }
+ ],
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Race creating per-partition locks; issue is about the commit thread not joined in terminate."
+  },
+  {
+   "id": "S11",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "FilteredPayload hits an assertion in decode_payload; unrelated to the commit-thread shutdown issue."
+  }
+ ]
+}

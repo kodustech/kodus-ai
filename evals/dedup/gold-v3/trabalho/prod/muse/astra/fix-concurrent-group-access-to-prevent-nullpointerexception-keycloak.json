@@ -1,0 +1,11 @@
+{
+ "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#01",
+   "newGroup": null,
+   "reason": "Both describe getSubGroupsCount() returning null when the delegate is gone, causing NPEs in callers that unbox the result. Returning a non-null fallback fixes the same problem at the same location."
+  }
+ ]
+}

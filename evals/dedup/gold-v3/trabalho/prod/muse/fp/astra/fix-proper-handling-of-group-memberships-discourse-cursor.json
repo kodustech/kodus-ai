@@ -1,0 +1,23 @@
+{
+ "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Same claim that the routes supply params[:id] while add_members and remove_member require params[:group_id], causing ParameterMissing."
+  },
+  {
+   "id": "S2",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Same claim that the members template uses bare members even though the controller model is now a Group object, leaving the list empty."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims that remove_member uses users.delete and bypasses the membership counter-cache decrement. None of the rejected issues describes this problem."
+  }
+ ]
+}

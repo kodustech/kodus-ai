@@ -1,0 +1,32 @@
+{
+ "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+ "prOriginal": {
+  "numero": 22532,
+  "url": "https://github.com/calcom/cal.diy/pull/22532",
+  "mergedAt": "2025-07-22",
+  "nota": "Known from earlier check, reconfirmed: PR #22532 merged 2025-07-22, headRefOid = benchmark head 5fd11f9f, squash cb786923 (calcom/cal.com redirects to calcom/cal.diy)."
+ },
+ "tps": {
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com#muse13-01": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2025-11-20",
+    "pr": 25284,
+    "commit": "ae7fd0cae2",
+    "url": "https://github.com/calcom/cal.diy/pull/25284"
+   },
+   "diasNoAr": 121,
+   "reason": "connectedCalendars.handler.ts kept `new CalendarCacheRepository()` + getCacheStatusByCredentialIds after the merge (bb68cd73ef only moved an import). PR #25284 'Remove all code related to the old cache system' (2025-11-20) deleted the repository call and hardcoded cacheUpdatedAt: null, removing the old cache system as a whole rather than routing through the feature-flag factory; main today still returns null.",
+   "astra": []
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com#muse13-02": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 452,
+   "reason": "scripts/test-gcal-webhooks.sh on main is unchanged since the merge commit cb786923 (no later commits touch it): LOG_FILE is still the fixed /tmp/tmole.log, with `rm -f` followed by `tmole ... > \"$LOG_FILE\"`.",
+   "astra": []
+  }
+ }
+}

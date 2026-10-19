@@ -1,0 +1,12 @@
+{
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "items": [
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#muse13-02",
+   "class": "TP",
+   "subclass": "none",
+   "severity": "medium",
+   "reply": "I retain TP: src/sentry/consumers/__init__.py:586\u2013589 wraps the strategy in DlqStaleMessagesStrategyFactoryWrapper when stale_threshold_sec is set. That wrapper forwards Message(Value(FILTERED_PAYLOAD, ...)) downstream from src/sentry/consumers/dlq.py:136\u2013138, making the decoder assertion reachable. The new queue strategy consequently logs an exception; its fallback only completes BrokerValue offsets, so it does not complete this wrapper-generated message. The claim that no upstream filter can exist overlooks this consumer-level wrapper."
+  }
+ ]
+}

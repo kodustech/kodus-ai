@@ -1,0 +1,59 @@
+{
+ "caseId": "notification-rule-processing-engine-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "notification-rule-processing-engine-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Identifies the same missing key on GrafanaRuleListItem in the filtered list and resulting reconciliation problems."
+  },
+  {
+   "id": "S2",
+   "match": "notification-rule-processing-engine-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Identifies the same ruler-rule rendering guard that hides Pause/Resume for prom-only list rows."
+  },
+  {
+   "id": "S3",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "Identifies the same silence drawer guard that prevents the drawer from opening for prom-only rows."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes removal of Creating/Deleting operation-state rendering when switching to Prometheus-only data. No golden issue covers this behavior."
+  },
+  {
+   "id": "S5",
+   "match": "notification-rule-processing-engine-grafana-codex#09",
+   "newGroup": null,
+   "reason": "Identifies the same stale JSDoc claiming the loader fetches both Prometheus and Ruler endpoints."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "The claimed empty-group crash is false: the continuous optional chain in groups.at(0)?.rules.map(...) short-circuits when no group exists. No golden issue describes this claim."
+  },
+  {
+   "id": "S7",
+   "match": "notification-rule-processing-engine-grafana-codex#08",
+   "newGroup": null,
+   "reason": "Identifies the same test that promises menu-option coverage but only checks the More button."
+  },
+  {
+   "id": "S8",
+   "match": "notification-rule-processing-engine-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Identifies the same Duplicate permission leak from the undefined Grafana-rule branch into cloud-rule abilities."
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "The claim is false at the PR head: GrafanaGroupLoader explicitly passes showLocation={false}. No golden issue matches this alleged location-display problem."
+  }
+ ]
+}

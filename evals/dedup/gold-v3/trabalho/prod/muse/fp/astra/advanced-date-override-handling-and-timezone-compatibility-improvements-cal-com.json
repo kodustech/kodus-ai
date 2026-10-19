@@ -1,0 +1,17 @@
+{
+ "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+ "items": [
+  {
+   "id": "S5",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-04",
+   "newGroup": null,
+   "reason": "It asserts the same missing dateOverrides and workingHours arguments at the selected/held-slots availability call site, causing those availability gates to be bypassed."
+  },
+  {
+   "id": "S6",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#snapi-01",
+   "newGroup": null,
+   "reason": "It asserts the same incorrect offset calculation caused by passing an undefined override.timeZone to .tz(). The suggested fallback does not change the claim."
+  }
+ ]
+}

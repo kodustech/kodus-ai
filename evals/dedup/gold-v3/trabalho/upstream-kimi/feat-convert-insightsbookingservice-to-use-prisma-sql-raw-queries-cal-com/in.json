@@ -1,0 +1,24 @@
+{
+ "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+ "prTitle": "feat: convert InsightsBookingService to use Prisma.sql raw queries",
+ "upstream": "calcom/cal.com",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/cal.com",
+ "base": "c9a47dd0cebd121ff73f24e1f8c1829579daf8e3",
+ "head": "da09bc0808e7c6df1bc10e00d5acf764d94c7cc7",
+ "prOriginalConhecido": {
+  "numero": 22345,
+  "url": "https://github.com/calcom/cal.diy/pull/22345",
+  "mergedAt": "2025-07-15",
+  "nota": "Found via gh api commits/<head>/pulls; PR headRefOid equals the benchmark head da09bc0808; squash commit 967442892a has no diff vs head in packages/lib/server/service/. calcom/cal.com now redirects to calcom/cal.diy."
+ },
+ "tps": [
+  {
+   "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#kimi-03",
+   "severity": "medium",
+   "category": "api",
+   "bug": "The new public options type makes teamId optional for team scope, so a missing teamId compiles and silently yields empty insights instead of a type error.",
+   "evidenciaOpus": "insightsBooking.ts:29-34 the PR adds InsightsBookingServicePublicOptions with teamId optional and makes the constructor accept it (line 58), replacing the discriminated union type. A team-scope call without teamId now compiles, fails safeParse (line 61-62), and silently returns the 1=0 condition with no error.",
+   "evidenciaAstra": "The new public type makes teamId optional at packages/lib/server/service/insightsBooking.ts:29-34 and is accepted by the constructor at line 58, although the team schema requires it at line 25. Omitting it now compiles but fails safeParse at lines 62-63 and silently produces 1=0 at lines 125-127; this confirms the second comment, although validation prevents the undefined interpolation alleged by the first."
+  }
+ ]
+}

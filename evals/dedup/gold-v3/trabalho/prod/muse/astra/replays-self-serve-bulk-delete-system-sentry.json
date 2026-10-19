@@ -1,0 +1,23 @@
+{
+ "caseId": "replays-self-serve-bulk-delete-system-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "Describes the same incorrect positional pairing of error IDs with nodestore values, attaching event details to the wrong IDs."
+  },
+  {
+   "id": "S2",
+   "match": "replays-self-serve-bulk-delete-system-sentry#12",
+   "newGroup": null,
+   "reason": "Describes the same feature-flagged table rendering empty columns and data instead of the actual query results."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes an unguarded access to missing table metadata that crashes rendering. This differs from the golden issue about passing hardcoded empty table data."
+  }
+ ]
+}

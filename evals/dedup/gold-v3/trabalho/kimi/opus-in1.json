@@ -1,0 +1,2394 @@
+{
+ "dual-storage-architecture-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "e369f24665ec70e1e3700f457d25ef83301d931a",
+  "base": "66c4dff17e9147b11fb9b14c6ed63089a599da65",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "lines": [
+     41,
+     48
+    ],
+    "texto": "WHAT: When Storage.Create fails, the code records a legacy-duration metric instead of a storage-duration metric. WHY: This corrupts the dual_writer_legacy_duration_seconds histogram with values from the unified store and makes the storage-error path invisible in the storage metric. HOW: Replace `d.recordLegacyDuration(true, ...)` with `d.recordStorageDuration(true, ...)` in the error branch."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "lines": [
+     125,
+     132
+    ],
+    "texto": "WHAT: When Storage.Update fails, the code records a legacy-duration metric instead of a storage-duration metric. WHY: It misattributes the unified-store error to the legacy store and leaves the storage-duration histogram without an error observation. HOW: Replace `d.recordLegacyDuration(true, ...)` with `d.recordStorageDuration(true, ...)` in the error branch."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "lines": [
+     161,
+     167
+    ],
+    "texto": "WHAT: The async legacy DeleteCollection goroutine records a storage-duration metric for the legacy call. WHY: It puts legacy-call latency into the dual_writer_storage_duration_seconds histogram and leaves the legacy histogram without an observation. HOW: Use `d.recordLegacyDuration(err != nil, mode3Str, options.Kind, method, startLegacy)` inside the goroutine."
+   },
+   {
+    "id": "S4",
+    "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "lines": [
+     99,
+     106
+    ],
+    "texto": "WHAT: On successful Delete, the storage-duration metric is observed with `name` as the third label instead of `options.Kind`. WHY: The third histogram label is `kind`; passing the object name creates inconsistent label values across methods and inflates metric cardinality with unique names. HOW: Pass `options.Kind` to match the error path and other methods."
+   },
+   {
+    "id": "S5",
+    "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "lines": [
+     50,
+     167
+    ],
+    "texto": "WHAT: The goroutines spawned for async legacy writes are created from the request context using `context.WithTimeoutCause(ctx, ...)`. WHY: The request context is canceled when the HTTP handler returns, so the async legacy write is likely canceled before it completes, defeating mode 3's purpose of writing to legacy as a safety measure. HOW: Detach the goroutine context from request cancellation, e.g. `context.WithTimeoutCause(context.WithoutCancel(ctx), time.Second*10, ...)` so it can run to completion or its own timeout."
+   },
+   {
+    "id": "S6",
+    "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "lines": [
+     50,
+     167
+    ],
+    "texto": "WHAT: Every Create, Update, Delete, and DeleteCollection spawns a new goroutine that can live up to 10 seconds with no concurrency limit or backpressure. WHY: Under high write throughput this creates unbounded goroutine fanout and memory growth, especially if the legacy store is slow or times out. HOW: Bound concurrency with a worker pool or semaphore, or use a rate-limited background queue for legacy writes."
+   },
+   {
+    "id": "S7",
+    "file": "playlist_test.go",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "The test file constructs a single shared *mock.Mock and embeds it in both legacyStoreMock and storageMock, which define separate mock methods over the same underlying mock object. Because both d.Storage.Create and d.Legacy.Create route through that single shared Mock, expectations are matched against whichever method name the concrete type invokes. This works only because the mock instance is shared, so the test is fragile and relies on that shared-instance coupling rather than on distinct, independent mocks."
+   },
+   {
+    "id": "S8",
+    "file": "",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "Inconsistent metric recording in the production DualWriterMode3 code: recordStorageDuration is used versus recordLegacyDuration, and options.Kind/name are used inconsistently (for example, the Delete success path records name instead of options.Kind). This is a single-hunk issue rather than a cross-file disagreement, but the labels/names recorded are inconsistent."
+   },
+   {
+    "id": "S9",
+    "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "lines": [
+     94,
+     97
+    ],
+    "texto": "In Delete, `log := d.Log.WithValues(\"name\", name, \"kind\", options.Kind, \"method\", method)` is computed but never used. The next line does `ctx = klog.NewContext(ctx, d.Log)`, so the enriched `log` is discarded and context logs lose the name/kind/method tags. It should use `ctx = klog.NewContext(ctx, log)` like the other methods."
+   },
+   {
+    "id": "S10",
+    "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "lines": [
+     41,
+     48
+    ],
+    "texto": "When `d.Storage.Create` returns an error, the code calls `d.recordLegacyDuration(true, mode3Str, options.Kind, method, startStorage)`. It should call `recordStorageDuration` because the failure came from Storage, not Legacy. As written, the storage error path is credited to the legacy metric with the storage start time."
+   },
+   {
+    "id": "S11",
+    "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "lines": [
+     125,
+     132
+    ],
+    "texto": "When `d.Storage.Update` returns an error, the code calls `d.recordLegacyDuration(true, mode3Str, options.Kind, method, startStorage)`. It should call `recordStorageDuration`, matching the Delete path. The storage failure is currently attributed to Legacy."
+   },
+   {
+    "id": "S12",
+    "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "lines": [
+     104,
+     106
+    ],
+    "texto": "After a successful Storage Delete, the code records `d.recordStorageDuration(false, mode3Str, name, method, startStorage)`. All other metric calls in this file use `options.Kind` as the resource/kind label. This mismatch will break queries/dashboards that group by kind. It should use `options.Kind` to stay consistent with the error path and other methods."
+   },
+   {
+    "id": "S13",
+    "file": "pkg/apiserver/rest/dualwriter_mode3_test.go",
+    "lines": [
+     198,
+     239
+    ],
+    "texto": "The success case 'deleting an object in the unified store' only configures a mock for Storage.Delete and asserts only the synchronous result. The implementation also spawns a goroutine that calls Legacy.Delete, but the test exits immediately. If the legacy write were removed from the implementation, this test would still pass. Worse, because no expectation is registered for Legacy.Delete, the test can panic if the goroutine runs before the test returns, making it flaky."
+   },
+   {
+    "id": "S14",
+    "file": "pkg/apiserver/rest/dualwriter_mode3_test.go",
+    "lines": [
+     252,
+     292
+    ],
+    "texto": "The success case 'deleting a collection in the unified store' only mocks Storage.DeleteCollection. The implementation spawns a goroutine that also calls Legacy.DeleteCollection, but the test does not register that expectation and returns before the goroutine completes. This means the test passes even if the legacy collection deletion is removed, and it may panic on a slow run when the unmocked legacy call executes."
+   },
+   {
+    "id": "S15",
+    "file": "pkg/apiserver/rest/dualwriter_mode3_test.go",
+    "lines": [
+     28,
+     76
+    ],
+    "texto": "The success case is named 'creating an object only in the unified store', but the implementation also writes to LegacyStorage in a goroutine. The test registers a Legacy.Create mock but never asserts it is called, so the test would still pass if the legacy write were entirely removed. The test name should match the actual dual-write behaviour and the test should verify the legacy call is attempted, or use a synchronization primitive to wait for the goroutine."
+   },
+   {
+    "id": "S16",
+    "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "lines": [
+     119,
+     144
+    ],
+    "texto": "Update passes the same `objInfo` to `d.Storage.Update` synchronously and then to `d.Legacy.Update` in a goroutine. Because `rest.UpdatedObjectInfo` may hold mutable state and `UpdatedObject` can produce different results when invoked at different times or against different stored objects, Storage and Legacy may apply different versions of the update, violating the dual-write consistency invariant and creating a data race. The previous code pre-computed the updated object and wrapped it for both stores; that synchronization should be preserved or a copy/thread-safe wrapper should be used."
+   },
+   {
+    "id": "S17",
+    "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "lines": [
+     41,
+     48
+    ],
+    "texto": "At line 45, when `d.Storage.Create` returns an error, the code calls `d.recordLegacyDuration(true, mode3Str, options.Kind, method, startStorage)`. This records the storage failure under the legacy duration/error metric, corrupting the metric labels. It should be `d.recordStorageDuration(true, mode3Str, options.Kind, method, startStorage)`."
+   },
+   {
+    "id": "S18",
+    "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "lines": [
+     125,
+     132
+    ],
+    "texto": "At line 129, when `d.Storage.Update` returns an error, the code calls `d.recordLegacyDuration(true, mode3Str, options.Kind, method, startStorage)`. The failure is in Storage, not Legacy, so it should be recorded with `d.recordStorageDuration(true, mode3Str, options.Kind, method, startStorage)`."
+   },
+   {
+    "id": "S19",
+    "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+    "lines": [
+     161,
+     167
+    ],
+    "texto": "At line 166, the goroutine performing `d.Legacy.DeleteCollection` calls `d.recordStorageDuration(err != nil, ...)`. Because the operation is on LegacyStorage, it should call `d.recordLegacyDuration(err != nil, mode3Str, options.Kind, method, startLegacy)`."
+   },
+   {
+    "id": "S20",
+    "file": "pkg/apiserver/rest/dualwriter_mode3_test.go",
+    "lines": [
+     38,
+     44
+    ],
+    "texto": "The test case 'error when creating object in the unified store fails' still sets up a Legacy.Create mock expectation, but the new DualWriterMode3.Create contract (lines 42-46) returns immediately when Storage.Create fails and never calls Legacy.Create. Update this test to match the new contract: remove the Legacy expectation in the storage-failure path and assert that Legacy.Create is not invoked. If the intent is to verify the new async path, add synchronization so the goroutine is observed before assertions."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "dual-storage-architecture-grafana-codex#01",
+    "descricao": "Delete puts the base d.Log instead of the enriched per-call logger into the context, so downstream logs lose name/kind/method fields.",
+    "textoGolden": "The context is being created with d.Log instead of the log variable that was initialized with additional context values (name, kind, method). This means those values won't be propagated to the logging context.",
+    "comentarios": [
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       97,
+       97
+      ],
+      "texto": "`ctx = klog.NewContext(ctx, d.Log)` installs the mode-level logger instead of the request-scoped `log` built on line 96 (which carries name, kind and method) \u2014 a copy/paste error, as every other method in this file passes the composed `log`. Storage.Delete and the legacy delete goroutine therefore log without the per-request fields this PR is adding (and without the metrics method/kind context)."
+     },
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       97,
+       97
+      ],
+      "texto": "ctx is built with klog.NewContext(ctx, d.Log) instead of the enriched `log`. The delete logs then lose the name, kind and method values. Use `log`."
+     },
+     {
+      "file": "dualwriter_mode3.go",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The Delete context uses d.Log rather than the per-call log. This is a logging-context inconsistency (not a data leak); use the per-call logger for consistency."
+     }
+    ]
+   },
+   {
+    "issueId": "dual-storage-architecture-grafana-codex#02",
+    "descricao": "The legacy DeleteCollection goroutine records its duration with recordStorageDuration instead of recordLegacyDuration, misattributing legacy latency and errors to the storage metric.",
+    "textoGolden": "In DualWriterMode3's DeleteCollection method, when a storage operation fails, recordStorageDuration is incorrectly called with recordLegacyDuration instead.",
+    "comentarios": [
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       166,
+       166
+      ],
+      "texto": "The legacy DeleteCollection duration and error status are recorded in the unified-storage histogram. Every successful unified deletion therefore produces a second storage observation for a different backend, while legacy deletion failures are attributed to unified storage and no legacy observation is emitted. Call recordLegacyDuration here instead."
+     },
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       166,
+       166
+      ],
+      "texto": "The timed call is d.Legacy.DeleteCollection, but its measurement is emitted using recordStorageDuration. Use recordLegacyDuration; otherwise storage receives two measurements for a successful collection deletion and legacy receives none, and legacy failures appear as storage failures."
+     },
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       166,
+       166
+      ],
+      "texto": "The legacy DeleteCollection duration is recorded with recordStorageDuration, so legacy latency and errors are attributed to storage. Use recordLegacyDuration."
+     }
+    ]
+   },
+   {
+    "issueId": "dual-storage-architecture-grafana-codex#03",
+    "descricao": "Delete's success path records the storage metric with the object name in the kind label instead of options.Kind, creating per-object series and inconsistent labels.",
+    "textoGolden": "Inconsistency: using name instead of options.Kind for metrics recording differs from other methods.",
+    "comentarios": [
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       106,
+       106
+      ],
+      "texto": "The Delete success-path metric passes `name` where every other call site in this file (lines 48, 103, 113, 156, 159) passes options.Kind in the kind/name argument slot. The storage-success sample for Delete is thus labelled with the object name instead of the resource kind, breaking label consistency with the other operations and with the error sample emitted at line 103. Use options.Kind here (or insert name consistently everywhere, matching the metric's label semantics)."
+     },
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       106,
+       106
+      ],
+      "texto": "recordStorageDuration(false, mode3Str, name, method, startStorage) at line 106 passes the object name in the kind label slot."
+     },
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       106,
+       106
+      ],
+      "texto": "recordStorageDuration is called with the object `name` as the `kind` label: `d.recordStorageDuration(false, mode3Str, name, method, startStorage)`. Every other storage call site passes `options.Kind` (lines 73, 89, 103, 156, 159). This injects a per-object value into the kind label, corrupting the metric and giving it unbounded cardinality (one series per object name), which grows memory on every delete. Should be `options.Kind`."
+     }
+    ]
+   },
+   {
+    "issueId": "dual-storage-architecture-grafana-codex#04",
+    "descricao": "On storage Create/Update failure the duration is recorded with recordLegacyDuration, attributing unified-store errors to the legacy metric.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       43,
+       46
+      ],
+      "texto": "On a Storage.Create failure the code records the error with recordLegacyDuration(true, mode3Str, options.Kind, method, startStorage) \u2014 the failing subsystem is Storage, not Legacy, and it passes the storage start time. This records storage failures under the legacy metric, corrupting the dual-writer error dashboards (and contradicts the success path on line 48 which uses recordStorageDuration). Use d.recordStorageDuration(true, mode3Str, options.Kind, method, startStorage)."
+     },
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       127,
+       130
+      ],
+      "texto": "On a Storage.Update failure the code records the error with recordLegacyDuration(true, mode3Str, options.Kind, method, startStorage), attributing a storage failure and its storage duration to the legacy metric. This is inconsistent with the success path on line 132 (recordStorageDuration) and with mode1's semantics. Use d.recordStorageDuration(true, mode3Str, options.Kind, method, startStorage)."
+     },
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       161,
+       167
+      ],
+      "texto": "The async goroutine performing the LEGACY DeleteCollection measures it with d.recordStorageDuration(err != nil, mode3Str, options.Kind, method, startLegacy). Every other legacy write in this file uses recordLegacyDuration (lines 56, 113, 140); recording it under the storage metric reports legacy latency/errors as storage latency/errors. Use d.recordLegacyDuration(err != nil, mode3Str, options.Kind, method, startLegacy)."
+     }
+    ]
+   },
+   {
+    "issueId": "dual-storage-architecture-grafana-codex#05",
+    "descricao": "Mode 3 legacy writes now run in background goroutines derived from the request context, which is cancelled when the request completes, so legacy writes can be cancelled and legacy storage falls out of sync.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       50,
+       57
+      ],
+      "texto": "The async legacy write goroutine derives its context from the request-scoped `ctx` (context.WithTimeoutCause(ctx, ...)). The apiserver cancels that context as soon as the HTTP handler returns \u2014 which is immediately after Create/Update/Delete/DeleteCollection return \u2014 so the goroutine's Legacy.Create can be canceled before completing, silently dropping the legacy write that this mode exists to guarantee. The same applies to the goroutines at lines 108-114, 134-141 and 161-167. Detach the async context from request cancellation (e.g. derive from context.WithoutCancel(ctx) / context.Background()) before applying the timeout."
+     },
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       50,
+       57
+      ],
+      "texto": "The legacy write in Mode 3 became fire-and-forget, changing the contract callers relied on: previously Create (and, identically, Update/Delete/DeleteCollection) returned only after the LegacyStorage call had been made in-request; now it returns immediately and the write runs in a detached goroutine. Worse, the goroutine builds its context from the request-scoped `ctx` (line 51: `context.WithTimeoutCause(ctx, ...)`), which the API server cancels as soon as the handler returns/flushes the response \u2014 so the legacy write and its 10s timeout will typically be cancelled outright and the legacy store silently stops being updated, which is precisely what the new mode-3 integration cases assume still happens. Any detached work must be given a context not tied to the request lifetime (e.g. context.WithoutCancel(ctx) or a server-lifetime context), and consumers that depended on the synchronous legacy write need to be updated."
+     },
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       50,
+       51
+      ],
+      "texto": "The asynchronous legacy write derives its timeout context from the request context, which is canceled when the HTTP request finishes. Create, Update, Delete, and DeleteCollection return before this work completes, so their legacy database operations can be canceled immediately instead of receiving the intended ten-second window. Derive the bounded background context from context.WithoutCancel(ctx) to retain request values without inheriting request cancellation."
+     }
+    ]
+   },
+   {
+    "issueId": "dual-storage-architecture-grafana-codex#06",
+    "descricao": "Legacy.Update now receives the original objInfo instead of a wrapper carrying the object stored in unified storage, so legacy recomputes the update and can diverge.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       139,
+       139
+      ],
+      "texto": "Legacy.Update receives the original objInfo instead of the object successfully committed to unified storage. The playlist legacy implementation calls objInfo.UpdatedObject(ctx, old) against its own legacy object, so a patch is reapplied to potentially stale state and can persist a different result or fail rather than mirror the unified write. Pass an updateWrapper containing res, as the previous implementation did."
+     },
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       139,
+       139
+      ],
+      "texto": "Legacy.Update previously received an updateWrapper containing the object returned by Storage.Update; it now receives the original objInfo. UpdatedObjectInfo can compute an update from the old object supplied by each backend (notably for patches), so evaluating it against a stale legacy object can produce a different result or reject an update that already succeeded in Storage. Preserve the canonical-result contract by passing an updateWrapper with updated: res and upstream: objInfo to the legacy consumer rather than replaying the original update against legacy state."
+     },
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       139,
+       139
+      ],
+      "texto": "Legacy.Update now receives the original objInfo rather than the updateWrapper containing the object successfully committed to Storage. UpdatedObjectInfo can represent a patch/transform based on the supplied old object; replaying it against legacy's potentially different old state can persist a different result or fail, even though the authoritative update succeeded. Restore forwarding of the committed result via updateWrapper instead of recomputing the update against legacy state."
+     }
+    ]
+   },
+   {
+    "issueId": "dual-storage-architecture-grafana-codex#07",
+    "descricao": "The Mode 3 tests never wait for or assert the asynchronous legacy writes, and legacy and storage share one mock, so removing the legacy calls would not fail them.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3_test.go",
+      "lines": [
+       30,
+       57
+      ],
+      "texto": "The legacy half of Mode 3 is never verified, so these tests cannot catch its removal. Mode 3 is documented as writing to BOTH LegacyStorage and Storage, and the implementation performs the legacy write in a detached goroutine (`go func(){ d.Legacy.Create(...) }()`, dualwriter_mode3.go lines 50-57, and likewise at 108-114, 134-141, 161-167). Each test registers legacy expectations (`setupLegacyFn`, e.g. lines 30-32 and 40-42) but never calls `m.AssertExpectations(t)`, `AssertCalled` or `AssertNumberOfCalls`, and never waits for or observes the goroutine \u2014 no channel, no polling. Additionally `legacyStoreMock{m, l}` and `storageMock{m, s}` (lines 53-54, and the same pair in every other test function) share one `*mock.Mock`, so even a count assertion could not distinguish a legacy call from a storage call. Deleting every `d.Legacy.*` call from the implementation leaves all six tests passing, which is exactly the regression the names \u2014 and the Mode 3 contract \u2014 claim to cover."
+     },
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3_test.go",
+      "lines": [
+       65,
+       75
+      ],
+      "texto": "The successful Create test never verifies the legacy write. Configuring m.On(\"Create\", ...) does not require that expectation to be consumed, and these assertions only inspect the object returned by Storage.Create. Deleting the entire legacy-create goroutine would still pass this test. Use distinct storage and legacy mocks and synchronize on the legacy call, then assert that it completed with the intended object."
+     },
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3_test.go",
+      "lines": [
+       345,
+       353
+      ],
+      "texto": "The successful Update case configures a legacy Update expectation but returns after checking only the unified-store result. It neither waits for the asynchronous legacy update nor verifies its expectation, so removing the legacy-update goroutine entirely still passes. Add explicit synchronization and verification of the legacy update (ideally with separate mocks), including the object propagated to legacy storage."
+     }
+    ]
+   },
+   {
+    "issueId": "dual-storage-architecture-grafana-codex#09",
+    "descricao": "The List error test case is still named 'not implemented' although List is now implemented and the case checks storage error propagation.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3_test.go",
+      "lines": [
+       145,
+       145
+      ],
+      "texto": "The test-case name \"error when listing an object in the unified store is not implemented\" still describes the old stub List (which returned nil, nil with a \"List not implemented\" log). List is now implemented at dualwriter_mode3.go:79 and delegates to Storage.List; the case merely checks that a Storage error is propagated. The name contradicts the code it now exercises \u2014 rename it, e.g. \"error when listing objects in the unified store fails\"."
+     }
+    ]
+   },
+   {
+    "issueId": "dual-storage-architecture-grafana-codex#10",
+    "descricao": "The Create test case name says 'only in the unified store' although Mode 3 also writes to legacy.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3_test.go",
+      "lines": [
+       28,
+       28
+      ],
+      "texto": "The test name says creation happens \"only in the unified store\", but this case configures a successful Legacy.Create as well, and Mode3.Create launches that legacy write after the unified write succeeds. Rename the case to describe creation in both stores (with the legacy write asynchronous), so test output does not communicate the opposite of the mode-3 write contract."
+     }
+    ]
+   },
+   {
+    "issueId": "dual-storage-architecture-grafana-codex#11",
+    "descricao": "Independent per-request goroutines remove ordering between legacy writes to the same resource, so legacy can end up with an older version or a resurrected object.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       134,
+       139
+      ],
+      "texto": "Independent goroutines remove ordering between successful writes to the same resource. For example, Storage commits update A and then update B, but the legacy goroutine for B can finish before A, leaving legacy with A while Storage contains B. Likewise a delete can run before an earlier create and leave a resurrected legacy object. Preserve per-resource commit order for mirroring (including across create/update/delete), rather than launching each write independently."
+     }
+    ]
+   },
+   {
+    "issueId": "dual-storage-architecture-grafana-codex#13",
+    "descricao": "The storage-failure Create test registers its failing expectation via setupLegacyFn and only works because legacy and storage share one mock.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/apiserver/rest/dualwriter_mode3_test.go",
+      "lines": [
+       37,
+       44
+      ],
+      "texto": "The 'error when creating object in the unified store fails' case registers the failing Create expectation only through setupLegacyFn. It passes only because legacy and storage share one mock, so the storage Create gets that error by accident. Register the expectation in setupStorageFn and use separate mocks for legacy and storage, so the test really covers a storage failure."
+     }
+    ]
+   },
+   {
+    "issueId": "dual-storage-architecture-grafana-codex#sncc-01",
+    "descricao": "DualWriterMode3.Delete now returns on any unified-storage error, including NotFound, before deleting from legacy, so objects that exist only in legacy can no longer be deleted.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "dual-storage-architecture-grafana-codex#snapi-01",
+    "descricao": "Mode 3 legacy-storage write errors (create/update/delete/delete-collection) are no longer logged after moving to async goroutines; only a duration metric with an error flag is recorded.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "5fd11f9faa79c4aefd39975d1b0e963e5034f793",
+  "base": "30a92a4d66b417f7c19dee2b343099adc6e88aa6",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     1023,
+     1025
+    ],
+    "texto": "WHAT: The call to SelectedCalendarRepository.updateManyByCredentialId passes an empty data object, which Prisma treats as a no-op. WHY: With data: {}, Prisma performs no actual column writes, so the @updatedAt timestamp on SelectedCalendar is not refreshed and the cache-status UI continues to show a stale 'last updated' time. HOW: Pass { updatedAt: new Date() } in the data argument so the timestamp is explicitly updated."
+   },
+   {
+    "id": "S2",
+    "file": "packages/trpc/server/routers/viewer/calendars/connectedCalendars.handler.ts",
+    "lines": [
+     27,
+     29
+    ],
+    "texto": "WHAT: connectedCalendarsHandler directly constructs CalendarCacheRepository instead of using the CalendarCache.init factory. WHY: The factory checks the 'calendar-cache' feature flag globally and returns a no-op mock when disabled; bypassing it forces a calendarCache.groupBy query on every settings-page load even for tenants that have the feature turned off. HOW: Use CalendarCache.init(null) (or await the feature check) to obtain the repository so the mock is used when the feature is disabled."
+   },
+   {
+    "id": "S3",
+    "file": "CredentialActionsDropdown.tsx",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "Only sends credential IDs and static i18n keys; no raw errors or PII are logged or displayed. Cache timestamps shown belong to the user's own credential. No data-exposure issue found."
+   },
+   {
+    "id": "S4",
+    "file": "calendar-cache.repository.ts",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "Exposes only credentialId + latest cache updatedAt, used solely to enrich the caller's own connected-calendars response. No data-exposure issue found."
+   },
+   {
+    "id": "S5",
+    "file": "selectedCalendar.ts",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "Changes are DB-only with no logging; updateManyByCredentialId is called with empty data. No data-exposure issue found."
+   },
+   {
+    "id": "S6",
+    "file": "deleteCache.handler.ts",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "Returns a generic \"Credential not found or access denied\" error, which does not leak existence or details. No data-exposure issue found."
+   },
+   {
+    "id": "S7",
+    "file": "test-gcal-webhooks.sh",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "Echoes and logs the public tunnelmole webhook receiver URL; that URL is intended to be public and is not a secret credential or PII-bearing value. No data-exposure issue found."
+   },
+   {
+    "id": "S8",
+    "file": "packages/lib/server/repository/selectedCalendar.ts",
+    "lines": [
+     400,
+     405
+    ],
+    "texto": "The new updateManyByCredentialId method passes `data` directly to `prisma.selectedCalendar.updateMany`. Its caller in CalendarService.ts invokes it with `{}` to bump `updatedAt`, but Prisma's updateMany requires at least one field in `data`; an empty object causes a Prisma Client validation error and breaks the availability refresh. Either pass `{ updatedAt: new Date() }` from the caller, or make the repository method always include `updatedAt: new Date()` internally when the caller wants to touch the timestamp."
+   },
+   {
+    "id": "S9",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     1023,
+     1025
+    ],
+    "texto": "The code calls `SelectedCalendarRepository.updateManyByCredentialId(this.credential.id, {})` to update `SelectedCalendar.updatedAt`, but an empty `data` object does not change any columns and therefore will not trigger Prisma's `@updatedAt` (and may throw). Pass `{ updatedAt: new Date() }` (or another real change) so the timestamp is actually updated."
+   },
+   {
+    "id": "S10",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     1023,
+     1025
+    ],
+    "texto": "The caller intends to touch `updatedAt` for every `SelectedCalendar` row belonging to the credential, but it passes an empty `{}` update object. Prisma's `updateMany` needs at least one field in `data`; with an empty object it will either throw a validation error or issue no UPDATE, so `updatedAt` is not refreshed. Pass `{ updatedAt: new Date() }` (or another field) so the update is valid and the timestamp is actually updated."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+    "descricao": "fetchAvailabilityAndSetCache calls SelectedCalendarRepository.updateManyByCredentialId with an empty data object, so Prisma does not refresh the @updatedAt timestamp and SelectedCalendar.updatedAt never reflects the cache refresh.",
+    "textoGolden": "The updateManyByCredentialId call uses an empty data object, which prevents Prisma's @updatedAt decorator from updating the updatedAt timestamp. This results in inaccurate cache status tracking, as the timestamp isn't updated when the cache is refreshed. To fix this, explicitly set the updatedAt field.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       1023,
+       1024
+      ],
+      "texto": "WHAT: updateManyByCredentialId is called with empty data {} to bump SelectedCalendar.updatedAt. WHY: Prisma updateMany rejects empty data (validation error) or no-ops without touching @updatedAt, so the refresh path throws or silently leaves updatedAt stale. HOW: pass an explicit touch field e.g. { updatedAt: new Date() }."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       1023,
+       1024
+      ],
+      "texto": "Comment claims \"Update SelectedCalendar.updatedAt\" but call passes empty object {} as data, so nothing is updated (Prisma updateMany with empty data is a no-op/error). Fix comment or pass { updatedAt: new Date() } to match the stated intent."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       1023,
+       1024
+      ],
+      "texto": "updateManyByCredentialId is called with empty data {}. Prisma updateMany throws when data is empty, so this line throws on every resync after the cache write. Pass an explicit touch e.g. { updatedAt: new Date() } instead of {}."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#03",
+    "descricao": "After deleting the calendar cache, CredentialActionsDropdown does not invalidate the connectedCalendars query, so where no parent refetch callback is passed the stale cache status and delete action remain visible.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+      "lines": [
+       42,
+       50
+      ],
+      "texto": "WHAT: `deleteCacheMutation`'s `onSuccess` only calls `onSuccess?.()` and never invalidates the `viewer.calendars.connectedCalendars` query, while the sibling `disconnectMutation` explicitly invalidates it in `onSettled`. WHY: the 'Cache Status' row in the dropdown is rendered from the cached `connectedCalendars` result; after deleting the cache the query is not refetched, so the deleted status/last-updated entry stays visible and stale in the UI. HOW: invalidate the query in the cache-deletion mutation as well, e.g. `const utils = trpc.useUtils(); onSuccess: async () => { ...; await utils.viewer.calendars.connectedCalendars.invalidate(); }`."
+     },
+     {
+      "file": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+      "lines": [
+       42,
+       50
+      ],
+      "texto": "WHAT: deleteCacheMutation onSuccess only calls onSuccess?.() and never invalidates viewer.calendars.connectedCalendars, unlike disconnectMutation onSettled. WHY: cacheUpdatedAt stays stale after deletion so UI keeps showing old Last updated and delete action until manual refetch. HOW: add onSettled invalidate of connectedCalendars like disconnect does."
+     },
+     {
+      "file": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+      "lines": [
+       43,
+       46
+      ],
+      "texto": "Successful cache deletion does not invalidate the connectedCalendars query that supplies cacheUpdatedAt. The wrapper forwards only an optional parent onChanged callback and disables window-focus refetch, so the deleted cache continues to appear present with its old timestamp and delete action. Invalidate utils.viewer.calendars.connectedCalendars on successful deletion."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#04",
+    "descricao": "The cache 'last updated' timestamp is formatted with a hard-coded en-US locale instead of the user's locale, so non-US users see US-style dates in an otherwise translated label.",
+    "textoGolden": "Date is formatted with hardcoded 'en-US' locale instead of using the user's locale from useLocale, which can lead to incorrect date representation for users in different locales.",
+    "comentarios": [
+     {
+      "file": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+      "lines": [
+       88,
+       94
+      ],
+      "texto": "The 'Last updated' timestamp is formatted with a hard-coded \"en-US\" locale (new Intl.DateTimeFormat(\"en-US\", ...)), so every user \u2014 regardless of their locale \u2014 sees a US-style date/time while the surrounding label is translated. Use the app's locale-aware date formatting helper (the user's current locale) instead of pinning en-US."
+     },
+     {
+      "file": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+      "lines": [
+       88,
+       94
+      ],
+      "texto": "Date format hard-coded to \"en-US\" via Intl.DateTimeFormat while surrounding strings use t()/useLocale. Users in other locales see US short date/time. Use the active locale from useLocale/i18n instead of hard-coding \"en-US\"."
+     },
+     {
+      "file": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+      "lines": [
+       89,
+       92
+      ],
+      "texto": "The cache timestamp is always formatted with \"en-US\", even though the surrounding label uses the user's selected translation locale. Users in other locales therefore see US month/day ordering and time conventions inside an otherwise localized message, potentially misreading the last-update date. Use the active application locale for Intl.DateTimeFormat instead of hard-coding en-US."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#05",
+    "descricao": "The calendar cache migration keeps a generated warning saying updatedAt has no default and cannot be added to a non-empty table, although the SQL adds it with DEFAULT NOW().",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/prisma/migrations/20250715160635_add_calendar_cache_updated_at/migration.sql",
+      "lines": [
+       4,
+       4
+      ],
+      "texto": "This warning says updatedAt is added without a default and cannot be added to a nonempty table, but the migration actually supplies DEFAULT NOW(), explicitly handling existing rows. Remove or correct the warning so operators reviewing the migration are not incorrectly told that existing data makes it unsafe to run."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#06",
+    "descricao": "The test-gcal-webhooks.sh cleanup function always exits 0, including when called from the failure paths, so the script reports success when the tunnel could not be set up.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "scripts/test-gcal-webhooks.sh",
+      "lines": [
+       10,
+       18
+      ],
+      "texto": "`cleanup` always runs `exit 0`, and it is also called on the failure paths (rate limit hit, failed to extract the URL). The script therefore reports success even though the tunnel failed and GOOGLE_WEBHOOK_URL was never updated. Have `cleanup` take an exit code, and pass 1 from the failure paths."
+     },
+     {
+      "file": "scripts/test-gcal-webhooks.sh",
+      "lines": [
+       11,
+       18
+      ],
+      "texto": "cleanup() always ends in `exit 0`, and both failure paths (rate-limit at lines 46-50 and 'Failed to extract Tunnelmole URL' at lines 56-59) call cleanup. So a script named test-gcal-webhooks that did not actually obtain the tunnel URL / update GOOGLE_WEBHOOK_URL still exits with status 0, letting any automation treat the run as successful even though the setup it verifies failed. On the failure branches the script should exit non-zero (e.g. `exit 1`) so failure is observable; only the SIGINT/SIGTERM interactive shutdown should exit 0."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#07",
+    "descricao": "The webhook test script updates .env with the macOS-only `sed -i ''` syntax, which fails on Linux GNU sed and leaves GOOGLE_WEBHOOK_URL unchanged.",
+    "textoGolden": "logic: macOS-specific sed syntax with empty string after -i flag will fail on Linux systems",
+    "comentarios": [
+     {
+      "file": "scripts/test-gcal-webhooks.sh",
+      "lines": [
+       67,
+       68
+      ],
+      "texto": "WHAT: `sed -i '' -E 's|^GOOGLE_WEBHOOK_URL=.*|...|' \"$ENV_FILE\"` uses the BSD/macOS `sed -i ''` form. WHY: under GNU sed (typical Linux dev/CI environment) the empty `''` is consumed as the script operand and the command errors, so the existing `GOOGLE_WEBHOOK_URL` line is never replaced and the tunnel URL is not written to the env file. HOW: use a portable invocation, e.g. `sed -i.bak -E \"s|^GOOGLE_WEBHOOK_URL=.*|GOOGLE_WEBHOOK_URL=$TUNNEL_URL|\" \"$ENV_FILE\"` (or branch on `uname`)."
+     },
+     {
+      "file": "scripts/test-gcal-webhooks.sh",
+      "lines": [
+       67,
+       68
+      ],
+      "texto": "The environment update uses BSD sed's `-i ''` syntax, which fails with GNU sed on Linux. When GOOGLE_WEBHOOK_URL already exists, the script leaves the previous URL unchanged but still prints that it was updated, preventing webhooks from reaching the new tunnel. Use a portable replacement strategy or select the in-place syntax based on the available sed implementation and check its exit status."
+     },
+     {
+      "file": "scripts/test-gcal-webhooks.sh",
+      "lines": [
+       67,
+       73
+      ],
+      "texto": "When GOOGLE_WEBHOOK_URL already exists, `sed -i ''` uses BSD/macOS syntax and fails under GNU sed on Linux. The script nevertheless prints that the URL was updated and keeps the tunnel running, leaving webhooks configured with the old URL. Use a portable replacement approach (or select the appropriate sed syntax) and only announce success after the edit succeeds."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#08",
+    "descricao": "deleteCacheHandler throws a plain Error when the credential is missing or not owned by the user, so tRPC returns a 500 instead of a structured FORBIDDEN/NOT_FOUND error.",
+    "textoGolden": "Throwing a generic Error for authentication failures results in a 500 response in tRPC. Instead, it should return a structured TRPCError with an appropriate code, such as FORBIDDEN, to accurately reflect the error type.",
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#muse13-01",
+    "descricao": "connectedCalendarsHandler instantiates CalendarCacheRepository directly instead of the feature-flag-aware factory, so cache status is queried and shown even when calendar-cache is disabled.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#muse13-02",
+    "descricao": "The dev script writes tunnelmole output to a fixed /tmp/tmole.log, so a local attacker's symlink at that path could make it overwrite an arbitrary file.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "notification-rule-processing-engine-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "8df850371034b73dc4dd9908cc30fa09f12a1f97",
+  "base": "47e5bd23163e6037fc0741068ac78930bba2769f",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx",
+    "lines": [
+     104,
+     106
+    ],
+    "texto": "WHAT: The SilenceGrafanaRuleDrawer is only rendered when `rulerRuleType.grafana.alertingRule(rule)` is true, but `GrafanaRuleListItem` passes only `promRule` and leaves `rule` undefined. WHY: Clicking the Silence action in the Grafana rule list menu sets `showSilenceDrawer` to true but the drawer never mounts, so users cannot silence Grafana rules from the list view. HOW: Also check the prom rule type, e.g. change the condition to `(rulerRuleType.grafana.alertingRule(rule) || prometheusRuleType.grafana.alertingRule(promRule)) && showSilenceDrawer`."
+   },
+   {
+    "id": "S2",
+    "file": "public/app/features/alerting/unified/rule-list/FilterView.tsx",
+    "lines": [
+     154,
+     164
+    ],
+    "texto": "WHAT: The `GrafanaRuleListItem` rendered for `origin === 'grafana'` omits the `key` prop, while the `datasource` and `default` branches include `key={key}`. WHY: React will use index-based keys for this list, which can cause component state to be reused for the wrong rule when the filtered list reorders or updates, leading to incorrect actions/links being shown. HOW: Add `key={key}` to `GrafanaRuleListItem`."
+   },
+   {
+    "id": "S3",
+    "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+    "lines": [
+     324,
+     324
+    ],
+    "texto": "WHAT: `useAllGrafanaPromRuleAbilities` gates `ModifyExport` on `isAlertingRule`, which is true only for alerting rules, whereas the ruler-based equivalent gated it on `isGrafanaManagedAlertRule` (true for all Grafana-managed rules). WHY: Grafana-managed recording rules lose the export action when viewed through the Prometheus-rule list path, breaking feature parity with the ruler-based view. HOW: Change the support flag to `prometheusRuleType.grafana.rule(rule)` or `true` for all Grafana-prom rules, e.g. `[prometheusRuleType.grafana.rule(rule), exportAllowed]`."
+   },
+   {
+    "id": "S4",
+    "file": "RuleActionsButtons.V2",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "Producer/consumer mismatch for the silence action: GrafanaRuleListItem and GrafanaGroupLoader now render RuleActionsButtons with only a promRule and no rulerRule, but RuleActionsButtons.V2 still gates the SilenceGrafanaRuleDrawer on rulerRuleType.grafana.alertingRule(rule). When rule is undefined the drawer never opens, even though AlertRuleMenu computes canSilence from the promRule abilities and invokes handleSilence. The menu enables silence based on GrafanaPromRuleDTO, while the drawer consumer still requires a RulerRuleDTO. Align the drawer gating with the promRule-based abilities (or pass the rulerRule) so silence works from these call sites."
+   },
+   {
+    "id": "S5",
+    "file": "GrafanaGroupLoader",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "The key={promRule.uid} could be problematic if uids are not unique within a group, though this is noted as a pre-existing data contract issue."
+   },
+   {
+    "id": "S6",
+    "file": "RuleActionsButtons.V2",
+    "lines": [
+     104,
+     104
+    ],
+    "texto": "Line 104 uses rulerRuleType.grafana.alertingRule(rule) to decide whether to render SilenceGrafanaRuleDrawer. Since this component is now used with only promRule (no rule) from the list view, rule will be undefined; the guard evaluates false, so the SilenceGrafanaRuleDrawer won't open even when the silence action is triggered. This is a functional gap/UX bug and a possible regression for silencing from the list view."
+   },
+   {
+    "id": "S7",
+    "file": "useAbilities.ts",
+    "lines": [
+     289,
+     289
+    ],
+    "texto": "Line 289 has a stray `// duplicate` comment next to `useIsGrafanaPromRuleEditable(rule)`; it appears to be a stray comment, not a code defect."
+   },
+   {
+    "id": "S8",
+    "file": "public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx",
+    "lines": [
+     89,
+     106
+    ],
+    "texto": "The silence drawer is gated on rulerRuleType.grafana.alertingRule(rule), which is false when only a Grafana PromRule is supplied. Now that the component is used with prom-only rules, clicking 'Silence notifications' opens state but the drawer never mounts. Render the drawer for Grafana-managed prom alerting rules as well, or provide a prom-rule-compatible silence path."
+   },
+   {
+    "id": "S9",
+    "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx",
+    "lines": [
+     66,
+     75
+    ],
+    "texto": "The code maps over `promResponse.data.groups.at(0)?.rules` without a fallback. If `groups` is empty, `at(0)` returns `undefined`, `?.rules` yields `undefined`, and `.map(...)` throws. The previous implementation guarded this with `?? []`. Restore the fallback: `(promResponse.data.groups.at(0)?.rules ?? []).map(...)`."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#01",
+    "descricao": "The pause menu item is still gated on a Grafana ruler rule, but the list view now passes only the Prometheus rule, so Pause/Resume disappears for list-view rules even when the user may pause them.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx",
+      "lines": [
+       83,
+       83
+      ],
+      "texto": "The new Prometheus-based pause ability cannot display Pause or Resume for list-view rules because the menu still requires rulerRuleType.grafana.rule(rulerRule) before rendering MenuItemPauseRule. GrafanaRuleListItem now supplies only promRule, so these actions disappear even for editable rules. Adapt the pause menu item to accept the Grafana identifier and Prometheus pause state, or load the ruler rule on demand."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#02",
+    "descricao": "The Delete menu item still requires a ruler rule, which list-view Grafana rules no longer provide, so users with delete permission lose the Delete action.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx",
+      "lines": [
+       85,
+       87
+      ],
+      "texto": "The new Prometheus-based delete ability is still gated by `canDelete && rulerRule` when rendering the Delete item. Both Grafana list-view paths now omit rulerRule, so users with delete permission lose the Delete action entirely. Render deletion using the available identifier and group identifier instead of requiring the ruler DTO, adapting the callback contract accordingly."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#03",
+    "descricao": "When the Grafana prom-rule branch is skipped (datasource rules), useAllGrafanaPromRuleAbilities(undefined) still reports Duplicate as supported and allowed by Grafana create permission, and AlertRuleMenu ORs it with the ruler ability, so Duplicate appears on cloud rules even when the ruler check denies it.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx",
+      "lines": [
+       89,
+       92
+      ],
+      "texto": "WHAT: canDuplicate ORs ruler ability with grafana ability where grafana path is skipToken=>undefined for cloud rules, and useAllGrafanaPromRuleAbilities(undefined) returns Duplicate=[true,true] whenever the user has global Grafana create permission. WHY: Any user with Grafana rule-create gets Duplicate menu item on cloud/Mimir rules even when ruler abilities deny it \u2014 incorrect authorization gating. HOW: Return NotSupported for all abilities when rule is skipToken/undefined, or gate grafana branch on prometheusRuleType.grafana.rule(promRule) before ORing."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       307,
+       314
+      ],
+      "texto": "useAllGrafanaPromRuleAbilities returns AlwaysSupported for Duplicate when rule is undefined (skipToken): loading is false from the !rule early-return, so MaybeSupported=true and duplicateSupported=true. ORed in AlertRuleMenu/RuleActionsButtons this leaks Grafana create permission into non-Grafana rules. Gate MaybeSupported/duplicateSupported on rule existence (e.g. NotSupported when !rule)."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       287,
+       318
+      ],
+      "texto": "useAllGrafanaPromRuleAbilities must return NotSupported for all actions when rule is undefined (skipToken). Currently MaybeSupported falls back to AlwaysSupported when !loading, so Duplicate=[true, global-create] is true for a cloud rule passed as skipToken, and AlertRuleMenu/RuleActionsButtons OR-logic then incorrectly enables Duplicate (and Explore). Guard with if (!rule) return all-NotSupported abilities or make MaybeSupported require rule."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#04",
+    "descricao": "The refactor of useAllAlertRuleAbilities into useAllRulerRuleAbilities drops the isFederatedRuleGroup check (isFederated is hardcoded false), so federated Mimir rules are reported as editable and deletable.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       223,
+       228
+      ],
+      "texto": "useAllAlertRuleAbilities now delegates to useAllRulerRuleAbilities, which hardcodes isFederated = false. The previous isFederatedRuleGroup(rule.group) check is gone, so federated Mimir rules are no longer treated as immutable and can show edit and delete abilities. Keep the federation check in this wrapper, or pass the federation state into the shared hook."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       227,
+       228
+      ],
+      "texto": "Delegating useAllAlertRuleAbilities to useAllRulerRuleAbilities discards the group's federation status and replaces the previous isFederatedRuleGroup(rule.group) check with a constant false. Legacy RuleActionsButtons consequently enables editing rules in groups with source_tenants, although these groups were explicitly immutable before this change. Preserve the CombinedRule federation check in the wrapper or pass federation status into the delegated ability calculation."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       227,
+       228
+      ],
+      "texto": "Preserve the federated-group immutability check when delegating this CombinedRule hook. Previously useAllAlertRuleAbilities inspected rule.group with isFederatedRuleGroup and disabled modification/removal for federated rules. The replacement delegates to a hook that hardcodes isFederated=false and receives no group information. Existing useAlertRuleAbility/useAlertRuleAbilities consumers therefore now receive supported update/delete abilities for federated rules when datasource permissions allow them, exposing operations that the previous contract explicitly prohibited. Pass the federation state through or retain that restriction in this wrapper."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#05",
+    "descricao": "The Grafana prom-rule abilities gate Pause, Restore, Export and DeletePermanently on alertingRule(rule) while the comment claims it checks Grafana-managed rules, so Grafana recording rules lose these actions in the list view.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       301,
+       302
+      ],
+      "texto": "The comment says all GrafanaPromRuleDTO rules are Grafana-managed, but the variable it describes is `isAlertingRule`. That variable is true only for alerting rules and false for Grafana recording rules. Fix the comment, or rename the variable, so it says the check is for alerting rules. As written, readers will expect Pause, Export and Silence to be enabled for recording rules."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       301,
+       328
+      ],
+      "texto": "The comment says all GrafanaPromRuleDTO rules are Grafana-managed, but the check used is alertingRule(rule), which is false for recording rules. Pause, Restore, ModifyExport and DeletePermanently are therefore wrongly disabled for Grafana recording rules, where the old isGrafanaManagedAlertRule check allowed them. Use prometheusRuleType.grafana.rule(rule) for these abilities, and keep alertingRule only for Silence."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#06",
+    "descricao": "The comment claims GrafanaPromRuleDTO abilities have no loading state, but the next line makes support depend on the folder loading flag.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       308,
+       309
+      ],
+      "texto": "The comment says there is no loading state, but the next line is `loading ? NotSupported : AlwaysSupported`. `loading` comes from the folder fetch. Update the comment to say that support depends on the folder loading state."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#07",
+    "descricao": "The Grafana branch of the filtered rule list renders GrafanaRuleListItem without a key prop, so React reconciles the streaming list by index and warns about missing keys.",
+    "textoGolden": "The rendered GrafanaRuleListItem is missing the required key prop for React list items. This can cause rendering issues when the list order changes.",
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/rule-list/FilterView.tsx",
+      "lines": [
+       157,
+       162
+      ],
+      "texto": "WHAT: The grafana branch of the filtered list renders <GrafanaRuleListItem .../> without a `key` prop, dropping the `key={key}` that the replaced <GrafanaRuleLoader key={key} .../> had. WHY: `rules.map` renders a dynamic list keyed by getRuleKey/hashRule; without a key React logs duplicate-key warnings and reconciles rows by index, so as the async rule stream updates/reorders the wrong rule row can be reused/mutated (stale state, swapped actions). HOW: add `key={key}` (the value is already destructured on line 152) to the <GrafanaRuleListItem> element."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/FilterView.tsx",
+      "lines": [
+       157,
+       162
+      ],
+      "texto": "WHAT: Grafana branch of FilterViewResults renders GrafanaRuleListItem without key={key} while datasource and unknown branches pass key. WHY: Breaks React list reconciliation \u2014 wrong item reuse, stale actions/state and console key warnings for every Grafana hit. HOW: Add key={key} to the GrafanaRuleListItem element."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#08",
+    "descricao": "The test named 'should render More button with action menu options' only checks the More button exists, never the menu options.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx",
+      "lines": [
+       85,
+       101
+      ],
+      "texto": "The test 'should render More button with action menu options' only checks that the More button exists. It finds the button by name 'More', so the aria-label and text assertions are tautological. It would pass even if the menu had no actions or the abilities were broken. Click the button and assert the expected menu items, or rename the test to match what it checks."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx",
+      "lines": [
+       85,
+       102
+      ],
+      "texto": "Test named 'should render More button with action menu options' never verifies any action menu option: the body only asserts the More button exists and has aria-label/text 'More'. It would still pass if the dropdown were rendered empty (Silence/Duplicate/Copy link/Export all missing), i.e. the behaviour the name promises is not covered. Either open the menu and assert the menu items, or rename the test to reflect that it only checks the trigger button's rendering/accessibility."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx",
+      "lines": [
+       85,
+       102
+      ],
+      "texto": "Test named 'should render More button with action menu options' never opens the menu nor asserts menu items \u2014 it only checks More button presence/aria/text. Click More and assert expected menuitems (or rename to 'should render More button') so it fails if menu actions break."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#09",
+    "descricao": "GrafanaGroupLoader's JSDoc still says it loads from Prometheus and Ruler endpoints after the ruler query was removed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx",
+      "lines": [
+       24,
+       28
+      ],
+      "texto": "The JSDoc for GrafanaGroupLoader still says \"Loads an evaluation group from Prometheus and Ruler endpoints.\" but this PR removed the ruler API query entirely \u2014 the component now only calls useGetGrafanaGroupsQuery (Prometheus). The documentation describes a data source the function no longer consumes; update it to state only the Prometheus endpoint is loaded (and the same stale \"Ruler response\" reference in the expectedRulesCount prop doc at lines 18\u201319 should be corrected)."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#11",
+    "descricao": "For list-view Grafana rules RuleActionsButtons gets only promRule, so the Silence menu item is shown but the silence drawer, still gated on a ruler alerting rule, never renders and clicking Silence does nothing.",
+    "textoGolden": "RuleActionsButtons is invoked with only promRule, but SilenceGrafanaRuleDrawer inside RuleActionsButtons still depends on a Grafana Ruler rule being present, so for Grafana rules coming from list views the 'Silence notifications' menu entry (now driven by Grafana Prom abilities) will toggle showSilenceDrawer without ever rendering the drawer. This means clicking 'Silence notifications' for these rules has no visible effect, even when abilities indicate silencing is allowed.",
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx",
+      "lines": [
+       47,
+       47
+      ],
+      "texto": "Passing only promRule enables the Silence notifications menu item but leaves RuleActionsButtons.V2 unable to render its silence drawer, which is guarded by rulerRuleType.grafana.alertingRule(rule). Clicking Silence only updates showSilenceDrawer and displays nothing because rule is undefined. Update the drawer to accept a rule UID\u2014the inspected SilenceGrafanaRuleDrawer only needs grafana_alert.uid\u2014and allow the Prometheus alerting-rule path to render it."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx",
+      "lines": [
+       47,
+       47
+      ],
+      "texto": "The new list item passes only promRule to RuleActionsButtons, but that component renders SilenceGrafanaRuleDrawer only under `rulerRuleType.grafana.alertingRule(rule) && showSilenceDrawer`. With rule undefined, clicking the newly enabled 'Silence notifications' action only sets state and never opens a drawer. Adapt the silence rendering path to load/use the rule by its Prometheus identifier before switching this caller to promRule-only."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx",
+      "lines": [
+       130,
+       144
+      ],
+      "texto": "WHAT: getEditableIdentifier now enables a prom-only path (Grafana uid identifier with rulerRule undefined) but the silence drawer still renders only when rulerRuleType.grafana.alertingRule(rule) is true. WHY: In the list view Silence menu item can be shown via grafana abilities, clicking it sets showSilenceDrawer but the drawer never mounts, so Silence silently does nothing. HOW: Gate the drawer on promRule as well or provide a prom-based silence drawer."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#opa-01",
+    "descricao": "RulesTable RBAC tests only mock useGrafanaPromRuleAbilities and leave useRulerRuleAbilities denied, so the ruler-based Delete permission branch of AlertRuleMenu is never tested.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "79d11c4890cc4792e3dc3535af59e4e5f7a2739d",
+  "base": "10aca5552314d6e5c9226f3c6d0107861c38c693",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+    "lines": [
+     65,
+     74
+    ],
+    "texto": "WHAT: readInteger accepts constructed INTEGER tags (e.g., 0x22) because it only masks the low 5 bits of the tag byte. WHY: DER/BER requires INTEGER to be primitive; accepting constructed encodings silently parses malformed input as a valid integer, diverging from BouncyCastle's strict parser. HOW: Reject the constructed bit by checking `(tag & ASN1Encoder.CONSTRUCTED) == 0` before reading the value."
+   },
+   {
+    "id": "S2",
+    "file": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+    "lines": [
+     64,
+     70
+    ],
+    "texto": "WHAT: The ignored-providers log calls `logger.debugf(builder.toString())`, but debugf expects a format string. WHY: A provider class name containing `%` (e.g., from a shaded/proxied jar) would cause `MissingFormatArgumentException` and abort detection; even without that, it is the wrong logging API. HOW: Use `logger.debug(builder.toString())` and avoid the trailing comma."
+   },
+   {
+    "id": "S3",
+    "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+    "lines": [
+     60,
+     67
+    ],
+    "texto": "WHAT: getBouncyCastleProvider returns `KeyStore.getInstance(KeyStore.getDefaultType()).getProvider()`, the JVM's default keystore provider, not a BouncyCastle provider. WHY: This violates the CryptoProvider contract documented to return a BouncyCastle provider and misidentifies the provider in BouncyIntegration.PROVIDER/logs when AuthzClientCryptoProvider is selected. HOW: Return null so BouncyIntegration.loadProvider falls back to the first installed provider, which is the documented null-handling behavior."
+   },
+   {
+    "id": "S4",
+    "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+    "lines": [
+     114,
+     121
+    ],
+    "texto": "WHAT: concatenatedRSToASN1DER creates two ASN1Encoder instances at lines 114-115 and discards them. WHY: This is leftover dead code that allocates and encodes the integers before the real sequence encoding at lines 117-121; it performs no work and is misleading. HOW: Remove the two unused encoder calls."
+   },
+   {
+    "id": "S5",
+    "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+    "lines": [
+     46,
+     57
+    ],
+    "texto": "The test in ECDSAAlgorithmTest.test() only asserts that converting a signature DER -> concatenated RS -> DER -> concatenated RS yields the same concatenated bytes twice. This round-trip assertion cannot detect a broken conversion that corrupts the signature symmetrically. The test should verify the re-encoded DER signature against the original data using Signature.verify() with the public key, or compare rsConcat to a value derived from the original sign, so the test fails if the ASN.1/RS conversion corrupts r or s."
+   },
+   {
+    "id": "S6",
+    "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+    "lines": [
+     60,
+     67
+    ],
+    "texto": "The method name getBouncyCastleProvider() promises a BouncyCastle provider, but the implementation returns KeyStore.getInstance(KeyStore.getDefaultType()).getProvider(), which is the platform default keystore provider (usually SUN for JKS). This identifier/code disagreement can mislead callers that rely on BouncyCastle-specific behavior. Either return an actual BouncyCastle provider or rename the method/role to reflect that it provides a generic fallback provider."
+   },
+   {
+    "id": "S7",
+    "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+    "lines": [
+     103,
+     121
+    ],
+    "texto": "The method assumes signature.length == signLength and copies signLength/2 bytes from it. A malformed or mismatched concatenated signature causes an unhandled ArrayIndexOutOfBoundsException. Validate that signature is non-null, signLength is even, and signature.length == signLength before copying, throwing IOException for invalid input."
+   },
+   {
+    "id": "S8",
+    "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+    "lines": [
+     103,
+     122
+    ],
+    "texto": "The method assumes signature.length == signLength. It allocates r/s of size len+1 and copies len bytes from signature without validation; a shorter input causes an out-of-bounds read. Add an explicit check (e.g., if (signature.length != signLength) throw new IOException(...)) before the array copies."
+   },
+   {
+    "id": "S9",
+    "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+    "lines": [
+     151,
+     163
+    ],
+    "texto": "When qLength < bytes.length, the method copies only the lowest qLength bytes. For a malformed or non-minimal DER integer whose value exceeds the curve coordinate size, this silently changes the numeric value instead of rejecting the signature. It should throw if bytes.length > qLength + 1 (after allowing at most one sign-padding zero) or if stripping that zero still leaves more than qLength bytes."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#02",
+    "descricao": "concatenatedRSToASN1DER encodes r and s into two throwaway ASN1Encoder instances before re-encoding them in the return statement.",
+    "textoGolden": "Dead code exists where ASN1Encoder instances are created and written to, but their results are immediately discarded. The actual encoding is performed by new ASN1Encoder instances created in the subsequent return statement, rendering the earlier operations useless.",
+    "comentarios": [
+     {
+      "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+      "lines": [
+       114,
+       115
+      ],
+      "texto": "Dead computation: the two ASN1Encoder.create().write(...) calls allocate encoders and encode rBigInteger/sBigInteger, but their results are discarded \u2014 the returned DER comes entirely from the expression at lines 117-121, which re-encodes the same BigIntegers. These two statements have no effect and should be removed (they are a leftover from an earlier formulation)."
+     },
+     {
+      "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+      "lines": [
+       114,
+       115
+      ],
+      "texto": "Remove these two discarded encoder writes. Each allocates an encoder and encodes a BigInteger, but neither result participates in the returned signature; lines 119\u2013120 repeat both writes on fresh encoders. This performs redundant encoding and allocations on every concatenated-signature conversion."
+     },
+     {
+      "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+      "lines": [
+       114,
+       115
+      ],
+      "texto": "The two statements `ASN1Encoder.create().write(rBigInteger);` and `ASN1Encoder.create().write(sBigInteger);` encode values and discard the results. The return expression re-encodes the same values, so these lines are dead computation left over from a copy-paste or refactor. Remove them."
+     }
+    ]
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#04",
+    "descricao": "order() is added to CryptoProvider as an abstract method, breaking source and binary compatibility for existing third-party CryptoProvider implementations.",
+    "textoGolden": "Abstract order() method on CryptoProvider may break backward compatibility with existing implementations",
+    "comentarios": [
+     {
+      "file": "common/src/main/java/org/keycloak/common/crypto/CryptoProvider.java",
+      "lines": [
+       39,
+       44
+      ],
+      "texto": "order() was added as an abstract method to the public CryptoProvider interface. CryptoIntegration.detectProvider now invokes order() on every ServiceLoader-discovered CryptoProvider via Comparator.comparingInt(CryptoProvider::order). Any CryptoProvider implementation compiled against the previous interface (an external or separately built provider jar on the classpath) will throw AbstractMethodError at detection time, i.e. during AuthzClient.create()/server bootstrap, before any provider is usable. Giving order() a default implementation (e.g. default int order() { return 0; }) avoids the binary-incompatibility."
+     }
+    ]
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#05",
+    "descricao": "detectProvider no longer fails when several crypto providers are present; with Default, FIPS and Elytron all at order 200, ties are resolved by classpath order and a FIPS deployment can silently run with the non-FIPS provider.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+      "lines": [
+       54,
+       72
+      ],
+      "texto": "WHAT: detectProvider sorts by order() reversed and silently picks index 0, removing the previous multiple-providers error. WHY: Default/FIPS/Elytron all return order 200, so ambiguous classpath (e.g. default+FIPS) now nondeterministically picks one by ServiceLoader order instead of failing fast, risking wrong FIPS vs non-FIPS crypto. HOW: only auto-ignore lower-order providers; throw when the top two have equal order()."
+     },
+     {
+      "file": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+      "lines": [
+       56,
+       62
+      ],
+      "texto": "Reject ambiguous highest-priority providers rather than silently taking the first. Both DefaultCryptoProvider and FIPS1402Provider return order 200 in this PR, so when both are present the stable sort leaves the decision to ServiceLoader discovery order. A deployment expecting FIPS can therefore initialize the ordinary Bouncy Castle provider without an error; previously this mixed classpath failed closed. Preserve the error for tied highest-priority providers (or require an explicit security-mode/provider choice), while still allowing the lower-priority authz-client fallback."
+     },
+     {
+      "file": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+      "lines": [
+       56,
+       72
+      ],
+      "texto": "detectProvider() no longer fails fast when multiple CryptoProviders are present and instead silently picks the first after sorting by order() descending. All Keycloak providers return the same order (DefaultCryptoProvider, FIPS1402Provider, WildFlyElytronProvider all return 200), so a tie between two providers is broken by the non-deterministic ServiceLoader iteration order rather than the intended priority. The previous code threw an IllegalStateException forcing the classpath to be corrected; now a deployment with two provider jars (exactly the 'multiple providers on classpath' scenario this PR enables) can silently select the unintended provider \u2014 e.g. a non-FIPS/strict provider when FIPS is required \u2014 with no error. Use a stable tie-breaker (delegate to the provider name/type) or reject equal top orders instead of relying on ServiceLoader order."
+     }
+    ]
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#07",
+    "descricao": "Claims a wrong-length JOSE signature causes an unchecked exception in concatenatedRSToASN1DER; verifiers catch it and report verification failure, as with the existing providers.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+      "lines": [
+       103,
+       122
+      ],
+      "texto": "WHAT: concatenatedRSToASN1DER splits signature without validating signature.length==signLength. WHY: short JOSE input throws ArrayIndexOutOfBoundsException and long input is silently truncated to signLength, breaking the ECDSACryptoProvider contract (IOException on malformed) used by verifier contexts. HOW: check length upfront and throw IOException."
+     },
+     {
+      "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+      "lines": [
+       103,
+       112
+      ],
+      "texto": "concatenatedRSToASN1DER never validates signature.length == signLength before System.arraycopy(signature,0,r,1,len) / (signature,len,s,1,len). A short JWS signature throws unchecked ArrayIndexOutOfBoundsException instead of the declared IOException, breaking verification on attacker-controlled input. Validate length and throw IOException."
+     }
+    ]
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#10",
+    "descricao": "The ES384 and ES512 tests sign with the same default P-256 key, so the converter is never tested with real P-384 or P-521 signatures.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+      "lines": [
+       39,
+       43
+      ],
+      "texto": "Single default EC keypair reused for ES256/ES384/ES512: testES384/testES512 names claim larger curves but body signs with the same P-256 key and only pads to larger signLength, so full-width 384/521-bit handling is never exercised. Generate a per-algorithm keypair with the correct curve (e.g. secp256r1/secp384r1/secp521r1) before signing."
+     },
+     {
+      "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+      "lines": [
+       41,
+       42
+      ],
+      "texto": "Every case generates a default EC key rather than a key on the curve associated with the named algorithm. On the standard JDK this is P-256, so testES384 and testES512 just pad P-256 signature components to larger lengths. A converter that discards nonzero high bytes beyond 32 bytes would still pass all three cases. Initialize the key generator with the appropriate curve per case (P-256, P-384, and P-521) so the larger-component conversions are actually tested."
+     },
+     {
+      "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+      "lines": [
+       41,
+       42
+      ],
+      "texto": "Generate a key on the curve corresponding to each tested algorithm rather than using the provider's default EC curve for all three tests. On the standard JDK this generates a P-256 key even for testES384 and testES512, so those tests merely pad P-256 integers to larger output lengths and never exercise actual P-384/P-521 signature encoding (including P-521's long-form sequence length)."
+     }
+    ]
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#11",
+    "descricao": "The test only checks a round trip between the two new converters and never verifies the re-encoded DER against the original signature or with Signature.verify, so mutually consistent bugs go undetected.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+      "lines": [
+       46,
+       57
+      ],
+      "texto": "Tautological round-trip assertion: rsConcat2 is derived from rsConcat via encode+decode that are inverses if self-consistent, so assertArrayEquals(rsConcat,rsConcat2) passes even if both directions are wrong. Verify against external oracle: Signature.initVerify + verify(asn1Des) and/or compare rsConcat to expected split, not just to itself."
+     },
+     {
+      "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+      "lines": [
+       52,
+       56
+      ],
+      "texto": "The test only checks self-consistency: it asserts asn1derToConcatenatedRS(g(asn1derToConcatenatedRS(sign))) == asn1derToConcatenatedRS(sign), i.e. that concatenatedRSToASN1DER is a right inverse of asn1derToConcatenatedRS. It never compares against the original DER `sign`, never verifies the ECDSA signature, and never asserts the emvider output is canonical DER. Because the decoder it reads back with (ASN1Decoder.readLength) accepts non-canonical long-form lengths (e.g. 0x81) and validates only tag numbers, a regression in ASN1Encoder.writeLength that always emitted long form would still round-trip and the test would still pass, even though the produced signature would no longer be valid DER and would be rejected by the Keycloak server / a JDK Signature.verify. Assert the encoded signature is valid DER (e.g. verify it with a JDK Signature, or compare asn1derToConcatenatedRS(sign) against a known-good width-padded r||s and assert its length equals algorithm.getSignatureLength())."
+     },
+     {
+      "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+      "lines": [
+       53,
+       56
+      ],
+      "texto": "The assertion only establishes agreement between the two new conversion routines, not correctness of the converted signature. For example, swapping r and s in both routines makes this entire round trip pass, although the DER result no longer verifies the signed data. Verify `asn1Des` with the public key and original data (or compare against an independently specified encoding) so mutually compensating conversion defects fail the test."
+     }
+    ]
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-02",
+    "descricao": "getBouncyCastleProvider in AuthzClientCryptoProvider returns the JDK default KeyStore provider instead of BouncyCastle, contrary to the CryptoProvider contract.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "d38c4d5f7443223c81529c22470293771baf9f38",
+  "base": "7554b5e3c458dc79b591d5e874e79ab10cf30c2f",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/assets/stylesheets/desktop/topic-post.scss",
+    "lines": [
+     291,
+     291
+    ],
+    "texto": "WHAT: The light-theme argument for `.topic-meta-data h5 a` changed from `scale-color($primary, $lightness: 30%)` to `scale-color($primary, $lightness: 70%)`. WHY: On light themes the author link becomes much lighter than intended, breaking the muted style and lowering contrast. HOW: Keep the first argument at 30% and use 70% only for the secondary dark-theme argument."
+   },
+   {
+    "id": "S2",
+    "file": "app/assets/stylesheets/desktop/user.scss",
+    "lines": [
+     522,
+     522
+    ],
+    "texto": "WHAT: The light-theme value for `.group-member-info .name` changed from `scale-color($primary, $lightness: 30%)` to `scale-color($primary, $lightness: 50%)`. WHY: The name renders lighter/less bold than the original design on light themes. HOW: Restore the first argument to 30% and use 70% for the secondary dark-theme argument."
+   },
+   {
+    "id": "S3",
+    "file": "app/assets/stylesheets/mobile/user.scss",
+    "lines": [
+     497,
+     497
+    ],
+    "texto": "WHAT: The light-theme value for `.group-member-info .name` changed from `scale-color($primary, $lightness: 30%)` to `scale-color($primary, $lightness: 50%)`. WHY: The mobile name renders lighter than intended and no longer matches the desktop style. HOW: Restore the first argument to 30% and use 70% for the secondary dark-theme argument."
+   },
+   {
+    "id": "S4",
+    "file": "app/assets/stylesheets/mobile/topic-post.scss",
+    "lines": [
+     182,
+     182
+    ],
+    "texto": "WHAT: `.topic-map h3` on mobile changed from `scale-color($primary, $lightness: 20%)` to `scale-color($primary, $lightness: 50%)` for light themes. WHY: It becomes too light and no longer matches the desktop topic map heading, which keeps 20%/80%. HOW: Use 20% for the primary light-theme argument and 80% for the secondary dark-theme argument."
+   },
+   {
+    "id": "S5",
+    "file": "app/assets/stylesheets/mobile/modal.scss",
+    "lines": [
+     102,
+     102
+    ],
+    "texto": "WHAT: `.custom-message-length` on mobile changed the light-theme value from 70% to 30% and the dark-theme value from 30% to 70%, opposite of the desktop modal. WHY: The hint becomes much darker than intended on light themes and is inconsistent with the desktop modal. HOW: Match the desktop modal by using 70% primary for light themes and 30% secondary for dark themes."
+   },
+   {
+    "id": "S6",
+    "file": "app/assets/stylesheets/desktop/topic-post.scss",
+    "lines": [
+     289,
+     292
+    ],
+    "texto": "The `.topic-meta-data h5 a` rule originally used `scale-color($primary, $lightness: 30%)`. The replacement passes `70%` as the light-scheme argument and `30%` as the dark-scheme argument, which is backwards: in the light scheme the link becomes much lighter than intended, and in the dark scheme it becomes too dark. The first argument should preserve the original `30%` and the second should be `70%` to maintain the same muted appearance on a dark background."
+   },
+   {
+    "id": "S7",
+    "file": "app/assets/stylesheets/mobile/modal.scss",
+    "lines": [
+     100,
+     103
+    ],
+    "texto": "The mobile `.custom-message-length` rule now uses `scale-color($primary, $lightness: 30%)` for light schemes and `scale-color($secondary, $lightness: 70%)` for dark schemes. The desktop equivalent (desktop/modal.scss:50) keeps the original `70%` for light schemes and `30%` for dark schemes. These two implementations disagree, so the mobile hint will be too dark in light mode and too light in dark mode."
+   },
+   {
+    "id": "S8",
+    "file": "app/assets/stylesheets/mobile/topic-post.scss",
+    "lines": [
+     179,
+     182
+    ],
+    "texto": "The mobile onebox `h3` color changed from `scale-color($primary, $lightness: 20%)` to `dark-light-choose(...50%, ...50%)`, while the desktop onebox `h3` (desktop/topic-post.scss:321) preserves `20%` for light schemes and uses `80%` for dark schemes. The mobile version both alters the light-scheme appearance and produces a different dark-scheme shade than desktop, breaking visual parity across viewports."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+    "descricao": "In .topic-meta-data h5 a, the light-theme color changed from scale-color($primary, 30%) to 70% because the dark-light-choose arguments were inverted, making the link much paler in light themes.",
+    "textoGolden": "In .topic-meta-data h5 a, the original code had color: scale-color($primary, $lightness: 30%) but was changed to dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%)). The lightness for the light theme changed from 30% to 70%, which is a dramatic inversion",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/desktop/topic-post.scss",
+      "lines": [
+       291,
+       291
+      ],
+      "texto": "The light-theme argument was changed from the original lightness. WHAT: the original was `scale-color($primary, $lightness: 30%)`, but the new value uses `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))` \u2014 the first (light-theme) argument is now 70%, not 30%. WHY: this silently darkens the light-theme color for `.topic-meta-data h5 a` (post-author link) from a 30% to a 70% tint, a light-theme regression outside the PR's dark-theme-only intent; the values also are inverted relative to the (X, 100\u2212X) convention used everywhere else (should be 30/70). HOW: use `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/desktop/topic-post.scss",
+      "lines": [
+       291,
+       291
+      ],
+      "texto": "The original value was scale-color($primary, $lightness: 30%). After conversion the light-mode argument became $primary:70% and dark-mode $secondary:30% \u2014 both inverted away from the original 30%. Should be dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%)). As written the light-mode color is dramatically lighter than intended."
+     },
+     {
+      "file": "app/assets/stylesheets/desktop/topic-post.scss",
+      "lines": [
+       291,
+       291
+      ],
+      "texto": "This bold link inside `.reply`/`nav.post-controls` was originally `scale-color($primary, $lightness: 30%)`. The rewrite uses 70% as the light-theme argument, inverting the intended value (the complementary pair should be 30/70, not 70/30). The light theme now shows this link far lighter than before; the first argument must remain the original 30%."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+    "descricao": "In mobile .custom-message-length the light-theme lightness changed from 70% to 30% (inverted pair), making the hint text much darker than before and than desktop.",
+    "textoGolden": "In topic-post.css the original code used $lightness: 70% but the replacement uses $lightness: 30% for the light theme. This makes the text significantly darker than intended.",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/mobile/modal.scss",
+      "lines": [
+       102,
+       102
+      ],
+      "texto": "The light-theme argument was changed from the original lightness. WHAT: the original was `scale-color($primary, $lightness: 70%)`, but the new value is `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))` \u2014 the first argument is now 30%, not 70%. WHY: this changes the light-theme color of `.custom-message-length` from a 70% to a 30% tint (a light-theme regression), and the pair is inverted vs. the (X, 100\u2212X) convention; the desktop counterpart at desktop/modal.scss:94 correctly kept 70/30. HOW: use `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/mobile/modal.scss",
+      "lines": [
+       102,
+       102
+      ],
+      "texto": "The original `.custom-message-length` color was `scale-color($primary, $lightness: 70%)`. The refactor changed the light-theme argument to 30%, so the light theme now renders this hint much darker than before (a 40-point lightness jump). It also no longer matches its desktop counterpart (desktop/modal.scss keeps `70%, 30%`). The first argument must stay at the original 70%: `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/mobile/modal.scss",
+      "lines": [
+       100,
+       102
+      ],
+      "texto": "`.custom-message-length` now contradicts the desktop rule for the same class. desktop/modal.scss (line 94) converted the original `scale-color($primary, $lightness: 70%)` to `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))` (keeping 70%), while this hunk produced `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`, flipping the primary lightness 70\u219230. Both files started from 70%, so mobile should be 70/30 to agree with desktop and preserve the original value."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+    "descricao": "In desktop/user.scss .name the light-theme lightness was changed from 30% to 50%, lightening the name in light themes instead of only adding a dark-theme value.",
+    "textoGolden": "This change for desktop/user.css changes $primary from 30% to 50% for the light theme; most other changes preserve the original $primary value and move the complement to $secondary for dark. Consider reviewing this (also applies to a similar .name change in the mobile variant).",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/desktop/user.scss",
+      "lines": [
+       522,
+       522
+      ],
+      "texto": "The `.name` color was `scale-color($primary, $lightness: 30%)` and is now `50%` in the light branch. This changes the light-theme color. Use `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/desktop/user.scss",
+      "lines": [
+       522,
+       522
+      ],
+      "texto": "The .name color was scale-color($primary, $lightness: 30%) but the light argument was changed to 50%, so the light theme loses its contrast. Use dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))."
+     },
+     {
+      "file": "app/assets/stylesheets/desktop/user.scss",
+      "lines": [
+       522,
+       522
+      ],
+      "texto": "The .name light value was changed from primary 30% to 50%, which lightens the text in light mode. Use dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+    "descricao": "In mobile/user.scss .name the light-theme lightness was changed from 30% to 50% instead of preserving 30% with a 70% secondary for dark themes.",
+    "textoGolden": "In mobile/user.scss line 497, the lightness value for dark themes should be inverted to 70% instead of being changed to 50%. This change may lead to unintended visual regressions in light themes.",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/desktop/user.scss",
+      "lines": [
+       522,
+       522
+      ],
+      "texto": "The light-theme value no longer matches the original. WHAT: `.group-member-info .name` was `scale-color($primary, $lightness: 30%)` and now is `dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%))` (30% \u2192 50%). WHY: this lightens the name link in the light theme, an unintended light-theme change; the equivalent rule in common/base/user.scss:124 correctly preserved 30% (30/70). HOW: use `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/mobile/user.scss",
+      "lines": [
+       497,
+       497
+      ],
+      "texto": "The light-theme value no longer matches the original. WHAT: `.group-member-info .name` was `scale-color($primary, $lightness: 30%)` and now is `dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%))` (30% \u2192 50%). WHY: this lightens the name link in the light theme, an unintended light-theme change inconsistent with the mobile/desktop counterpart that preserved 30%; desktop/user.scss:522 has the same defect. HOW: use `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/desktop/user.scss",
+      "lines": [
+       522,
+       522
+      ],
+      "texto": ".group-member-info .name originally used scale-color($primary, $lightness: 30%). The conversion changed the light-mode argument to 50% (making it 50/50), altering the intended color. Should preserve the original: dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+    "descricao": "In mobile topic-post a.star h3 the light-theme lightness changed from 20% to 50%, fading the heading and diverging from the desktop 20%/80% conversion.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/mobile/topic-post.scss",
+      "lines": [
+       182,
+       182
+      ],
+      "texto": "The light-theme value no longer matches the original. WHAT: `.topic-map h3` was `scale-color($primary, $lightness: 20%)` and now is `dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%))` (20% \u2192 50%). WHY: this visibly lightens the topic-map heading in the light theme; the desktop counterpart at desktop/topic-post.scss:321 correctly kept 20% (20/80), so mobile diverged. HOW: use `dark-light-choose(scale-color($primary, $lightness: 20%), scale-color($secondary, $lightness: 80%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/mobile/topic-post.scss",
+      "lines": [
+       182,
+       182
+      ],
+      "texto": "Original was scale-color($primary, $lightness: 20%). The conversion changed it to 50%/50%, but the desktop mirror of this rule (desktop/topic-post.scss h3) uses 20%/80%. The two files must agree; should be dark-light-choose(scale-color($primary, $lightness: 20%), scale-color($secondary, $lightness: 80%))."
+     },
+     {
+      "file": "app/assets/stylesheets/mobile/topic-post.scss",
+      "lines": [
+       182,
+       182
+      ],
+      "texto": "This `h3` was originally `scale-color($primary, $lightness: 20%)`. The rewrite changed the light-theme argument to 50%, so the light theme renders the heading lighter than before; the correct pair is 20/80, not 50/50. The first argument must keep the original 20%."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#07",
+    "descricao": "The comment describing the topic-list cell default color still names a plain scale-color($primary, 50%) rule that the PR replaced with dark-light-choose.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/base/discourse.scss",
+      "lines": [
+       72,
+       76
+      ],
+      "texto": "The comment at lines 72-74 states \"the default for table cells in topic list is scale-color($primary, $lightness: 50%)\", but the rule it documents was converted by this PR to `dark-light-choose(scale-color($primary, $lightness: X%), scale-color($secondary, $lightness: 100-X%))` (here for coldmap-high/med/low and in common/base/_topic-list.scss th/td). The prose still names a single `$primary` expression, so it no longer describes the code: a reader comparing the two will look for a plain `$primary` 50% rule that no longer exists. Update the comment to describe the dark-light-choose baseline (e.g. \"is dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%))\")."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#08",
+    "descricao": "In dark themes the notification badge background becomes a lightened $secondary while its text stays $secondary, giving dark text on a dark background with poor contrast.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/components/badges.css.scss",
+      "lines": [
+       239,
+       239
+      ],
+      "texto": "The dark-theme notification badge background now uses a lightened $secondary while its text still uses the unmodified $secondary. This puts dark text on a dark background for plain badges such as category unread counts in site-map.hbs:73; with $secondary black, the foreground is #000 and the background is approximately #4d4d4d (about 2.5:1 contrast), making the small count text difficult to read. Set the default badge foreground, including its &[href] rule, to a contrasting dark-theme color such as $primary when selecting this dark background."
+     }
+    ]
+   }
+  ]
+ },
+ "implement-access-token-context-encoding-framework-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "daffb05b5ad091d3ec09933c3c99c2b54f448696",
+  "base": "c22f76867f595f0f7c327376a66a08dca01949e8",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     481,
+     484
+    ],
+    "texto": "WHAT: The access-token ID matcher reads the wrong substring and inverts the equality check. WHY: The encoder writes the grant shortcut at indices 4-5 of the prefix, but the matcher reads substring(3, 5) and returns false when it equals the expected shortcut, so the matcher never rejects a token with the wrong grant type. HOW: Change the condition to `if (!items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;`."
+   },
+   {
+    "id": "S2",
+    "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+    "lines": [
+     69,
+     78
+    ],
+    "texto": "WHAT: The constructor null-checks grantType twice and never validates rawTokenId. WHY: A null rawTokenId is silently accepted, and the error message refers to grantType even though rawTokenId is the value being checked. HOW: Change the fourth requireNonNull to check rawTokenId: `Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\");`."
+   },
+   {
+    "id": "S3",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     476,
+     492
+    ],
+    "texto": "The `isAccessTokenId` matcher returns `false` when `items[0].substring(3, 5).equals(expectedGrantShortcut)`. It should return `true` on a match. Fix the logic so the expected grant shortcut is required, not rejected. Also consider updating the misleading comment about the shortcut starting at the 4th character, since it is at 0-indexed positions 4-5."
+   },
+   {
+    "id": "S4",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     476,
+     492
+    ],
+    "texto": "The matcher extracts the grant-type shortcut from the wrong position. The encoder produces token ids as <sessionType:2><tokenType:2><grantType:2>:<rawId>, so the grant shortcut is at indices 4-5 of the prefix, not 3-5. Change items[0].substring(3, 5) to items[0].substring(4, 6) and update the comment accordingly, otherwise valid token ids produced by DefaultTokenContextEncoderProvider will fail the assertion."
+   },
+   {
+    "id": "S5",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     476,
+     492
+    ],
+    "texto": "The matcher checks items[0].substring(3, 5) to validate the 2-char grant shortcut, but the shortcut starts at index 4 and ends at index 6 in the 6-character prefix. This causes it to reject valid token IDs and to not actually verify the grant type. Change the check to substring(4, 6)."
+   },
+   {
+    "id": "S6",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     476,
+     492
+    ],
+    "texto": "The `isAccessTokenId` matcher extracts the wrong two-character grant-type segment and inverts the equality check. For the encoded token format `<st(2)><tt(2)><gt(2)>:<uuid>` the grant shortcut is at indices 4-5 of the prefix, so it should be `substring(4, 6)`. The current `substring(3, 5)` reads the token-type/grant-type boundary, and the `if (...equals(...)) return false;` logic accepts non-matching grants and rejects matching ones. Fix the substring indices and use `!equals(...)` (or return true directly on match) so the matcher validates the expected grant type correctly."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#01",
+    "descricao": "The AccessTokenContext constructor checks grantType twice instead of rawTokenId, so a null rawTokenId passes validation and is encoded as ':null'.",
+    "textoGolden": "In AccessTokenContext constructor, the fourth Objects.requireNonNull validates grantType twice instead of validating rawTokenId, allowing null rawTokenId values to pass validation.",
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+      "lines": [
+       73,
+       73
+      ],
+      "texto": "WHAT: the constructor validates `grantType` a second time instead of `rawTokenId` (`Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\")`). WHY: a null `rawTokenId` is silently accepted, so `encodeTokenId` produces a token id ending in `:null` and any later consumer of the raw id gets an invalid value instead of an early failure. HOW: change the argument to `Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")`."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+      "lines": [
+       69,
+       78
+      ],
+      "texto": "Line 73 calls Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\") \u2014 it validates grantType a second time (line 72 already does) with a message naming a different field. rawTokenId is never validated, so a null rawTokenId is accepted at construction and the advertised check/message is wrong. It should be Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+      "lines": [
+       73,
+       73
+      ],
+      "texto": "The null-check message names the wrong parameter: `Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\")` validates `grantType` but reports `rawTokenId`, and it duplicates the check on line 72 while `rawTokenId` is never validated at all. The message that reaches the reader contradicts the code it guards; it should be `Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")`."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#02",
+    "descricao": "isAccessTokenId reads the grant shortcut at the wrong offset (3,5 instead of 4,6) and inverts the comparison, so the event assertions never verify the token's grant type.",
+    "textoGolden": "In isAccessTokenId, the substring for the grant shortcut and the equality check look inverted: the grant shortcut occupies indices 4\u20135 (substring(4,6)), and a match should return true (combined with UUID check), not false.",
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+      "lines": [
+       483,
+       483
+      ],
+      "texto": "WHAT: `isAccessTokenId` reads the grant shortcut from the wrong offset and inverts the comparison \u2014 `if (items[0].substring(3, 5).equals(expectedGrantShortcut)) return false;`. WHY: for the encoded id `ssttgg:raw` the grant shortcut occupies 0-based indices 4-5, so `substring(3,5)` inspects the token-type/grant boundary and can never equal the expected shortcut; combined with the inverted `return false`, the equality branch is unreachable and the matcher validates only the UUID part. As a result the new assertions in `expectCodeToToken`/`expectRefresh`/`expectDeviceCodeToToken`/`expectAuthReqIdToToken` do not actually assert the grant type and would pass even if the grant shortcut were wrong. HOW: use `items[0].substring(4, 6)` and negate the condition (`if (!items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;`)."
+     },
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+      "lines": [
+       476,
+       492
+      ],
+      "texto": "The matcher logic is inverted: line 483 returns false when the extracted grant shortcut EQUALS expectedGrantShortcut, so a token that actually carries the expected grant fails the matcher, while a token with any other grant shortcut falls through and passes. The condition should be negated: `if (!items[0].substring(3,5).equals(expectedGrantShortcut)) return false;`. Also note the encode site writes the grant shortcut at chars 4-6 (substring(4,6)); substring(3,5) reads one character early into the token-type field, so the offset is off by one relative to TokenManager.encodeTokenId."
+     },
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+      "lines": [
+       482,
+       483
+      ],
+      "texto": "The comment 'Grant type shortcut starts at character 4th char' disagrees with the encoding that this PR defines (sessionType chars 1-2, tokenType 3-4, grantType 5-6, e.g. 'trltcc'), and the code reads substring(3,5) \u2014 the 4th-5th chars, i.e. the token-type second char plus the grant first char, never the grant shortcut. The comment (and the index) should point at the 5th char / substring(4,6)."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#03",
+    "descricao": "getShortcut() Javadoc says shortcuts are usually 3 letters, but the encoding requires exactly 2-character shortcuts.",
+    "textoGolden": "Javadoc mentions \"usually like 3-letters shortcut\" but some implementations use 2-letter shortcuts (\"ac\", \"cc\", \"rt\", \"te\", \"pc\", \"ci\", \"ro\"). Consider updating documentation to reflect actual usage pattern.",
+    "comentarios": [
+     {
+      "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java",
+      "lines": [
+       30,
+       31
+      ],
+      "texto": "The Javadoc says getShortcut() returns 'usually like 3-letters shortcut', but every implementation introduced in this PR returns a 2-character shortcut ('ac','cc','pg','pc','rt','ro','te','ci','dg') and the encoder relies on exactly 2 chars (encoded context length 6 = 2+2+2). The doc states a length the code does not produce; it should say 2-character shortcut."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java",
+      "lines": [
+       73,
+       76
+      ],
+      "texto": "Grant shortcuts are registered without enforcing the two-character length required by the decoder. A custom grant returning a three-character shortcut, which the new OAuth2GrantTypeFactory documentation explicitly suggests, produces a seven-character prefix that getTokenContextFromTokenId rejects, breaking encode/decode round trips for that grant. Validate shortcut length during registration and dynamic refresh, and document the required two-character format."
+     },
+     {
+      "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java",
+      "lines": [
+       30,
+       31
+      ],
+      "texto": "The new contract describes getShortcut() as usually returning a three-letter shortcut, but DefaultTokenContextEncoderProvider requires exactly two characters for the grant field (six total prefix characters, decoded with substring(4, 6)). An extension author following this documentation can produce token IDs that the default decoder rejects. Document the required two-character length rather than advertising three letters."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#04",
+    "descricao": "testIncorrectGrantType catches any RuntimeException, so it passes on a NullPointerException from the unset sessionFactory rather than verifying the unknown-grant IllegalArgumentException.",
+    "textoGolden": " Catching generic RuntimeException is too broad. The implementation throws IllegalArgumentException specifically - catch that instead for more precise testing.",
+    "comentarios": [
+     {
+      "file": "services/src/test/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderTest.java",
+      "lines": [
+       77,
+       83
+      ],
+      "texto": "Catching RuntimeException allows this negative test to pass for an unrelated fixture failure. The fixture constructs the factory without postInit, leaving sessionFactory null; resolving the unregistered `ac` shortcut calls sessionFactory.getProviderFactoriesStream and throws NullPointerException before the decoder's intended unknown-grant IllegalArgumentException. Catch/assert IllegalArgumentException specifically and provide a factory fixture whose lookup returns no matching grant, so removing the decoder's validation would fail the test."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#05",
+    "descricao": "Client-credentials (and UMA permission) token issuance never sets the GRANT_TYPE attribute, so their access token ids are encoded with the unknown grant 'na' instead of their shortcut.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java",
+      "lines": [
+       57,
+       60
+      ],
+      "texto": "The new grant metadata falls back to 'na' for client-credentials and UMA tokens because their issuance paths never set Constants.GRANT_TYPE on their fresh ClientSessionContext. ClientCredentialsGrantType calls responseBuilder.generateAccessToken directly, and PermissionGrantType delegates to AuthorizationTokenService, so neither executes the new assignment in createTokenResponse; tokens from these known grants therefore carry unknown grant context. Set the grant attribute in both issuance paths before generating the access token."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#06",
+    "descricao": "Lazy registration of newly deployed grants does not check shortcut uniqueness, so a grant reusing an existing shortcut silently overwrites the reverse mapping and older tokens decode to the wrong grant.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java",
+      "lines": [
+       112,
+       114
+      ],
+      "texto": "Enforce shortcut uniqueness during lazy registration rather than overwriting grantsByShortcuts. If a newly deployed grant B uses existing grant A's shortcut, this path replaces shortcut\u2192A with shortcut\u2192B while retaining both forward entries. Previously issued A tokens then decode as B. Concurrent registrations of two new grants with the same shortcut likewise both succeed, with the last inverse-map write winning. Use collision-aware atomic registration and reject the conflicting grant before publishing its forward mapping."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#opa-01",
+    "descricao": "getShortcut() is added as an abstract method to OAuth2GrantTypeFactory without a default, breaking existing custom grant type factories (compile error or AbstractMethodError when DefaultTokenContextEncoderProviderFactory.postInit calls it).",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "9501091c52ae94e8d916f79b35d21975b3f9cadb",
+  "base": "bb5a6837cb5b3d8d3b174e17d42ec14486ef8738",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/integrations/services/assignment_source.py",
+    "lines": [
+     18,
+     18
+    ],
+    "texto": "WHAT: The `queued` default uses `timezone.now()` as a dataclass default, which evaluates once at class definition time. WHY: Every `AssignmentSource` created without an explicit `queued` value will share the same stale datetime (when the module was first imported), defeating the purpose of recording when the assignment was queued. HOW: Use `dataclasses.field(default_factory=timezone.now)` so each instance gets a fresh timestamp at creation time."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/integrations/services/assignment_source.py",
+    "lines": [
+     14,
+     35
+    ],
+    "texto": "AssignmentSource.to_dict() returns a dataclass.asdict() that includes a datetime object in the `queued` field. This dict is passed through apply_async kwargs and serialized by Celery using JSON, which cannot encode datetime. The task will fail at the serialization boundary with a TypeError. Serialize `queued` to an ISO 8601 string in to_dict and parse it back in from_dict so the payload is JSON-safe."
+   },
+   {
+    "id": "S3",
+    "file": "tests/sentry/integrations/services/test_assignment_source.py",
+    "lines": [
+     8,
+     11
+    ],
+    "texto": "The test `test_from_dict_empty_array` is misnamed because it passes an empty dictionary (`{}`), not an empty array. Rename it to `test_from_dict_empty_dict` so the test name accurately describes the scenario it covers."
+   },
+   {
+    "id": "S4",
+    "file": "tests/sentry/integrations/services/test_assignment_source.py",
+    "lines": [
+     8,
+     11
+    ],
+    "texto": "test_from_dict_empty_array is named to exercise from_dict with an empty array, but the body passes an empty dict ({}). If from_dict([]) behaved incorrectly (e.g., raised instead of returning None), this test would still pass because it never uses []. Rename the test to test_from_dict_empty_dict or change the input to [] to match the name."
+   },
+   {
+    "id": "S5",
+    "file": "tests/sentry/integrations/services/test_assignment_source.py",
+    "lines": [
+     13,
+     19
+    ],
+    "texto": "test_from_dict_inalid_data contains a typo (inalid instead of invalid). This means the test is skipped when developers or CI filter tests by name (e.g., pytest -k invalid), so the invalid-data handling it covers would not be exercised in those runs. Rename it to test_from_dict_invalid_data."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/integrations/tasks/sync_assignee_outbound.py",
+    "lines": [
+     52,
+     61
+    ],
+    "texto": "The task was updated to pass `assignment_source=parsed_assignment_source` to `installation.sync_assignee_outbound`, but the abstract `IssueSyncIntegration.sync_assignee_outbound` and concrete integration implementations were not updated to accept that parameter. This causes a `TypeError` at runtime for any integration whose assignee-outbound method does not accept `assignment_source` or `**kwargs`. Update the abstract method signature (and the concrete implementations that override it) to accept `assignment_source: AssignmentSource | None = None`."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+    "descricao": "AssignmentSource.queued defaults to timezone.now() evaluated at class definition, so all instances share the import-time timestamp instead of the time they were queued.",
+    "textoGolden": "The AssignmentSource dataclass uses queued: datetime = timezone.now() as a default field value, which evaluates timezone.now() once at class definition time and shares that single datetime instance across all objects.",
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/services/assignment_source.py",
+      "lines": [
+       14,
+       18
+      ],
+      "texto": "WHAT: `queued: datetime = timezone.now()` evaluates once at class-definition time so every AssignmentSource without explicit queued shares the same timestamp. WHY: queued time is wrong/stale for all later instances and defeats its purpose as a queue-time marker. HOW: use `field(default_factory=timezone.now)` (with `field` import)."
+     },
+     {
+      "file": "src/sentry/integrations/services/assignment_source.py",
+      "lines": [
+       14,
+       18
+      ],
+      "texto": "Field `queued: datetime = timezone.now()` is evaluated once at import so all AssignmentSources share the same timestamp. Use `field(default_factory=timezone.now)` so each instance measures its actual creation/queue time."
+     },
+     {
+      "file": "src/sentry/integrations/services/assignment_source.py",
+      "lines": [
+       18,
+       18
+      ],
+      "texto": "The dataclass field default `queued: datetime = timezone.now()` is evaluated a single time when the module is imported, so every AssignmentSource created without an explicit `queued` value (which is exactly what `from_integration` does, and what `from_dict` falls back to when the key is absent) shares the same frozen import-time timestamp instead of the moment the assignment was actually queued. This makes the `queued` timestamp semantically wrong/meaningless (it reflects process start, not assignment time) and would silently misreport the queue time anywhere this value is later inspected. Fix by defaulting in a factory/`__post_init__` or making the caller pass the timestamp, e.g. set `queued` inside `from_integration` (`queued=timezone.now()`), or use `field(default_factory=timezone.now)`."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#02",
+    "descricao": "The test method name test_from_dict_inalid_data has a typo; it should be test_from_dict_invalid_data.",
+    "textoGolden": "The method name has a typo: test_from_dict_inalid_data should be test_from_dict_invalid_data.",
+    "comentarios": [
+     {
+      "file": "tests/sentry/integrations/services/test_assignment_source.py",
+      "lines": [
+       13,
+       19
+      ],
+      "texto": "Typo in test name test_from_dict_inalid_data hides it from name-filtered runs (e.g. -k invalid_data): fix spelling to test_from_dict_invalid_data so the invalid-payload guard is actually selected and verified."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#03",
+    "descricao": "test_from_dict_empty_array actually passes an empty dict, so the name does not match what the test exercises.",
+    "textoGolden": "Method name says 'empty_array' but tests empty dict - consider renaming to 'test_from_dict_empty_dict' for clarity.",
+    "comentarios": [
+     {
+      "file": "tests/sentry/integrations/services/test_assignment_source.py",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "The test is named test_from_dict_empty_array but it passes an empty dict ({}), not an empty array; a caller reading the name will believe the empty-list/array input path is covered when it is not. Rename it to test_from_dict_empty_dict (or pass [] to actually cover the empty-array case) so the identifier agrees with the input it exercises."
+     },
+     {
+      "file": "tests/sentry/integrations/services/test_assignment_source.py",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "test_from_dict_empty_array names an empty array but constructs an empty dict (`data: dict[str, Any] = {}`), so it only re-exercises the empty/None path and never covers empty-array input; a regression specific to that input would pass unnoticed. Pass a real empty array or rename the test to match its body."
+     },
+     {
+      "file": "tests/sentry/integrations/services/test_assignment_source.py",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "test_from_dict_empty_array passes {} rather than an empty array. It therefore only tests missing required dictionary keys and would still pass if rejection of an array input were broken. Pass [] to exercise the named case (or rename this test to empty_dict if that is the intended contract)."
+     }
+    ]
+   }
+  ]
+ },
+ "anonymous-add-configurable-device-limit-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "bbd8c507cdf56f6b884373809e0b24abd4a2353d",
+  "base": "50f4e78a39914711d0d231a501ba215becf17ebc",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/services/anonymous/anonimpl/impl.go",
+    "lines": [
+     144,
+     148
+    ],
+    "texto": "WHAT: tagDeviceUI sets the local cache before the database write succeeds, so a failed CreateOrUpdateDevice leaves a cached entry that suppresses limit checks for 29 minutes. WHY: after the first ErrDeviceLimitReached rejection, retries from the same device hit the cache and skip the store, allowing anonymous authentication to bypass the configured device limit. HOW: move a.localCache.SetDefault to after a successful a.anonStore.CreateOrUpdateDevice(ctx, device) return, or invalidate the cache on error."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+    "lines": [
+     108,
+     118
+    ],
+    "texto": "WHAT: CreateOrUpdateDevice checks CountDevices and then performs the insert/update in separate, non-atomic steps. WHY: concurrent requests can both see count < deviceLimit and both insert new devices, allowing the number of stored devices to exceed the configured anonymous device limit. HOW: wrap the count check and write in a single transaction with an appropriate isolation level, or enforce the limit with a single set-returning query."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+    "lines": [
+     105,
+     118
+    ],
+    "texto": "CreateOrUpdateDevice performs CountDevices and then conditionally inserts in two separate transactions. Two concurrent requests can both read count < deviceLimit and both insert new rows, overshooting the configured anonymous device limit. Enforce the limit atomically (e.g., with a single UPSERT guarded by a subquery count, a serializable transaction, or an application-level lock) so the check and write happen together."
+   },
+   {
+    "id": "S4",
+    "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+    "lines": [
+     72,
+     103
+    ],
+    "texto": "updateDevice updates only rows WHERE updated_at BETWEEN device.UpdatedAt - 30d AND device.UpdatedAt + 1m. If the existing row's updated_at is older than 30 days, the UPDATE matches no rows and CreateOrUpdateDevice returns ErrDeviceLimitReached. The caller in client.go then fails anonymous authentication. The limit-reached path should still allow an existing device to be renewed/updated regardless of age (or fall back to an insert when the device_id already exists), rather than rejecting the request."
+   },
+   {
+    "id": "S5",
+    "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+    "lines": [
+     18,
+     18
+    ],
+    "texto": "The error message 'device limit reached' is user-facing but is a hard-coded English literal. It bypasses Grafana's i18n/translation system, so users in other locales will see untranslated English text. This string should be passed through the project's translation mechanism (e.g., i18n.Translate) and added to the relevant locale file(s)."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#01",
+    "descricao": "The device limit check counts devices and then inserts in separate non-atomic steps, so concurrent requests from new devices can all pass the check and exceed the configured limit.",
+    "textoGolden": "Race condition: Multiple concurrent requests could pass the device count check simultaneously and create devices beyond the limit. Consider using a database transaction or lock.",
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       108,
+       118
+      ],
+      "texto": "The limit check counts devices and then inserts in separate steps with no lock or transaction. Concurrent requests from new devices can all see count < limit and all insert, so the limit is exceeded. Make the count-and-insert atomic, for example with a conditional INSERT ... SELECT ... WHERE (SELECT COUNT(*)) < limit."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       108,
+       118
+      ],
+      "texto": "The device limit check is a non-atomic count followed by an insert. Concurrent requests from different new devices can all see count < limit and all insert, so the number of devices exceeds deviceLimit. Make the check and insert atomic, for example with a conditional INSERT ... SELECT WHERE (SELECT COUNT(*)) < limit, or serialize the check and insert under a lock."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       108,
+       118
+      ],
+      "texto": "WHAT: CreateOrUpdateDevice does check-then-act (CountDevices then INSERT/UPSERT) with no lock, transaction, or unique-guard when deviceLimit>0. WHY: Two concurrent new-device requests can both observe count < limit and both insert, exceeding the configured limit and breaking the enforcement contract. HOW: Enforce atomically (e.g., conditional insert guarded by count in one statement/transaction with serializable lock, or re-check count on conflict)."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#02",
+    "descricao": "Device slots are keyed by the client-controlled X-Grafana-Device-Id header with no validation or rate limiting, so an anonymous caller can fill the limit with fake IDs and deny anonymous access to every new legitimate device.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       109,
+       117
+      ],
+      "texto": "WHAT: Device slots counted toward deviceLimit are keyed by the unauthenticated X-Grafana-Device-Id header (read in impl.go TagDevice) with no validation or rate-limit. WHY: Any anonymous caller can mint arbitrary device IDs to fill the table up to the limit, after which all legitimate new anonymous devices get ErrDeviceLimitReached and authentication is denied \u2014 a trivial anonymous-access DoS introduced by the limit. HOW: Do not let a single client consume many slots (e.g., bind slot consumption to IP/fingerprint, rate-limit new-device creation, or require proof of distinct device)."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#05",
+    "descricao": "TestIntegrationBeyondDeviceLimit only checks that a new device is rejected at the limit and never verifies that an existing device can still be updated at the limit.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database_test.go",
+      "lines": [
+       51,
+       70
+      ],
+      "texto": "The at-limit call reuses a brand-new device ID (\"keep\") that was never inserted, so it only reaches updateDevice's `rowsAffected == 0` -> ErrDeviceLimitReached branch. The success branch of the newly added updateDevice (an existing device still being updated while the store is at the limit) is never exercised by any test \u2014 every other call uses deviceLimit 0, so updateDevice is never invoked. A regression that made updateDevice always affect 0 rows, use a wrong WHERE/SET, or unconditionally return ErrDeviceLimitReached whenever limit>0 would leave this and all other tests green. Add a case that, after the store is at the limit, calls CreateOrUpdateDevice again with the SAME DeviceID and asserts require.NoError (and ideally that client_ip/user_agent/updated_at were changed), so the update path is actually verified."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database_test.go",
+      "lines": [
+       51,
+       70
+      ],
+      "texto": "TestIntegrationBeyondDeviceLimit only checks that a new device is rejected at the limit. It would still pass if updateDevice always returned ErrDeviceLimitReached, because it never re-submits the existing device (DeviceID \"32mdo31deeqwes\") at the limit. Add a call that updates the existing device with a new UserAgent or UpdatedAt, require NoError, and check the stored row changed."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#07",
+    "descricao": "tagDeviceUI caches the device key before CreateOrUpdateDevice; when the store returns ErrDeviceLimitReached the entry stays, so the next request from the same device skips the limit check and authenticates for up to 29 minutes.",
+    "textoGolden": "The `tagDeviceUI` function populates the local cache with the device ID before the `CreateOrUpdateDevice` call. If `ErrDeviceLimitReached` is returned, the cache entry remains set, allowing subsequent requests to bypass the device limit until the cache expires after 29 minutes.",
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/client.go",
+      "lines": [
+       44,
+       47
+      ],
+      "texto": "WHAT: TagDevice failures that triggered the new ErrDeviceLimitReached early-return are not permanent, because tagDeviceUI (impl.go:87) writes the device key into localCache BEFORE CreateOrUpdateDevice (impl.go:93) and never evicts it on error; tagDeviceUI returns early on any cache hit (impl.go:83-84). WHY: the first request from a new over-limit device is denied, but the poisoned cache makes every subsequent request from that same device skip the limit check entirely and authenticate successfully, so the configurable device limit is bypassed by simply retrying. HOW: only set the cache key after CreateOrUpdateDevice returns nil (e.g. move a.localCache.SetDefault after the successful DB write, or delete the key when it returns ErrDeviceLimitReached)."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/impl.go",
+      "lines": [
+       144,
+       148
+      ],
+      "texto": "TagDevice now propagates ErrDeviceLimitReached to deny an over-limit anonymous device, but tagDeviceUI (impl.go:83-95) records the device in localCache at line 87 *before* calling a.anonStore.CreateOrUpdateDevice. When the store rejects the device with ErrDeviceLimitReached, the key is already cached, so the next request for that same device returns early at line 83 with a nil error and the device is admitted. The limit therefore only blocks the first request and is silently bypassed on retry. Fix by only setting the cache entry after CreateOrUpdateDevice succeeds (move SetDefault after the store call), or by removing/not caching the key on failure."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/client.go",
+      "lines": [
+       44,
+       46
+      ],
+      "texto": "The new authentication gate accepts retries from devices that were rejected by the limit because tagDeviceUI inserts the cache entry before CreateOrUpdateDevice succeeds. At capacity, the first request with a new X-Grafana-Device-Id fails, but subsequent requests with that same ID hit the 29-minute cache and receive an anonymous identity without admission to the device store. Cache only successful admissions, and ensure concurrent requests cannot treat an in-progress admission as successful."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#09",
+    "descricao": "Device tagging now runs synchronously in Authenticate, adding DB round-trips on cache-miss anonymous requests where it used to be fire-and-forget.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/client.go",
+      "lines": [
+       44,
+       50
+      ],
+      "texto": "WHAT: Anonymous.Authenticate changed from fire-and-forget goroutine TagDevice to synchronous TagDevice(ctx) that runs CountDevices + INSERT/UPDATE inline. WHY: Every cache-miss anonymous authentication now blocks on two DB round-trips in the login hot path, adding latency and DB load per request where previously auth returned immediately. HOW: Restore async tagging for the non-limit path or at least decouple denial from the hot path (e.g., async count with cached count, or only synchronously enforce when near limit)."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#11",
+    "descricao": "The new auth.anonymous device_limit setting has no entry in conf/defaults.ini, so the GF_AUTH_ANONYMOUS_DEVICE_LIMIT environment override is ignored and the limit stays 0.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/setting/setting.go",
+      "lines": [
+       1654,
+       1654
+      ],
+      "texto": "The new device_limit setting is read without adding a corresponding key to conf/defaults.ini. applyEnvVariableOverrides only visits keys already present in the loaded INI and runs before readAuthSettings, so setting GF_AUTH_ANONYMOUS_DEVICE_LIMIT alone is ignored and leaves the limit at zero, disabling enforcement. Add an uncommented device_limit = 0 entry under auth.anonymous in defaults.ini so the standard environment override mechanism can apply it."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#opa-02",
+    "descricao": "The anonymous device limit is enforced only through TagDevice, which returns nil when the client-controlled device ID header is missing, so requests without the header authenticate anonymously regardless of the configured limit.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#opa-04",
+    "descricao": "The doc comment on updateDevice says it updates a device \"updated between the given times\", but the function takes no times, computes the 30-day window itself and returns ErrDeviceLimitReached when no row matches.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#prod-02",
+    "descricao": "updateDevice prepends the query to the captured args inside the retried DB callback, so a SQLite lock retry runs Exec with the query duplicated in the arguments and the update fails.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "267d8be1f556ed59639ced396c885bb44586da19",
+  "base": "7a5fbae060bd0d3e29f3a4b5c6f2bfd8b2914dc7",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/serializers/user_serializer.rb",
+    "lines": [
+     153,
+     155
+    ],
+    "texto": "WHAT: The conditional inclusion method for `website_name` is named `include_website_name` without the required trailing `?`, so ActiveModelSerializers 0.8 ignores it. WHY: `website_name` is always serialized, bypassing the `untrusted_attributes` guard on `website` and exposing the user's website host/path to anonymous/TL0 viewers even when `website` is hidden. HOW: Rename the method to `include_website_name?` and mirror the `website` guard: `def include_website_name?; return false if scope.restrict_user_fields?(object); website.present?; end`."
+   },
+   {
+    "id": "S2",
+    "file": "app/serializers/user_serializer.rb",
+    "lines": [
+     153,
+     155
+    ],
+    "texto": "The method is named `include_website_name`, but ActiveModel::Serializers invokes `include_website_name?` to decide whether to serialize the attribute. Rename it to `include_website_name?` so the intended guard actually runs, otherwise `website_name` is always included regardless of whether the user has a website."
+   },
+   {
+    "id": "S3",
+    "file": "app/serializers/user_serializer.rb",
+    "lines": [
+     137,
+     155
+    ],
+    "texto": "The new `website_name` method parses the serialized `website` value using `URI(...).host` and `URI(...).path`, and the `rescue nil` swallows parse errors silently without logging the URL or the error, making failures undiagnosable."
+   },
+   {
+    "id": "S4",
+    "file": "app/serializers/user_serializer.rb",
+    "lines": [
+     137,
+     151
+    ],
+    "texto": "Domain names are case-insensitive, but website_name compares URI(website).host against Discourse.current_hostname using case-sensitive ==, ends_with?, and split/join comparisons. Normalize both hosts (e.g., downcase) before comparing so that http://EXAMPLE.COM/... on an instance at example.com is recognized as the same domain and the path logic is not bypassed by case variation."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#01",
+    "descricao": "website_name compares hostnames case-sensitively, so an uppercase website host matching the instance domain shows only the host instead of the full path.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       137,
+       151
+      ],
+      "texto": "The new `website_name` compares two domain names case-sensitively. `URI(website.to_s).host` preserves the letter case written by the user, whereas `Discourse.current_hostname` is the canonical lower-cased host, and no side is down-cased before the comparison at lines 141, 144-146 and 149 (including the `ends_with?` suffix check). Because DNS host names are case-insensitive identity values, `http://EXAMPLE.com/user` and `http://example.com/user` denote the same host but take different branches, so the same-site check is decided by letter case: the wrong arm is chosen and the full-path form is dropped. Normalise both sides before comparing, e.g. `website_host = URI(website.to_s).host&.downcase` (or use `URI(...).hostname`, which down-cases) and compare against `Discourse.current_hostname.to_s.downcase`."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       138,
+       141
+      ],
+      "texto": "Hostname comparisons are case-sensitive even though DNS hostnames are case-insensitive. With an instance hostname of example.com and a valid website of http://EXAMPLE.COM/user, neither the exact-host nor suffix comparison matches, so the profile displays only EXAMPLE.COM instead of the requested path. Normalize both hostnames to lowercase for comparison while preserving the desired display spelling."
+     }
+    ]
+   },
+   {
+    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#04",
+    "descricao": "website_name strips only the first label to decide same-domain, so unrelated hosts under multi-label public suffixes (co.uk, github.io) are treated as the instance domain and shown with full path.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       144,
+       146
+      ],
+      "texto": "WHAT: the `elsif` branch treats the last two dot-segments as the registrable domain, so multi-part public suffixes are mis-compared. WHY: for e.g. website_host='example.co.uk' and discourse_host='forum.co.uk' both have 3 segments, the branch compares `'co.uk' == 'co.uk'`, concludes the domains match, and returns `website_host + path`, even though example.co.uk and forum.co.uk are unrelated sites \u2014 the display then shows a path that does not belong to the instance domain, defeating the feature's purpose. HOW: compare against a public-suffix-aware registrable domain (e.g. use the PublicSuffix list) or require at least the full suffix before treating hosts as the same domain, instead of blindly taking `split('.')[1..-1]`."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       144,
+       146
+      ],
+      "texto": "Comparing all labels except the first incorrectly treats unrelated domains under multi-label public suffixes as the same domain. For example, with instance host `forum.co.uk` and website `https://unrelated.co.uk/user`, this returns `unrelated.co.uk/user` rather than the unrelated-site host-only label. Both hosts have three labels and their suffixes are `co.uk`, so this branch mistakes the public suffix for a shared site domain. Use registrable-domain-aware comparison (or a narrower explicit host relationship) before including the path."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       144,
+       146
+      ],
+      "texto": "The same-label-count branch treats two hosts as the same domain when everything after the first label matches. Unrelated hosts on shared suffixes, such as `a.github.io` and `b.github.io`, are treated as the same domain, so the full path is shown for an unrelated website. Compare against the registrable domain, for example with the PublicSuffix gem, or drop this heuristic branch."
+     }
+    ]
+   },
+   {
+    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#05",
+    "descricao": "Claims website_name should also show the full path when the website is a subdomain of the instance host.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       147,
+       150
+      ],
+      "texto": "WHAT: Else branch only tests `discourse_host.ends_with?('.'+website_host)` (discourse child of website) and misses the reverse (website subdomain of instance). WHY: With instance `example.com` and website `http://sub.example.com/page`, it returns `sub.example.com` instead of `sub.example.com/page`, contradicting the PR intent to show the full path for same-base-domain URLs. HOW: Also return host+path when `website_host` ends with `.`+discourse_host or shares the same registrable domain."
+     }
+    ]
+   },
+   {
+    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+    "descricao": "website_name is not marked untrusted, so the host/path of a TL0 user's website, which is hidden from anonymous viewers, is still exposed through the new field.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       153,
+       155
+      ],
+      "texto": "WHAT: website_name re-exposes the user's website for profiles where it is intentionally hidden \u2014 the attribute is added to the public `attributes` list (line 43) but not to `untrusted_attributes`, and `include_website_name` only checks `website.present?` instead of `scope.restrict_user_fields?(object)`. WHY: `website` is an untrusted attribute gated by `restrict_user_fields?` (lib/guardian/user_guardian.rb:58-60), which is true for a TL0 user viewed by an anonymous visitor; `website_name` derives `website_host + path` from the same `object.user_profile.website`, so the URL that `include_website?` suppresses is still disclosed through the new key (the existing spec at spec/serializers/user_serializer_spec.rb:11-14 only asserts the listed untrusted keys are absent, so this leak is not covered). HOW: add `:website_name` to the `untrusted_attributes` list (or have `include_website_name` return false when `scope.restrict_user_fields?(object)`), mirroring the `website` handling."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       137,
+       155
+      ],
+      "texto": "`website_name` is derived from the same `object.user_profile.website` value that `:website` protects via `untrusted_attributes` (lines 105-111), but it is only gated by `include_website_name` -> `website.present?`. Since the untrusted filter removes `website` for some viewers while `website_name` is still emitted, and in the same-domain / subdomain branches it returns host *plus* `URI(website).path` (lines 143/146/149), the user's full website URL still leaves in the response for viewers the filter was supposed to strip it from. Either add `:website_name` to `untrusted_attributes` or gate `include_website_name` with the same trust condition as `website`."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       153,
+       155
+      ],
+      "texto": "The new `website_name` field is gated only on `website.present?`, ignoring the visibility constraint this file declares for its source attribute: lines 105-111 put `:website` in `untrusted_attributes`, so `website` is omitted for viewers not allowed to see profile fields, but `website_name` is still serialized because `include_website_name` never consults that condition. Those viewers now receive the user's URL host, and when the host equals (lines 141-143) or is a parent of (144-149) the instance host they receive host + path, i.e. the complete URL that `website` was supposed to hide. Fix by adding `:website_name` to the `untrusted_attributes` list (105-111) \u2014 or make the guard reuse `website`'s own inclusion condition instead of a bare presence check."
+     }
+    ]
+   },
+   {
+    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07",
+    "descricao": "include_website_name lacks the '?' suffix that ActiveModelSerializers requires, so the conditional-inclusion guard is never called.",
+    "textoGolden": "The include_website_name method is missing the required ? suffix. Rails serializers expect include_ methods to end with ? for conditional attribute inclusion, a convention followed by other methods in this serializer. Without it, the website_name attribute may not be conditionally included as intended. Additionally, the '.' << website_host string concatenation should be replaced with '.' + website_host or '.#{website_host}' to avoid mutating string literals, which can lead to issues.",
+    "comentarios": [
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       153,
+       153
+      ],
+      "texto": "WHAT: `include_website_name` is missing the trailing `?` required by ActiveModelSerializers. WHY: every other conditional-inclusion guard in this file uses the `?` form (`define_method \"include_#{attr}?\"` at lines 9/18/27, `include_email?` at line 117), and AMS 0.8.3 resolves the guard as `include_<attr>?`; because this method lacks the `?` it is never invoked, so the intended `website.present?` condition is silently ignored and `website_name` is always serialized. HOW: rename to `def include_website_name?`."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       153,
+       155
+      ],
+      "texto": "The guard method is named `include_website_name`, but ActiveModelSerializers (and this file's own convention, e.g. `include_email?` at line 117) resolves per-attribute guards via `include_<attribute>?`. Because the name lacks the trailing `?`, the framework never invokes it: the `website.present?` guard is dead code and `website_name` is serialized unconditionally, emitting `website_name: null` for users without a website. Rename to `include_website_name?`."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       153,
+       155
+      ],
+      "texto": "The conditional-inclusion guard is named `include_website_name`, but ActiveModelSerializers resolves these guards as `include_<attribute>?` (the sibling in this very file is `include_email?` at line 117). As written the method is never called, so the guard is dead and the `:website_name` attribute declared at line 43 is serialized unconditionally. That defeats the intent of the guard (`website.present?`): the payload now always carries `website_name`, including for the scopes where `website` itself is withheld by the `untrusted_attributes` list (line 109), leaking the user's site host/path to viewers who were never meant to receive the website. Rename the method to `include_website_name?` so the serializer base class honors it."
+     }
+    ]
+   }
+  ]
+ },
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "62bf98939eda58f0d0a1a41a58aa6d4ecdc24dba",
+  "base": "8671f860469d6d95e54df3e13f77ebc401249489",
+  "sugestoes": [],
+  "issues": [
+   {
+    "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#03",
+    "descricao": "testFeatureNotEnabled only covers the metadata subcommand, so the feature guard in the check subcommand is untested.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+      "lines": [
+       46,
+       50
+      ],
+      "texto": "testFeatureNotEnabled only launches the `metadata` subcommand and never the `check` subcommand. Removing the feature guard from UpdateCompatibilityCheck.run() would therefore not fail any test. It also doesn't assert the exit code (FEATURE_DISABLED=4). Add a case for `check` and assert the exit code on both."
+     },
+     {
+      "file": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+      "lines": [
+       46,
+       50
+      ],
+      "texto": "WHAT: testFeatureNotEnabled only exercises the metadata subcommand disabled path and never the check subcommand. WHY: the feature gate in UpdateCompatibilityCheck.run can be removed or broken without failing any test since no assertion covers its disabled message/exit code. HOW: also launch/assert the check command without --features (e.g. parameterize over metadata and check subcommands or add a second Launch)."
+     },
+     {
+      "file": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+      "lines": [
+       46,
+       50
+      ],
+      "texto": "testFeatureNotEnabled only exercises the metadata subcommand, leaving the identical ROLLING_UPDATES gate in UpdateCompatibilityCheck unverified. If the Check gate were removed, the suite still passes. Parameterize/add a second @Launch for {UpdateCompatibility.NAME, UpdateCompatibilityCheck.NAME} (with required --file or not) asserting the disabled message and FEATURE_DISABLED exit code."
+     }
+    ]
+   },
+   {
+    "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#04",
+    "descricao": "The disabled-feature test checks only the error message, not that the command exits with FEATURE_DISABLED (4).",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+      "lines": [
+       46,
+       50
+      ],
+      "texto": "The new disabled-feature test only verifies the error text, not the failure exit status. If the metadata command still prints this diagnostic but exits with 0 (or another incorrect code) instead of FEATURE_DISABLED (4), this test would still pass. Assert that cliResult.exitCode() equals CompatibilityResult.FEATURE_DISABLED so the test actually protects the new disabled-feature failure contract."
+     }
+    ]
+   },
+   {
+    "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#oph-01",
+    "descricao": "testMissingOptionOnSave only asserts a message is absent, so it would still pass if --features=rolling-updates were not honoured and the command failed with the feature-disabled error.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ }
+}

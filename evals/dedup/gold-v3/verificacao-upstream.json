@@ -277,6 +277,21 @@
      "diasNoAr": 392,
      "reason": "PR #46967 'Fix deny unsupported FGAPv2 token-exchange audience checks' (closes #46718) changed ClientPermissionsV2.canExchangeTo from throwing UnsupportedOperationException to `return false`, explicitly because V1 token exchange audience validation failed with HTTP 500 under FGAP V2. Main today still returns false.",
      "astra": []
+    },
+    "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01": {
+     "bug": "In ClientPermissionsV2.hasPermission, an admin granted a permission on all clients is denied on any client that also has its own per-client permission resource, because only the per-client resource is evaluated.",
+     "severity": "high",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2025-03-27",
+      "pr": 38443,
+      "commit": "78aa8b486fb20df9c11161e6b5ac8ce1551ce61f",
+      "url": "https://github.com/keycloak/keycloak/pull/38443"
+     },
+     "removidoEm": null,
+     "diasNoAr": 44,
+     "reason": "Commit 78aa8b486f ('User not visible when permission with different scope exists', closes #38369, in PR #38443 merged 2025-03-27) passed the resource type into ResourcePermission from ClientPermissionsV2.hasPermission and made FGAPPolicyEvaluator.evaluateResourceTypePolicies also evaluate the policies of the all-clients type resource when a per-client resource is evaluated. It added ClientResourceTypeEvaluationTest.testEvaluateAllResourcePermissionsForSpecificResourcePermission, which asserts that the all-clients grant still applies once a per-client permission exists. Today's main (fgap/FGAPPolicyEvaluator + FineGrainedAdminPermissionEvaluator) keeps this behaviour.",
+     "astra": []
     }
    }
   },
@@ -441,6 +456,27 @@
        "pergunta": "Confirmado (via #48320 backfill or #49893 migration fix) or pendente since the evaluator has no null check?",
        "resposta": "Confirmado by PR #48320 (2026-04-29): the backfill run by the migration removes the condition that triggered the bug; #49893 complements it on the 26.6.2 migration path but is not the first fix.",
        "veredito": "confirmado #48320"
+      }
+     ]
+    },
+    "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01": {
+     "bug": "Removing the canViewGlobal short-circuit from the subgroup and group listings makes an admin with an all-groups V2 grant run one full authorization evaluation per group in the listing instead of a single check.",
+     "severity": "medium",
+     "status": "descontinuado",
+     "corrigidoEm": null,
+     "removidoEm": {
+      "data": "2025-03-24",
+      "pr": 38322,
+      "commit": "1c57035d41",
+      "url": "https://github.com/keycloak/keycloak/pull/38322"
+     },
+     "diasNoAr": 40,
+     "reason": "PR #38322 ('Support partial evaluation for the group resource type', issue #38273, motivation 'Apply FGAP permissions when querying groups') moved V2 group filtering into the store query and wrapped the per-group canView filter in GroupResource.getSubGroups, GroupsResource.getGroups and GroupUtils.populateGroupHierarchyFromSubGroups with `if (!isAdminPermissionsEnabled(realm))`. Today's main still has that guard, so under FGAP V2 the listings no longer run one evaluation per group. The change was a functional rewrite to query-level filtering, not aimed at this perf cost; the canViewGlobal short-circuit itself was never restored (only the V1 path still filters per group).",
+     "astra": [
+      {
+       "pergunta": "Bug + benchmark code + #38322 diff + today's code; confirmado (fixed by #38322) or descontinuado (rewrite not aimed at this perf issue)?",
+       "resposta": "#38322 replaced the per-group V2 evaluation with query-level authorization; that removes the cost, but its stated motivation does not show it targeted this perf bug, so the behaviour disappeared through a rewrite; the remaining V1 filter does not change that.",
+       "veredito": "descontinuado"
       }
      ]
     }
@@ -636,6 +672,41 @@
      "diasNoAr": 788,
      "reason": "The handler still throws FORBIDDEN with message 'you_do_not_have_permission' and AddGuestsDialog still renders t(err.message), but the key is absent from packages/i18n/locales/en/common.json today, so the raw key is still shown.",
      "astra": []
+    },
+    "add-guest-management-functionality-to-existing-bookings-cal-com#musep-01": {
+     "bug": "addGuests does not check the booking status, so guests can be added to cancelled or rejected bookings, which updates calendars and emails invitations for events that no longer exist.",
+     "severity": "medium",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 788,
+     "reason": "On main today packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts loads the booking via BookingRepository.findByIdIncludeDestinationCalendar, then only validateUserPermissions (organizer/attendee) and validateGuestsFieldEnabled; nothing checks booking.status before updating attendees, the calendar event and sending guest emails. The tRPC route is a plain authedProcedure with no status gate. None of the 27 later commits on the file (through 2026-04-15) added a CANCELLED/REJECTED check.",
+     "astra": []
+    },
+    "add-guest-management-functionality-to-existing-bookings-cal-com#kimi-01": {
+     "bug": "Guest email uniqueness is checked case-sensitively, so case variants of the same address are accepted as distinct guests (and slip past the lowercased blacklist).",
+     "severity": "medium",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2025-10-15",
+      "pr": 24298,
+      "commit": "64297f027c124be2d0a51c397901064c65a74df4",
+      "url": "https://github.com/calcom/cal.diy/pull/24298"
+     },
+     "removidoEm": null,
+     "diasNoAr": 421,
+     "reason": "At the merge, addGuests.handler.ts filtered guests with `guest === attendee.email` and `blacklistedGuestEmails.includes(guest)` on raw strings, so case variants passed. PR #24298 (2025-10-15, email verification setting) rewrote the filter: guests are deduplicated by extractBaseEmail(guest).toLowerCase(), and the attendee and blacklist comparisons use the lowercased base email; today's main (sanitizeAndFilterGuests/deduplicateGuestEmails) still does this. The dialog's client-side `new Set(emails)` is still case-sensitive, but the server now drops case-variant duplicates and blocks case-variant blacklist bypass, so the buggy behaviour is gone.",
+     "astra": []
+    },
+    "add-guest-management-functionality-to-existing-bookings-cal-com#kimip-02": {
+     "bug": "Adding guests ignores `seatsPerTimeSlot`, so a seated event can exceed its configured capacity; reject when attendees plus new guests exceed the seat limit.",
+     "severity": "medium",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 788,
+     "reason": "Today's packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts (main) refactored the handler into helpers (sanitizeAndFilterGuests, validateGuestsFieldEnabled, updateBookingAttendees) but none checks booking.eventType.seatsPerTimeSlot; seatsPerTimeSlot is still only forwarded into the CalendarEvent. BookingRepository.updateBookingAttendees does a plain createMany of attendees, and the tRPC route addGuests has no seated-event guard. 27 commits touched the handler since the merge; none adds a seat-capacity check.",
+     "astra": []
     }
    }
   },
@@ -717,6 +788,26 @@
      "removidoEm": null,
      "diasNoAr": 604,
      "reason": "verifySafeHtml on main still derives the English file by string replacement and wraps the FileInputStream IOException in new RuntimeException(\"unable to read file \" + englishFile). verify() catches only IOException and ThemeVerifierMojo.execute does not catch it, so a bundle without an English sibling still aborts the mojo with an unchecked exception.",
+     "astra": []
+    },
+    "add-html-sanitizer-for-translated-message-resources-keycloak#kimi-01": {
+     "bug": "The theme verifier's HTML and anchor regexes are case-sensitive, so uppercase tags in translations are flagged as illegal HTML by the build.",
+     "severity": "medium",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 604,
+     "reason": "On keycloak/keycloak main today, misc/theme-verifier/.../VerifyMessageProperties.java still declares ANCHOR_PATTERN = Pattern.compile(\"</?a[^>]*>\") (and HTML_TAGS \"<[a-z]+[^>]*>\") with no CASE_INSENSITIVE flag, and santizeAnchors still only strips anchors matched by it. POLICY_SOME_HTML still allows only br/p/strong/b/formattedLink (no anchors), so an uppercase <A ...> identical in English and translation survives santizeAnchors, gets stripped by the sanitizer and reported as 'Illegal HTML'. The 10 later commits to the file (2025-02-23 to 2026-01-20) add other validations (blanks, quotes, placeholders, curly braces, discouraged words) and do not touch the anchor/HTML patterns.",
+     "astra": []
+    },
+    "add-html-sanitizer-for-translated-message-resources-keycloak#pf-kimi-C1": {
+     "bug": "The anchor regex </?a[^>]*> in the theme verifier treats any tag starting with 'a' (<abbr>, <area>, ...) as an anchor tag, which can produce misleading anchor errors or strip such tags before HTML sanitizing.",
+     "severity": "medium",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 604,
+     "reason": "On keycloak/keycloak main today, VerifyMessageProperties.java still declares ANCHOR_PATTERN = Pattern.compile(\"</?a[^>]*>\") and santizeAnchors still strips matched tags (so <abbr>, <area>, etc. are treated as anchors) before the OWASP policy runs in verifySafeHtml. The 10 commits on this file since the merge (RTL autodetect, blanks, single quotes, placeholders, curly braces, range fix, import order, referrer-policy text, login escaping, whitelist wording) never touch the anchor regex or santizeAnchors; the only policy change added 'formattedLink' to the allowed elements.",
      "astra": []
     }
    }
@@ -1417,6 +1508,26 @@
      "diasNoAr": 1009,
      "reason": "On main today cleanup_test.go still seeds fresh annotations per subtest (createTestAnnotations inside t.Run) and wipes both tables in t.Cleanup, and the 'running the max count delete again should not remove any annotations' case still calls cleaner.Run once on 9 annotations with MaxCount=3. Later edits to the test (#102622, #106676, #120207, etc.) did not restore a second run.",
      "astra": []
+    },
+    "database-performance-optimizations-grafana-codex#musep-01": {
+     "bug": "The annotation cleanup loop stops on a batch whose IDs were already deleted by a concurrent cleaner, leaving the remaining work to the next cycle; checking the fetched count instead would avoid that.",
+     "severity": "medium",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 1009,
+     "reason": "On grafana/grafana main today (last file commit e9243f551a, 2026-09-30), CleanAnnotations/CleanOrphanedAnnotationTags still run fetchIDs then return deleteByIDs, which returns res.RowsAffected(), and untilDoneOrCancelled still stops when affected == 0. None of the 28 commits touching xorm_store.go since the merge changed this loop or the stop condition, so a batch whose fetched IDs were all deleted concurrently still ends cleanup while eligible rows remain.",
+     "astra": []
+    },
+    "database-performance-optimizations-grafana-codex#muse13-01": {
+     "bug": "MaxCount annotation cleanup reads victim IDs with LIMIT/OFFSET and deletes them in a separate non-atomic statement, so concurrent deletions can make it delete annotations that should be retained.",
+     "severity": "medium",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 1009,
+     "reason": "On main today CleanAnnotations' MaxCount branch still runs fetchIDs with ORDER BY id DESC LimitOffset(batch, MaxCount) and then deleteByIDs, a separate DELETE ... WHERE id IN (...) in its own session with no re-check or transaction. Later commits to xorm_store.go only removed the debug logs (#80670) and touched unrelated query/tag/migration code.",
+     "astra": []
     }
    }
   },
@@ -1831,6 +1942,53 @@
      "diasNoAr": 2142,
      "reason": "The specs were rewritten on 2014-04-24 (#2428), but no example ever isolated feed_polling_enabled (the enabled=false example also left the URL nil). spec/jobs/poll_feed_spec.rb and Jobs::PollFeed were deleted by #8233 when RSS polling moved to a plugin, without targeting the gap.",
      "astra": []
+    },
+    "enhance-embed-url-handling-and-validation-system-discourse-cursor#musep-01": {
+     "bug": "TopicEmbed.import_remote fetches the embed URL with open(url).read and no timeout or size limit, so a slow or huge remote page can block the background job and exhaust memory.",
+     "severity": "medium",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 4673,
+     "reason": "The open(url).read call was rewritten several times (2016 allow_redirections, 2020 FinalDestination, 2023-11-09 SSRF fix 5f20748e) and today TopicEmbed.find_remote does FinalDestination::HTTP.get_response(uri) then parse_html(response.body). FinalDestination::HTTP only overrides connect for SSRF filtering; no read/total timeout and no body-size cap are set, so the whole body is still read into memory with Net::HTTP defaults, as with open-uri in 2013. The changes targeted SSRF/redirects, not the unbounded fetch.",
+     "astra": [
+      {
+       "pergunta": "Fetch rewritten to FinalDestination::HTTP.get_response with no explicit timeout or size cap: confirmado, pendente or descontinuado?",
+       "resposta": "Default 60s timeouts bound each read, not total duration; body still fully loaded without size limit; security changes addressed SSRF/redirects only.",
+       "veredito": "pendente"
+      }
+     ]
+    },
+    "enhance-embed-url-handling-and-validation-system-discourse-cursor#musep-02": {
+     "bug": "The retrieve throttle sets the Redis key with setnx and sets its TTL in a separate expire call, so a crash between the two leaves a key without expiry that blocks retrieval of that URL forever.",
+     "severity": "medium",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 4673,
+     "reason": "lib/topic_retriever.rb on main still does `if Discourse.redis.setnx(retrieved_key, \"1\")` followed by a separate `Discourse.redis.expire(retrieved_key, 60)`. Later commits only renamed $redis to Discourse.redis (2019) and changed the key to a global \"retrieved_topic\" (67e20416, 2016), so a crash between the two commands still leaves a key without TTL that blocks retrieval (now for all URLs).",
+     "astra": []
+    },
+    "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimip-01": {
+     "bug": "`import_remote` fetches the embed URL with open-uri, which follows redirects, so the embeddable-host check on the initial URL can be bypassed to reach internal services (SSRF).",
+     "severity": "high",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2023-11-09",
+      "pr": 24304,
+      "commit": "5f20748e402223b265e6fee381472c14e2604da6",
+      "url": "https://github.com/discourse/discourse/commit/5f20748e402223b265e6fee381472c14e2604da6"
+     },
+     "removidoEm": null,
+     "diasNoAr": 3600,
+     "reason": "The open-uri fetch persisted through rewrites (2017: open(url, allow_redirections: :safe).read; later uri.read). Commit da839e6 (2020-05-27, 'SECURITY: Use FinalDestination for topic embeds') added FinalDestination resolution with validate_uri, validating each redirect hop, but still fetched the resolved URL with open-uri following redirects without IP checks. Commit 5f20748 'SECURITY: SSRF vulnerability in TopicEmbed - Block redirects when making the final request' (authored 2023-10-27, landed on main via PR #24304 merged 2023-11-09) replaced it with FinalDestination::HTTP.get plus DisallowedIpError, closing the redirect-follow SSRF; main today still uses FinalDestination + FinalDestination::HTTP.get_response.",
+     "astra": [
+      {
+       "pergunta": "Which change fixes the bug: 2020 FinalDestination resolve (validates hops, but final fetch still open-uri following redirects) or 2023 commit blocking redirects on the final fetch?",
+       "resposta": "The 2023 commit 5f20748: the 2020 change blocks the plain redirect chain during resolution but the actual fetch still follows redirects without IP validation; 2023 disables redirects on the fetch and applies IP checks.",
+       "veredito": "confirmado, fix = 5f20748 / PR #24304 (2023-11-09); 2020 da839e6 noted as partial mitigation."
+      }
+     ]
     }
    }
   },
@@ -2063,6 +2221,41 @@
      "diasNoAr": 121,
      "reason": "deleteCache.handler.ts kept throwing new Error(\"Credential not found or access denied\") with no change after the merge, and the file was deleted (with its deleteCache route in _router.tsx) by PR #25284 when the old cache system was removed.",
      "astra": []
+    },
+    "feat-add-calendar-cache-status-and-actions-22532-cal-com#muse13-01": {
+     "bug": "connectedCalendarsHandler instantiates CalendarCacheRepository directly instead of the feature-flag-aware factory, so cache status is queried and shown even when calendar-cache is disabled.",
+     "severity": "medium",
+     "status": "descontinuado",
+     "corrigidoEm": null,
+     "removidoEm": {
+      "data": "2025-11-20",
+      "pr": 25284,
+      "commit": "ae7fd0cae2",
+      "url": "https://github.com/calcom/cal.diy/pull/25284"
+     },
+     "diasNoAr": 121,
+     "reason": "connectedCalendars.handler.ts kept `new CalendarCacheRepository()` + getCacheStatusByCredentialIds after the merge (bb68cd73ef only moved an import). PR #25284 'Remove all code related to the old cache system' (2025-11-20) deleted the repository call and hardcoded cacheUpdatedAt: null, removing the old cache system as a whole rather than routing through the feature-flag factory; main today still returns null.",
+     "astra": []
+    },
+    "feat-add-calendar-cache-status-and-actions-22532-cal-com#muse13-02": {
+     "bug": "The dev script writes tunnelmole output to a fixed /tmp/tmole.log, so a local attacker's symlink at that path could make it overwrite an arbitrary file.",
+     "severity": "medium",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 452,
+     "reason": "scripts/test-gcal-webhooks.sh on main is unchanged since the merge commit cb786923 (no later commits touch it): LOG_FILE is still the fixed /tmp/tmole.log, with `rm -f` followed by `tmole ... > \"$LOG_FILE\"`.",
+     "astra": []
+    },
+    "feat-add-calendar-cache-status-and-actions-22532-cal-com#pf-opus-C2": {
+     "bug": "The new test-gcal-webhooks.sh writes GOOGLE_WEBHOOK_URL to '../.env' relative to the current directory, so running it from the repo root creates/edits a .env above the repo and the app never sees the URL.",
+     "severity": "low",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 452,
+     "reason": "scripts/test-gcal-webhooks.sh on calcom/cal.diy main today is byte-identical to the benchmark head, still with ENV_FILE=\"../.env\" and no cd to the script directory. The file history since the merge has only the original squash commit cb786923, and no package.json script or other file invokes it from a subdirectory, so running it from the repo root still writes to a .env outside the repo.",
+     "astra": []
     }
    }
   },
@@ -2104,6 +2297,21 @@
      "removidoEm": null,
      "diasNoAr": 6,
      "reason": "At merge commit 967442892a, getBaseConditions in packages/lib/server/service/insightsBooking.ts returns `authConditions` bare, and the combined case is `(auth) AND (filter)` without outer parentheses. PR #22619 (feat: add hourly booking charts, commit e7535b9db3, 2025-07-21) changed it to `((auth) AND (filter))`, `(auth)` and `(filter)`, so a caller appending AND no longer changes precedence. Every later version kept the parentheses (checked through the rename to InsightsBookingBaseService.ts and the move to packages/features/insights/services/). The Cal.diy refactor (#28903, 2026-04-15) later deleted the insights service entirely, but the fix came first.",
+     "astra": []
+    },
+    "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#kimi-03": {
+     "bug": "The new public options type makes teamId optional for team scope, so a missing teamId compiles and silently yields empty insights instead of a type error.",
+     "severity": "medium",
+     "status": "descontinuado",
+     "corrigidoEm": null,
+     "removidoEm": {
+      "data": "2026-04-15",
+      "pr": 28903,
+      "commit": "ab21c7f805a089fa3a11ffd61c4a9aecc349c16c",
+      "url": "https://github.com/calcom/cal.diy/pull/28903"
+     },
+     "diasNoAr": 274,
+     "reason": "The file moved packages/lib/server/service/insightsBooking.ts -> InsightsBookingBaseService.ts (#22790, 2025-08-05) -> packages/features/insights/services/InsightsBookingBaseService.ts (#24399, 2025-10-13). In its last version (98b6d63164, 2026-02-11) InsightsBookingServicePublicOptions still had `teamId?: number` with scope a plain union, and the constructor still safeParsed into NOTHING_CONDITION, so the bug was never fixed. The Cal.diy refactor (#28903, 2026-04-15, removing EE features) deleted the file, and packages/features/insights no longer exists on main, so the code is gone without a targeted fix.",
      "astra": []
     }
    }
@@ -2439,6 +2647,36 @@
      "diasNoAr": 22,
      "reason": "The remote_subscriptions.queue_worker.queue_depth gauge kept only the identifier tag in all later versions (#95943 added a processing_time timer with the same single tag). #97340 (2025-08-07) deleted queue_consumer.py, test_queue_consumer.py and the thread-queue-parallel tests/mode as unused code, not targeting this bug.",
      "astra": []
+    },
+    "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#musep-01": {
+     "bug": "SimpleQueueProcessingStrategy.terminate signals the commit thread without joining it, so the background thread is claimed to keep committing offsets for revoked partitions after terminate.",
+     "severity": "medium",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2025-07-17",
+      "pr": 95753,
+      "commit": "82e2139720c76694e89f0297b370e1556d047201",
+      "url": "https://github.com/getsentry/sentry/pull/95753"
+     },
+     "removidoEm": null,
+     "diasNoAr": 1,
+     "reason": "PR #95753 'Fix thread-queue-parallel consumer to handle Kafka rebalances correctly' states the commit thread kept running after partition revocation and committed offsets for partitions no longer owned. It moved the commit thread from SimpleQueueProcessingStrategy into FixedQueuePool (joined on shutdown), added a shutdown recheck after wait(), and resets the offset tracker on revocation; terminate() no longer owns a commit thread. The whole thread-queue-parallel mode and queue_consumer.py were later removed (e6ab8605, 2025-08-07, #97340).",
+     "astra": []
+    },
+    "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#muse13-02": {
+     "bug": "SimpleQueueProcessingStrategy passes FilteredPayload to decode_payload, whose assert raises instead of returning None, so filtered messages go through the error path.",
+     "severity": "medium",
+     "status": "descontinuado",
+     "corrigidoEm": null,
+     "removidoEm": {
+      "data": "2025-08-07",
+      "pr": 97340,
+      "commit": "e6ab860545",
+      "url": "https://github.com/getsentry/sentry/pull/97340"
+     },
+     "diasNoAr": 22,
+     "reason": "Between the merge and 2025-08-07, upstream changes to queue_consumer.py (#95753, #95919, #95942, #95943) left SimpleQueueProcessingStrategy.submit the same where it matters: it still calls decoder(message.payload) (decode_payload asserts not FilteredPayload) before the None check, and the except fallback only completes offsets when message.value is a BrokerValue. So filtered DLQ-stale messages kept leaving their offsets uncommitted. PR #97340 ('Remove thread-queue-parallel mode and related code', 2025-08-07) deleted queue_consumer.py and the thread-queue-parallel wiring in result_consumer.py and consumers/__init__.py, saying the mode was unused and had not helped much. It did not target this bug. Today's master has no queue mode; decode_payload still asserts, but only the serial, parallel and batched-parallel modes remain.",
+     "astra": []
     }
    }
   },
@@ -2614,6 +2852,27 @@
      "diasNoAr": 494,
      "reason": "Commit 15b5fddd 'SECURITY: protect upload params, only allow very strict filenames' added raise Discourse::InvalidAccess unless type =~ /^[a-z\\-\\_]{1,100}$/ in UploadsController#create and OptimizedImage.ensure_safe_paths! (only [_\\-a-zA-Z0-9./]) in every *_instructions method, including downsize_instructions. Shell metacharacters can no longer reach the backtick command.",
      "astra": []
+    },
+    "feature-automatically-downsize-large-images-discourse-cursor#musep-01": {
+     "bug": "Oversized SVG uploads go through the new ImageMagick downsize loop because SVG counts as an image, so the vector file is rasterized or corrupted in place before Upload.create_for parses it as SVG.",
+     "severity": "medium",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2016-06-20",
+      "pr": null,
+      "commit": "5e2545a578eabc8a52b9df3a64558f6d2bf2dfa2",
+      "url": "https://github.com/discourse/discourse/commit/5e2545a578eabc8a52b9df3a64558f6d2bf2dfa2"
+     },
+     "removidoEm": null,
+     "diasNoAr": 313,
+     "reason": "The controller downsize loop was gated by Upload.should_optimize?(tempfile.path) since 2016-02-22 (4d981cec), which still let SVG through. Commit 5e2545a5 'FEATURE: improve support for (whitelisted) SVGs as images' changed it to `return false if path =~ /\\.(gif|svg)$/i` (comment: don't optimize GIFs or SVGs); Rack 1.6.4 multipart tempfiles keep the extension, so oversized SVGs stop being downsized. Today UploadCreator routes :svg to clean_svg! and never to downsize!.",
+     "astra": [
+      {
+       "pergunta": "Is 5e2545a5 (should_optimize? excludes .svg by tempfile path) the fix, given Rack 1.6.4 tempfile naming, or the 2017 UploadCreator refactor?",
+       "resposta": "Rack 1.6.4 keeps the original extension in the multipart tempfile, so the new guard excludes SVGs; the 2017 refactor only made it explicit by type.",
+       "veredito": "confirmado / 5e2545a5"
+      }
+     ]
     }
    }
   },
@@ -3202,6 +3461,26 @@
      "diasNoAr": 4,
      "reason": "PR #11139 'hotfix: missing gCal calendarId' (2023-09-04) moved the \"primary\" fallback into selectedCalendar itself (`...find(cal => cal.credentialId === credentialId)?.externalId || \"primary\"`), so the hangout-link events.patch no longer receives an undefined calendarId. Today's main (packages/app-store/googlecalendar/lib/CalendarService.ts createEvent) keeps `externalCalendarId ?? (find(...)?.externalId || \"primary\")` and passes selectedCalendar to both insert and patch.",
      "astra": []
+    },
+    "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#musep-01": {
+     "bug": "When updateAllCalendarEvents fails before the calendar references are loaded, its catch now returns an empty array instead of a failed result, so a failed reschedule or location update looks successful to callers.",
+     "severity": "medium",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 1143,
+     "reason": "On main today EventManager.updateAllCalendarEvents (packages/features/bookings/lib/EventManager.ts) still declares calendarReference as undefined, awaits prisma.booking.findUnique for newBookingId before assigning it, and its catch still returns `calendarReference?.map(...) ?? []`. A throw before the references are loaded therefore still yields an empty array instead of a failed result, exactly as at the benchmark head.",
+     "astra": []
+    },
+    "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#kimip-01": {
+     "bug": "When rescheduling merges into a new booking, only the first old `_calendar` reference is deleted via `.find()`, leaving stale events on other hosts' calendars for collective bookings; iterate all old calendar references.",
+     "severity": "medium",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 1143,
+     "reason": "In today's packages/features/bookings/lib/EventManager.ts (main), updateAllCalendarEvents still has the 'If we are merging two calendar events we should delete the old calendar event' block under `if (newBookingId)`, using booking.references.find((reference) => reference.type.includes(\"_calendar\")) and deleting only that one event. Only the credential lookup changed (CredentialRepository.findCredentialForCalendarServiceById, getCalendar(..., \"booking\")); the single-reference cleanup is unchanged, and rescheduleEvent still passes newBookingId into updateAllCalendarEvents.",
+     "astra": []
     }
    }
   },
@@ -3351,6 +3630,42 @@
        "veredito": "descontinuado"
       }
      ]
+    },
+    "fix-proper-handling-of-group-memberships-discourse-cursor#musep-01": {
+     "bug": "Admin remove_member deletes memberships with group.users.delete, which skips GroupUser callbacks, so the cached groups.user_count is never decremented and stays inflated.",
+     "severity": "medium",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2016-12-12",
+      "pr": 4592,
+      "commit": "05f55dbc1001227261c24d055e8b37a685fa9625",
+      "url": "https://github.com/discourse/discourse/commit/05f55dbc1001227261c24d055e8b37a685fa9625"
+     },
+     "removidoEm": null,
+     "diasNoAr": 707,
+     "reason": "remove_member moved to GroupsController in 2015-11 (6dd4bc7d) still using group.users.delete. 79639e2d (2016-04-04) only added a daily Group.reset_all_counters job and resets in other admin actions, not in remove_member. Commit 05f55dbc ('FEATURE: Group logs', in PR #4592 'FEATURE: Public groups', 2016-12-12) replaced group.users.delete(user.id) with group.remove(user), which destroys GroupUser rows with callbacks so user_count is decremented; today removal goes through GroupManager.",
+     "astra": [
+      {
+       "pergunta": "Confirmado or descontinuado, and which change: 79639e2d (daily counter resync) or 05f55dbc (switch to group.remove)?",
+       "resposta": "79639e2d only reconciles periodically, the wrong count persists between runs; 05f55dbc destroys GroupUser with callbacks and effectively fixes the behaviour even though it shipped inside a feature.",
+       "veredito": "confirmado / 05f55dbc"
+      }
+     ]
+    },
+    "fix-proper-handling-of-group-memberships-discourse-cursor#muse13-01": {
+     "bug": "Group member pagination is off by one when user_count is a multiple of limit: Next moves to offset == user_count and shows an empty page.",
+     "severity": "medium",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2017-05-17",
+      "pr": null,
+      "commit": "9090c7b05b2ce52236e831607dae923f7a371d62",
+      "url": "https://github.com/discourse/discourse/commit/9090c7b05b2ce52236e831607dae923f7a371d62"
+     },
+     "removidoEm": null,
+     "diasNoAr": 863,
+     "reason": "The floor(user_count/limit)+1 totalPages formula survived in admin-group.js.es6 until 7bfabb029b (2016-12-13) moved the pagination verbatim into discourse/components/group-members-input.js.es6. Commit 9090c7b05b 'FIX: Admin groups editor was showing extra page when exactly 50 records' (2017-05-17, pushed directly, no PR) changed it to Math.ceil(userCount / limit), so at offset 50 of 100 members showingLast is true and Next no longer reaches an empty page.",
+     "astra": []
     }
    }
   },
@@ -3960,6 +4275,48 @@
        "pergunta": "PR #3641 was merged 2015-08-04 and fully reverted by Jeff Atwood ~1.5h later (commit 2b2ae4bfe7, no reason stated). Does an unexplained full revert count as confirmado or descontinuado for #01, #02, #05?",
        "resposta": "All three confirmado: the revert undid the flex layout (#01), removed the defective mixin and its uses (#02) and restored float:right (#05). Under 'any way of fixing counts', a full rollback of the introducing change is a fix; the missing justification only means upstream did not acknowledge each bug.",
        "veredito": "confirmado"
+      }
+     ]
+    },
+    "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#pf-gpt-C1": {
+     "bug": "Making .small-action a flex container leaves .small-action-desc content-sized (no flex:1), so the right-floated edit/delete buttons inside it sit right after short action descriptions instead of at the right edge of the row.",
+     "severity": "medium",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2015-08-04",
+      "pr": null,
+      "commit": "2b2ae4bfe79937ba1ee7143da92e5278abef7557",
+      "url": "https://github.com/discourse/discourse/commit/2b2ae4bfe79937ba1ee7143da92e5278abef7557"
+     },
+     "removidoEm": null,
+     "diasNoAr": 0,
+     "reason": "The upstream PR #3641 (head = benchmark head) was merged 2015-08-04 21:26Z and reverted in full 1.5h later by Jeff Atwood (2b2ae4bfe7, on main). The revert removes `@include flexbox(); @include align-items(center);` from .small-action in common/base/topic-post.scss, so .small-action-desc is no longer a content-sized flex item and the right-floated buttons return to the row edge. The buggy behaviour was undone by restoring the previous layout.",
+     "astra": [
+      {
+       "pergunta": "PR #3641 merged 2015-08-04 and fully reverted the same day by 2b2ae4bfe7 (no reason given; removes flexbox/align-items from .small-action and restores .small-action-desc padding 0.5em 0 0.5em 4em). Confirmado or descontinuado for both bugs?",
+       "resposta": "Both confirmado: the revert undid exactly the changes causing both bugs and restored the prior layout; any way of fixing counts, no explicit justification needed.",
+       "veredito": "confirmado (a full revert restoring the prior layout counts as a fix)"
+      }
+     ]
+    },
+    "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#pf-sonnet-C1": {
+     "bug": "On mobile the .small-action custom message keeps margin-left:-40px, tuned for the old 4em left padding; with the new flex layout and 1.5% padding it is pulled into the avatar column and overlaps the icon.",
+     "severity": "medium",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2015-08-04",
+      "pr": null,
+      "commit": "2b2ae4bfe79937ba1ee7143da92e5278abef7557",
+      "url": "https://github.com/discourse/discourse/commit/2b2ae4bfe79937ba1ee7143da92e5278abef7557"
+     },
+     "removidoEm": null,
+     "diasNoAr": 0,
+     "reason": "PR #3641 was merged 2015-08-04 and reverted in full the same day (2b2ae4bfe7, on main). The revert removes the flex layout from .small-action and restores .small-action-desc `padding: 0.5em 0 0.5em 4em`, the gutter the mobile `.custom-message { margin-left: -40px }` was tuned for, so the overlap with the icon is gone.",
+     "astra": [
+      {
+       "pergunta": "PR #3641 merged 2015-08-04 and fully reverted the same day by 2b2ae4bfe7 (no reason given; removes flexbox/align-items from .small-action and restores .small-action-desc padding 0.5em 0 0.5em 4em). Confirmado or descontinuado for both bugs?",
+       "resposta": "Both confirmado: the revert undid exactly the changes causing both bugs and restored the prior layout; any way of fixing counts, no explicit justification needed.",
+       "veredito": "confirmado (a full revert restoring the prior layout counts as a fix)"
       }
      ]
     }

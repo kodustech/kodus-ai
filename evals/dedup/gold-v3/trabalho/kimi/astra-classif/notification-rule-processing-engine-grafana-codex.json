@@ -1,0 +1,19 @@
+{
+ "caseId": "notification-rule-processing-engine-grafana-codex",
+ "items": [
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#kimi-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "GrafanaGroupLoader.tsx:68-71 uses promRule.uid as the key, as the base version already did. pkg/services/sqlstore/migrations/ualert/tables.go:222 enforces uniqueness on (org_id, uid), so the comment raises a hypothetical contract violation without demonstrating a defect.",
+   "severity": "low"
+  },
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#kimi-02",
+   "class": "TP",
+   "subclass": "nit",
+   "reason": "public/app/features/alerting/unified/hooks/useAbilities.ts:289 contains the newly added trailing `// duplicate` comment exactly as reported. This stray annotation has no runtime effect and is only a comment-cleanup nit.",
+   "severity": "low"
+  }
+ ]
+}

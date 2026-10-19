@@ -1,0 +1,23 @@
+{
+ "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#25",
+   "newGroup": null,
+   "reason": "Reports the same JavaScript injection through request.referer interpolated into the embed layout\u2019s quoted JavaScript string."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reports worker exhaustion from missing fetch timeouts and response-size limits. Issue #20 concerns URL validation allowing command execution or local file reads, a different cause."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Reports a crash between setnx and expire leaving a permanent throttle key. Issue #15 describes the throttle without reporting this atomicity defect."
+  }
+ ]
+}

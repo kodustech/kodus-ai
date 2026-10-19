@@ -1,0 +1,12 @@
+{
+ "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
+ "items": [
+  {
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#muse13-01",
+   "class": "TP",
+   "subclass": "nit",
+   "reason": "The PR-added comment at spec/models/blocked_email_spec.rb:13-14 incorrectly equates last_match_at with having been blocked: app/models/blocked_email.rb:13-18 updates it for every matching record before checking the action. The :do_nothing tests at spec/models/blocked_email_spec.rb:41-44 confirm statistics update even when blocking returns false; this is a comment-only inaccuracy with no behavioral impact.",
+   "severity": "low"
+  }
+ ]
+}

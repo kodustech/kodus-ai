@@ -1,0 +1,9 @@
+{
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#muse13-02": {
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "concede": true,
+    "text": "Concede. I missed the consumer-level wrapper: src/sentry/consumers/__init__.py:586-589 wraps every strategy factory in DlqStaleMessagesStrategyFactoryWrapper when stale_threshold_sec is set, and its poll submits `Message(Value(FILTERED_PAYLOAD, self.offsets_to_forward))` downstream (dlq.py:136-138). That reaches SimpleQueueProcessingStrategy.submit, where `result = self.decoder(message.payload)` (queue_consumer.py:295) hits the decode_payload assertion (result_consumer.py:188), logs `Error submitting message to queue` (:318), and the fallback only completes BrokerValue offsets (:319), so the stale-skip offsets carried by that filtered message are dropped. Reachable, PR-introduced: TP none, medium (misleading error log plus lost commit of filtered offsets in a configuration-dependent path)."
+  }
+}

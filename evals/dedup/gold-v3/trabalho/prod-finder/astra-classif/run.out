@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/Users/juniorsartori/Projects/Kody/kodus-ai/evals/dedup/gold-v3/trabalho/astra-classifica-rodada.py", line 62, in <module>
+    print('feitos',len([f for f in os.listdir(f'{W}/astra') if f.endswith('.json')]),'de',len(fila))
+FileNotFoundError: [Errno 2] No such file or directory: '/Users/juniorsartori/Projects/Kody/kodus-ai/evals/dedup/gold-v3/trabalho/astra'

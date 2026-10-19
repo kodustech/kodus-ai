@@ -1,0 +1,410 @@
+{
+ "ds|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": [
+  {
+   "id": "C1",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Same light-theme 30%->70% change in .topic-meta-data h5 a at topic-post.scss:291."
+  },
+  {
+   "id": "C2",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Same desktop user.scss .name light-theme 30%->50% change at line 522."
+  },
+  {
+   "id": "C3",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Same mobile topic-post.scss:182 h3 light-theme 20%->50% change."
+  },
+  {
+   "id": "C4",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Same mobile modal.scss .custom-message-length light-theme 70%->30% inversion."
+  },
+  {
+   "id": "C5",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Same desktop user.scss:522 light-theme 30%->50% regression."
+  },
+  {
+   "id": "C6",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Same mobile user.scss:497 .name light-theme 30%->50% regression."
+  },
+  {
+   "id": "C7",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Same mobile topic-post.scss:182 light-theme 20%->50% regression."
+  },
+  {
+   "id": "C8",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Same mobile modal.scss:102 light-theme 70%->30% regression."
+  }
+ ],
+ "ds|dual-storage-architecture-grafana-codex": [
+  {
+   "id": "C1",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage Create failure records recordLegacyDuration instead of the storage metric."
+  },
+  {
+   "id": "C2",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage Update failure records recordLegacyDuration instead of the storage metric."
+  },
+  {
+   "id": "C3",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Legacy DeleteCollection goroutine records recordStorageDuration instead of recordLegacyDuration."
+  },
+  {
+   "id": "C4",
+   "match": "dual-storage-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Delete puts base d.Log into the context instead of the enriched logger."
+  }
+ ],
+ "kimi|github-oauth-security-enhancement-sentry": [
+  {
+   "id": "C1",
+   "match": "github-oauth-security-enhancement-sentry#10",
+   "newGroup": null,
+   "reason": "test_installation_not_found uses a wrong state and never reaches the not-found path."
+  },
+  {
+   "id": "C2",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "Unchecked metadata['sender']['login'] raises KeyError."
+  },
+  {
+   "id": "C3",
+   "match": "github-oauth-security-enhancement-sentry#05",
+   "newGroup": null,
+   "reason": "OAuth user lookup (get_user_info) is not wrapped in error handling, so failures become 500s."
+  },
+  {
+   "id": "C4",
+   "match": "github-oauth-security-enhancement-sentry#10",
+   "newGroup": null,
+   "reason": "Same wrong-state test that never exercises installation-not-found."
+  }
+ ],
+ "muse|async-import-of-the-appstore-packages-cal-com": [
+  {
+   "id": "C1",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "forEach with async callback after getCalendar became async; deletions not awaited and errors escape try/catch."
+  },
+  {
+   "id": "C2",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Same forEach-async fire-and-forget pattern from getCalendar becoming async (the golden issue covers this pattern across the PR)."
+  },
+  {
+   "id": "C3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Serial awaiting of video adapter imports is a latency concern not covered by any issue."
+  }
+ ],
+ "kimi|advanced-query-processing-architecture-grafana-codex": [
+  {
+   "id": "C1",
+   "match": "advanced-query-processing-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Interpolation before shard splitting plus re-interpolation on execution applies ad hoc filters twice."
+  },
+  {
+   "id": "C2",
+   "match": "advanced-query-processing-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "runSplitQuery interpolates before splitting and again downstream, duplicating ad hoc filters."
+  },
+  {
+   "id": "C3",
+   "match": "advanced-query-processing-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Same double interpolation of ad hoc filters in shardQuerySplitting."
+  }
+ ],
+ "ds|add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "C1",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "should_block? mutates match_count as a validation side effect, inflated by double validation."
+  },
+  {
+   "id": "C2",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Same match_count inflation from validator side effect run twice per signup."
+  }
+ ],
+ "ds|async-import-of-the-appstore-packages-cal-com": [
+  {
+   "id": "C1",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "forEach with async callback not awaited after getCalendar became async."
+  },
+  {
+   "id": "C2",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Same forEach-async fire-and-forget pattern in bookings reschedule."
+  }
+ ],
+ "opus|feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+  {
+   "id": "C1",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#07",
+   "newGroup": null,
+   "reason": "macOS-only sed -i '' fails on GNU sed, GOOGLE_WEBHOOK_URL never updated."
+  },
+  {
+   "id": "C2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "ENV_FILE='../.env' resolves against the caller's cwd, not the script dir; no issue covers this."
+  }
+ ],
+ "muse|add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "C1",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Case-sensitive exact match in BlockedEmail lookup lets case variants bypass the block."
+  },
+  {
+   "id": "C2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims rejectedEmails.@each does not fire on pushObject of strings; differs from prod-01 (never cleared)."
+  }
+ ],
+ "muse|feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+  {
+   "id": "C1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Cache status ignores expiresAt so expired caches still show; no issue covers it."
+  },
+  {
+   "id": "C2",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#muse13-01",
+   "newGroup": null,
+   "reason": "Handler instantiates CalendarCacheRepository directly instead of the flag-aware factory."
+  }
+ ],
+ "muse|plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+  {
+   "id": "C1",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#03",
+   "newGroup": null,
+   "reason": "TestLogger.FromContext returns a new logger instead of the receiver, losing logs."
+  },
+  {
+   "id": "C2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Dropped explicit log fields relying on middleware ordering; no issue covers it."
+  }
+ ],
+ "kimi|implement-access-token-context-encoding-framework-keycloak": [
+  {
+   "id": "C1",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Constructor checks grantType twice and never rawTokenId."
+  },
+  {
+   "id": "C2",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "isAccessTokenId reads wrong offset and inverts the comparison."
+  }
+ ],
+ "ds|add-guest-management-functionality-to-existing-bookings-cal-com": [
+  {
+   "id": "C1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims new guests never receive any email because recipients come only from calendarEvent.attendees; issue 06 is a different problem (existing attendees get the wrong email)."
+  }
+ ],
+ "ds|feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+  {
+   "id": "C1",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+   "newGroup": null,
+   "reason": "Empty data object in updateManyByCredentialId means SelectedCalendar.updatedAt is not actually refreshed; the comment says the intended updatedAt update has no effect and proposes passing a real field."
+  }
+ ],
+ "ds|implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "C1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims rebuilt recovery-codes model never reflects consumed codes in getCredentials; differs from issue 01 (validator not consuming) and 02 (null id)."
+  }
+ ],
+ "ds|span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
+  {
+   "id": "C1",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#10",
+   "newGroup": null,
+   "reason": "_create_process_for_shard is dead code with no caller."
+  }
+ ],
+ "gpt|enhanced-pagination-performance-for-high-volume-audit-logs-sentry": [
+  {
+   "id": "C1",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Negative cursor offsets reach Django queryset slicing, which raises instead of returning a page."
+  }
+ ],
+ "gpt|implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "C1",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#01",
+   "newGroup": null,
+   "reason": "Validator accepts a code without consuming it, allowing replay."
+  }
+ ],
+ "opus|add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "C1",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Cleanup registered for literal alias 'alias' instead of the created IDPs."
+  }
+ ],
+ "opus|enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "C1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Stray 'if' after 'end' in best.html.erb:6 turns the block into a modifier; no issue covers it."
+  }
+ ],
+ "opus|optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
+  {
+   "id": "C1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Flex .small-action makes button float:right ineffective; no issue covers it (kimi-01 is about .topic-avatar float)."
+  }
+ ],
+ "sonnet|add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "C1",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#snapi-01",
+   "newGroup": null,
+   "reason": "remove() always calls idpDelegate.getByAlias, adding a DB read on every removal."
+  }
+ ],
+ "sonnet|dual-storage-architecture-grafana-codex": [
+  {
+   "id": "C1",
+   "match": "dual-storage-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Delete stores d.Log instead of the enriched logger in the context."
+  }
+ ],
+ "sonnet|fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "id": "C1",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "deleteEvent's find by absent externalCalendarId never matches, so the destination calendar is not used."
+  }
+ ],
+ "sonnet|replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "C1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Per-issue get_recommended_event Snuba queries in commit_context.py; unrelated to any golden issue."
+  }
+ ],
+ "muse|add-guest-management-functionality-to-existing-bookings-cal-com": [
+  {
+   "id": "C1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Organizer add-guests email subject uses attendees[0].name; no issue covers it."
+  }
+ ],
+ "muse|feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "C1",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "update/destroy dereference a nil host for unknown id, returning 500 instead of 404."
+  }
+ ],
+ "muse|replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "C1",
+   "match": "replays-self-serve-bulk-delete-system-sentry#01",
+   "newGroup": null,
+   "reason": "Truthiness check via initial_data.get() lets zero values bypass age/timestamp mutual exclusion."
+  }
+ ],
+ "kimi|add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "C1",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Cleanup registered for literal alias 'alias' instead of the created providers."
+  }
+ ],
+ "kimi|authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "C1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Denial cache short-circuits before permCache so newly granted permissions stay denied up to TTL; differs from key-collision and reload issues."
+  }
+ ],
+ "kimi|feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": [
+  {
+   "id": "C1",
+   "match": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#kimi-03",
+   "newGroup": null,
+   "reason": "Public options type makes teamId optional for team scope, silently returning no insights."
+  }
+ ],
+ "kimi|implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "C1",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#01",
+   "newGroup": null,
+   "reason": "isValid never consumes the matched recovery code, allowing replay."
+  }
+ ],
+ "kimi|plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+  {
+   "id": "C1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "ContextualLoggerMiddleware added even when request logging is disabled; no issue covers it."
+  }
+ ]
+}

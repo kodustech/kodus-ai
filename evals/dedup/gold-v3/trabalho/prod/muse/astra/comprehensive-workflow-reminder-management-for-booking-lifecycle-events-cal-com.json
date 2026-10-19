@@ -1,0 +1,23 @@
+{
+ "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+   "newGroup": null,
+   "reason": "Both describe unawaited reminder cancellation helpers allowing the booking handler to return before cancellation or deletion completes."
+  },
+  {
+   "id": "S2",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+   "newGroup": null,
+   "reason": "Both describe a single SendGrid cancellation failure aborting the shared loop and skipping queued database deletions, blocking remaining cancellations."
+  },
+  {
+   "id": "S3",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#13",
+   "newGroup": null,
+   "reason": "Both describe a Twilio cancellation failure skipping the database deletion and leaving the SMS reminder row behind."
+  }
+ ]
+}

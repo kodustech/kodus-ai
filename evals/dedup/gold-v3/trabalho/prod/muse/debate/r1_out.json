@@ -1,0 +1,37 @@
+{
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#musep-01": {
+  "class": "FP",
+  "subclass": "hallucination",
+  "severity": "high",
+  "concede": true,
+  "text": "Concede hallucination. The comment's load-bearing claim, that a later server init is ignored, is contradicted by the code: the Quarkus server installs its provider with CryptoIntegration.setProvider, which unconditionally replaces the singleton (KeycloakRecorder.java:214 `CryptoIntegration.setProvider(`; CryptoIntegration.java:96-98 `cryptoProvider = provider;`), and in a shared classloader detectProvider now picks the highest order() (`.sorted(Comparator.comparingInt(CryptoProvider::order).reversed())`, CryptoIntegration.java:56), so DefaultCryptoProvider (200) beats AuthzClientCryptoProvider (100). The described lock-in cannot happen."
+ },
+ "add-html-sanitizer-for-translated-message-resources-keycloak#musep-01": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": false,
+  "text": "The facts are right (an _en file resolves englishFile to itself, VerifyMessageProperties.java:74-75, so santizeAnchors strips its anchors at :88), but that is the designed trust model, not a defect. The javadoc states the rule: `Allow only those anchor tags from the source key to also appear in the target key.` (:147-148). The English source is the reference the verifier checks translations against; the PR's purpose is sanitizing translated (community) resources, and translations still get every anchor matched against English (:153-158). Asking the verifier to also police the reference file is a feature request, not a regression this PR introduces. Severity as stated: a build-time verifier gap, not a runtime hole, so medium."
+ },
+ "database-performance-optimizations-grafana-codex#musep-01": {
+  "class": "TP",
+  "subclass": "nit",
+  "severity": "low",
+  "concede": false,
+  "text": "We agree the race exists (`if affected == 0 { return totalAffected, nil }`, xorm_store.go:656-657, with affected from `affected, err = res.RowsAffected()`, :626). The disagreement is whether it is worth a comment. It needs a concurrent deleter to remove every one of the fetched oldest IDs between fetchIDs (:530) and deleteByIDs (:536), and the only consequence is that remaining rows are deleted on the next cleanup cycle. The PR already accepts exactly that outcome as harmless: `This may under-delete ... any such annotations will simply be cleaned on the next cycle.` (:525). No user-visible effect, so nit / low."
+ },
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#musep-01": {
+  "class": "TP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": true,
+  "text": "Concede. I missed that the loop does not recheck shutdown after the wait: when terminate() sets the event, `self.shutdown_event.wait(1.0)` (queue_consumer.py:276) returns immediately and the same iteration still runs `get_committable_offsets()` and `self.commit_function(committable)` (:278, :287). terminate() (:340-342) neither joins the thread nor waits, so a commit can land after terminate returns and partitions are revoked, unlike close() which joins (:337). The file is new in this PR. Edge-case late commit, medium."
+ },
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#musep-01": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": true,
+  "text": "Concede FP. `const ADMIN_MODELS = ['plugin', 'site-customization', 'embeddable-host'];` (rest.js.es6:1) contains only entries with at most one separator, so `type.replace('_', '-')` (:22) routes every configured admin model correctly; no code path today hits a multi-underscore admin type. A latent issue with no reachable effect is FP (none), not a nit. Severity as stated (wrong base path for an uncommon type name) is medium."
+ }
+}

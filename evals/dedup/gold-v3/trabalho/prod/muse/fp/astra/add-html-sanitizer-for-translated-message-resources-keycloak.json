@@ -1,0 +1,11 @@
+{
+ "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The comment claims English anchors bypass safety validation because self-comparison removes them before sanitization. Rejected issue #03 concerns excess translation anchors and matcher-group validation, a different cause."
+  }
+ ]
+}

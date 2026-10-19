@@ -1,0 +1,12 @@
+{
+ "caseId": "database-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "issueId": "database-performance-optimizations-grafana-codex#muse13-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The PR replaces an atomic DELETE with separate selection and deletion at pkg/services/annotations/annotationsimpl/xorm_store.go:549-556; the helpers use separate sessions and delete solely by captured IDs (:591-593, :616-622). Concurrent deletion through :413-419 can remove a newer annotation between these operations, promoting a selected victim into the newest MaxCount rows without preventing its deletion. This can permanently delete annotations that now fall within the retention window, constituting persisted-data loss under the severity rubric.",
+   "severity": "critical"
+  }
+ ]
+}

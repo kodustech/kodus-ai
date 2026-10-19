@@ -1,0 +1,35 @@
+{
+ "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+ "items": [
+  {
+   "id": "S2",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#04",
+   "newGroup": null,
+   "reason": "Asserts the same raw queued datetime from to_dict() causes JSON serialization failure in Celery task kwargs."
+  },
+  {
+   "id": "S3",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#07",
+   "newGroup": null,
+   "reason": "Asserts the same malformed-input path where from_dict returns None and should_sync fails open, allowing the sync cycle."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims ExampleIntegration's status-sync override rejects assignment_source with TypeError. This differs from adding the parameter to the wrong abstract method (#05) or omitting status-cycle prevention (#prod-01)."
+  },
+  {
+   "id": "S5",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#04",
+   "newGroup": null,
+   "reason": "Asserts the same raw datetime serialization failure when to_dict() is passed through Celery kwargs; the additional default_factory suggestion does not change that claim."
+  },
+  {
+   "id": "S7",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#04",
+   "newGroup": null,
+   "reason": "Repeats the raw queued datetime serialization claim at to_dict(), with additional round-trip detail and the same ISO-string fix."
+  }
+ ]
+}

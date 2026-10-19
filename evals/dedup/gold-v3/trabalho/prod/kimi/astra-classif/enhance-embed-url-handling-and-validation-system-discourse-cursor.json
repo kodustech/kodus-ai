@@ -1,0 +1,12 @@
+{
+ "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+ "items": [
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimip-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The newly added lib/topic_retriever.rb:15 validates only the original URL\u2019s host, then passes that URL to import_remote at line 52. app/models/topic_embed.rb:48 calls open(url).read without restricting or validating redirects, allowing an allowed-host endpoint that redirects to an internal address to trigger SSRF.",
+   "severity": "high"
+  }
+ ]
+}

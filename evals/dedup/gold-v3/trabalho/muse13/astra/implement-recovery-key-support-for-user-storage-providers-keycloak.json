@@ -1,0 +1,23 @@
+{
+ "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#05",
+   "newGroup": null,
+   "reason": "The comment includes the same failure to remove old local recovery codes after creating federated codes, allowing replaced codes to authenticate. Its additional reverse-store scenario does not change the match."
+  },
+  {
+   "id": "S2",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#06",
+   "newGroup": null,
+   "reason": "Both describe exhausted federated recovery credentials surviving cleanup because removeStoredCredentialById only deletes from local storage."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This describes an unchecked Optional.get() crashing login rendering when no recovery credential is returned. None of the golden issues describes this missing-credential handling problem."
+  }
+ ]
+}

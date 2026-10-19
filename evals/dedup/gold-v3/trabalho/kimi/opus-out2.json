@@ -1,0 +1,490 @@
+{
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+   "newGroup": null,
+   "reason": "Protocol-relative URLs rewritten onto the article host in absolutize_urls."
+  },
+  {
+   "id": "S2",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "i.content.scrub crashes for feed items without content."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Null container before appendChild in embed.js; no golden issue."
+  },
+  {
+   "id": "S4",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#16",
+   "newGroup": null,
+   "reason": "contents << mutates the caller string in TopicEmbed.import."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "embed_by_username.downcase on blank setting in fetch_http; no golden issue."
+  },
+  {
+   "id": "S6",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#30",
+   "newGroup": null,
+   "reason": "Uncached retrieval synchronously polls and imports the whole feed."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "No timeout/item cap on PollFeed open(feed_url); musep-01 is about import_remote, a different call."
+  },
+  {
+   "id": "S8",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Case-sensitive referer host comparison against embeddable_host."
+  },
+  {
+   "id": "S9",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Case-sensitive embed_url host comparison in TopicRetriever, part of #04 (referer and embed_url host checks)."
+  },
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "TopicRetriever specs not isolating invalid_host; no golden issue."
+  },
+  {
+   "id": "S11",
+   "match": "new",
+   "newGroup": "N5",
+   "reason": "Embed controller specs only assert mocks; no golden issue."
+  },
+  {
+   "id": "S12",
+   "match": "new",
+   "newGroup": "N6",
+   "reason": "delegates-to-poll_feed test does not exercise poll_feed itself; different from the guard-isolation issues."
+  },
+  {
+   "id": "S13",
+   "match": "new",
+   "newGroup": "N7",
+   "reason": "cook_method migration default 1 = raw_html; no golden issue."
+  },
+  {
+   "id": "S14",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "i.content.scrub crashes for feed items without content."
+  },
+  {
+   "id": "S15",
+   "match": "new",
+   "newGroup": "N7",
+   "reason": "cook_method migration default 1 = raw_html; no golden issue."
+  },
+  {
+   "id": "S16",
+   "match": "new",
+   "newGroup": "N7",
+   "reason": "cook_method migration default 1 = raw_html; no golden issue."
+  },
+  {
+   "id": "S17",
+   "match": "new",
+   "newGroup": "N8",
+   "reason": "Claimed ERB syntax error from end if; no golden issue."
+  },
+  {
+   "id": "S18",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-02",
+   "newGroup": null,
+   "reason": "feed_key cache key computed but never used."
+  }
+ ],
+ "feature-automatically-downsize-large-images-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Duplicate downsize definition overrides width/height signature, breaking callers."
+  },
+  {
+   "id": "S2",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Downsize loop ignores false return of failed conversion."
+  },
+  {
+   "id": "S3",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Duplicate downsize definition overrides the max_width/max_height signature."
+  },
+  {
+   "id": "S4",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Duplicate downsize definition overrides the max_width/max_height signature."
+  },
+  {
+   "id": "S5",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Duplicate downsize definition overrides the max_width/max_height signature."
+  },
+  {
+   "id": "S6",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Duplicate downsize definition overrides the max_width/max_height signature."
+  },
+  {
+   "id": "S7",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Duplicate downsize definition overrides the max_width/max_height signature."
+  },
+  {
+   "id": "S8",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Duplicate downsize definition overrides the max_width/max_height signature."
+  },
+  {
+   "id": "S9",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Duplicate downsize definition overrides the max_width/max_height signature."
+  },
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Same file used as convert input and output; no golden issue."
+  }
+ ],
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Consumer reads end_timestamp_precise from Kafka schema; no golden issue."
+  },
+  {
+   "id": "S2",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#05",
+   "newGroup": null,
+   "reason": "zpopmin eviction by timestamp can drop root/ancestor spans, breaking root detection."
+  },
+  {
+   "id": "S3",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+   "newGroup": null,
+   "reason": "max_segment_spans ignored; cap hardcoded to 1000 in Lua."
+  },
+  {
+   "id": "S4",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+   "newGroup": null,
+   "reason": "max_segment_spans ignored; cap hardcoded to 1000 in Lua."
+  },
+  {
+   "id": "S5",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+   "newGroup": null,
+   "reason": "max_segment_spans ignored; cap hardcoded to 1000 in Lua."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "No finite check on ZADD score; no golden issue."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "set_key naming vs sorted set; snloop-01 is about the module docstring, different place."
+  },
+  {
+   "id": "S8",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#08",
+   "newGroup": null,
+   "reason": "Identical end timestamps in test_buffer fixtures leave score ordering/eviction untested."
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "Same-timestamp concern but in test_flusher.py; #08 is test_buffer.py, different place."
+  },
+  {
+   "id": "S10",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+   "newGroup": null,
+   "reason": "max_segment_spans ignored; cap hardcoded to 1000 in Lua."
+  }
+ ],
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "TopicUser.find_by nil dereference in unsubscribe."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Memoized TopicView shows stale notification level; no golden issue."
+  },
+  {
+   "id": "S3",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "TopicUser.find_by nil dereference in unsubscribe."
+  },
+  {
+   "id": "S4",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "TopicUser.find_by nil dereference in unsubscribe."
+  },
+  {
+   "id": "S5",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "TopicUser.find_by nil dereference in unsubscribe."
+  },
+  {
+   "id": "S6",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Visiting the unsubscribe URL mutates state without token (CSRF-like GET)."
+  },
+  {
+   "id": "S7",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Spec never asserts unsubscribe_url appears in the email."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Possible XSS via triple-brace topic title; no golden issue."
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Relative unsubscribe_url in email; no golden issue."
+  }
+ ],
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
+  {
+   "id": "S1",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08",
+   "newGroup": null,
+   "reason": "submit() gathers cluster memory info once per buffer; querying one buffer fixes both."
+  },
+  {
+   "id": "S2",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "isinstance multiprocessing.Process misses SpawnProcess, hung flusher not killed."
+  },
+  {
+   "id": "S3",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "newGroup": null,
+   "reason": "join() breaks on deadline and skips remaining processes."
+  },
+  {
+   "id": "S4",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#05",
+   "newGroup": null,
+   "reason": "Docstring says one process per shard."
+  },
+  {
+   "id": "S5",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#06",
+   "newGroup": null,
+   "reason": "Truthiness fallback for max_processes ignores 0."
+  },
+  {
+   "id": "S6",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#02",
+   "newGroup": null,
+   "reason": "time.sleep(0.1) is no-op due to monkeypatch."
+  },
+  {
+   "id": "S7",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "isinstance multiprocessing.Process misses SpawnProcess, hung flusher not killed."
+  },
+  {
+   "id": "S8",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#01",
+   "newGroup": null,
+   "reason": "wait_produce tagged shards vs shard."
+  }
+ ],
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "newGroup": null,
+   "reason": "getGroupIdsWithViewPermission uses resource id instead of name."
+  },
+  {
+   "id": "S2",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "newGroup": null,
+   "reason": "canManage accepts VIEW scope."
+  },
+  {
+   "id": "S3",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "newGroup": null,
+   "reason": "canManage accepts VIEW scope."
+  },
+  {
+   "id": "S4",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "newGroup": null,
+   "reason": "canManage accepts VIEW scope."
+  },
+  {
+   "id": "S5",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+   "newGroup": null,
+   "reason": "requireManageMembers Javadoc references canManageMembership."
+  },
+  {
+   "id": "S6",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#07",
+   "newGroup": null,
+   "reason": "Javadoc says Stream but returns Set."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "canView Javadoc vs legacy V1 implementation; no golden issue."
+  }
+ ],
+ "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Comment says commits instead of check-ins; no golden issue."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Hard-coded untranslated UI strings; no golden issue."
+  },
+  {
+   "id": "S3",
+   "match": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#01",
+   "newGroup": null,
+   "reason": "get_failure_reason docstring examples do not match output."
+  },
+  {
+   "id": "S4",
+   "match": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02",
+   "newGroup": null,
+   "reason": "Returns original config instead of converted copy."
+  },
+  {
+   "id": "S5",
+   "match": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02",
+   "newGroup": null,
+   "reason": "Returns original config instead of converted copy."
+  },
+  {
+   "id": "S6",
+   "match": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02",
+   "newGroup": null,
+   "reason": "Returns original config instead of converted copy."
+  }
+ ],
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Shared middleware instance mutating next; no golden issue."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Duplicate registry lookup per request; no golden issue."
+  },
+  {
+   "id": "S3",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Test still named TestInstrumentationMiddleware."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "pluginRequestSize help text wording; no golden issue."
+  },
+  {
+   "id": "S5",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Test still named TestInstrumentationMiddleware."
+  }
+ ],
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Invalid -ms-align-items declaration."
+  },
+  {
+   "id": "S2",
+   "match": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Invalid -ms-align-items declaration."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Dead float on flex item .topic-avatar; no golden issue."
+  }
+ ],
+ "advanced-query-processing-architecture-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "applyTemplateVariables drops datasource ref; no golden issue."
+  },
+  {
+   "id": "S2",
+   "match": "advanced-query-processing-architecture-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Filtering before interpolation inverts old order; interpolating first fixes #05."
+  }
+ ]
+}

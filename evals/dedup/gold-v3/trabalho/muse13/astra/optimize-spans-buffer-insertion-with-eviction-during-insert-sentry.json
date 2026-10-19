@@ -1,0 +1,53 @@
+{
+ "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#04",
+   "newGroup": null,
+   "reason": "Describes the same rollout incompatibility: existing SET keys are accessed with sorted-set commands under unchanged key names, causing WRONGTYPE failures."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes missing end_timestamp_precise causing a KeyError and aborting a batch; no golden issue covers missing-field handling."
+  },
+  {
+   "id": "S3",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#03",
+   "newGroup": null,
+   "reason": "Describes the same default SUM aggregation doubling duplicate payload scores and corrupting oldest-first eviction."
+  },
+  {
+   "id": "S4",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#05",
+   "newGroup": null,
+   "reason": "Describes the same root-span eviction while the has-root flag remains set, allowing a rootless segment to be flushed."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Describes unvalidated client timestamps allowing far-future spans to survive eviction. This differs from duplicate scores being summed or root spans lacking eviction protection."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Describes repeated full-set unions causing excessive insertion cost; no golden issue covers this performance problem."
+  },
+  {
+   "id": "S7",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#08",
+   "newGroup": null,
+   "reason": "Describes the same test coverage gap: identical timestamps and small batches fail to exercise score ordering and eviction above 1000 spans."
+  },
+  {
+   "id": "S8",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#03",
+   "newGroup": null,
+   "reason": "Describes the same ZUNIONSTORE default SUM behavior inflating duplicate payload scores and breaking timestamp-based eviction."
+  }
+ ]
+}

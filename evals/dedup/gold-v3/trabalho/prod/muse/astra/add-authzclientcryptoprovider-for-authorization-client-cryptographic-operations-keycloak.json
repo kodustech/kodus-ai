@@ -1,0 +1,35 @@
+{
+ "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#04",
+   "newGroup": null,
+   "reason": "Describes the same compatibility break from adding abstract order(): legacy providers can throw AbstractMethodError during provider detection."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Concerns AuthzClient initialization locking the global provider to the client's classloader. This differs from the golden issue about equal-priority providers being selected by discovery order."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Concerns missing DER sequence boundary and trailing-byte validation in readSequence, which no golden issue describes."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Concerns negative or oversized DER integers being mangled by integerToBytes. This differs from the golden issue about incorrect JOSE input length in the opposite conversion."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "Concerns unchecked exceptions from invalid DER integer lengths in readInteger/readLength. Neither the golden JOSE-length issue nor S3's sequence-boundary problem describes this same defect."
+  }
+ ]
+}

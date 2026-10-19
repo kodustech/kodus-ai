@@ -1,0 +1,26 @@
+{
+ "caseId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+ "items": [
+  {
+   "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#pf-muse-C3",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "The float-based main topic title still retains its bullet margin at app/assets/stylesheets/common/base/topic.scss:10-13. The removed margin belongs to the header, where the category renders below the heading (app/assets/javascripts/discourse/templates/components/header-extra-info.hbs:13-15), and the PR changes both header alignment and line-height; removing that spacing does not establish the claimed alignment defect.",
+   "severity": "low"
+  },
+  {
+   "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#pf-gpt-C1",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "app/assets/stylesheets/common/base/topic-post.scss:264 makes the description a flex item, but its rule at line 279 supplies neither growth nor a width. The buttons are nested inside that description (app/assets/javascripts/discourse/templates/components/small-action.hbs:2-8) and float right at topic-post.scss:309, so short descriptions leave the controls short of the row\u2019s right edge.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#pf-sonnet-C1",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "app/assets/stylesheets/mobile/topic-post.scss:520-521 still pulls custom messages 40px left, into the adjacent icon\u2019s horizontal space. The new flex alignment centers that icon against the entire description, including its custom message (app/assets/stylesheets/common/base/topic-post.scss:264-265; app/assets/javascripts/discourse/templates/components/small-action.hbs:15-16), allowing longer messages to overlap the icon.",
+   "severity": "medium"
+  }
+ ]
+}

@@ -1,0 +1,59 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "newGroup": null,
+   "reason": "Describes the global canManage() check incorrectly accepting VIEW and granting manage access."
+  },
+  {
+   "id": "S2",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "newGroup": null,
+   "reason": "Describes using authorization resource IDs instead of resource names for permission checks and the returned group IDs."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Alleges that removing ADMIN from UserPermissionsV2 role checks denies administrators user access. No golden issue describes this role-check change."
+  },
+  {
+   "id": "S4",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+   "newGroup": null,
+   "reason": "Identifies the requireManageMembers Javadoc incorrectly referencing canManageMembership instead of canManageMembers."
+  },
+  {
+   "id": "S5",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#07",
+   "newGroup": null,
+   "reason": "Identifies the Javadoc describing a Stream when the method returns a Set."
+  },
+  {
+   "id": "S6",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#snloop-01",
+   "newGroup": null,
+   "reason": "Describes the missing null guard for getResourceTypeResource's result in hasPermission, causing an NPE and HTTP 500."
+  },
+  {
+   "id": "S7",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "newGroup": null,
+   "reason": "Describes passing and returning authorization resource UUIDs where actual group IDs stored in resource names are required."
+  },
+  {
+   "id": "S8",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "newGroup": null,
+   "reason": "Describes the global canManage() check accepting VIEW rather than requiring MANAGE."
+  },
+  {
+   "id": "S9",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "newGroup": null,
+   "reason": "Describes using resource IDs instead of resource names, breaking per-group permission lookup and downstream group filtering."
+  }
+ ]
+}

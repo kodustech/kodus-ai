@@ -1,0 +1,19 @@
+{
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "prOriginal": {
+  "numero": 10967,
+  "url": "https://github.com/calcom/cal.diy/pull/10967",
+  "mergedAt": "2023-08-31",
+  "nota": "Taken from prOriginalConhecido; confirmed via gh pr view on calcom/cal.diy: MERGED 2023-08-31; squash c4e5d168 carries the same diff as benchmark head de62829. EventManager now lives at packages/features/bookings/lib/EventManager.ts."
+ },
+ "tps": {
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#musep-01": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 1143,
+   "reason": "On main today EventManager.updateAllCalendarEvents (packages/features/bookings/lib/EventManager.ts) still declares calendarReference as undefined, awaits prisma.booking.findUnique for newBookingId before assigning it, and its catch still returns `calendarReference?.map(...) ?? []`. A throw before the references are loaded therefore still yields an empty array instead of a failed result, exactly as at the benchmark head.",
+   "astra": []
+  }
+ }
+}

@@ -1,0 +1,11 @@
+{
+ "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
+ "items": [
+  {
+   "id": "S3",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "Both claim EmailValidator lost the prior email syntax check, allowing malformed addresses. The suggested restoration and domain-list condition describe the same alleged defect."
+  }
+ ]
+}

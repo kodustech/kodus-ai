@@ -1,0 +1,41 @@
+{
+ "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes handling nil or blank default locales during fallback-chain construction, distinct from missing fallback catalogs or incorrect cache keys."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Describes inconsistent string/symbol locale representation affecting matching and load tracking. Neither golden issue concerns locale normalization."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Describes a claimed synchronization problem in loaded-locale tracking, not missing fallback-chain loading outside controllers. load_locale already locks and rechecks membership."
+  },
+  {
+   "id": "S4",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes the same unloaded fallback catalogs in jobs and mailers caused by ensuring the fallback chain only in the controller."
+  },
+  {
+   "id": "S5",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Describes the same cache-key omission of site-dependent fallback context, causing incorrect translations across sites or after default-locale changes."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "Describes regex interpolation of unvalidated locale values loading unintended files. This is distinct from both golden issues."
+  }
+ ]
+}

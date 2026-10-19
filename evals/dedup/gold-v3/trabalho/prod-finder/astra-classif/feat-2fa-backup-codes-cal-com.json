@@ -1,0 +1,12 @@
+{
+ "caseId": "feat-2fa-backup-codes-cal-com",
+ "items": [
+  {
+   "issueId": "feat-2fa-backup-codes-cal-com#pf-muse-C2",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The PR adds an uncaught throw for a missing encryption key in apps/web/pages/api/auth/two-factor/totp/disable.ts:48-51, producing a framework 500 instead of a JSON error response. The caller unconditionally parses unsuccessful responses as JSON at apps/web/components/settings/DisableTwoFactorModal.tsx:66, so this response causes a parsing failure handled by the generic-error catch at lines 80-82. The UI catches the failure, but the new branch still breaks the expected error-response format.",
+   "severity": "medium"
+  }
+ ]
+}

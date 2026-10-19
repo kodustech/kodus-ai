@@ -1,0 +1,29 @@
+{
+ "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+ "items": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims client-first initialization locks the global singleton to an unsuitable provider and prevents later server initialization. This differs from prod-01's missing ServiceLoader metadata causing construction failure."
+  },
+  {
+   "id": "S3",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#06",
+   "newGroup": null,
+   "reason": "Same claim that readSequence accepts malformed lengths or trailing DER, enabling signature malleability through insufficient sequence-boundary validation."
+  },
+  {
+   "id": "S4",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-03",
+   "newGroup": null,
+   "reason": "Same claim that integerToBytes truncates oversized R/S components into different values and improperly accepts malformed signatures. The additional negative-value check does not change the overlapping truncation claim."
+  },
+  {
+   "id": "S5",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-01",
+   "newGroup": null,
+   "reason": "Same readInteger path passing indefinite length -1 into an allocation and throwing NegativeArraySizeException instead of IOException. The comment additionally identifies the zero-length exception case."
+  }
+ ]
+}

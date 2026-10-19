@@ -1,0 +1,24 @@
+{
+ "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+ "prTitle": "feat: add calendar cache status and actions (#22532)",
+ "upstream": "calcom/cal.com",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/cal.com",
+ "base": "30a92a4d66b417f7c19dee2b343099adc6e88aa6",
+ "head": "5fd11f9faa79c4aefd39975d1b0e963e5034f793",
+ "prOriginalConhecido": {
+  "numero": 22532,
+  "url": "https://github.com/calcom/cal.diy/pull/22532",
+  "mergedAt": "2025-07-22",
+  "nota": "calcom/cal.com now redirects to calcom/cal.diy (renamed). PR #22532 head sha equals benchmark head 5fd11f9f; squash commit cb786923. Its tree differs from the head only by unrelated main changes (apps/web version bump, one unrelated locale key)."
+ },
+ "tps": [
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#pf-opus-C2",
+   "severity": "low",
+   "category": "bug",
+   "bug": "The new test-gcal-webhooks.sh writes GOOGLE_WEBHOOK_URL to '../.env' relative to the current directory, so running it from the repo root creates/edits a .env above the repo and the app never sees the URL.",
+   "evidenciaOpus": "scripts/test-gcal-webhooks.sh:5 sets ENV_FILE=\"../.env\", resolved against the caller's working directory; lines 61-70 then create/edit that file. Run from the repo root (./scripts/test-gcal-webhooks.sh) it writes GOOGLE_WEBHOOK_URL to a .env outside the repo, so the app never picks it up.",
+   "evidenciaAstra": "The new script sets ENV_FILE=\"../.env\" at scripts/test-gcal-webhooks.sh:5 and writes to that path at lines 62–70 without changing directories. Running it from the repository root therefore updates the parent directory’s .env, whereas apps/web/next.config.js:1 loads the repository’s .env, leaving the application's webhook configuration unchanged."
+  }
+ ]
+}

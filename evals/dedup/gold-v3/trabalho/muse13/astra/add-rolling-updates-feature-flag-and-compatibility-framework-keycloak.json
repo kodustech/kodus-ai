@@ -1,0 +1,29 @@
+{
+ "caseId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reports exit-code renumbering breaking existing automation, which is distinct from the golden-set test coverage problems."
+  },
+  {
+   "id": "S2",
+   "match": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#03",
+   "newGroup": null,
+   "reason": "Reports missing coverage of the check subcommand's disabled-feature guard."
+  },
+  {
+   "id": "S3",
+   "match": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#04",
+   "newGroup": null,
+   "reason": "Reports that testFeatureNotEnabled does not assert the FEATURE_DISABLED exit code of 4."
+  },
+  {
+   "id": "S4",
+   "match": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#03",
+   "newGroup": null,
+   "reason": "Reports that testing only metadata leaves the check subcommand's feature guard untested."
+  }
+ ]
+}

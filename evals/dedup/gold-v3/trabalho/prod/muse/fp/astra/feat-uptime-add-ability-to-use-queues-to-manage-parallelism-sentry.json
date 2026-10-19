@@ -1,0 +1,11 @@
+{
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "items": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "S2 identifies terminate() failing to join the commit thread after signaling shutdown, allowing a commit during termination. Rejected issue #19 concerns factory shutdown leaving strategy commit threads running, a different shutdown path and cause."
+  }
+ ]
+}

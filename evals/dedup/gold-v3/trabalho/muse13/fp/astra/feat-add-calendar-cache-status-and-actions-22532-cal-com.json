@@ -1,0 +1,17 @@
+{
+ "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+ "items": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims the handler bypasses the feature-flag-aware repository factory and queries cache data when caching is disabled. None of the rejected issues describes this cause or behavior."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Claims the webhook test script's predictable temporary log path permits symlink-based file overwrite. None of the rejected issues concerns temporary files or this script."
+  }
+ ]
+}

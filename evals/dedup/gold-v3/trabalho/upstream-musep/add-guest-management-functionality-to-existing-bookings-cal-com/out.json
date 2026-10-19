@@ -1,0 +1,19 @@
+{
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "prOriginal": {
+  "numero": 14740,
+  "url": "https://github.com/calcom/cal.diy/pull/14740",
+  "mergedAt": "2024-08-20",
+  "nota": "Taken from prOriginalConhecido; confirmed via gh pr view on calcom/cal.diy (calcom/cal.com redirects there): MERGED 2024-08-20, merged handler identical to the benchmark head."
+ },
+ "tps": {
+  "add-guest-management-functionality-to-existing-bookings-cal-com#musep-01": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 788,
+   "reason": "On main today packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts loads the booking via BookingRepository.findByIdIncludeDestinationCalendar, then only validateUserPermissions (organizer/attendee) and validateGuestsFieldEnabled; nothing checks booking.status before updating attendees, the calendar event and sending guest emails. The tRPC route is a plain authedProcedure with no status gate. None of the 27 later commits on the file (through 2026-04-15) added a CANCELLED/REJECTED check.",
+   "astra": []
+  }
+ }
+}

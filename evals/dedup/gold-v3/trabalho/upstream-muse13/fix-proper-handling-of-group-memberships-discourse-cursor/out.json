@@ -1,0 +1,24 @@
+{
+ "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+ "prOriginal": {
+  "numero": null,
+  "url": "https://github.com/discourse/discourse/commit/060cda77729cb1c4a827560e09e89a7b22078ba9",
+  "mergedAt": "2015-01-05",
+  "nota": "Known from earlier check, reconfirmed: benchmark head 060cda77 was committed directly to master on 2015-01-05 (no PR); merged code is the benchmark head itself."
+ },
+ "tps": {
+  "fix-proper-handling-of-group-memberships-discourse-cursor#muse13-01": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2017-05-17",
+    "pr": null,
+    "commit": "9090c7b05b2ce52236e831607dae923f7a371d62",
+    "url": "https://github.com/discourse/discourse/commit/9090c7b05b2ce52236e831607dae923f7a371d62"
+   },
+   "removidoEm": null,
+   "diasNoAr": 863,
+   "reason": "The floor(user_count/limit)+1 totalPages formula survived in admin-group.js.es6 until 7bfabb029b (2016-12-13) moved the pagination verbatim into discourse/components/group-members-input.js.es6. Commit 9090c7b05b 'FIX: Admin groups editor was showing extra page when exactly 50 records' (2017-05-17, pushed directly, no PR) changed it to Math.ceil(userCount / limit), so at offset 50 of 100 members showingLast is true and Next no longer reaches an empty page.",
+   "astra": []
+  }
+ }
+}

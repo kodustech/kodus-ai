@@ -1,0 +1,19 @@
+{
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "items": [
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#kimip-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "The handler persists guests at packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:92-106 and accurately returns \u201cGuests added\u201d at line 173. Notifications follow the existing best-effort contract: packages/emails/templates/_base-email.ts:68-89 already logs delivery failures and resolves, and editLocation.handler.ts:134-146 likewise returns success after notification errors; no delivery guarantee is established here.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#kimip-02",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:74-106 filters email addresses and inserts attendees without checking capacity; seatsPerTimeSlot is only forwarded afterward at line 145. The authenticated mutation is exposed without a seated-event restriction in packages/trpc/server/routers/viewer/bookings/_router.tsx:79-94, allowing additional attendees even when a seated booking is full.",
+   "severity": "high"
+  }
+ ]
+}

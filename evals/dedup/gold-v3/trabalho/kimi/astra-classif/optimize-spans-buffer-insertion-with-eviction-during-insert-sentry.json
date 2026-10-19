@@ -1,0 +1,26 @@
+{
+ "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+ "items": [
+  {
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#kimi-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "src/sentry/spans/consumers/process/factory.py:134-141 uses rapidjson.loads with no NaN restriction and typing.cast, which performs no runtime validation. The newly added ZADD at src/sentry/spans/buffer.py:197-201 forwards that value directly as a score, so a NaN timestamp causes an unhandled Redis error.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#kimi-02",
+   "class": "TP",
+   "subclass": "nit",
+   "reason": "src/sentry/spans/buffer.py:196-198 retains the name set_key while changing its use to ZADD, and src/sentry/scripts/spans/add-buffer.lua:62-63 trims the sorted set with ZPOPMIN. Renaming the identifier would only improve naming clarity and would not change behavior.",
+   "severity": "low"
+  },
+  {
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#kimi-03",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "tests/sentry/spans/consumers/process/test_flusher.py:78-87 explicitly triggers and checks flusher backpressure, which does not depend on distinct span timestamps. Each segment contains only four spans, below the eviction threshold of 1000 in src/sentry/scripts/spans/add-buffer.lua:62-63; timestamp ordering and eviction are outside this test's purpose.",
+   "severity": "medium"
+  }
+ ]
+}

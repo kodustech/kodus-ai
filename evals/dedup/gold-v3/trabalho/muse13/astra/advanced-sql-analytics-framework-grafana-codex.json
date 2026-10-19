@@ -1,0 +1,41 @@
+{
+ "caseId": "advanced-sql-analytics-framework-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The replacement DB methods unconditionally return errors. This is separate from the reader's always-false feature gate and the golden-set naming issues."
+  },
+  {
+   "id": "S2",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "Both branches of enableSqlExpressions return false, causing ReadQuery to reject SQL expressions even when the flag is enabled."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reports the same unimplemented replacement DB methods as S1, which prevent callers from obtaining SQL results."
+  },
+  {
+   "id": "S4",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-02",
+   "newGroup": null,
+   "reason": "The enabled variable contains the negated feature flag, so its name expresses the opposite of its value."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Reports misleading naming or missing documentation for the NewInMemoryDB stub, distinct from the stale duckDB variable in TablesList. Renaming or documenting this constructor would not fix the methods' unconditional errors."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reports the unimplemented QueryFramesInto method causing SQLCommand.Execute to fail, a specific part of the DB stub problem described by S1 and S3."
+  }
+ ]
+}

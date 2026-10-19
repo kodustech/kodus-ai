@@ -1,0 +1,12 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "GroupResource.java:176-180 removes the cached global-view shortcut and calls canView(g) for each subgroup traversed before pagination. GroupPermissionsV2.java:56-61,141-152 evaluates permissions each time, including repeatedly evaluating the same all-groups resource; MgmtPermissions.java:347-351 starts a fresh evaluation without caching the result. This introduces meaningful authorization overhead proportional to the subgroups traversed, especially for large pagination offsets.",
+   "severity": "medium"
+  }
+ ]
+}

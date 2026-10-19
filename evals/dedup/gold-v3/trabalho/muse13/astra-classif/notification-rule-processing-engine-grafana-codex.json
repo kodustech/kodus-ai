@@ -1,0 +1,26 @@
+{
+ "caseId": "notification-rule-processing-engine-grafana-codex",
+ "items": [
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#muse13-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "Removing the matching logic is safe because the Prometheus endpoint reads persisted rules through ListAlertRules (pkg/services/ngalert/api/prometheus/api_prometheus.go:487), just like Ruler (pkg/services/ngalert/api/api_ruler.go:780). Unscheduled rules receive default status rather than being omitted (pkg/services/ngalert/api/prometheus/api_prometheus.go:316-327), so the alleged propagation-dependent Creating/Deleting states do not require restoration.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#muse13-02",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "At public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx:68, `groups.at(0)?.rules.map(...)` is one continuous optional chain. When groups is empty, the entire chain returns undefined without calling map, so the claimed exception cannot occur.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#muse13-03",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "The loader explicitly passes `showLocation={false}` at public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx:76. GrafanaRuleListItem forwards that value to alerting and recording rows at public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx:61 and :67, overriding the default.",
+   "severity": "low"
+  }
+ ]
+}

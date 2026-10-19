@@ -1,0 +1,11 @@
+{
+ "caseId": "unified-storage-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "S2 claims Watch clients miss writes during indexing because the broadcaster captures its starting RV too late. This differs from #06\u2019s search-index gap and #prod-01\u2019s claim that the search reader consumes events before the broadcaster starts."
+  }
+ ]
+}

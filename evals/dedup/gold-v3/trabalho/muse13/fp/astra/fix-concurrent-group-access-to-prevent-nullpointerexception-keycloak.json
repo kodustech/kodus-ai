@@ -1,0 +1,11 @@
+{
+ "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+ "items": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This comment concerns an unthrottled reader loop in GroupTest causing excessive server load. The rejected claim concerns null dereferences in GroupAdapter's getSubGroupsStream overloads after concurrent deletion, a different defect and location."
+  }
+ ]
+}

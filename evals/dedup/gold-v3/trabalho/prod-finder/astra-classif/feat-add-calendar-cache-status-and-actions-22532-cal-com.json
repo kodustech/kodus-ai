@@ -1,0 +1,19 @@
+{
+ "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+ "items": [
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#pf-opus-C2",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The new script sets ENV_FILE=\"../.env\" at scripts/test-gcal-webhooks.sh:5 and writes to that path at lines 62\u201370 without changing directories. Running it from the repository root therefore updates the parent directory\u2019s .env, whereas apps/web/next.config.js:1 loads the repository\u2019s .env, leaving the application's webhook configuration unchanged.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#pf-muse-C1",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "packages/features/calendar-cache/calendar-cache.repository.ts:174 aggregates persisted rows without filtering expiration, but packages/features/apps/components/CredentialActionsDropdown.tsx:86\u201394 displays only their last-update timestamp, not a claim that cached availability remains usable. Expired rows still exist and can legitimately be deleted by packages/trpc/server/routers/viewer/calendars/deleteCache.handler.ts:28\u201329, so showing their timestamp and deletion action does not establish incorrect behavior.",
+   "severity": "medium"
+  }
+ ]
+}

@@ -1,0 +1,23 @@
+{
+ "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+ "items": [
+  {
+   "id": "S2",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#07",
+   "newGroup": null,
+   "reason": "Asserts the same direct indexing of end_timestamp_precise causing KeyError and aborting the batch. This also duplicates rejected claim #sncc-02."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims unvalidated client timestamps can manipulate eviction priority. This differs from the rejected claim about span_count causing excessive eviction."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Claims repeated full-set ZUNIONSTORE operations cause quadratic insertion work. No rejected issue describes this performance problem."
+  }
+ ]
+}

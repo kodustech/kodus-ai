@@ -1,0 +1,23 @@
+{
+ "caseId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes an off-by-one mapping from modern order to legacy box-ordinal-group in order(), which is distinct from every golden-set issue."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes the same missing +1 adjustment for legacy box-ordinal-group values in order(); no golden-set issue covers this problem."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes the same off-by-one legacy ordinal-group mapping as S1 and S2, rather than any golden-set issue."
+  }
+ ]
+}

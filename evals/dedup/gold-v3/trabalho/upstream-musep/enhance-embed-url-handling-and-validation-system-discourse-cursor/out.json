@@ -1,0 +1,33 @@
+{
+ "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+ "prOriginal": {
+  "numero": null,
+  "url": "https://github.com/discourse/discourse/commit/4f8aed295a29954023b2849c060ef4fb299d1b5d",
+  "mergedAt": "2013-12-31",
+  "nota": "From prOriginalConhecido, reconfirmed: compare 4f8aed2...main = ahead (benchmark head is on upstream main), direct commit 2013-12-31 by Robin Ward, no PR."
+ },
+ "tps": {
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#musep-01": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 4673,
+   "reason": "The open(url).read call was rewritten several times (2016 allow_redirections, 2020 FinalDestination, 2023-11-09 SSRF fix 5f20748e) and today TopicEmbed.find_remote does FinalDestination::HTTP.get_response(uri) then parse_html(response.body). FinalDestination::HTTP only overrides connect for SSRF filtering; no read/total timeout and no body-size cap are set, so the whole body is still read into memory with Net::HTTP defaults, as with open-uri in 2013. The changes targeted SSRF/redirects, not the unbounded fetch.",
+   "astra": [
+    {
+     "pergunta": "Fetch rewritten to FinalDestination::HTTP.get_response with no explicit timeout or size cap: confirmado, pendente or descontinuado?",
+     "resposta": "Default 60s timeouts bound each read, not total duration; body still fully loaded without size limit; security changes addressed SSRF/redirects only.",
+     "veredito": "pendente"
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#musep-02": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 4673,
+   "reason": "lib/topic_retriever.rb on main still does `if Discourse.redis.setnx(retrieved_key, \"1\")` followed by a separate `Discourse.redis.expire(retrieved_key, 60)`. Later commits only renamed $redis to Discourse.redis (2019) and changed the key to a global \"retrieved_topic\" (67e20416, 2016), so a crash between the two commands still leaves a key without TTL that blocks retrieval (now for all URLs).",
+   "astra": []
+  }
+ }
+}

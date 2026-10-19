@@ -1,0 +1,17 @@
+{
+ "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+ "items": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes failure-return handling in record_for_host and its category_id callers, unrelated to replacing all underscores in model types for ADMIN_MODELS matching and base paths."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Describes database-query overhead in embed host checks and proposes caching, unrelated to the model-type normalization issue and distinct from S3's failure-return handling."
+  }
+ ]
+}

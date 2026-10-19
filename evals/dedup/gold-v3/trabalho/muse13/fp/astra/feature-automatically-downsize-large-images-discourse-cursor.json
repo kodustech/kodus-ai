@@ -1,0 +1,11 @@
+{
+ "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+ "items": [
+  {
+   "id": "S3",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Both claim that the API URL download limit changed from max_image_size_kb to a hardcoded 10 MB, increasing attacker-controlled server-side download bandwidth. The added disk usage and ImageMagick details describe consequences of the same alleged cause."
+  }
+ ]
+}

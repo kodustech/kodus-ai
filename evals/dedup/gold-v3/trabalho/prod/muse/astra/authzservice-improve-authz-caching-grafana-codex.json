@@ -1,0 +1,17 @@
+{
+ "caseId": "authzservice-improve-authz-caching-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This describes stale denials hiding newly granted permissions until the denial-cache TTL expires. None of the golden issues describes this invalidation problem."
+  },
+  {
+   "id": "S2",
+   "match": "authzservice-improve-authz-caching-grafana-codex#01",
+   "newGroup": null,
+   "reason": "This describes the same ambiguous underscore-separated cache key: distinct name/parent pairs collide, causing a denial for one resource to deny another."
+  }
+ ]
+}

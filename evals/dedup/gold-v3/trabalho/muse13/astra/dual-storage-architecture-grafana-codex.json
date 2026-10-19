@@ -1,0 +1,101 @@
+{
+ "caseId": "dual-storage-architecture-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "dual-storage-architecture-grafana-codex#05",
+   "newGroup": null,
+   "reason": "The async legacy writes inherit request cancellation, which can cancel them when the handler returns."
+  },
+  {
+   "id": "S2",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage Create and Update failures are recorded in the legacy histogram instead of the storage histogram."
+  },
+  {
+   "id": "S3",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "The legacy DeleteCollection measurement incorrectly uses recordStorageDuration instead of recordLegacyDuration."
+  },
+  {
+   "id": "S4",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Delete's success metric uses the object name as the kind label, creating inconsistent, per-object series."
+  },
+  {
+   "id": "S5",
+   "match": "dual-storage-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Delete installs d.Log in the context instead of the enriched logger, losing request fields."
+  },
+  {
+   "id": "S6",
+   "match": "dual-storage-architecture-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Passing the original objInfo to Legacy.Update recomputes the update against legacy state instead of forwarding the committed storage result. The additional race concern does not change the included golden-set problem."
+  },
+  {
+   "id": "S7",
+   "match": "dual-storage-architecture-grafana-codex#05",
+   "newGroup": null,
+   "reason": "The legacy goroutines inherit cancellation from the request context and can lose their writes when the request finishes."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This describes shared mutable inputs racing with background legacy writes and proposes copying them. That is distinct from request cancellation, write ordering, or recomputing an update against legacy state."
+  },
+  {
+   "id": "S9",
+   "match": "dual-storage-architecture-grafana-codex#07",
+   "newGroup": null,
+   "reason": "The Create test neither waits for nor verifies the asynchronous legacy call, so removing it would still pass."
+  },
+  {
+   "id": "S10",
+   "match": "dual-storage-architecture-grafana-codex#07",
+   "newGroup": null,
+   "reason": "The Delete test does not wait for or assert the asynchronous legacy write, leaving its removal undetected."
+  },
+  {
+   "id": "S11",
+   "match": "dual-storage-architecture-grafana-codex#07",
+   "newGroup": null,
+   "reason": "The Update test registers an expectation but never waits for or verifies the legacy update."
+  },
+  {
+   "id": "S12",
+   "match": "dual-storage-architecture-grafana-codex#07",
+   "newGroup": null,
+   "reason": "The DeleteCollection test does not wait for or verify the asynchronous legacy call, so a missing legacy write would pass."
+  },
+  {
+   "id": "S13",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Delete's successful storage measurement passes name instead of options.Kind into the kind label."
+  },
+  {
+   "id": "S14",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Legacy DeleteCollection latency is incorrectly recorded in the storage histogram."
+  },
+  {
+   "id": "S15",
+   "match": "dual-storage-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Delete propagates d.Log rather than the enriched log, discarding name, kind, and method fields."
+  },
+  {
+   "id": "S16",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "The storage Create and Update error paths use recordLegacyDuration, misattributing storage failures to legacy."
+  }
+ ]
+}

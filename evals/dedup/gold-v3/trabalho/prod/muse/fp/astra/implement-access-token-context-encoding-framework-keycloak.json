@@ -1,0 +1,11 @@
+{
+ "caseId": "implement-access-token-context-encoding-framework-keycloak",
+ "items": [
+  {
+   "id": "S2",
+   "match": "implement-access-token-context-encoding-framework-keycloak#07",
+   "newGroup": null,
+   "reason": "The comment asserts that setFormParams leaves the cached grantType stale, causing incorrect grant encoding. This is the same cause and location as rejected issue #07."
+  }
+ ]
+}

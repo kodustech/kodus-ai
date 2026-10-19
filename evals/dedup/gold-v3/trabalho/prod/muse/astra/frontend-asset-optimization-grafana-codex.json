@@ -1,0 +1,17 @@
+{
+ "caseId": "frontend-asset-optimization-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "frontend-asset-optimization-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Describes the missing cache re-check after acquiring the write lock, causing concurrent cache misses to reload the manifest redundantly."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes mutable shared-cache aliasing through index data hooks. Fixing this would not fix either the missing cache re-check or the exclusive lock held during manifest loading."
+  }
+ ]
+}

@@ -1,0 +1,19 @@
+{
+ "caseId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor",
+ "items": [
+  {
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#muse13-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "app/services/user_updater.rb:31 normalizes website values before saving, and format_url at lines 105\u2013106 prepends http:// to example.com/user. The claimed input therefore reaches the serializer with a host; moreover, the base controller\u2019s website.split(\"/\")[2] already hid the unnormalized example, so that disappearance is not introduced here.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#muse13-02",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "app/serializers/user_serializer.rb:143 deliberately builds a display label from host and path, consistent with this PR\u2019s path-display scope; query and fragment are separate URL components. app/assets/javascripts/discourse/templates/user/user.hbs:69 retains the complete website as href, so the shortened label does not alter navigation or establish a broken contract.",
+   "severity": "medium"
+  }
+ ]
+}

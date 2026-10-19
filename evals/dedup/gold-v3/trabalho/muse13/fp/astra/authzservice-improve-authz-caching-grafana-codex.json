@@ -1,0 +1,17 @@
+{
+ "caseId": "authzservice-improve-authz-caching-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "authzservice-improve-authz-caching-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "Same claim that the denial cache short-circuits permission checks and is not invalidated when access is granted, keeping newly accessible resources denied until TTL expiry."
+  },
+  {
+   "id": "S3",
+   "match": "authzservice-improve-authz-caching-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Same claim that per-resource denial entries allow excessive cache memory growth. Request-controlled names and enumeration describe how that same cardinality problem could arise."
+  }
+ ]
+}

@@ -1,0 +1,12 @@
+{
+ "caseId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+ "items": [
+  {
+   "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#pf-muse-C3",
+   "class": "FP",
+   "subclass": "none",
+   "severity": "low",
+   "reply": "I retain FP/none: the main topic title's floated bullet retains its 5px margin, while the removed margin affects the header category rendered below its heading with newly adjusted line-height. The reviewer's assertion that order(2) works is incorrect: header-extra-info retains Ember's default component wrapper, so .extra-info-wrapper is not a direct flex child of .contents. That ineffective order does not establish the claimed bullet alignment defect."
+  }
+ ]
+}

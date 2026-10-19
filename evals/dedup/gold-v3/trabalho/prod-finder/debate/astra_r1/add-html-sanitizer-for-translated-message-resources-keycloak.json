@@ -1,0 +1,12 @@
+{
+ "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+ "items": [
+  {
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#pf-kimi-C1",
+   "class": "TP",
+   "subclass": "none",
+   "severity": "medium",
+   "reply": "I retain TP: the newly introduced regex strips non-anchor tags before policy validation, producing incorrect validation results. English bundles are also verified against themselves, so an English value containing `<abbr>text</abbr>` passes despite `abbr` being excluded from the allowed elements. Matching the English source therefore does not eliminate the defect. The absence of affected tags in current bundles limits its incidence, but this is incorrect behavior for uncommon input, not a cosmetic nit."
+  }
+ ]
+}

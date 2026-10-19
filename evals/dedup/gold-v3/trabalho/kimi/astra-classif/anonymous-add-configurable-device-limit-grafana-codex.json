@@ -1,0 +1,12 @@
+{
+ "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+ "items": [
+  {
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#kimi-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "The literal in pkg/services/anonymous/anonimpl/anonstore/database.go:18 is an internal sentinel error, not the user-facing message claimed. pkg/middleware/auth.go:39 supplies \u201cUnauthorized\u201d as the response fallback, and pkg/services/contexthandler/model/model.go:116-149 logs ordinary errors while returning that fallback; browser requests redirect to login (pkg/middleware/auth.go:50).",
+   "severity": "low"
+  }
+ ]
+}

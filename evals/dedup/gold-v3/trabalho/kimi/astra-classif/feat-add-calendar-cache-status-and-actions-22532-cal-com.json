@@ -1,0 +1,40 @@
+{
+ "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+ "items": [
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#kimi-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "CredentialActionsDropdown.tsx:47-59 displays static translated error messages, and lines 136 and 149 send only credential IDs. The comment explicitly reports no issue and identifies no defect.",
+   "severity": "low"
+  },
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#kimi-02",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "packages/features/calendar-cache/calendar-cache.repository.ts:173-187 filters by supplied credential IDs and returns only each ID and its latest updatedAt. connectedCalendars.handler.ts:19-35 derives those IDs from the caller's connected calendars; the comment reports no defect.",
+   "severity": "low"
+  },
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#kimi-03",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "packages/lib/server/repository/selectedCalendar.ts:400-404 performs a database update without logging, and packages/app-store/googlecalendar/lib/CalendarService.ts:1024 passes empty data. The comment explicitly finds no data-exposure issue and does not allege a behavioral defect.",
+   "severity": "low"
+  },
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#kimi-04",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "deleteCache.handler.ts:17-25 checks both credential ID and authenticated user ID, using the same generic error when no matching credential exists. This is a no-issue observation, not a reported defect.",
+   "severity": "low"
+  },
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#kimi-05",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "scripts/test-gcal-webhooks.sh:35 logs tunnel startup output, while lines 67-73 configure and print the extracted webhook receiver URL. The comment identifies no secret disclosure or other defect and explicitly reports no issue.",
+   "severity": "low"
+  }
+ ]
+}

@@ -1,0 +1,305 @@
+{
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": [
+  {
+   "id": "S1",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+   "newGroup": null,
+   "reason": "Computed keys from z.string().toString() are literal keys, so the sync schema does not validate as intended."
+  },
+  {
+   "id": "S2",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "Sync mode returns raw fetch Response while callers expect provider-specific shapes."
+  },
+  {
+   "id": "S3",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "newGroup": null,
+   "reason": "Zoho Bigin passes credentialId instead of user id as calcomUserId."
+  },
+  {
+   "id": "S4",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#17",
+   "newGroup": null,
+   "reason": "jsforce.Connection is built from the stale pre-refresh credential key."
+  },
+  {
+   "id": "S5",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#07",
+   "newGroup": null,
+   "reason": "Hardcoded 'refresh_token' placeholder stored when the response omits a refresh token."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Decrypted keys stored without validating against app credential schema (credential poisoning); not in golden set."
+  },
+  {
+   "id": "S7",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "newGroup": null,
+   "reason": "SafeParse result object stored as credential key instead of its data."
+  },
+  {
+   "id": "S8",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#16",
+   "newGroup": null,
+   "reason": "statusText !== 'OK' check instead of response.ok."
+  }
+ ],
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Migration interpolates host values into SQL unquoted (also mentions the unguarded execute[0])."
+  },
+  {
+   "id": "S2",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "update/destroy use where(id).first with no nil check, 500 instead of 404."
+  },
+  {
+   "id": "S3",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "before_validation calls host.sub! on nil host, NoMethodError."
+  },
+  {
+   "id": "S4",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-01",
+   "newGroup": null,
+   "reason": "No index on embeddable_hosts.host for record_for_host lookup."
+  },
+  {
+   "id": "S5",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#11",
+   "newGroup": null,
+   "reason": "After save the row category is set from categoryId (null) instead of the saved uncategorized category."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Topic expansion guard does not check that any embeddable host exists; not in golden set."
+  }
+ ],
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Domain restriction regex is not anchored/escaped, so suffixed or substring domains match; fix anchors with \\z."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "rejectedEmails array shared on the prototype across instances; golden prod-01 is about never clearing the cache in a singleton controller, which moving to init would not fix."
+  },
+  {
+   "id": "S3",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Case-sensitive exact lookup lets case variants bypass the block list."
+  },
+  {
+   "id": "S4",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Non-atomic match_count read-modify-write in should_block? loses increments."
+  }
+ ],
+ "add-html-sanitizer-for-translated-message-resources-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#07",
+   "newGroup": null,
+   "reason": "normalizeValue blanks whole choice expression so HTML inside choice branches bypasses the verifier."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims PropertyResourceBundle from InputStream decodes UTF-8 files as ISO-8859-1; not in golden set."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Path replacement to find the English file is not anchored to the end; not in golden set."
+  },
+  {
+   "id": "S4",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#opa-01",
+   "newGroup": null,
+   "reason": "Missing English counterpart file throws unchecked exception that crashes the mojo instead of reporting."
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-02",
+   "newGroup": null,
+   "reason": "ClientPermissionsV2.canExchangeTo throws UnsupportedOperationException while token exchange still calls it."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Other V2 overrides (isPermissionsEnabled, resource, getPermissions...) throw UnsupportedOperationException for V1 callers; not in golden set."
+  },
+  {
+   "id": "S3",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+   "newGroup": null,
+   "reason": "getClientsWithPermission returns the type resource name 'Clients' instead of real client ids."
+  }
+ ],
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+  {
+   "id": "S1",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#11",
+   "newGroup": null,
+   "reason": "deleteScheduledEmailReminder with immediateDelete does not delete the row, so the name does not describe the behaviour."
+  },
+  {
+   "id": "S2",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+   "newGroup": null,
+   "reason": "One failing SendGrid cancel in the single try aborts the rest of the cron batch."
+  },
+  {
+   "id": "S3",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+   "newGroup": null,
+   "reason": "Async reminder cancel helpers called in forEach without await."
+  }
+ ],
+ "fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "findMembers returns undefined on the early-exit path (inconsistent return)."
+  },
+  {
+   "id": "S2",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Pager off by one when user_count is a multiple of limit, empty last page."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "add_members does one User query per username (N+1); not in golden set."
+  }
+ ],
+ "sms-workflow-reminder-retry-count-tracking-cal-com": [
+  {
+   "id": "S1",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "deleteMany retryCount > 1 branch lacks the SMS method filter."
+  },
+  {
+   "id": "S2",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
+   "newGroup": null,
+   "reason": "Unguarded retryCount update in catch escapes the loop and aborts the cron run."
+  },
+  {
+   "id": "S3",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#07",
+   "newGroup": null,
+   "reason": "No index on retryCount for the new OR arm of the cleanup delete."
+  }
+ ],
+ "async-import-of-the-appstore-packages-cal-com": [
+  {
+   "id": "S1",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Async callbacks in forEach are not awaited after getCalendar became async."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "getVideoAdapters awaits each app import sequentially; not in golden set."
+  }
+ ],
+ "dual-storage-architecture-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "dual-storage-architecture-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Legacy.Update receives raw objInfo instead of wrapper with the stored object, so legacy diverges."
+  },
+  {
+   "id": "S2",
+   "match": "dual-storage-architecture-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Async legacy goroutines inherit the request context and get cancelled when the request ends."
+  }
+ ],
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": [
+  {
+   "id": "S1",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#01",
+   "newGroup": null,
+   "reason": "getSubGroupsCount returns null for a concurrently deleted group, violating the contract."
+  },
+  {
+   "id": "S2",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "Test asserts caughtExceptions without joining the reader thread."
+  }
+ ],
+ "unified-storage-performance-optimizations-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "unified-storage-performance-optimizations-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Init failure returns without cancelling the server context."
+  },
+  {
+   "id": "S2",
+   "match": "unified-storage-performance-optimizations-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Unsynchronized cache check and build lets concurrent callers build the same index."
+  }
+ ],
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": [
+  {
+   "id": "S1",
+   "match": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#kimi-03",
+   "newGroup": null,
+   "reason": "Public options type makes teamId optional for team scope, silently yielding empty insights."
+  }
+ ],
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "TopicUser.find_by nil not handled in unsubscribe, NoMethodError."
+  }
+ ],
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#03",
+   "newGroup": null,
+   "reason": "TestLogger.FromContext returns a fresh logger, contextual logs lost to assertions."
+  }
+ ],
+ "fixing-re-authentication-with-passkeys-keycloak": [],
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [],
+ "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": []
+}

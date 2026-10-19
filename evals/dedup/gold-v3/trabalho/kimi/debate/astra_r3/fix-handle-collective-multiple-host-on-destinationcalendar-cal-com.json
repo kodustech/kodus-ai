@@ -1,0 +1,12 @@
+{
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "items": [
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#kimi-01",
+   "class": "TP",
+   "subclass": "nit",
+   "severity": "low",
+   "reply": "I change to TP/nit, low. The PR edits the English literal in CalendarManager.ts, and CalEventParser.ts:getAdditionalNotes renders it verbatim, so the localization gap is real and touches changed code. However, this short informational notice remains accurate, and the spelling change neither introduces nor worsens the existing gap; requesting localization here is a minor wording improvement rather than a substantive behavioral defect."
+  }
+ ]
+}

@@ -1,0 +1,54 @@
+{
+ "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+ "items": [
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-01",
+   "class": "TP",
+   "subclass": "nit",
+   "reason": "app/models/embeddable_host.rb:17 performs the unindexed lookup, and db/migrate/20150818190757_create_embeddable_hosts.rb:3 creates the table without a host index. This is a minor optimization for an administrator-configured allowlist; the code establishes no scale that makes the scan a meaningful performance defect.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-02",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "app/models/topic_embed.rb:43 does pass nil for an unmatched host, but app/models/topic.rb:165 invokes the fallback at app/models/topic.rb:215, which assigns Uncategorized. The suggested fallback already exists, and db/migrate/20150818190757_create_embeddable_hosts.rb:31 deliberately removes the old global setting.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-03",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "app/controllers/admin/embeddable_hosts_controller.rb:25 checks blank?, which does not consider numeric zero blank. The claimed replacement of category ID 0 therefore cannot happen through this condition.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-04",
+   "class": "TP",
+   "subclass": "nit",
+   "reason": "spec/models/embeddable_host_spec.rb:23 names the group allows_embeddable_host, while app/models/embeddable_host.rb:20 defines host_allowed?. The assertions at spec/models/embeddable_host_spec.rb:27 call the correct method, so this is only test-description tidying.",
+   "severity": "low"
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-05",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "app/assets/javascripts/admin/templates/components/embeddable-host.hbs:3 uses example.com as an example hostname. This is a valid domain literal rather than English instructional text requiring translation, so leaving it unchanged across locales is reasonable.",
+   "severity": "low"
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-06",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "spec/controllers/admin/embeddable_hosts_controller_spec.rb:5 explicitly declares an inheritance test, and line 6 correctly verifies that contract. Additional action coverage would be useful, but the comment identifies neither a defective assertion nor behavior this test claims to verify and fails to check.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-07",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "spec/controllers/admin/embedding_controller_spec.rb:5 explicitly tests inheritance, and line 6 verifies exactly that property. Requesting additional serialization tests does not establish a defect in this test or in the show/update implementations at app/controllers/admin/embedding_controller.rb:5 and :9.",
+   "severity": "medium"
+  }
+ ]
+}

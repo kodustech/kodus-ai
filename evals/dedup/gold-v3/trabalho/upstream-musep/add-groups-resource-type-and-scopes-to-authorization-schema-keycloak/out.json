@@ -1,0 +1,30 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "prOriginal": {
+  "numero": 37038,
+  "url": "https://github.com/keycloak/keycloak/pull/37038",
+  "mergedAt": "2025-02-12",
+  "nota": "Taken from prOriginalConhecido; confirmed via gh pr view: MERGED 2025-02-12, merged as 679f44692d with the same single commit as the benchmark head 7355f05e6a."
+ },
+ "tps": {
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2025-03-24",
+    "pr": 38322,
+    "commit": "1c57035d41",
+    "url": "https://github.com/keycloak/keycloak/pull/38322"
+   },
+   "diasNoAr": 40,
+   "reason": "PR #38322 ('Support partial evaluation for the group resource type', issue #38273, motivation 'Apply FGAP permissions when querying groups') moved V2 group filtering into the store query and wrapped the per-group canView filter in GroupResource.getSubGroups, GroupsResource.getGroups and GroupUtils.populateGroupHierarchyFromSubGroups with `if (!isAdminPermissionsEnabled(realm))`. Today's main still has that guard, so under FGAP V2 the listings no longer run one evaluation per group. The change was a functional rewrite to query-level filtering, not aimed at this perf cost; the canViewGlobal short-circuit itself was never restored (only the V1 path still filters per group).",
+   "astra": [
+    {
+     "pergunta": "Bug + benchmark code + #38322 diff + today's code; confirmado (fixed by #38322) or descontinuado (rewrite not aimed at this perf issue)?",
+     "resposta": "#38322 replaced the per-group V2 evaluation with query-level authorization; that removes the cost, but its stated motivation does not show it targeted this perf bug, so the behaviour disappeared through a rewrite; the remaining V1 filter does not change that.",
+     "veredito": "descontinuado"
+    }
+   ]
+  }
+ }
+}

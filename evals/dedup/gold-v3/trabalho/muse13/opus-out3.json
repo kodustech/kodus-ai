@@ -1,0 +1,508 @@
+{
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "Unescaped url interpolated into the footer <a href> of raw_html content, stored XSS."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Unescaped request.referer reflected into JS string in embed layout; not in golden."
+  },
+  {
+   "id": "S3",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "i.content nil for description-only feed items, scrub raises NoMethodError."
+  },
+  {
+   "id": "S4",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#19",
+   "newGroup": null,
+   "reason": "import_remote lacks nil/network error handling around open(url).read and doc.content."
+  },
+  {
+   "id": "S5",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-02",
+   "newGroup": null,
+   "reason": "feed_key conditional fetch never used, whole feed re-fetched and re-processed each run."
+  },
+  {
+   "id": "S6",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "i.content nil crashes the poll on scrub."
+  },
+  {
+   "id": "S7",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#17",
+   "newGroup": null,
+   "reason": "Check-then-insert race on embed_url raises RecordNotUnique."
+  },
+  {
+   "id": "S8",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "Url escaped nowhere before interpolation into href in raw_html footer, stored XSS."
+  },
+  {
+   "id": "S9",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "raw_html cook_method plus raw post.cooked renders imported HTML unsanitized."
+  },
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "request.referer interpolated into JS string without escaping, XSS in embed layout."
+  },
+  {
+   "id": "S11",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#24",
+   "newGroup": null,
+   "reason": "Hard-coded strftime English date format instead of I18n.l."
+  },
+  {
+   "id": "S12",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "postMessage targetOrigin uses full referer URL instead of origin; different from referer XSS and from embed.js indexOf issue."
+  },
+  {
+   "id": "S13",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "embed.js origin check via discourseUrl.indexOf(e.origin) substring test."
+  },
+  {
+   "id": "S14",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Controller spec still mocks synchronous TopicRetriever though controller now enqueues a job; not in golden."
+  },
+  {
+   "id": "S15",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#33",
+   "newGroup": null,
+   "reason": "Poll feed negative specs leave other preconditions disabled, so they pass regardless."
+  }
+ ],
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Shared MetricsMiddleware mutates next per chain build; not in golden."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Contextual logger middleware lacks nil-req guard."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Metrics middleware lacks nil-req guard."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "Metrics lookup error fails the plugin request instead of best-effort."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N5",
+   "reason": "traceID lost from request logs after removing explicit fields."
+  },
+  {
+   "id": "S6",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#03",
+   "newGroup": null,
+   "reason": "TestLogger.FromContext returns new instance instead of receiver."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N6",
+   "reason": "Request size metric HELP text says 'returned'."
+  },
+  {
+   "id": "S8",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Test function still named TestInstrumentationMiddleware after rename."
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Metrics middleware lacks nil-req guard."
+  },
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Contextual logger middleware lacks nil-req guard."
+  },
+  {
+   "id": "S11",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#03",
+   "newGroup": null,
+   "reason": "TestLogger.FromContext returns fresh logger instead of receiver."
+  },
+  {
+   "id": "S12",
+   "match": "new",
+   "newGroup": "N5",
+   "reason": "instrumentContext never adds traceID, trace correlation lost."
+  },
+  {
+   "id": "S13",
+   "match": "new",
+   "newGroup": "N7",
+   "reason": "Millisecond histogram truncates duration via integer division."
+  },
+  {
+   "id": "S14",
+   "match": "new",
+   "newGroup": "N8",
+   "reason": "Test helper foundLabels not reset per metric."
+  },
+  {
+   "id": "S15",
+   "match": "new",
+   "newGroup": "N9",
+   "reason": "Test never asserts request size not emitted for CheckHealth/CollectMetrics."
+  }
+ ],
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
+  {
+   "id": "S1",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "isinstance(process, multiprocessing.Process) false for SpawnProcess, hung flushers not killed."
+  },
+  {
+   "id": "S2",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#07",
+   "newGroup": null,
+   "reason": "Negative max_processes not validated; fix is the same validation at construction."
+  },
+  {
+   "id": "S3",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08",
+   "newGroup": null,
+   "reason": "Cluster-wide Redis memory queried once per flusher buffer on every submit."
+  },
+  {
+   "id": "S4",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#02",
+   "newGroup": null,
+   "reason": "Monkeypatched time.sleep makes the added sleep(0.1) a no-op."
+  },
+  {
+   "id": "S5",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#05",
+   "newGroup": null,
+   "reason": "Docstring says one process per shard, but shards are pooled over max_processes."
+  },
+  {
+   "id": "S6",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#01",
+   "newGroup": null,
+   "reason": "wait_produce tagged 'shards' vs 'shard' elsewhere."
+  },
+  {
+   "id": "S7",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#02",
+   "newGroup": null,
+   "reason": "time.sleep(0.1) no-op due to monkeypatch."
+  },
+  {
+   "id": "S8",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#12",
+   "newGroup": null,
+   "reason": "test_flusher_processes_limit only checks counts, not correct shard assignment."
+  },
+  {
+   "id": "S9",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "SpawnProcess fails isinstance check, hung flusher not killed before replacement."
+  },
+  {
+   "id": "S10",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "Same SpawnProcess isinstance check in join(); same fix as the golden issue (golden comments cite join too)."
+  }
+ ],
+ "notification-rule-processing-engine-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "notification-rule-processing-engine-grafana-codex#07",
+   "newGroup": null,
+   "reason": "GrafanaRuleListItem rendered without key."
+  },
+  {
+   "id": "S2",
+   "match": "notification-rule-processing-engine-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Pause item still gated on ruler rule, missing in list view."
+  },
+  {
+   "id": "S3",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "Silence drawer gated on ruler rule, Silence is a no-op for prom-only rules."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Dropped Creating/Deleting operation handling in GrafanaGroupLoader; not in golden."
+  },
+  {
+   "id": "S5",
+   "match": "notification-rule-processing-engine-grafana-codex#09",
+   "newGroup": null,
+   "reason": "GrafanaGroupLoader doc still mentions Ruler endpoint."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Claimed undefined.map on empty groups; not in golden."
+  },
+  {
+   "id": "S7",
+   "match": "notification-rule-processing-engine-grafana-codex#08",
+   "newGroup": null,
+   "reason": "Test named 'with action menu options' never checks menu options."
+  },
+  {
+   "id": "S8",
+   "match": "notification-rule-processing-engine-grafana-codex#03",
+   "newGroup": null,
+   "reason": "useAllGrafanaPromRuleAbilities(undefined) reports Duplicate allowed, ORed for cloud rules."
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Location shown despite comment saying redundant; not in golden."
+  }
+ ],
+ "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "topic-meta-data h5 a light lightness 30% changed to 70%."
+  },
+  {
+   "id": "S2",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "mobile custom-message-length 70% changed to 30%."
+  },
+  {
+   "id": "S3",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "mobile a.star h3 20% changed to 50%."
+  },
+  {
+   "id": "S4",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "desktop user.scss .name 30% changed to 50%."
+  },
+  {
+   "id": "S5",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "mobile user.scss .name 30% changed to 50%."
+  },
+  {
+   "id": "S6",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "topic-meta-data link 30% changed to 70%."
+  },
+  {
+   "id": "S7",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "mobile custom-message-length inverted 70/30."
+  },
+  {
+   "id": "S8",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "mobile h3 20% changed to 50%."
+  },
+  {
+   "id": "S9",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "desktop user.scss .name 30% changed to 50%."
+  }
+ ],
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Case-sensitive lookup in should_block? bypasses block list."
+  },
+  {
+   "id": "S2",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Non-atomic match_count update in should_block? loses increments."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "rejectedEmails.@each dependency does not observe primitive pushes; not in golden."
+  },
+  {
+   "id": "S4",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "should_block? writes stats as side effect of validation, inflating counter."
+  },
+  {
+   "id": "S5",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Case-sensitive should_block? lookup."
+  },
+  {
+   "id": "S6",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Read-modify-write race on match_count in should_block?."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Spec comment wording about last_match_at; not in golden."
+  },
+  {
+   "id": "S8",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "should_block? predicate performs DB writes; split check from recording."
+  }
+ ],
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Errors dataset fast-path rewrites to upsampled_count unresolvable there; not in golden."
+  },
+  {
+   "id": "S2",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#03",
+   "newGroup": null,
+   "reason": "Upsampling gated on outer dataset instead of scoped_dataset."
+  },
+  {
+   "id": "S3",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04",
+   "newGroup": null,
+   "reason": "Substring match on event.type:error mis-classifies queries."
+  },
+  {
+   "id": "S4",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#14",
+   "newGroup": null,
+   "reason": "Only bare count() rewritten; aliases/eps/epm stay raw."
+  },
+  {
+   "id": "S5",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#06",
+   "newGroup": null,
+   "reason": "Factory helper stores any truthy float sample rate without validation."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Truthiness check drops client_sample_rate 0; different from the missing range validation."
+  },
+  {
+   "id": "S7",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#05",
+   "newGroup": null,
+   "reason": "Transaction test cannot detect upsampling since no sample_weight."
+  }
+ ],
+ "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": [
+  {
+   "id": "S1",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "MetricAlertDetectorHandler abstract methods unimplemented, TypeError."
+  },
+  {
+   "id": "S2",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#03",
+   "newGroup": null,
+   "reason": "evaluate docstring says list, returns dict."
+  },
+  {
+   "id": "S3",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "Abstract methods unimplemented, instantiation raises TypeError."
+  },
+  {
+   "id": "S4",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "Abstract methods unimplemented, class cannot be instantiated."
+  }
+ ],
+ "unified-storage-performance-optimizations-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "unified-storage-performance-optimizations-grafana-codex#01",
+   "newGroup": null,
+   "reason": "BuildIndex locks only final assignment, concurrent duplicate builds."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "initWatcher moved after search init creating a broadcast gap; not in golden."
+  },
+  {
+   "id": "S3",
+   "match": "unified-storage-performance-optimizations-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Init failure returns without cancelling context."
+  }
+ ],
+ "frontend-asset-optimization-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "frontend-asset-optimization-grafana-codex#01",
+   "newGroup": null,
+   "reason": "No cache re-check after acquiring write lock, redundant manifest loads."
+  }
+ ]
+}

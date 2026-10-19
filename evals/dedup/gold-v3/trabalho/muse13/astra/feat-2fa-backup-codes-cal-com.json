@@ -1,0 +1,65 @@
+{
+ "caseId": "feat-2fa-backup-codes-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-2fa-backup-codes-cal-com#01",
+   "newGroup": null,
+   "reason": "Describes the same password bypass using a valid backup code together with an unvalidated dummy totpCode."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes unintended form submission from the disable modal's toggle button, which no golden issue covers."
+  },
+  {
+   "id": "S3",
+   "match": "feat-2fa-backup-codes-cal-com#16",
+   "newGroup": null,
+   "reason": "Describes the same unchecked replaceAll call on non-string backupCode input in the disable endpoint."
+  },
+  {
+   "id": "S4",
+   "match": "feat-2fa-backup-codes-cal-com#04",
+   "newGroup": null,
+   "reason": "Identifies the same incorrectly named TwoFactor export in BackupCode.tsx."
+  },
+  {
+   "id": "S5",
+   "match": "feat-2fa-backup-codes-cal-com#13",
+   "newGroup": null,
+   "reason": "Identifies the same download test gap: checking the filename without verifying the exported backup codes."
+  },
+  {
+   "id": "S6",
+   "match": "feat-2fa-backup-codes-cal-com#05",
+   "newGroup": null,
+   "reason": "Identifies the same copy test gap: an unconditional success toast does not verify clipboard contents."
+  },
+  {
+   "id": "S7",
+   "match": "feat-2fa-backup-codes-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "Describes the non-constant-time Array.indexOf comparison of secret backup codes identified by the golden issue."
+  },
+  {
+   "id": "S8",
+   "match": "feat-2fa-backup-codes-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "Describes the golden issue's non-constant-time Array.indexOf comparison of backup codes, here in the disable endpoint."
+  },
+  {
+   "id": "S9",
+   "match": "feat-2fa-backup-codes-cal-com#16",
+   "newGroup": null,
+   "reason": "Describes the same missing string validation before replaceAll in the disable endpoint, causing a 500 for non-string input."
+  },
+  {
+   "id": "S10",
+   "match": "feat-2fa-backup-codes-cal-com#07",
+   "newGroup": null,
+   "reason": "Describes the same non-atomic backup-code consumption that allows concurrent logins to reuse a single-use code."
+  }
+ ]
+}

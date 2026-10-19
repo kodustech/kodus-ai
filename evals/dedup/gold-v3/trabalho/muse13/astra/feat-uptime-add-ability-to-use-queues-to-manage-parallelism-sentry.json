@@ -1,0 +1,71 @@
+{
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "The strategy shuts down the factory-owned pool, so strategies created after rebalance reuse dead queues and acknowledge unprocessed messages."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This lock-creation race claim matches no golden issue. The implementation returns dict.setdefault's stored lock, so concurrent callers constructing candidate locks does not establish that they receive different locks."
+  },
+  {
+   "id": "S3",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10",
+   "newGroup": null,
+   "reason": "Setting the worker shutdown flag causes workers to exit before draining queued work, which is the golden shutdown problem."
+  },
+  {
+   "id": "S4",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "newGroup": null,
+   "reason": "Unbounded queues and unconditional acceptance provide no backpressure, allowing backlog memory to grow without limit."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "This alleges commit-scan CPU overhead, distinct from the golden issues about commit correctness across offset gaps. Its sparse-range claim is also inaccurate: the loop breaks at the first missing or outstanding offset, although min/max still scan the stored set."
+  },
+  {
+   "id": "S6",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#16",
+   "newGroup": null,
+   "reason": "The group-concurrency test checks completion counts and group presence without verifying overlapping processing, so serial execution passes."
+  },
+  {
+   "id": "S7",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#16",
+   "newGroup": null,
+   "reason": "The subscription-concurrency test only checks processor call count, so it cannot detect a regression to serial execution."
+  },
+  {
+   "id": "S8",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03",
+   "newGroup": null,
+   "reason": "The worker completes offsets after processing exceptions, allowing failed messages to be committed despite the successful-processing guarantee."
+  },
+  {
+   "id": "S9",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "newGroup": null,
+   "reason": "The advertised backpressure does not exist because worker queues are unbounded and submissions are accepted unconditionally."
+  },
+  {
+   "id": "S10",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03",
+   "newGroup": null,
+   "reason": "Unconditional offset completion in finally makes failed processing committable and silently skips failed results."
+  },
+  {
+   "id": "S11",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "FilteredPayload reaches a decoder that explicitly rejects it, causing exception logging and fallback handling instead of the intended skip path. No golden issue describes this decoder mismatch."
+  }
+ ]
+}

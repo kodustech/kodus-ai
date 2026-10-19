@@ -1,0 +1,19 @@
+{
+ "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+ "items": [
+  {
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#muse13-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "src/sentry/spans/consumers/process/factory.py:134-141 copies end_timestamp_precise from the incoming payload without validation, and src/sentry/spans/buffer.py:197-199 uses it directly as the score. The newly added ZPOPMIN at src/sentry/scripts/spans/add-buffer.lua:62-63 therefore preferentially retains future-dated injected spans and evicts legitimate lower-scored spans when the same segment exceeds 1,000 members.",
+   "severity": "high"
+  },
+  {
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#muse13-02",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "src/sentry/spans/buffer.py:192-199 groups spans and inserts each subsegment together before executing the per-span scripts. Both unions are conditional on nonempty source sets and immediately unlink those sources (src/sentry/scripts/spans/add-buffer.lua:46-54), so subsequent spans already joined do not repeatedly copy the set as claimed; the base also used full-set unions under the same conditions.",
+   "severity": "medium"
+  }
+ ]
+}

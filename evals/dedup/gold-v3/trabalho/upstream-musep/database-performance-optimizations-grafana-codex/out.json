@@ -1,0 +1,19 @@
+{
+ "caseId": "database-performance-optimizations-grafana-codex",
+ "prOriginal": {
+  "numero": 80329,
+  "url": "https://github.com/grafana/grafana/pull/80329",
+  "mergedAt": "2024-01-12",
+  "nota": "Given in in.json; confirmed: PR merged 2024-01-12 as squash 81c45bfe, and xorm_store.go blob at 81c45bfe equals the benchmark head blob (2525601f)."
+ },
+ "tps": {
+  "database-performance-optimizations-grafana-codex#musep-01": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 1009,
+   "reason": "On grafana/grafana main today (last file commit e9243f551a, 2026-09-30), CleanAnnotations/CleanOrphanedAnnotationTags still run fetchIDs then return deleteByIDs, which returns res.RowsAffected(), and untilDoneOrCancelled still stops when affected == 0. None of the 28 commits touching xorm_store.go since the merge changed this loop or the stop condition, so a batch whose fetched IDs were all deleted concurrently still ends cleanup while eligible rows remain.",
+   "astra": []
+  }
+ }
+}

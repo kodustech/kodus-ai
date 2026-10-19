@@ -1,0 +1,19 @@
+{
+ "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+ "items": [
+  {
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#kimi-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "ASN1Decoder.java:94 masks off the constructed bit, and readInteger at lines 65\u201373 checks only the resulting tag number, so malformed bytes 22 01 01 are accepted as integer 1. AuthzClientCryptoProvider.java:133\u2013134 uses this newly introduced decoder for DER signature integers, making this a real input-validation defect.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#kimi-02",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "CryptoIntegration.java:56 loads providers through ServiceLoader, and lines 65\u201369 build the message exclusively from their class names and fixed text. The claimed '%' provider name is not a valid provider name in this service-loading path, so the alleged formatting-triggered detection failure is unreachable; changing the logging method or trailing comma is cosmetic.",
+   "severity": "medium"
+  }
+ ]
+}

@@ -1,0 +1,17 @@
+{
+ "caseId": "feat-2fa-backup-codes-cal-com",
+ "items": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reports unintended form submission from toggle buttons lacking type=\"button\" in DisableTwoFactorModal. None of the rejected claims describes this problem."
+  },
+  {
+   "id": "S8",
+   "match": "feat-2fa-backup-codes-cal-com#08",
+   "newGroup": null,
+   "reason": "Makes the same claim that backup-code verification using indexOf/=== instead of constant-time comparison leaks timing information."
+  }
+ ]
+}

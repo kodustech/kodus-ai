@@ -1,0 +1,24 @@
+{
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "prOriginal": {
+  "numero": 95633,
+  "url": "https://github.com/getsentry/sentry/pull/95633",
+  "mergedAt": "2025-07-16",
+  "nota": "From prOriginalConhecido; confirmed via gh: branch danf/uptime-queue-consumer, merged 2025-07-16T21:55:57Z as squash commit 33f4fddf."
+ },
+ "tps": {
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#muse13-02": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2025-08-07",
+    "pr": 97340,
+    "commit": "e6ab860545",
+    "url": "https://github.com/getsentry/sentry/pull/97340"
+   },
+   "diasNoAr": 22,
+   "reason": "Between the merge and 2025-08-07, upstream changes to queue_consumer.py (#95753, #95919, #95942, #95943) left SimpleQueueProcessingStrategy.submit the same where it matters: it still calls decoder(message.payload) (decode_payload asserts not FilteredPayload) before the None check, and the except fallback only completes offsets when message.value is a BrokerValue. So filtered DLQ-stale messages kept leaving their offsets uncommitted. PR #97340 ('Remove thread-queue-parallel mode and related code', 2025-08-07) deleted queue_consumer.py and the thread-queue-parallel wiring in result_consumer.py and consumers/__init__.py, saying the mode was unused and had not helped much. It did not target this bug. Today's master has no queue mode; decode_payload still asserts, but only the serial, parallel and batched-parallel modes remain.",
+   "astra": []
+  }
+ }
+}

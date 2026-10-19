@@ -1,0 +1,35 @@
+{
+ "caseId": "notification-rule-processing-engine-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "Describes the same broken Silence action: prom-only rules can toggle drawer state, but the drawer requires a ruler rule and never renders."
+  },
+  {
+   "id": "S2",
+   "match": "notification-rule-processing-engine-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Includes the same Pause/Resume rendering gate that hides the action when list-view rules provide only promRule. The broader comment also covers the Delete gate described by issue #02."
+  },
+  {
+   "id": "S3",
+   "match": "notification-rule-processing-engine-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Identifies the same missing key prop on GrafanaRuleListItem in the filtered list."
+  },
+  {
+   "id": "S4",
+   "match": "notification-rule-processing-engine-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Describes the same skipped Grafana ability branch leaking Grafana create permission into datasource-rule Duplicate authorization through the OR expression."
+  },
+  {
+   "id": "S5",
+   "match": "notification-rule-processing-engine-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Identifies the same hardcoded isFederated=false that discards federated-group immutability and enables editing and deletion."
+  }
+ ]
+}

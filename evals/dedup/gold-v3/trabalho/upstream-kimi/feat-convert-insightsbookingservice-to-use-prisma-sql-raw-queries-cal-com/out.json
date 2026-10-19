@@ -1,0 +1,24 @@
+{
+ "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+ "prOriginal": {
+  "numero": 22345,
+  "url": "https://github.com/calcom/cal.diy/pull/22345",
+  "mergedAt": "2025-07-15",
+  "nota": "Taken from prOriginalConhecido; confirmed with gh pr view: merged 2025-07-15, headRefOid equals benchmark head da09bc0808. calcom/cal.com redirects to calcom/cal.diy (default branch main)."
+ },
+ "tps": {
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#kimi-03": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2026-04-15",
+    "pr": 28903,
+    "commit": "ab21c7f805a089fa3a11ffd61c4a9aecc349c16c",
+    "url": "https://github.com/calcom/cal.diy/pull/28903"
+   },
+   "diasNoAr": 274,
+   "reason": "The file moved packages/lib/server/service/insightsBooking.ts -> InsightsBookingBaseService.ts (#22790, 2025-08-05) -> packages/features/insights/services/InsightsBookingBaseService.ts (#24399, 2025-10-13). In its last version (98b6d63164, 2026-02-11) InsightsBookingServicePublicOptions still had `teamId?: number` with scope a plain union, and the constructor still safeParsed into NOTHING_CONDITION, so the bug was never fixed. The Cal.diy refactor (#28903, 2026-04-15, removing EE features) deleted the file, and packages/features/insights no longer exists on main, so the code is gone without a targeted fix.",
+   "astra": []
+  }
+ }
+}

@@ -1,0 +1,12 @@
+{
+ "caseId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+ "items": [
+  {
+   "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#musep-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "The buttons are nested inside `.small-action-desc`, not direct flex items (app/assets/javascripts/discourse/templates/components/small-action.hbs:2\u20138), so their `float: right` remains effective. Flexbox applies to `.small-action` itself (app/assets/stylesheets/common/base/topic-post.scss:263\u2013265); it does not invalidate the container\u2019s own `clear: both` at line 312.",
+   "severity": "medium"
+  }
+ ]
+}

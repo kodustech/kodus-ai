@@ -1,0 +1,26 @@
+{
+ "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+ "items": [
+  {
+   "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#kimi-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "The truthiness checks at packages/lib/server/service/insightsBooking.ts:104 and :110 are unchanged from base-version lines 99 and 105, so dropping zero-valued filters is not introduced by this PR. EventType and User IDs also use autoincrement defaults (packages/prisma/schema.prisma:87 and :312), rather than normally generating ID 0.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#kimi-02",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "packages/lib/server/service/insightsBooking.ts:154 initializes teamIds with options.orgId before adding child-team IDs. Consequently, the array passed to ANY at line 164 is never empty, even when the organization has no child teams, contradicting the issue's premise.",
+   "severity": "high"
+  },
+  {
+   "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#kimi-03",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The new public type makes teamId optional at packages/lib/server/service/insightsBooking.ts:29-34 and is accepted by the constructor at line 58, although the team schema requires it at line 25. Omitting it now compiles but fails safeParse at lines 62-63 and silently produces 1=0 at lines 125-127; this confirms the second comment, although validation prevents the undefined interpolation alleged by the first.",
+   "severity": "medium"
+  }
+ ]
+}

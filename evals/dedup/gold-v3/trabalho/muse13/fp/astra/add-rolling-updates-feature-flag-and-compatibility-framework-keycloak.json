@@ -1,0 +1,11 @@
+{
+ "caseId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Both assert that changing RECREATE_UPGRADE_EXIT_CODE from 4 to 3 and reusing 4 for FEATURE_DISABLED breaks existing exit-code consumers. The suggested remedy differs, but the claimed defect is the same."
+  }
+ ]
+}

@@ -11,6 +11,11 @@ Saidas (nesta pasta):
                          (as decisoes de Junior e Gabriel ficam em trabalho/revisao-humana-decisoes.json)
   sugestoes.json         cada sugestao do finder (modelo, PR, id) -> problema
 
+Cada problema guarda a classificacao original (class, subclass) e a classe com que o gold e medido,
+class_reviewed: "TP" (TP confirmado ou descontinuado no repositorio original, verificacao-upstream.json),
+"FP nit" (TP pendente ou que nao entrou no original, TP nit, FP) ou "FP hallucination" (o fato alegado e falso).
+Cada TP conta uma vez; a segunda sugestao sobre o mesmo TP conta como FP nit.
+
   python3 evals/dedup/gold-v3/montar.py [<dir de trabalho>]   (padrao: trabalho/, os insumos desta rodada)
 """
 import json, os, sys, collections
@@ -230,7 +235,7 @@ if os.path.exists(f'{W}/prod/pool/debate/estado.json'):
 # Rodadas novas de um modelo so, no processo do baseline de producao: juiz Opus conferido pelo
 # Astra (o Opus decide), segunda passada contra os FPs conhecidos (<pasta>/fp), e o que seguiu
 # novo classificado por Opus e Astra as cegas, com debate (<pasta>/debate).
-RODADAS_FP = {'snapi': 'sonnet-5.5@sdkapi', 'snloop': 'sonnet-5.5@loop'}
+RODADAS_FP = {'snapi': 'sonnet-5.5@sdkapi', 'snloop': 'sonnet-5.5@loop', 'prod/muse': 'muse-spark-1.3@prod', 'muse13': 'muse-spark-1.3@novo', 'kimi': 'kimi-k2.7-code@novo', 'prod/kimi': 'kimi-k2.7-code@prod'}
 for pasta, chave in RODADAS_FP.items():
     R = f'{W}/{pasta}'
     if not os.path.exists(f'{R}/debate/estado.json'):
@@ -274,11 +279,84 @@ for pasta, chave in RODADAS_FP.items():
             (golden if cls == 'TP' else fps).setdefault(cid, []).append(reg)
             cont[(f'{pasta}:{status}', cls, sc)] += 1
 
-meta = {'versao': 'v3', 'prs': len(A), 'modelos': list(ABR.values()) + list(RODADAS.values()) + list(RODADAS_JUIZ.values()) + list(RODADAS_PROD.values()) + list(RODADAS_FP.values()), 'classificadores': ['claude-opus-5.5', 'gpt-6-astra'],
-        'regua': 'TP = o problema existe no codigo do head e o PR o introduz ou mexe no codigo envolvido; FP = nao ha problema a reportar no PR'}
+# Finder da producao (main 1a7041085, light): o loopFindings de cada PR, antes do dedup, do verify e do corte por
+# severidade (trabalho/prod-finder/<modelo>/finder.json, chave L<i> na ordem do loop). O que a producao publicou herda
+# o problema da sugestao publicada (@prod); o que ela cortou passou pelo juiz Opus contra os TPs e TP nits (opus-out*),
+# depois contra os FPs conhecidos (fp-out.json), e o que seguiu novo foi classificado por Opus e Astra as cegas, com debate.
+RODADAS_FINDER = {'ds': 'deepseek-v4.1-flash', 'gpt': 'gpt-6.1-sol', 'opus': 'opus-5.5', 'sonnet': 'sonnet-5.5', 'muse': 'muse-spark-1.3', 'kimi': 'kimi-k2.7-code'}
+R = f'{W}/prod-finder'
+if os.path.exists(f'{R}/debate/estado.json'):
+    import glob
+    porId = {r['issueId']: r for d in (golden, fps, revisao) for l in d.values() for r in l}
+    fin = {k: json.load(open(f'{R}/{k}/finder.json')) for k in RODADAS_FINDER}
+    deC = {(k, cid, it['cortado']): it['id'] for k, p in fin.items() for cid, l in p.items() for it in l if 'cortado' in it}
+    oc = json.load(open(f'{R}/opus-classif.json'))
+    ac = {x['issueId']: x for f in glob.glob(f'{R}/astra-classif/*.json') for x in json.load(open(f))['items']}
+    D2 = json.load(open(f'{R}/debate/estado.json'))
+    for cid, p in json.load(open(f'{R}/classif-in.json')).items():
+        for it in p['issues']:
+            k = it['issueId']; o = oc[k]; a = ac[k]
+            mk, cn = it['comentarios'][0]['gid'].split(':'); mk = mk.split('-', 1)[1]
+            reg = {'issueId': k, 'caseId': cid, 'comment': o['comment'], 'commentOpus': o['comment'], 'source': 'kodus', 'martianRef': [],
+                   'foundBy': {f'{RODADAS_FINDER[mk]}@prod-finder': [deC[(mk, cid, cn)]]},
+                   'reason_opus': o['reason'], 'reason_astra': a['reason'],
+                   'class_opus_inicial': o['class'], 'subclass_opus_inicial': o['subclass'],
+                   'class_astra_inicial': a['class'], 'subclass_astra_inicial': sub(a['subclass']), 'rodada': 'prod-finder'}
+            if k in D2:
+                d = D2[k]
+                assert d.get('fechado'), f'{k}: debate em aberto'
+                fo = next(h for h in reversed(d['hist']) if h['who'] == 'opus')
+                cls, sc, sev = fo['class'], sub(fo['subclass']), fo['severity']
+                status = 'human_decision' if d['fechado'] == 'humano' else 'agreed_after_debate'
+                if d.get('decisaoHumana'): reg['decisaoHumana'] = d['decisaoHumana']
+                reg['debate'] = [{'quem': h['who'], 'class': h['class'], 'subclass': sub(h['subclass']), 'severity': sub(h['severity']), 'texto': h['text']} for h in d['hist']]
+            else:
+                assert (o['class'], o['subclass']) == (a['class'], sub(a['subclass'])), f'{k}: classe sem consenso'
+                cls, sc, sev, status = o['class'], o['subclass'], o['severity'], 'agreed'
+            reg.update({'class': cls, 'subclass': sc, 'status': status, 'severity': sev, 'category': (o['category'] or 'bug') if cls == 'TP' else None})
+            (golden if cls == 'TP' else fps).setdefault(cid, []).append(reg)
+            porId[k] = reg
+            cont[(f'prod-finder:{status}', cls, sc)] += 1
+    op = {}
+    for f in sorted(glob.glob(f'{R}/opus-out*.json')): op.update(json.load(open(f)))
+    fpo = json.load(open(f'{R}/fp-out.json'))
+    for mk, model in RODADAS_FINDER.items():
+        chave = f'{model}@prod-finder'
+        for cid, itens in fin[mk].items():
+            for it in itens:
+                if 'publicado' in it:
+                    iss = sugestoes[f'{model}@prod|{cid}|{it["publicado"]}']
+                else:
+                    cn, key = it['cortado'], f'{mk}|{cid}'
+                    iss = next(x['match'] for x in op[key] if x['id'] == cn)
+                    if iss == 'new': iss = next(x['match'] for x in fpo[key] if x['id'] == cn)
+                    if iss == 'new': iss = f'{cid}#pf-{mk}-{cn}'
+                    if chave not in porId[iss].get('foundBy', {}) or it['id'] not in porId[iss]['foundBy'][chave]:
+                        porId[iss].setdefault('foundBy', {}).setdefault(chave, []).append(it['id'])
+                sugestoes[f'{chave}|{cid}|{it["id"]}'] = iss
+
+# class_reviewed: a classe com que o gold e medido (regra oficial desde 18/10/26). class e subclass ficam como a
+# classificacao original. TP = TP confirmado ou descontinuado no repositorio original (verificacao-upstream.json);
+# FP nit = TP pendente ou que nao entrou no original, TP nit e FP; FP hallucination = FP com subclass hallucination.
+# Um TP ainda sem conferencia no original fica com class_reviewed null.
+UP = {k: t['status'] for p in json.load(open(f'{AQUI}/verificacao-upstream.json'))['prs'].values() for k, t in p['tps'].items()} if os.path.exists(f'{AQUI}/verificacao-upstream.json') else {}
+def revisada(r):
+    if r['class'] == 'TP' and not r['subclass']:
+        return {'confirmado': 'TP', 'descontinuado': 'TP', 'pendente': 'FP nit', 'nao_entrou_no_original': 'FP nit'}.get(UP.get(r['issueId']))
+    if r['class'] == 'FP' and r['subclass'] == 'hallucination':
+        return 'FP hallucination'
+    return 'FP nit' if r['class'] in ('TP', 'FP') else None
+for d in (golden, fps, revisao):
+    for l in d.values():
+        for r in l: r['class_reviewed'] = revisada(r)
+
+meta = {'versao': 'v3', 'prs': len(A), 'modelos': list(ABR.values()) + list(RODADAS.values()) + list(RODADAS_JUIZ.values()) + list(RODADAS_PROD.values()) + list(RODADAS_FP.values()) + [f'{m}@prod-finder' for m in RODADAS_FINDER.values()], 'classificadores': ['claude-opus-5.5', 'gpt-6-astra'],
+        'regua': 'TP = o problema existe no codigo do head e o PR o introduz ou mexe no codigo envolvido; FP = nao ha problema a reportar no PR',
+        'regua_class_reviewed': 'Medir pelo class_reviewed. TP = TP confirmado ou descontinuado no repositorio original; FP nit = TP pendente ou que nao entrou no original, TP nit e FP; FP hallucination = o fato alegado e falso. Cada TP conta uma vez: a segunda sugestao sobre o mesmo TP conta como FP nit.'}
 for nome, dados in [('golden', golden), ('fps-conhecidos', fps), ('revisao-humana', revisao)]:
     json.dump({**meta, 'prs': dados}, open(f'{AQUI}/{nome}.json', 'w'), indent=1, ensure_ascii=False)
 json.dump({**meta, 'sugestoes': sugestoes}, open(f'{AQUI}/sugestoes.json', 'w'), indent=1, ensure_ascii=False)
 n = lambda d: sum(len(v) for v in d.values())
 print('golden', n(golden), '| fps', n(fps), '| revisao', n(revisao), '| sugestoes mapeadas', len(sugestoes))
+print('class_reviewed', dict(collections.Counter(r['class_reviewed'] for d in (golden, fps) for l in d.values() for r in l)))
 for k, v in sorted(cont.items(), key=lambda t: str(t[0])): print(' ', k, v)

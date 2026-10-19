@@ -1,0 +1,17 @@
+{
+ "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#05",
+   "newGroup": null,
+   "reason": "The comment includes the same failure to remove existing local recovery codes after creating replacements in external storage, leaving old codes usable through fallback validation."
+  },
+  {
+   "id": "S2",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#06",
+   "newGroup": null,
+   "reason": "The comment describes the same local-only removal call failing to delete exhausted federated recovery-code credentials."
+  }
+ ]
+}

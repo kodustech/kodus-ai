@@ -1,0 +1,12 @@
+{
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "items": [
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#pf-muse-C1",
+   "class": "TP",
+   "subclass": "none",
+   "severity": "medium",
+   "reply": "I retain TP: createMany inserts related rows; it does not append them to an ordered attendee array. The new handler retrieves attendees without orderBy, and neither its mapping nor formatCalEvent establishes the original booker as index zero. Consequently, the new template can interpolate a nameless guest into the subject, although this need not happen on every execution. Existing templates sharing this assumption do not make the newly introduced handler and template pre-existing code."
+  }
+ ]
+}

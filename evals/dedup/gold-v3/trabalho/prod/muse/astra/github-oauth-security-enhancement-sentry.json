@@ -1,0 +1,23 @@
+{
+ "caseId": "github-oauth-security-enhancement-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "github-oauth-security-enhancement-sentry#05",
+   "newGroup": null,
+   "reason": "Describes the same unhandled token-exchange and user-lookup failures that produce a 500 instead of the installation-failed page."
+  },
+  {
+   "id": "S2",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "Describes the same unchecked sender/login metadata lookup that raises KeyError for integrations without sender metadata."
+  },
+  {
+   "id": "S3",
+   "match": "github-oauth-security-enhancement-sentry#03",
+   "newGroup": null,
+   "reason": "Describes the same deterministic pipeline.signature used as OAuth state, which lacks per-attempt CSRF protection."
+  }
+ ]
+}

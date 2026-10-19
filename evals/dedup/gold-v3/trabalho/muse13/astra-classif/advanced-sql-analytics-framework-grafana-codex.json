@@ -1,0 +1,12 @@
+{
+ "caseId": "advanced-sql-analytics-framework-grafana-codex",
+ "items": [
+  {
+   "issueId": "advanced-sql-analytics-framework-grafana-codex#muse13-01",
+   "class": "TP",
+   "subclass": "nit",
+   "reason": "The newly added pkg/expr/sql/db.go:9-25 defines an empty DB whose methods return \"not implemented\", while NewInMemoryDB has no documentation identifying it as a stub. The PR replaces DuckDB construction at pkg/expr/sql/parser.go:23 and pkg/expr/sql_command.go:96 with this constructor. As stated, the issue requests clearer naming or documentation, making it a nit; fixing the actual execution failure would require implementing the database.",
+   "severity": "low"
+  }
+ ]
+}

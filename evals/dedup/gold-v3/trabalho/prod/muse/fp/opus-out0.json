@@ -1,0 +1,336 @@
+{
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "One-shot CryptoIntegration.init cementing the global provider so later server init is ignored; prod-01 is about a shaded client failing at construction, a different cause."
+  },
+  {
+   "id": "S3",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#06",
+   "newGroup": null,
+   "reason": "Same claim: lenient sequence parser accepts malformed/trailing DER enabling signature malleability."
+  },
+  {
+   "id": "S4",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#08",
+   "newGroup": null,
+   "reason": "Same claim: integerToBytes truncates/mangles oversized r/s instead of rejecting."
+  },
+  {
+   "id": "S5",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: readLength -1 reaching readInteger allocates negative array and throws NegativeArraySizeException instead of IOException."
+  }
+ ],
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#10",
+   "newGroup": null,
+   "reason": "Same claim: getLoginPredicate NPE on null config."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Org enable/disable not invalidating login caches; #04 is about linking/unlinking IDPs, a different trigger."
+  },
+  {
+   "id": "S3",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#opa-02",
+   "newGroup": null,
+   "reason": "Same claim: getForLogin caches all organizations in one shared entry instead of per organization."
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "S2",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+   "newGroup": null,
+   "reason": "Same claim: removal listener calls V2 setPermissionsEnabled which throws when V1 and V2 are both enabled."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Global all-clients grant ignored once a per-client resource exists (no fallback); #07 claims the all-clients resource cannot be found, a different cause."
+  },
+  {
+   "id": "S5",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#14",
+   "newGroup": null,
+   "reason": "Same claim: getClientsWithPermission evaluates per client resource, O(N) cost."
+  }
+ ],
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "S3",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "Same claim: EmailValidator dropped the format check, letting malformed emails pass."
+  }
+ ],
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Dropped canViewGlobal short-circuit in GroupResource subgroups listing; prod-02 is the same pattern at a different place (GroupsResource.getGroups)."
+  }
+ ],
+ "add-guest-management-functionality-to-existing-bookings-cal-com": [
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "addGuests allows cancelled/rejected bookings; no rejected issue covers booking status."
+  }
+ ],
+ "add-html-sanitizer-for-translated-message-resources-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "English file compared with itself lets unsafe anchors pass unchecked; not covered by #03 (translation with more anchors)."
+  }
+ ],
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": [
+  {
+   "id": "S5",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-04",
+   "newGroup": null,
+   "reason": "Same claim: selected-slots call site omits dateOverrides/workingHours so only busy times are checked."
+  },
+  {
+   "id": "S6",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#snapi-01",
+   "newGroup": null,
+   "reason": "Same claim: undefined override.timeZone yields wrong offset in getSlots."
+  }
+ ],
+ "anonymous-add-configurable-device-limit-grafana-codex": [
+  {
+   "id": "S4",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Same claim: zero-row update for a stale (out-of-window) existing device is reported as ErrDeviceLimitReached."
+  }
+ ],
+ "authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "authzservice-improve-authz-caching-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "Same claim: cached denial returns Allowed:false for the TTL after a grant is added."
+  }
+ ],
+ "database-performance-optimizations-grafana-codex": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Loop termination on affected vs fetched under concurrent deletion; no rejected issue covers it."
+  }
+ ],
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#25",
+   "newGroup": null,
+   "reason": "Same claim: request.referer interpolated into inline JS string allows breakout/XSS."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Unbounded open without timeouts/size limit (DoS); #20 is about command execution via Kernel#open, a different problem."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Non-atomic setnx+expire can leave a key without TTL; #15 reports no problem."
+  }
+ ],
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
+  {
+   "id": "S2",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#04",
+   "newGroup": null,
+   "reason": "Same claim: to_dict returns raw datetime queued that breaks Celery JSON serialization."
+  }
+ ],
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "SimpleQueueProcessingStrategy.terminate does not join commit_thread; #19 is about factory shutdown, a different place."
+  }
+ ],
+ "feature-automatically-downsize-large-images-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "SVG uploads get rasterized/corrupted by the downsize convert; no issue covers it."
+  },
+  {
+   "id": "S5",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Same claim: hardcoded 10MB download cap replaces max_image_size_kb, amplifying SSRF."
+  }
+ ],
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "S3",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#opa-01",
+   "newGroup": null,
+   "reason": "Same claim: _ids hydration calls map without null/array guard and throws TypeError."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "type.replace only replaces the first underscore; no issue covers it."
+  }
+ ],
+ "feature-localization-fallbacks-server-side-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Same claim: nil default_locale crashes fallback lookups."
+  },
+  {
+   "id": "S2",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Same claim: String locale mixed with Symbol entries breaks uniq/include? and causes repeated loads."
+  },
+  {
+   "id": "S3",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: ensure_loaded! reads/initializes @loaded_locales outside LOAD_MUTEX."
+  },
+  {
+   "id": "S6",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Same claim: user-controlled locale with regex metacharacters reaches load_locale Regexp."
+  }
+ ],
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": [
+  {
+   "id": "S3",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Same claim: other mailers with add_unsubscribe_link lack unsubscribe_url and raise missing interpolation."
+  }
+ ],
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "updateAllCalendarEvents returns empty results on missing reference, masking failure; no issue covers it."
+  }
+ ],
+ "fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Same claim: add_members/remove_member read params[:group_id] but the route provides :id."
+  },
+  {
+   "id": "S2",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Same claim: members template iterates bare members while model is now the Group."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "users.delete skips counter_cache so user_count stays inflated; no issue covers it."
+  }
+ ],
+ "frontend-asset-optimization-grafana-codex": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Shared cached EntryPointAssets pointer aliased and mutable by consumers; no issue covers it."
+  }
+ ],
+ "implement-access-token-context-encoding-framework-keycloak": [
+  {
+   "id": "S2",
+   "match": "implement-access-token-context-encoding-framework-keycloak#07",
+   "newGroup": null,
+   "reason": "Same claim: setFormParams does not refresh cached grantType."
+  }
+ ],
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": [
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Webhook accepts GET with shared secret; no issue covers HTTP method."
+  }
+ ],
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "float ignored on flex item button; #04 is about box-ordinal-group ordering."
+  }
+ ],
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "id": "S2",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-02",
+   "newGroup": null,
+   "reason": "Same claim: direct indexing of end_timestamp_precise raises KeyError and fails the batch."
+  }
+ ],
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Same claim: ContextualLoggerMiddleware dereferences req without nil guard."
+  }
+ ],
+ "replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "S3",
+   "match": "replays-self-serve-bulk-delete-system-sentry#14",
+   "newGroup": null,
+   "reason": "Same claim: column fallback crashes when tableData exists but meta is missing."
+  }
+ ],
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
+  {
+   "id": "S3",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#09",
+   "newGroup": null,
+   "reason": "Same claim: max-flush-segments becomes per-process so total flush grows with process count."
+  }
+ ],
+ "unified-storage-performance-optimizations-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "unified-storage-performance-optimizations-grafana-codex#prod-01",
+   "newGroup": null,
+   "reason": "Same claim: writes during search init before initWatcher never reach Watch subscribers/broadcaster."
+  }
+ ]
+}

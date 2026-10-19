@@ -1,0 +1,82 @@
+{
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#kimip-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "create_account_controller.js:17 adds `rejectedEmails: Em.A([])` as a class property in `extend`, so the array lives on the prototype and is shared by every instance; the PR pushes rejected emails into it (line ~275) and never resets it, so rejections persist across modal sessions.",
+    "category": "bug",
+    "comment": "`rejectedEmails` is declared as an array literal on the controller prototype, so it is shared across instances and modal sessions; emails rejected once keep failing validation later. Initialize it per instance in `init`.",
+    "severity": "medium"
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com#kimip-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "addGuests.handler.ts:167-171 wraps sendAddGuestsEmails in try/catch and logs; guests are already persisted and calendar updated, and best-effort email sending after a successful mutation is the intended pattern used across Cal.com handlers. No defect, only a design preference.",
+    "category": null,
+    "comment": "Swallowing email-sending errors returns success even if notification emails fail; the failure should be surfaced to the UI.",
+    "severity": "medium"
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com#kimip-02": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "The new addGuests.handler.ts:74-106 creates attendees with no check on booking.eventType.seatsPerTimeSlot (it only passes it into evt at line 145), and the UI (BookingListItem) exposes Add guests without gating seated events, so attendees can exceed the configured seat capacity.",
+    "category": "bug",
+    "comment": "Adding guests ignores `seatsPerTimeSlot`, so a seated event can exceed its configured capacity; reject when attendees plus new guests exceed the seat limit.",
+    "severity": "medium"
+  },
+  "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#kimip-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "In the normal run path Picocli.parseAndRun calls PropertyMappers.sanitizeDisabledMappers() before cmd.execute, which calls Environment.getCurrentOrCreateFeatureProfile() (PropertyMappers.java:~303), so the Profile is initialized; the rebuild-check path returns early via shouldSkipRebuild without running the command. UpdateCommandDistTest asserts the disabled-feature message, so the NPE cannot occur.",
+    "category": null,
+    "comment": "Claims `Profile.isFeatureEnabled` in UpdateCompatibilityCheck can hit a null profile and throw NullPointerException because initProfile is skipped for update-compatibility.",
+    "severity": "high"
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimip-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "topic_embed.rb:48 fetches with `open(url).read` (open-uri, follows redirects), while the only host validation is TopicRetriever#invalid_host? (lib/topic_retriever.rb:14-15) on the initial URL; a redirect from the embeddable host to an internal address is fetched and its content imported into a post.",
+    "category": "security",
+    "comment": "`import_remote` fetches the embed URL with open-uri, which follows redirects, so the embeddable-host check on the initial URL can be bypassed to reach internal services (SSRF).",
+    "severity": "high"
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com#kimip-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "deleteCache.handler.ts:17-22 restricts deletion to credentials owned by the session user, a correct and stricter ownership check; the comment does not show a reachable flow where a team-owned credential's cache must be cleared by this endpoint. It is a 'consider widening' request, not a defect.",
+    "category": null,
+    "comment": "Claims restricting the credential lookup to `userId: user.id` wrongly rejects team-owned or delegated credentials when deleting the calendar cache.",
+    "severity": "medium"
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#kimip-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "error_upsampling.py:38-43 does `all(project_id in allowlist for project_id in project_ids)` on the option list, which is O(N*M); the allowlist is a small option list, so converting to a set is a micro-optimization with no user effect.",
+    "category": "perf",
+    "comment": "`_are_all_projects_error_upsampled` checks membership against the allowlist list for each project; converting it to a set would avoid O(N*M) lookups.",
+    "severity": "low"
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#kimip-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "The PR makes updateAllCalendarEvents handle multiple `_calendar` references (EventManager.ts:496-551, find->filter) for collective multi-host bookings, but the merge cleanup at EventManager.ts:553-564 still uses `.find()` and deletes only the first old calendar event, leaving stale events on the other hosts' calendars.",
+    "category": "bug",
+    "comment": "When rescheduling merges into a new booking, only the first old `_calendar` reference is deleted via `.find()`, leaving stale events on other hosts' calendars for collective bookings; iterate all old calendar references.",
+    "severity": "medium"
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor#kimip-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "groups_controller.rb:71-75 in the new add_members action calls User.find_by_username per username (N+1); this is an admin-only action with small inputs, so batching is a minor optimization.",
+    "category": "perf",
+    "comment": "`add_members` runs one User query per username; load all users with a single `User.where(username: ...)` query.",
+    "severity": "low"
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com#kimip-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "app-credential.ts:24-29 authenticates the caller with CALCOM_WEBHOOK_SECRET and :57-59 decrypts keys encrypted with CALCOM_APP_CREDENTIAL_ENCRYPTION_KEY, so only a trusted sync service can write credentials; the attack requires both secrets to be compromised. Schema validation is a hardening suggestion, not a defect.",
+    "category": null,
+    "comment": "Claims decrypted credential keys are stored without validation against the app's credential schema, allowing credential poisoning if the webhook secret is compromised.",
+    "severity": "high"
+  }
+}

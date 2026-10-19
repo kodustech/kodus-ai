@@ -1,0 +1,2451 @@
+{
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "8ab88145113dd23a930e23b9cbbcf8b30e4c0b17",
+  "base": "a5d290951def84afdcc4c88d2f1f20023fc36e2a",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     838,
+     840
+    ],
+    "texto": "WHAT: OptimizedCursorPaginator.get_item_key copies the numeric Paginator implementation and calls math.floor/ceil on the raw key value. WHY: AuditLogEntry is ordered by '-datetime', so getattr(item, self.key) returns a datetime object and math.floor(datetime) raises TypeError, crashing pagination for authorized users. HOW: Use DateTimePaginator-style conversion (strftime('%s.%f') * multiplier) before floor/ceil, or make OptimizedCursorPaginator inherit from DateTimePaginator."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     842,
+     857
+    ],
+    "texto": "WHAT: OptimizedCursorPaginator.value_from_cursor returns the raw numeric cursor.value instead of converting it back to a datetime. WHY: BasePaginator.build_queryset compares this value against the datetime column in raw SQL, causing a type mismatch or wrong filter results when paging past the first page. HOW: Convert the numeric cursor value back to a timezone-aware datetime, matching DateTimePaginator.value_from_cursor."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     877,
+     882
+    ],
+    "texto": "WHAT: The enable_advanced_features branch passes negative offsets directly to queryset[start_offset:stop]. WHY: Django QuerySet slicing does not support negative start indices, so any authorized admin cursor with a negative offset triggers an AssertionError instead of efficient reverse pagination. HOW: Remove the branch or implement negative-offset pagination with list slicing after evaluating the queryset, not on the QuerySet itself."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+    "lines": [
+     71,
+     71
+    ],
+    "texto": "WHAT: The enable_advanced check dereferences organization_context.member without verifying it is not None. WHY: RpcUserOrganizationContext.member is typed as RpcOrganizationMember | None and documented as nullable when the user has no membership, so a non-superuser without membership triggers AttributeError. HOW: Guard the member access or combine the checks safely."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+    "lines": [
+     73,
+     83
+    ],
+    "texto": "The endpoint selects OptimizedCursorPaginator when optimized_pagination=true, but that paginator's get_item_key calls math.floor/math.ceil on the raw sort attribute. With order_by='-datetime' the key is a datetime object, so math.ceil will raise TypeError and break pagination for superusers/global-access members. Either use an integer/timestamp ordering compatible with OptimizedCursorPaginator, or make OptimizedCursorPaginator handle DateTime keys (e.g., like DateTimePaginator's timestamp conversion) before selecting it here."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     838,
+     840
+    ],
+    "texto": "OptimizedCursorPaginator.get_item_key uses math.floor/math.ceil on `getattr(item, self.key)`, which requires a numeric value. However, organization_auditlogs.py instantiates it with `order_by=\"-datetime\"`, so `self.key` is the datetime field and the value is a datetime object. This will raise TypeError at runtime when the paginator tries to build cursors. Either preserve the datetime-aware key logic used by DateTimePaginator, or restrict OptimizedCursorPaginator to numeric ordering fields and update the caller accordingly."
+   },
+   {
+    "id": "S7",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     838,
+     840
+    ],
+    "texto": "get_item_key calls math.floor/math.ceil on getattr(item, self.key). For the audit log endpoint order_by='-datetime', self.key is 'datetime' and the value is a datetime object, so math.floor(datetime) raises TypeError and the GET request crashes for any user with optimized_pagination=true. The sort key must be converted to a numeric timestamp (or use the same logic as DateTimePaginator) before floor/ceil is applied."
+   },
+   {
+    "id": "S8",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     877,
+     886
+    ],
+    "texto": "When enable_advanced_features is true and cursor.offset is negative, the code passes the negative offset directly to queryset[start_offset:stop]. Django/Python slicing interprets a negative start index as \"count from the end of the queryset\", not as a negative offset from the start, so the returned page is the wrong set of rows and breaks pagination invariants. Negative offsets must be translated to a positive LIMIT/OFFSET query or bounded to zero."
+   },
+   {
+    "id": "S9",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     179,
+     184
+    ],
+    "texto": "The modified BasePaginator.get_result sets start_offset = offset (without max(0, ...)) when cursor.is_prev is true. If a prev cursor carries a negative offset, queryset[start_offset:stop] slices from the end of the queryset instead of paginating forward from the start, returning incorrect rows for the previous page path."
+   },
+   {
+    "id": "S10",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     842,
+     843
+    ],
+    "texto": "OptimizedCursorPaginator.value_from_cursor returns cursor.value unchanged, while BasePaginator.value_from_cursor returns cursor.value + 1 for prev cursors. Since build_queryset uses this value as the pagination boundary, backward navigation will use an inclusive instead of exclusive boundary and can return the cursor row again or skip rows. Restore the prev-cursor increment or call the base implementation to keep boundary semantics consistent."
+   },
+   {
+    "id": "S11",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     838,
+     840
+    ],
+    "texto": "OptimizedCursorPaginator.get_item_key calls getattr(item, self.key) directly and omits the callable-key branch that BasePaginator.get_item_key provides. This contradicts the docstring's claim of backward compatibility and will raise TypeError for any queryset ordered by a callable key. Add the same isinstance(self.key, Callable) branch used by BasePaginator."
+   },
+   {
+    "id": "S12",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     874,
+     886
+    ],
+    "texto": "OptimizedCursorPaginator uses `queryset[cursor.offset:cursor.offset+limit+extra]` when `enable_advanced_features` is on and `cursor.offset < 0`. Django QuerySet slicing rejects negative start indices and raises `ValueError: Negative indexing is not supported`, so this path will crash instead of providing efficient reverse pagination. Negative offsets need to be translated into a positive LIMIT/OFFSET query (or clamped/validated) before slicing the queryset."
+   },
+   {
+    "id": "S13",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     874,
+     879
+    ],
+    "texto": "Lines 875-879 claim 'The underlying Django ORM properly handles negative slicing automatically', but Django QuerySet slicing does not support negative start indices and raises an AssertionError. Either remove the negative-offset branch or rewrite the comment to warn that negative offsets are unsupported by Django, and do not rely on the current claim."
+   },
+   {
+    "id": "S14",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     179,
+     184
+    ],
+    "texto": "The comment at lines 179-181 says negative offsets are allowed for bidirectional pagination, but line 182 computes `start_offset = max(0, offset) unless cursor.is_prev`, which clamps negative offsets to zero in the common forward-pagination case. Update the comment to describe the actual behavior, or change the code to match the documented intent."
+   },
+   {
+    "id": "S15",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     821,
+     832
+    ],
+    "texto": "The class docstring lists 'Optimized query path for large datasets' and 'Streamlined boundary condition handling', but the implementation largely duplicates BasePaginator.get_result and uses the same build_queryset path; it also adds extra conditional branches rather than streamlining boundary handling. Revise the docstring to describe only the features actually implemented (negative-offset branch when enable_advanced_features is true) and avoid claiming backward compatibility or query-path optimizations unless the code supports them."
+   },
+   {
+    "id": "S16",
+    "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+    "lines": [
+     68,
+     75
+    ],
+    "texto": "The comments at lines 68-69 and 74-75 describe the new OptimizedCursorPaginator path as a 'Performance optimization' and 'high-performance audit log navigation'. Since OptimizedCursorPaginator does not contain a distinct optimized query path and is structurally equivalent to the base paginator with extra negative-offset handling, these comments mislead maintainers and API consumers. Update them to describe the actual change (gated cursor paginator with optional negative-offset behavior) or implement the claimed optimizations."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+    "descricao": "OptimizedCursorPaginator passes negative cursor offsets straight into Django queryset slicing, which Django does not support, so requests with a negative offset raise an error instead of returning a page.",
+    "textoGolden": "The OptimizedCursorPaginator in organization_auditlogs.py attempts to use negative slice offsets on Django querysets, but Django querysets do not support negative slicing and will raise an AssertionError.",
+    "comentarios": [
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       877,
+       882
+      ],
+      "texto": "The advanced negative-offset branch passes a negative slice start directly to a Django QuerySet, which does not support negative indexing. A cursor such as 0:-1:0 is accepted by Cursor.from_string but crashes the optimized audit-log request instead of providing reverse pagination. Reject negative offsets with BadPaginationError or implement reverse traversal using nonnegative slices and reversed ordering."
+     },
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       874,
+       880
+      ],
+      "texto": "The comment claiming that Django ORM 'properly handles negative slicing automatically' is false: Django QuerySet slicing rejects negative indices. This branch passes cursor.offset straight into queryset[start_offset:stop], so it raises rather than supplying the documented negative-offset pagination. Correct the negative-offset support claims here, in the class docstring, and in the new BasePaginator boundary-handling comment (or implement actual supported boundary handling) so callers are not promised a pagination mode that the underlying queryset cannot provide."
+     },
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       877,
+       882
+      ],
+      "texto": "Django QuerySets do not support negative slice bounds. Passing a negative cursor offset directly into `queryset[start_offset:stop]` raises an exception instead of enabling advanced pagination. Validate or normalize negative offsets before slicing, or implement reverse traversal through ordering/filtering rather than negative slices."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#02",
+    "descricao": "The comment added to BasePaginator claims negative offsets are allowed and safely handled by the queryset, but the code clamps non-prev offsets to zero and leaves prev offsets as before, so the comment misdescribes the behaviour.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       179,
+       184
+      ],
+      "texto": "The added comment says this change will \"allow negative offsets to enable efficient bidirectional pagination ... safe because the underlying queryset will handle boundary conditions\", but the statement it annotates, line 182, is `start_offset = max(0, offset) if not cursor.is_prev else offset` \u2014 it clamps negative offsets to 0, i.e. it does the opposite of what the comment claims and leaves the 'negative offset' (offset < 0) paging behaviour exactly as before. The comment is now untrue for the code it sits on; either drop the 'allow negative offsets' wording or make the code actually permit them."
+     },
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       179,
+       184
+      ],
+      "texto": "The comment declares this change `allow[s] negative offsets to enable efficient bidirectional pagination`, but the actual computation is `start_offset = max(0, offset) if not cursor.is_prev else offset`, which clamps non-prev offsets at 0 \u2014 i.e. it never permits a negative offset. The declared optimization is a no-op relative to the original `queryset[offset:stop]`; the comment describes behavior the code does not have."
+     },
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       182,
+       184
+      ],
+      "texto": "BasePaginator now passes the raw `offset` to the slice whenever `cursor.is_prev` is true (`max(0, offset) if not cursor.is_prev else offset`). A negative offset from a user-supplied prev cursor therefore reaches `queryset[negative:stop]`, which Django rejects. This crashes every endpoint that uses BasePaginator. Fix: always use `max(0, offset)`, or validate the offset when the cursor is parsed."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#04",
+    "descricao": "The OptimizedCursorPaginator docstring claims streamlined boundary handling, an optimized query path and backward compatibility that the implementation, a copy of BasePaginator plus a negative-offset branch, does not provide.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       821,
+       832
+      ],
+      "texto": "Docstring lists 'Streamlined boundary condition handling', 'Optimized query path for large datasets', and 'maintaining backward compatibility', but get_result (845-886) is a copy of BasePaginator with only a negative-offset branch added \u2014 no streamlined handling or optimized path exists, and negative-offset slicing breaks prior cursor semantics. Doc describes behavior the function does not produce \u2014 align doc to code or implement the claimed handling."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+    "descricao": "OptimizedCursorPaginator computes cursor keys with math.floor/ceil on the raw attribute, but the audit log endpoint uses it with order_by='-datetime', so building the cursor raises TypeError for any non-empty result.",
+    "textoGolden": "get_item_key assumes a numeric key, but the paginator is used with order_by=-datetime in the audit logs endpoint; calling math.floor/ceil on a datetime will raise a TypeError.",
+    "comentarios": [
+     {
+      "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+      "lines": [
+       73,
+       83
+      ],
+      "texto": "OptimizedCursorPaginator requires numeric integer keys (get_item_key uses math.floor/ceil + int, cursor_value defaults to 0) but is instantiated here with order_by=\"-datetime\". This mismatched producer/consumer contract breaks pagination for datetime-ordered audit logs. Fix: do not use OptimizedCursorPaginator for datetime ordering; keep DateTimePaginator or make OptimizedCursorPaginator datetime-aware."
+     },
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       838,
+       843
+      ],
+      "texto": "WHAT: OptimizedCursorPaginator.get_item_key/value_from_cursor mishandles datetime ordering by calling math.floor/ceil directly on a datetime and returning raw int cursor value. WHY: Used with order_by=\"-datetime\" it crashes with TypeError on floor(datetime) when building cursors and filters the datetime column against an int in build_queryset, breaking pagination. HOW: Copy DateTimePaginator logic \u2014 timestamp via strftime/multiplier with floor/ceil and convert cursor value back with datetime.fromtimestamp."
+     },
+     {
+      "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+      "lines": [
+       79,
+       80
+      ],
+      "texto": "The optimized branch selects a numeric-key paginator while ordering by the datetime field. On any nonempty first page, build_cursor invokes OptimizedCursorPaginator.get_item_key, which calls math.ceil on a datetime and raises TypeError; nonzero cursors also lack the datetime conversion provided by DateTimePaginator. Make the optimized paginator inherit DateTimePaginator or preserve its timestamp encoding and decoding."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#07",
+    "descricao": "The audit log endpoint always dereferences organization_context.member.has_global_access, which crashes with AttributeError for authorized token requests that have no member, even on the default pagination path.",
+    "textoGolden": "When requests are authenticated with API keys or org auth tokens (which have user_id=None), organization_context.member is None. Line 71 attempts to access organization_context.member.has_global_access without checking if member is None, causing an AttributeError crash when optimized_pagination=true is used, even though the request passed all permission checks with valid org:write scope.",
+    "comentarios": [
+     {
+      "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+      "lines": [
+       71,
+       71
+      ],
+      "texto": "The unconditional advanced-access check dereferences organization_context.member although RpcUserOrganizationContext permits member=None. Authorized non-member organization-token requests therefore raise AttributeError even when optimized_pagination is absent, instead of returning audit logs through the existing paginator. Guard the optional member and evaluate eligibility only when optimized pagination is requested."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#08",
+    "descricao": "The comments and enable_advanced variable describe the optimized_pagination path as a performance optimization for administrators, hiding that it enables negative-offset slicing.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+      "lines": [
+       68,
+       72
+      ],
+      "texto": "The comments describe a 'performance optimization' for 'authorized administrators', and the variable is named enable_advanced. In fact it opts into negative-offset slicing, and the optimized_pagination query parameter gates it. The names and comments hide what the flag actually enables. Rename them to say what is enabled, or remove the path."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#09",
+    "descricao": "A user-controlled optimized_pagination flag lets any member with global access switch to a paginator that accepts unvalidated negative cursor offsets, widening the attack surface and causing server errors.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+      "lines": [
+       70,
+       83
+      ],
+      "texto": "A user-controlled `optimized_pagination` query flag switches the endpoint to a paginator that accepts attacker-supplied negative cursor offsets. This is available to any user with global access, not only to real admins. It widens the attack surface for unvalidated cursor offsets and causes server errors. The comment 'permissions are checked at the queryset level' is not backed by any check in the paginator. Fix: remove the optimized path, or have the paginator validate and clamp offsets."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01",
+    "descricao": "BasePaginator.get_result clamps negative offsets only for next cursors; a prev cursor with a negative offset is passed straight into the queryset slice, which Django rejects with an error (500) on every paginated endpoint.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-02",
+    "descricao": "The new comment in Cursor says negative offsets are allowed to enable efficient reverse pagination, but the constructor only calls int(offset) and provides no such behaviour.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#oph-01",
+    "descricao": "OptimizedCursorPaginator.value_from_cursor returns the raw integer cursor value, which is then compared against the datetime column, so next/prev cursor pagination of audit logs breaks.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#snapi-01",
+    "descricao": "Comments in OptimizedCursorPaginator.get_result claim Django handles negative slicing and that permissions are checked at the queryset level; both are false.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "add-guest-management-functionality-to-existing-bookings-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "92f44dcea7ff19e9123a30c63c167a2938df5a55",
+  "base": "b004587262e8221083bafbe9a0c515e7becaa7b3",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     52,
+     56
+    ],
+    "texto": "WHAT: Any attendee of a booking is authorized to add arbitrary guests. WHY: An attendee who knows the bookingId can invoke addGuests and inject new recipients into a meeting they do not own, bypassing organizer control and exposing meeting links/calendar events to unintended parties. HOW: Restrict addGuests to the same principals as bookingsProcedure (organizer or collective participant) or gate attendee access behind an explicit organizer/team-admin permission."
+   },
+   {
+    "id": "S2",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     46,
+     49
+    ],
+    "texto": "WHAT: The team permission check requires the user to be both a team admin and a team owner. WHY: `isTeamAdmin` already returns true for ADMIN or OWNER roles; `isTeamOwner` returns true only for OWNER, so pure team admins are incorrectly denied permission to add guests. HOW: Change the operator from `&&` to `||` so either an admin or an owner is authorized."
+   },
+   {
+    "id": "S3",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     167,
+     171
+    ],
+    "texto": "WHAT: `sendAddGuestsEmails` receives the raw `guests` input instead of the deduplicated `uniqueGuests` list. WHY: If the request includes an email that is already an attendee, that attendee is filtered out of `uniqueGuests` and no new record is created, but the email logic still treats it as a new guest and sends `AttendeeScheduledEmail` instead of `AttendeeAddGuestsEmail`. HOW: Pass `uniqueGuests` to `sendAddGuestsEmails`."
+   },
+   {
+    "id": "S4",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     74,
+     78
+    ],
+    "texto": "WHAT: The blacklisted-guest check is case-sensitive. WHY: `BLACKLISTED_GUEST_EMAILS` is lowercased before comparison, but the submitted `guest` email is compared verbatim, so a blacklisted address submitted with different casing (e.g. `BadEmail@example.com`) is accepted. HOW: Normalize the submitted email to lowercase before comparing against the lowercased blacklist."
+   },
+   {
+    "id": "S5",
+    "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+    "lines": [
+     42,
+     44
+    ],
+    "texto": "The onError handler concatenates err.data?.code and t(err.message) and shows it in a toast. If the server ever returns a raw error string instead of a translation key, sensitive details (emails, booking IDs, internal error text) could be exposed to the user. Defensively treat err.message as a key only when it is known to be a key, or fall back to a generic translation such as t(\"unable_to_add_guests\") rather than rendering the server message directly."
+   },
+   {
+    "id": "S6",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     74,
+     168
+    ],
+    "texto": "The handler filters the input into `uniqueGuests` and persists only those, but then calls `sendAddGuestsEmails(evt, guests)` with the original unfiltered array. Pass `uniqueGuests` instead so the email manager's `newGuests` parameter matches the attendees that were actually added."
+   },
+   {
+    "id": "S7",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     46,
+     48
+    ],
+    "texto": "The variable name and the authorization intent are 'admin OR owner', but the expression uses &&, so a team admin who is not also an owner (or vice versa) is incorrectly denied permission to add guests. Change && to ||."
+   },
+   {
+    "id": "S8",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     166,
+     169
+    ],
+    "texto": "The handler computes uniqueGuests (excluding existing attendees and blacklisted emails) to create the new attendees, but sendAddGuestsEmails receives the unfiltered guests list. That list is used to choose between AttendeeScheduledEmail and AttendeeAddGuestsEmail, so a duplicate email in the input will be treated as a new guest and existing attendees will receive the wrong template. Pass uniqueGuests instead."
+   },
+   {
+    "id": "S9",
+    "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+    "lines": [
+     42,
+     44
+    ],
+    "texto": "When err.data?.code is undefined the template literal produces the literal string \"undefined: ...\", and because that string is truthy the friendly fallback t(\"unable_to_add_guests\") is never shown. Only prepend the code when it exists, otherwise use the translated message or fallback."
+   },
+   {
+    "id": "S10",
+    "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+    "lines": [
+     26,
+     29
+    ],
+    "texto": "The uniqueness refine uses `new Set(emails)`, which compares strings case-sensitively. Email addresses are case-insensitive identity data, so `A@example.com` and `a@example.com` pass validation as unique but refer to the same mailbox. Normalize emails with `toLowerCase()` before the Set comparison (and ideally persist the normalized form) to prevent case-variation duplicates and any downstream bypass of case-sensitive attendee or blacklist checks."
+   },
+   {
+    "id": "S11",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     46,
+     54
+    ],
+    "texto": "The variable `isTeamAdminOrOwner` is defined with `(await isTeamAdmin(...)) && (await isTeamOwner(...))`, so a user must be both admin and owner to pass the check. The identifier says \"or\" and the surrounding permission logic at line 54 treats it as an either-or gate. Change `&&` to `||` so team admins or team owners can add guests, matching the name and intended behavior."
+   },
+   {
+    "id": "S12",
+    "file": "packages/ui/form/MultiEmail.tsx",
+    "lines": [
+     44,
+     51
+    ],
+    "texto": "The `Tooltip` for removing an email field hardcodes `content=\"Remove email\"`, bypassing the i18n system used elsewhere in the component. This text reaches the user untranslated. Pass it through the translation function, e.g., `content={t(\"remove_email\")}`, and add the corresponding key to the locale files."
+   },
+   {
+    "id": "S13",
+    "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+    "lines": [
+     42,
+     44
+    ],
+    "texto": "The error message is built as `` `${err.data?.code}: ${t(err.message)}` ``. The code portion is shown raw (and becomes \"undefined:\" when `err.data` is missing), so it is not localized and can be confusing. Because `message` is always truthy, the `|| t(\"unable_to_add_guests\")` fallback is never used. Build a fully localized message instead of concatenating an untranslated code, or use the translated fallback directly."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+    "descricao": "isTeamAdminOrOwner combines isTeamAdmin and isTeamOwner with &&, so only team owners pass; team admins who are not organizer or attendee are wrongly rejected with FORBIDDEN.",
+    "textoGolden": "The logic for checking team admin/owner permissions is incorrect. This condition uses AND (&&) which requires both isTeamAdmin AND isTeamOwner to be true, but it should use OR (||) since a user needs to be either an admin OR an owner to have permission.",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       46,
+       48
+      ],
+      "texto": "WHAT: isTeamAdminOrOwner is computed with && instead of ||. WHY: isTeamAdmin returns truthy for role ADMIN or OWNER while isTeamOwner returns true only for OWNER, so the && expression is only true for OWNERs; team ADMINs are treated as unauthorized and get FORBIDDEN when adding guests, contradicting the variable's intent. HOW: use `(await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) || (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0))`."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       46,
+       48
+      ],
+      "texto": "The flag is named `isTeamAdminOrOwner` but is computed with `&&` (both admin AND owner). A team admin who is not the owner, or the owner who is not flagged admin, will fail this check, so the guard at line 54 wrongly throws FORBIDDEN for legitimate admins/owners. Use `||` between isTeamAdmin and isTeamOwner."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       46,
+       48
+      ],
+      "texto": "The variable `isTeamAdminOrOwner` names an OR condition, but the code combines `isTeamAdmin(...)` and `isTeamOwner(...)` with `&&`, so it is true only when the user is both admin AND owner. Either the name is wrong or the operator is; as written the permission check at line 54 denies a plain team admin, contradicting what the identifier promises. Use `||` to match the name (or rename if AND is intended)."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+    "descricao": "The guest blacklist is lowercased but incoming guest emails are compared without normalization, so a blacklisted address submitted with different casing bypasses BLACKLISTED_GUEST_EMAILS and is added and emailed.",
+    "textoGolden": "The addGuests.handler.ts blacklist check uses blacklistedGuestEmails.includes(guest) after lowercasing the blacklist but not the input guest emails, allowing attackers to bypass BLACKLISTED_GUEST_EMAILS restrictions by submitting emails with uppercase characters.",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       70,
+       78
+      ],
+      "texto": "WHAT: The blacklist is compared case-sensitively against guest input while blacklistedGuestEmails are lowercased. WHY: blacklistedGuestEmails entries are lowercased but the filter compares `guest` verbatim (`!blacklistedGuestEmails.includes(guest)`); an authenticated user can add a blacklisted address simply by changing its case (e.g. `Foo@bar.com` vs `foo@bar.com`), bypassing the configured BLACKLISTED_GUEST_EMAILS restriction. HOW: normalize the guest before comparison, e.g. `!blacklistedGuestEmails.includes(guest.toLowerCase())`."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       70,
+       78
+      ],
+      "texto": "Case-sensitivity bypass of the guest blacklist. `blacklistedGuestEmails` is lowercased on the list side (line 71) but the input side is compared raw: `blacklistedGuestEmails.includes(guest)` (line 77). A guest email submitted with any different casing (e.g. `Foo@Bar.com` when the blacklist holds `foo@bar.com`) passes the filter and is persisted, defeating BLACKLISTED_GUEST_EMAILS. Normalize the input before comparison, e.g. filter on `!blacklistedGuestEmails.includes(guest.toLowerCase())` (and likewise lowercase `guest` for the attendee dedup check)."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       70,
+       78
+      ],
+      "texto": "WHAT: BLACKLISTED_GUEST_EMAILS entries are lowercased but the incoming guest string is compared without lowercasing/normalizing. WHY: an attacker bypasses the blocklist with case variation (e.g. Spam@Example.com) and gets added/emailed."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#03",
+    "descricao": "The server never deduplicates the guests array, so a request with the same email twice inserts duplicate attendee rows for the booking.",
+    "textoGolden": "uniqueGuests filters out existing attendees and blacklisted emails but does not deduplicate duplicates within the input; createMany can insert duplicate attendee rows if the client submits repeated emails.",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       74,
+       78
+      ],
+      "texto": "WHAT: uniqueGuests filter only dedupes against existing booking.attendees with case-sensitive === and never dedupes duplicates within the input guests array itself (server schema has no uniqueness refine unlike the client). WHY: a request with the same new email twice creates duplicate attendee rows via createMany."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       74,
+       106
+      ],
+      "texto": "uniqueGuests filters only against existing attendees/blacklist but never dedupes guests[] itself and schema has no uniqueness check. A request like guests=[a@x.com,a@x.com] passes the filter twice and createMany inserts duplicate attendee rows or throws an unhandled DB unique-constraint exception. Dedupe/normalize input (and reject intra-request duplicates) before createMany."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       74,
+       78
+      ],
+      "texto": "uniqueGuests filters against existing attendees but does not deduplicate addresses within the incoming guests array. A direct mutation with the same new address twice inserts two Attendee records and sends duplicate invitations because the server schema permits duplicates and the Attendee model has no unique booking/email constraint. Deduplicate normalized input before filtering and inserting."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#04",
+    "descricao": "Check-then-insert without a transaction or unique constraint lets two concurrent addGuests calls for the same email both pass the existing-attendee check and create duplicate attendees.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       26,
+       106
+      ],
+      "texto": "Race condition: findFirst check for existing attendees then booking.update+createMany is not atomic. Two concurrent addGuests calls with the same new email both see it as absent and both insert, creating duplicates. Guard with a unique constraint and handle conflict or run in a transaction/serializable check."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       92,
+       106
+      ],
+      "texto": "Check-then-insert race: the handler reads `booking.attendees` at the start, filters against it, then inserts in a separate `prisma.booking.update ... createMany` with no transaction or unique guard. Two concurrent addGuests calls for the same guest both see it as absent and both insert, producing duplicate attendees. Wrap the read+filter+insert in a transaction (or rely on a unique constraint on (bookingId, email) and handle the conflict) so concurrent requests cannot both succeed."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#05",
+    "descricao": "Attendee authorization and existing-attendee dedup compare emails case-sensitively, so an attendee with differently-cased stored email is FORBIDDEN and a case-variant of an existing attendee is added again.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       52,
+       76
+      ],
+      "texto": "Inconsistent email normalization for identity checks. Both the authorization check `attendee.email === user.email` (line 52) and the existing-attendee dedup `guest === attendee.email` (line 76) use strict case-sensitive equality, while emails are treated as case-insensitive everywhere else in this handler (the blacklist block directly below lowercases). Consequence: a legitimate attendee whose stored casing differs from their session email is wrongly FORBIDDEN, and a guest differing from an existing attendee only by case is duplicated rather than filtered. Compare on a normalized form (both sides `.toLowerCase()`), consistent with the blacklist normalization."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+    "descricao": "The handler passes the unfiltered guests list to sendAddGuestsEmails, which uses it to pick who gets AttendeeScheduledEmail, so existing attendees included in the request receive a new-booking confirmation instead of the add-guests email.",
+    "textoGolden": "The sendAddGuestsEmails function in email-manager.ts passes the full calendarEvent.attendees array when determining which attendees receive AttendeeScheduledEmail vs AttendeeAddGuestsEmail, but checks if newGuests.includes(attendee.email) where newGuests is the input guests array.",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       167,
+       168
+      ],
+      "texto": "WHAT: sendAddGuestsEmails(evt, guests) passes the raw input guests instead of the filtered uniqueGuests. WHY: already-existing attendees included in the request are misclassified as newGuests in email-manager and receive AttendeeScheduledEmail instead of AttendeeAddGuestsEmail (wrong notification)."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       167,
+       168
+      ],
+      "texto": "Dead-transform / wrong input: `uniqueGuests` is computed (dedup vs existing attendees + blacklist) and written to DB, but `sendAddGuestsEmails(evt, guests)` passes the original `guests`. Existing attendees re-submitted are then `includes()`-matched as new and get AttendeeScheduledEmail instead of AttendeeAddGuestsEmail. Pass `uniqueGuests`."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       167,
+       169
+      ],
+      "texto": "Pass `uniqueGuests` (the filtered set written to DB) to sendAddGuestsEmails instead of raw `guests`; the email layer assumes newGuests exactly equals newly created attendees for its Scheduled vs AddGuests branch."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#08",
+    "descricao": "EventManager is created with the requesting user's credentials, so when a non-organizer adds guests the organizer's calendar event is not updated (or the wrong account is used) for references without a credentialId.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       158,
+       162
+      ],
+      "texto": "EventManager is initialized with the requesting user's credentials rather than the booking organizer's credentials. When an attendee or team owner adds guests to a booking whose calendar reference lacks credentialId, updateAllCalendarEvents selects credentials by type from the caller's calendars, so the organizer's event is not updated or the update targets the wrong account. Load credentials for booking.userId and initialize the manager with the booking owner."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#09",
+    "descricao": "Claims a failing calendar update at addGuests.handler.ts:165 aborts the mutation after guests are persisted; the calendar update path already swallows provider errors.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       165,
+       171
+      ],
+      "texto": "The attendees are written to the database at line 92, but `eventManager.updateCalendarAttendees` at line 165 runs outside the try/catch. If it throws, the mutation returns an error even though the guests are already persisted, so the DB and the calendar are out of sync. No emails are sent, and a retry then fails with 'emails_must_be_unique_valid'. Catch and handle the calendar update failure after the DB write."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       165,
+       165
+      ],
+      "texto": "The attendees are already committed to the DB when `eventManager.updateCalendarAttendees` is awaited without a try/catch. If the calendar sync throws, the mutation returns an error and skips the emails, although the guests were added. The caller sees a failure for a partly applied change and may retry. Handle calendar sync failure as best-effort, as the email send is, or run it before the DB write."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#10",
+    "descricao": "Claims any attendee can add guests and trigger invites; this is the deliberate permission model of the new feature.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       52,
+       56
+      ],
+      "texto": "Any attendee, matched only by email, is allowed to add arbitrary guests to a booking, and the handler then sends emails and calendar invites on the organizer's behalf. Any attendee can use this to send invites to arbitrary addresses. Restrict the action to the organizer and team admins, or verify that the attendee's email is confirmed."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#11",
+    "descricao": "The guests array has no server-side size limit, so any authorized caller, including an attendee, can add thousands of guests and trigger an unbounded batch of inserts and emails.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts",
+      "lines": [
+       3,
+       6
+      ],
+      "texto": "WHAT: guests is an unbounded z.array(z.string().email()) with no max length. WHY: any authorized caller (including a mere attendee) can submit thousands of emails causing unbounded createMany inserts plus unbounded Promise.all email fanout in sendAddGuestsEmails."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts",
+      "lines": [
+       5,
+       5
+      ],
+      "texto": "The mutation accepts an unbounded guest array that is persisted and immediately expanded into concurrent emails to every attendee. For non-seated bookings each email's ICS serializes the full attendee list, so adding N guests creates O(N) concurrent sends and O(N\u00b2) aggregate attachment work; repeated additions also resend to all existing attendees. Enforce a server-side guest-count and total-attendee limit before insertion and bound notification concurrency."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#12",
+    "descricao": "The Remove email tooltip in MultiEmail is a hard-coded English string instead of a translation key.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/ui/form/MultiEmail.tsx",
+      "lines": [
+       44,
+       51
+      ],
+      "texto": "Tooltip content=\"Remove email\" is hard-coded English user-facing text bypassing i18n while surrounding strings in the same file/PR use t(). Wrap it in t() e.g. content={t(\"remove_email\")} and add the key to locales."
+     },
+     {
+      "file": "packages/ui/form/MultiEmail.tsx",
+      "lines": [
+       46,
+       46
+      ],
+      "texto": "`Tooltip content=\"Remove email\"` is a hard-coded English user-facing string, while the surrounding code in this same component routes user text through `t()` (e.g. `t(\"add_another\")` on line 69). This string bypasses the translation mechanism and will never be localised; it should use a translation key."
+     },
+     {
+      "file": "packages/ui/form/MultiEmail.tsx",
+      "lines": [
+       46,
+       46
+      ],
+      "texto": "The new removal tooltip hard-codes `Remove email`, so users in non-English locales see English text even though the neighbouring controls use `t(...)` and this component already obtains `t` from useLocale. Route this tooltip through a translation key (and supply its English translation) rather than using the literal."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#13",
+    "descricao": "The onError fallback to unable_to_add_guests is unreachable because the template-string message is always truthy.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+      "lines": [
+       42,
+       44
+      ],
+      "texto": "Unreachable fallback: `message` is a template string `${code}: ${...}` which is always truthy, so `message || t(\"unable_to_add_guests\")` never takes the fallback. Build message conditionally or test the underlying parts for emptiness."
+     },
+     {
+      "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+      "lines": [
+       42,
+       45
+      ],
+      "texto": "In `onError`, `message` is always a non-empty template string (`\"${err.data?.code}: ${t(err.message)}\"`), so the fallback `|| t(\"unable_to_add_guests\")` is unreachable and the newly added `unable_to_add_guests` translation is never shown. The user is instead shown a raw error code prefix like `BAD_REQUEST: ...` rather than the translated message; the fallback and code prefix handling should be corrected so the intended translated text reaches the user."
+     },
+     {
+      "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+      "lines": [
+       43,
+       44
+      ],
+      "texto": "The error message is built as a template string, so it is always truthy. The `|| t(\"unable_to_add_guests\")` fallback is therefore dead code, and the user can see \"undefined: ...\" or an untranslated raw message. Use `err.message ? t(err.message) : t(\"unable_to_add_guests\")`."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#14",
+    "descricao": "After a validation failure followed by a successful add, isInvalidEmail stays true, so the stale emails_must_be_unique_valid error shows the next time the dialog is opened.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+      "lines": [
+       35,
+       41
+      ],
+      "texto": "WHAT: addGuestsMutation onSuccess resets multiEmailValue and closes the dialog but never resets isInvalidEmail. WHY: after one failed validation the red emails_must_be_unique_valid error persists on the next open/successful add."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#16",
+    "descricao": "sendAddGuestsEmails ignores the event type's disableStandardEmails settings, so hosts and attendees receive add-guests emails even when standard emails are disabled.",
+    "textoGolden": "The `sendAddGuestsEmails` function does not check the `disableStandardEmails` flags in the `EventType` metadata, which may result in sending emails to hosts/attendees even when standard emails are disabled for the event type.",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#e2b-01",
+    "descricao": "The add-guests handler omits booking.iCalUID from the CalendarEvent, so the add-guests emails' .ics attachments use booking.uid as UID and recipients' calendars treat them as a new event rather than an update of the original booking invite.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#sncc-01",
+    "descricao": "The addGuests FORBIDDEN error uses the translation key you_do_not_have_permission, which is missing from the locale files, so the dialog shows the raw key to users.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#opa-01",
+    "descricao": "The comment in MultiEmailLazy.tsx (\"These are like 40kb\") is copied from the phone input lazy loader and does not apply to MultiEmail, which only uses existing UI components.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#musep-01",
+    "descricao": "addGuests does not check the booking status, so guests can be added to cancelled or rejected bookings, which updates calendars and emails invitations for events that no longer exist.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feat-2fa-backup-codes-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "54486a059cd2032042189bb565646ba4e0f6bd61",
+  "base": "efa6d464a38e60ceeeb88f40668c1c4ac4bfaf54",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/features/auth/lib/next-auth-options.ts",
+    "lines": [
+     143,
+     145
+    ],
+    "texto": "WHAT: Backup code verification compares the user-supplied code without normalizing case. WHY: Generated backup codes are lowercase hex, so a user who types an otherwise valid code in uppercase is rejected as incorrect. HOW: Lower-case the stripped input before comparing, e.g. `credentials.backupCode.replaceAll(\"-\", \"\").toLowerCase()`, and apply the same normalization in apps/web/pages/api/auth/two-factor/totp/disable.ts line 61."
+   },
+   {
+    "id": "S2",
+    "file": "packages/features/auth/lib/next-auth-options.ts",
+    "lines": [
+     131,
+     156
+    ],
+    "texto": "WHAT: The new backup-code authentication branch does not itself verify the user's password. WHY: Password verification is gated by `!credentials.totpCode`, so an attacker who knows a backup code can bypass the password by also sending any non-empty totpCode and authenticate successfully. HOW: Verify the password inside the backup-code branch (or move password verification before the second-factor branches) before consuming the backup code."
+   },
+   {
+    "id": "S3",
+    "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+    "lines": [
+     276,
+     279
+    ],
+    "texto": "WHAT: The clipboard writeText call is not awaited and its errors are not handled. WHY: The success toast is shown immediately even if the browser rejects the copy (permission denied, insecure context, etc.), misleading the user and leaving an unhandled promise rejection. HOW: Await the clipboard call and only show the toast on success, or catch errors and show an error toast."
+   },
+   {
+    "id": "S4",
+    "file": "apps/web/components/auth/BackupCode.tsx",
+    "lines": [
+     7,
+     7
+    ],
+    "texto": "The component is exported as `TwoFactor` but the file is `BackupCode.tsx` and is imported as `BackupCode`. Rename the function to `BackupCode` so the identifier matches the file name and usage."
+   },
+   {
+    "id": "S5",
+    "file": "apps/web/playwright/login.2fa.e2e.ts",
+    "lines": [
+     50,
+     53
+    ],
+    "texto": "The assertion `await expect(page.locator(`[data-testid=two-factor-switch]`).isChecked()).toBeTruthy()` passes even when the switch is not checked because `locator.isChecked()` returns a Promise, and a Promise object is always truthy when passed to the generic `toBeTruthy()` matcher. The PR added a FIXME noting this exact failure mode but left the assertion in place. Replace it with `await expect(page.locator(`[data-testid=two-factor-switch]`)).toBeChecked()` or `await expect(await page.locator(...).isChecked()).toBe(true)` so the test actually fails when the switch is unchecked."
+   },
+   {
+    "id": "S6",
+    "file": "apps/web/playwright/login.2fa.e2e.ts",
+    "lines": [
+     120,
+     123
+    ],
+    "texto": "After clicking the copy button, the test only waits for `toast-success`, but the implementation in EnableTwoFactorModal.tsx calls `navigator.clipboard.writeText(...)` without awaiting it and unconditionally shows the success toast. If the clipboard write fails or writes the wrong text, the toast still appears and the test passes. Read the clipboard (e.g., `await page.evaluate(() => navigator.clipboard.readText())`) and assert it contains the expected backup codes."
+   },
+   {
+    "id": "S7",
+    "file": "packages/features/auth/lib/next-auth-options.ts",
+    "lines": [
+     131,
+     156
+    ],
+    "texto": "The backup-code comparison uses `backupCodes.indexOf(...replaceAll(\"-\", \"\"))`, which short-circuits on mismatch and leaks timing information about the stored secret codes. Replace it with a constant-time comparison over every code (e.g., `crypto.timingSafeEqual`) and decide the match only after the loop, so an attacker cannot learn which code is correct or how much of it they guessed."
+   },
+   {
+    "id": "S8",
+    "file": "apps/web/pages/api/auth/two-factor/totp/disable.ts",
+    "lines": [
+     48,
+     68
+    ],
+    "texto": "The disable endpoint locates the supplied backup code with `backupCodes.indexOf(...replaceAll(\"-\", \"\"))`. This performs a non-constant-time secret comparison and can leak information through response timing. Compare every stored code with `crypto.timingSafeEqual` and only return success/failure after evaluating all candidates."
+   },
+   {
+    "id": "S9",
+    "file": "apps/web/components/auth/BackupCode.tsx",
+    "lines": [
+     7,
+     7
+    ],
+    "texto": "The default-exported function in BackupCode.tsx is named `TwoFactor` while the file and all imports use the name `BackupCode`. This naming inconsistency makes component identity in DevTools, error stacks and code search misleading and looks like a copy-paste error from TwoFactor.tsx. Rename the function to `BackupCode` to match its actual usage."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#01",
+    "descricao": "The credentials authorize() skips the password check when any totpCode is present, and the new backup-code branch never validates that totpCode, so a backup code plus a dummy totpCode logs in without the account password.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/auth/lib/next-auth-options.ts",
+      "lines": [
+       131,
+       156
+      ],
+      "texto": "The new backup-code branch authenticates without guaranteeing the password check ran: password verification at line 121 is gated on `!credentials.totpCode`, and the branch at line 131 triggers on any truthy `credentials.backupCode` regardless of that gate. A POST to the credentials callback supplying a valid backup code together with any non-empty totpCode therefore takes the backup branch (skipping TOTP validation) while line 121 skips password verification \u2014 granting a session using only a second-factor backup code, with no account password. Require the password check before the backup branch, or include backupCode in the guard at line 121 (e.g. `if (user.password && !credentials.totpCode && !credentials.backupCode)`)."
+     },
+     {
+      "file": "packages/features/auth/lib/next-auth-options.ts",
+      "lines": [
+       131,
+       145
+      ],
+      "texto": "The backup-code branch accepts a valid backup code even when an arbitrary nonempty totpCode has skipped password verification. The preceding guards at lines 113\u2013125 trust the presence of totpCode, but this new branch does not validate it, allowing a holder of a backup code to log in to a password account without knowing its password by submitting both fields. Require password verification for backup-code authentication rather than allowing an unverified totpCode to bypass it."
+     },
+     {
+      "file": "packages/features/auth/lib/next-auth-options.ts",
+      "lines": [
+       131,
+       145
+      ],
+      "texto": "WHAT: The new backup-code login branch authenticates without verifying the password when credentials also contain any totpCode value (password check at line 121 is skipped when totpCode is truthy, and the backup branch never checks it). WHY: An attacker holding only a backup code can add a dummy totpCode to the credentials callback and log in without the password, reducing two factors to one. HOW: Verify the password whenever backupCode is used (or decouple the password check from totpCode presence)."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#02",
+    "descricao": "After enabling 2FA, onEnable is only called from the backup-codes Close button; dismissing the dialog by Escape/overlay never notifies the parent, so the settings page keeps showing 2FA disabled.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+      "lines": [
+       134,
+       136
+      ],
+      "texto": "On a successful enable (response.status === 200) the modal no longer calls onEnable(); it only advances to SetupStep.DisplayBackupCodes, and onEnable() is now invoked solely from the 'close' button (line 269). If the user dismisses the Dialog via ESC or an overlay click, DialogContent's onOpenChange fires (wired to a plain setEnableModalOpen toggle at apps/web/pages/settings/security/two-factor-auth.tsx:64 and the conditional render at apps/web/components/security/TwoFactorAuthSection.tsx:36), so onEnable never runs. The parent callbacks (setEnableModalOpen(false) + utils.viewer.me.invalidate() / setEnabled(true)) are skipped, leaving the 2FA Switch unchecked and the UI showing 2FA as disabled even though the server has enabled it. Call onEnable() from the dismiss path (onOpenChange) or when transitioning into DisplayBackupCodes, not only from the Close button."
+     },
+     {
+      "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+      "lines": [
+       134,
+       136
+      ],
+      "texto": "Successful enablement no longer invokes onEnable until the backup-code screen's explicit Close button is clicked. Dismissing that screen through the dialog's onOpenChange instead only closes it in the parent and does not invalidate viewer.me, leaving the settings switch showing disabled even though the server has enabled 2FA. Ensure dismissal after successful enablement also invokes the completion callback and resets the setup state."
+     },
+     {
+      "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+      "lines": [
+       132,
+       136
+      ],
+      "texto": "After a successful enable, `onEnable()` is no longer called and is only called from the backup-codes Close button. If the user dismisses the dialog by Escape or overlay click (`onOpenChange`) while the codes are displayed, the parent is never notified that 2FA is enabled. The modal also keeps its step state and the plaintext backup codes. Call `onEnable` when 2FA is enabled, or make the dialog's `onOpenChange(false)` on the DisplayBackupCodes step run the same handler as Close, which resets state and clears `backupCodes`."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#04",
+    "descricao": "The default export in BackupCode.tsx is named TwoFactor, a copy-paste leftover from the TOTP component.",
+    "textoGolden": "The exported function TwoFactor handles backup codes and is in BackupCode.tsx. Inconsistent naming.",
+    "comentarios": [
+     {
+      "file": "apps/web/components/auth/BackupCode.tsx",
+      "lines": [
+       7,
+       7
+      ],
+      "texto": "The default export is named `TwoFactor` but this file (BackupCode.tsx) renders the backup-code field and is imported as `BackupCode` by callers. The copied identifier misstates what the component is; rename the function to `BackupCode` so the name matches the file, the imports and the rendered content."
+     },
+     {
+      "file": "apps/web/components/auth/BackupCode.tsx",
+      "lines": [
+       7,
+       7
+      ],
+      "texto": "The default export in BackupCode.tsx is named `TwoFactor`, which is the name of the separate TOTP component. It is a copy-paste leftover and misleads readers and stack traces. Rename it to `BackupCode`."
+     },
+     {
+      "file": "apps/web/components/auth/BackupCode.tsx",
+      "lines": [
+       7,
+       7
+      ],
+      "texto": "Component in BackupCode.tsx is named `TwoFactor` (`export default function TwoFactor`) while the file is BackupCode.tsx and it is imported as `BackupCode`. The name disagrees with the code's contract and duplicates the real TwoFactor component, misleading callers/readers. Rename to `BackupCode`."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#05",
+    "descricao": "The backup-code copy e2e test only waits for the success toast, which is shown unconditionally, so it never verifies the clipboard content.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/playwright/login.2fa.e2e.ts",
+      "lines": [
+       119,
+       122
+      ],
+      "texto": "This 'copy' test does not verify the copy behaviour it names: it clicks backup-codes-copy and then only waits for the toast-success element. The handler (EnableTwoFactorModal) runs navigator.clipboard.writeText(...) without awaiting it and then calls showToast(...) unconditionally, so the toast appears even when the clipboard write is removed or fails. The assertion therefore passes with the backup-code copy feature broken; assert the actual effect (clipboard content, or that the formatted codes reached writeText) instead of the toast."
+     },
+     {
+      "file": "apps/web/playwright/login.2fa.e2e.ts",
+      "lines": [
+       119,
+       122
+      ],
+      "texto": "The copy test only waits for a success toast, but the implementation emits that toast unconditionally without awaiting navigator.clipboard.writeText. Removing the clipboard write entirely, copying an empty string, or rejecting the write would still pass this test. Read the clipboard after the click and compare its contents with the displayed backup codes so the test verifies the actual copy effect."
+     },
+     {
+      "file": "apps/web/playwright/login.2fa.e2e.ts",
+      "lines": [
+       119,
+       122
+      ],
+      "texto": "Copy test only waits for toast-success, explicitly TODOing clipboard check. Broken writeText (wrong format/empty) still passes; assert clipboard content equals formatted backup codes."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#07",
+    "descricao": "Backup-code consumption is a non-atomic read-modify-write, so concurrent logins can accept the same backup code more than once or overwrite each other's removal.",
+    "textoGolden": "Because backupCodes are decrypted and mutated in memory before being written back, two concurrent login requests using the same backupCode could both pass this check and update, so a single backup code may effectively be accepted more than once if used concurrently, weakening the intended one-time-use semantics.",
+    "comentarios": [
+     {
+      "file": "packages/features/auth/lib/next-auth-options.ts",
+      "lines": [
+       144,
+       156
+      ],
+      "texto": "Backup-code consumption is a non-atomic read-modify-write: the code is validated with indexOf (line 144) and only then persisted via prisma.user.update (line 149), with no unique constraint or lock. Two concurrent login requests sending the same valid backup code both read the unchanged row, both pass the indexOf check, and both obtain a session, violating the 'each backup code can be used exactly once' invariant. Consume the code atomically (e.g. a conditional update on the raw encrypted value / a dedicated used-backup-codes table with a unique index) so only one request can succeed."
+     },
+     {
+      "file": "packages/features/auth/lib/next-auth-options.ts",
+      "lines": [
+       144,
+       156
+      ],
+      "texto": "Backup-code consumption is a non-atomic read-modify-write, breaking the stated invariant that each backup code is single-use. Two concurrent login requests with the same backup code both read the same user.backupCodes array and both pass `index !== -1` before either `prisma.user.update` commits; both then persist a stale array (each nulling only its own index), so the code authenticates twice. Make consumption atomic (e.g. compare-and-swap on the encrypted value/updatedAt, a transaction with a conditional update, or an optimistic-locking retry) so exactly one request can claim a given code."
+     },
+     {
+      "file": "packages/features/auth/lib/next-auth-options.ts",
+      "lines": [
+       148,
+       156
+      ],
+      "texto": "Backup-code consumption overwrites the encrypted list by user ID without checking that the stored list still matches the value read before verification. Concurrent requests can both authenticate with the same single-use code, and requests using different codes can overwrite each other's removals and restore a consumed code. Use a conditional atomic update matching the original backupCodes ciphertext and reject or retry authentication if no row was updated."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#12",
+    "descricao": "The copy button shows a success toast without awaiting clipboard.writeText, so a failed copy still tells the user their backup codes were saved.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+      "lines": [
+       276,
+       279
+      ],
+      "texto": "The handler shows \u201cBackup codes copied!\u201d immediately after calling `navigator.clipboard.writeText`, without awaiting its promise. If clipboard access is denied or the write otherwise rejects, the user still receives a success message and may close the dialog believing their recovery codes were saved. Await the clipboard write and show the success toast only after it resolves; handle rejection with an appropriate translated failure message."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#13",
+    "descricao": "The download e2e test checks only the filename, not that the file contains the displayed backup codes.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/playwright/login.2fa.e2e.ts",
+      "lines": [
+       113,
+       117
+      ],
+      "texto": "The download assertion checks only the static filename from the anchor's download attribute. It still passes if the blob contains empty or incorrect backup codes, leaving the essential recovery-code export behavior unverified. Read the downloaded file and compare its contents to the displayed codes, including their formatting."
+     },
+     {
+      "file": "apps/web/playwright/login.2fa.e2e.ts",
+      "lines": [
+       112,
+       117
+      ],
+      "texto": "Download test only asserts suggestedFilename, explicitly TODOing file-content check. Empty/wrong backupCodes blob with correct filename still passes; assert downloaded file lines equal displayed/formatted backup codes."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#14",
+    "descricao": "The disable endpoint's error log says 'backup code login' although it is disabling 2FA.",
+    "textoGolden": "Error message mentions 'backup code login' but this is a disable endpoint, not login",
+    "comentarios": [
+     {
+      "file": "apps/web/pages/api/auth/two-factor/totp/disable.ts",
+      "lines": [
+       50,
+       50
+      ],
+      "texto": "The error log says \"cannot proceed with backup code login\", but this endpoint disables two-factor authentication and does not log in. Change the message to describe disabling 2FA with a backup code."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#15",
+    "descricao": "resetState does not clear backup codes/secret or revoke the backup-codes object URL, leaving a small blob URL leaked per setup cycle.",
+    "textoGolden": "Object URL for backup codes is not revoked on component unmount, leading to a potential memory leak. This can cause increased memory usage over time, especially if the component is mounted and unmounted frequently.",
+    "comentarios": [
+     {
+      "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+      "lines": [
+       71,
+       75
+      ],
+      "texto": "WHAT: resetState() clears only password/error/step and never clears backupCodes, secret, dataUri, nor revokes backupCodesUrl. WHY: Closing the modal after setup leaves TOTP secret and backup codes in memory and leaks the Blob object URL on every setup/close cycle. HOW: Clear those states and call URL.revokeObjectURL in resetState and on unmount."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#16",
+    "descricao": "The disable endpoint calls replaceAll on req.body.backupCode without checking it is a string, so non-string input throws a 500.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/pages/api/auth/two-factor/totp/disable.ts",
+      "lines": [
+       60,
+       64
+      ],
+      "texto": "WHAT: req.body.backupCode.replaceAll assumes a string with no type guard. WHY: A non-string JSON value (number/array) throws TypeError and returns 500 instead of the 400 IncorrectBackupCode contract, breaking error handling and enabling error-probing. HOW: Validate typeof backupCode === 'string' (or String(...)) before replaceAll."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#17",
+    "descricao": "Backup codes are matched case-sensitively against lowercase hex, so a user typing the code in uppercase is rejected.",
+    "textoGolden": "Backup code validation is case-sensitive due to the use of indexOf(). This causes validation to fail if a user enters uppercase hex characters, as backup codes should be case-insensitive for a better user experience.",
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#sncc-01",
+    "descricao": "The backup code is compared with the stored codes through Array.indexOf, which is not constant-time and leaks timing information about the secret backup codes.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "advanced-sql-analytics-framework-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "f3317b329b4eb8fd96f99dd86525bc4a22d20248",
+  "base": "cbe1e7d63f098e306058c0fbcab2f5c30602fa7d",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     194,
+     200
+    ],
+    "texto": "WHAT: `enableSqlExpressions` always returns false, ignoring the `sqlExpressions` feature toggle. WHY: Operators who enable the feature flag still cannot use SQL expressions, and the feature-flag check is dead code that contradicts its name. HOW: Either return the flag value (`return h.features.IsEnabledGlobally(featuremgmt.FlagSqlExpressions)`) if SQL should remain toggleable, or make the kill-switch explicit by returning `false` and removing the unused parameter/import."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     194,
+     200
+    ],
+    "texto": "enableSqlExpressions ignores the feature flag it checks and always returns false. The function computes whether FlagSqlExpressions is NOT enabled, then returns false in both branches, so SQL expressions are rejected even when the flag is turned on. It should return the actual flag state, e.g. `return h.features.IsEnabledGlobally(featuremgmt.FlagSqlExpressions)`."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/expr/sql_command.go",
+    "lines": [
+     30,
+     36
+    ],
+    "texto": "Replacing the real in-memory DB with a stub means `sql.TablesList(rawSQL)` always fails, so the existing `logger.Warn(\"invalid sql query\", \"sql\", rawSQL, \"error\", err)` at lines 32-35 now logs the full raw SQL for every SQL expression. User-supplied SQL can contain sensitive values or schema information and should not be logged verbatim. Avoid logging `rawSQL` or redact it before logging."
+   },
+   {
+    "id": "S4",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     194,
+     200
+    ],
+    "texto": "The helper unconditionally returns false because it negates the flag and then returns false in both branches. This makes SQL expressions permanently disabled, ignoring FlagSqlExpressions. Return the actual flag value instead of negating it and short-circuiting to false."
+   },
+   {
+    "id": "S5",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "The enableSqlExpressions logic contains suspicious always-false logic that is a functional/feature-flag bug (the reviewer notes this is outside the assigned secrets/identity/comparisons/crypto class)."
+   },
+   {
+    "id": "S6",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     194,
+     200
+    ],
+    "texto": "The `enableSqlExpressions` function is named to indicate it returns whether SQL expressions should be enabled, but it always returns `false`. It assigns `enabled := !h.features.IsEnabledGlobally(featuremgmt.FlagSqlExpressions)` and then returns `false` in both branches, so the feature flag is effectively ignored and callers always see the \"not implemented\" path. The implementation should return the actual feature-flag state (e.g. `return h.features.IsEnabledGlobally(featuremgmt.FlagSqlExpressions)`) so the function name matches its behavior."
+   },
+   {
+    "id": "S7",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     194,
+     200
+    ],
+    "texto": "The `enableSqlExpressions` helper is logically inverted/buggy: it computes `enabled := !h.features.IsEnabledGlobally(featuremgmt.FlagSqlExpressions)`, then returns `false` in both branches. As a result, `ReadQuery` rejects every SQL expression with \"sqlExpressions is not implemented\", even when `FlagSqlExpressions` is globally enabled. The function should return the actual enabled state of the flag (or at least return `true` when the flag is enabled) so the feature gate matches its intended contract."
+   },
+   {
+    "id": "S8",
+    "file": "pkg/expr/sql/db.go",
+    "lines": [
+     9,
+     26
+    ],
+    "texto": "`NewInMemoryDB()` now returns a `DB` whose `TablesList`, `RunCommands`, and `QueryFramesInto` always return \"not implemented\". This changes the behavior contract from the previous real DuckDB implementation. Callers such as `pkg/expr/sql/parser.go:TablesList` and `pkg/expr/sql_command.go:Execute` were updated to use the local symbol but still depend on it actually parsing SQL and running queries, so SQL expressions will always fail. Either restore a working implementation or update every consumer to handle the permanent failure explicitly."
+   },
+   {
+    "id": "S9",
+    "file": "pkg/expr/sql/db.go",
+    "lines": [
+     9,
+     26
+    ],
+    "texto": "NewInMemoryDB returns a DB whose methods always return \"not implemented\". pkg/expr/sql/parser.go and pkg/expr/sql_command.go call these methods expecting real SQL parsing and execution, so SQL expressions will always fail. Either implement the methods or update callers to match the stub contract."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "advanced-sql-analytics-framework-grafana-codex#06",
+    "descricao": "The variable in TablesList is still named duckDB although it no longer holds a DuckDB instance.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/expr/sql/parser.go",
+      "lines": [
+       22,
+       26
+      ],
+      "texto": "After replacing `duck.NewInMemoryDB()` with local `NewInMemoryDB()` and removing the duck import, the local `duckDB` still carries the old implementation name though it is no longer a duck DB. Rename to `db`/`sqlDB` (as done in sql_command.go) so identifier matches code."
+     }
+    ]
+   },
+   {
+    "issueId": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+    "descricao": "enableSqlExpressions returns false on both branches, so ReadQuery rejects every SQL expression query as not implemented even when the sqlExpressions feature flag is enabled.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "advanced-sql-analytics-framework-grafana-codex#oph-02",
+    "descricao": "The variable `enabled` in enableSqlExpressions holds the negated flag value, so it is true when SQL expressions are disabled and the name states the opposite of its value.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "advanced-sql-analytics-framework-grafana-codex#muse13-01",
+    "descricao": "NewInMemoryDB returns a stateless stub whose methods all return 'not implemented', so its name misleads callers expecting a working in-memory database.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "async-import-of-the-appstore-packages-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "820d7fa87e0c824c5dee8082a33efadb1a2566f7",
+  "base": "ba9688a04a8398c9a8332ee7061bfae2f2efd524",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/app-store/vital/lib/reschedule.ts",
+    "lines": [
+     125,
+     134
+    ],
+    "texto": "WHAT: The `forEach` callback was changed to async, but `forEach` does not await async callbacks, so the surrounding `try/catch` cannot catch rejections from `getCalendar`, `deleteEvent`, or `deleteMeeting`. WHY: Errors that were previously caught synchronously now become unhandled promise rejections, bypassing the logger and potentially crashing the process. HOW: Replace `forEach(async \u2026)` with `for\u2026of` and await each operation inside the loop."
+   },
+   {
+    "id": "S2",
+    "file": "packages/app-store/wipemycalother/lib/reschedule.ts",
+    "lines": [
+     125,
+     134
+    ],
+    "texto": "WHAT: The `forEach` callback was changed to async, but `forEach` does not await async callbacks, so the surrounding `try/catch` cannot catch rejections from `getCalendar`, `deleteEvent`, or `deleteMeeting`. WHY: Errors that were previously caught synchronously now become unhandled promise rejections, bypassing the logger and potentially crashing the process. HOW: Replace `forEach(async \u2026)` with `for\u2026of` and await each operation inside the loop."
+   },
+   {
+    "id": "S3",
+    "file": "packages/trpc/server/routers/viewer/bookings.tsx",
+    "lines": [
+     553,
+     567
+    ],
+    "texto": "WHAT: The `forEach` callback was changed to async so `getCalendar` could be awaited, but `forEach` does not await async callbacks, so rejections from `getCalendar`, `deleteEvent`, and `deleteMeeting` escape tRPC's error handling. WHY: Errors that previously propagated synchronously to the tRPC handler now become unhandled promise rejections, and the cancellation operations are fire-and-forget. HOW: Replace `forEach(async \u2026)` with `for\u2026of` and await each operation, or collect the promises with `map` and `await Promise.all(...)`."
+   },
+   {
+    "id": "S4",
+    "file": "packages/core/CalendarManager.ts",
+    "lines": [
+     27,
+     30
+    ],
+    "texto": "getCalendarCredentials remains synchronous but calls the now-async getCalendar, so the returned calendar field is a Promise instead of a Calendar. This changes the contract of the exported helper. Make getCalendarCredentials async and await getCalendar(credential) so the shape of the returned objects stays the same (only the function itself becomes async), or explicitly document and verify every consumer awaits item.calendar."
+   },
+   {
+    "id": "S5",
+    "file": "packages/app-store/vital/lib/reschedule.ts",
+    "lines": [
+     124,
+     132
+    ],
+    "texto": "Converting the forEach callback to async makes the returned promises fire-and-forget: rejections from getCalendar or deleteEvent are unhandled and the caller cannot await completion. Replace with Promise.all(map(...)) and await each operation so errors propagate and deletions complete before proceeding."
+   },
+   {
+    "id": "S6",
+    "file": "packages/app-store/wipemycalother/lib/reschedule.ts",
+    "lines": [
+     124,
+     132
+    ],
+    "texto": "Same as the vital reschedule path: the async forEach callback ignores the promises it returns, so getCalendar or deleteEvent failures become unhandled rejections and the operation may not finish before the handler returns. Use Promise.all(map(...)) and await each step."
+   },
+   {
+    "id": "S7",
+    "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+    "lines": [
+     458,
+     466
+    ],
+    "texto": "The async forEach callback means the surrounding code does not wait for the recurring-booking calendar updates, and any rejection from getCalendar or updateEvent is unhandled. Replace with a for...of loop so updates are awaited and errors propagate."
+   },
+   {
+    "id": "S8",
+    "file": "packages/trpc/server/routers/viewer/bookings.tsx",
+    "lines": [
+     552,
+     560
+    ],
+    "texto": "The async callback passed to forEach returns a promise that forEach ignores. Rejections from getCalendar or deleteEvent become unhandled, and the router cannot guarantee the deletion completes before responding. Replace with Promise.all(map(async ...)) and await the delete call."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "async-import-of-the-appstore-packages-cal-com#02",
+    "descricao": "Async callbacks passed to forEach after getCalendar became async are never awaited, so calendar and video cancellations run fire-and-forget, may not finish, and their errors escape the surrounding try/catch as unhandled rejections.",
+    "textoGolden": "The code uses forEach with async callbacks, which causes asynchronous operations (e.g., calendar/video event deletions, payment refunds) to run concurrently without being awaited. This 'fire-and-forget' behavior leads to unhandled promise rejections, race conditions, and incomplete cleanup, as surrounding try-catch blocks cannot properly handle errors from these unawaited promises. Replace forEach with for...of loops or Promise.all() with map() to ensure proper sequential execution and error handling.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/vital/lib/reschedule.ts",
+      "lines": [
+       125,
+       128
+      ],
+      "texto": "The async forEach callback moves calendar factory exceptions outside the surrounding try/catch because forEach discards its returned promise. An invalid encrypted Exchange credential throws during CalendarService construction, now producing an unhandled rejection while Reschedule continues and returns success instead of logging the error; the identical regression occurs in wipemycalother/lib/reschedule.ts. Await Promise.all over bookingRefsFiltered.map(async ...) inside the try block, or use an awaited for...of loop, so factory and deletion failures reach the catch."
+     },
+     {
+      "file": "packages/app-store/vital/lib/reschedule.ts",
+      "lines": [
+       125,
+       128
+      ],
+      "texto": "The new async forEach callback is not awaited. If getCalendar rejects (for example, the dynamically imported calendar module fails to load or its service constructor throws), the callback produces a rejected promise that forEach discards; the surrounding try/catch cannot catch it. Previously a synchronous getCalendar failure reached that catch. Await Promise.all(bookingRefsFiltered.map(async ...)) or use an awaited for...of loop so these failures remain handled and calendar cleanup completes before rescheduling continues. Apply the same fix to the equivalent changed loop in wipemycalother/lib/reschedule.ts."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       458,
+       470
+      ],
+      "texto": "WHAT: credentials.filter(...).forEach(async (credential) => { await getCalendar; apiDeletes.push(...) }) pushes to apiDeletes asynchronously after outer code consumes it. WHY: outer apiDeletes is awaited elsewhere while async callbacks have not yet pushed, so recurring-event deletions are lost/partial and errors are unobserved. HOW: replace with for...of with await or collect promises via map + await Promise.all."
+     }
+    ]
+   },
+   {
+    "issueId": "async-import-of-the-appstore-packages-cal-com#sncc-01",
+    "descricao": "Each import(...) in the appStore object literal runs when app-store/index.ts is imported, so all integrations still load at startup instead of lazily, while every entry becomes a promise.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "9966ec5a13e331659c3ea00981f9b11b0faf821f",
+  "base": "fd358e8a388939959369f08f616e29552cdaf96e",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     335,
+     342
+    ],
+    "texto": "WHAT: SimpleQueueProcessingStrategy.close() and terminate() shut down the FixedQueuePool, but the pool is created and owned by ResultsStrategyFactory. WHY: Arroyo calls strategy.close() on partition revocation and factory.shutdown() at consumer shutdown; closing a per-strategy object destroys the factory's shared pool, so subsequent create_with_partitions() calls reuse a dead pool and the factory.shutdown() double-closes it. HOW: Remove self.queue_pool.shutdown() from close()/terminate() in SimpleQueueProcessingStrategy and let ResultsStrategyFactory.shutdown() manage the pool lifecycle, matching parallel_executor."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     144,
+     149
+    ],
+    "texto": "WHAT: The SimpleQueueProcessingStrategy docstring promises \"Only commits offsets after successful processing\", but OrderedQueueWorker.run() calls offset_tracker.complete_offset() in a finally block even when result_processor raises an exception. WHY: Offsets for failed messages are marked complete and will be committed as soon as all prior contiguous offsets finish, breaking the documented guarantee. If the intent is truly to skip failed offsets, move complete_offset out of finally and only call it on success (or add an explicit failure tracker)."
+   },
+   {
+    "id": "S3",
+    "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+    "lines": [
+     1921,
+     1924
+    ],
+    "texto": "WHAT: test_thread_queue_parallel_error_handling asserts that no offsets are committed after a processing failure, but the implementation completes offsets for failed items in a finally block and then commits past them. WHY: The test will be flaky/incorrect because both offsets 100 and 101 complete, so get_committable_offsets() will return offset 101 (committed as 102 by commit_offsets). The assertion `len(committed_offsets) == 0 or test_partition not in committed_offsets` will fail whenever the commit loop wakes up before the assertion. Align the test with the intended semantics: either expect commit offset 102 (move past failures) or change the implementation to not complete failed offsets."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     184,
+     186
+    ],
+    "texto": "WHAT: FixedQueuePool creates unbounded queue.Queue() instances with no maxsize. WHY: The docstring claims \"Natural backpressure when queues fill up\", but put() never blocks, so when ingestion outpaces processing the queues grow without bound and can consume unbounded memory. HOW: Pass maxsize=N to queue.Queue() and rely on the blocking put() to apply backpressure, or document that backpressure must come from the upstream Arroyo strategy."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     88,
+     93
+    ],
+    "texto": "WHAT: OffsetTracker.get_committable_offsets() iterates range(start, max_offset + 1) to find the highest contiguous completed offset. WHY: If offsets are sparse (log-compacted topic, skipped filtered messages), the loop runs in O(offset gap) rather than O(backlog), which can become very large and stalls the commit thread. HOW: Sort the tracked offsets and walk the sorted list to find the highest contiguous completed offset, which is O(n log n) in the number of tracked offsets."
+   },
+   {
+    "id": "S6",
+    "file": "queue_consumer.py",
+    "lines": [
+     204,
+     345
+    ],
+    "texto": "Review incomplete: the tail of queue_consumer.py (lines 204-345) has not been read yet. Per the coverage rules, this pending line range must be read via readFile before a final verdict can be given; no contract mismatch has been identified in this range so far."
+   },
+   {
+    "id": "S7",
+    "file": "result_consumer.py",
+    "lines": [
+     210,
+     280
+    ],
+    "texto": "Review incomplete: the tail of result_consumer.py (lines 210-280) has not been read yet. Per the coverage rules, this pending line range must be read via readFile before a final verdict can be given; no contract mismatch has been identified in this range so far."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#01",
+    "descricao": "Claims OffsetTracker.get_committable_offsets requires every integer offset to exist, so Kafka offset gaps permanently block commits for the partition and per-partition state is never cleared on rebalance.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       100,
+       105
+      ],
+      "texto": "Offsets are only tracked for messages that were submitted, and there is no partition revoke handling. Contiguity is checked with `range(start, max_offset+1)`, so any offset gap (compacted topics, transactional markers, or offsets filtered out upstream) permanently blocks commits for that partition. The `last_committed`, `all_offsets` and `outstanding` state is never cleared on rebalance, so stale state survives partition reassignment. Treat gaps as committable once all lower tracked offsets are complete, and clear per-partition state when partitions are revoked."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       86,
+       93
+      ],
+      "texto": "The commit scan assumes consecutive Kafka offsets and breaks at the first offset that is not in all_offsets. A permanent offset gap (compacted or transactional records) then blocks commits for that partition forever. Track the submitted offsets in sorted order and commit up to the highest offset below the lowest outstanding one, rather than requiring every integer in between to be present."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       86,
+       93
+      ],
+      "texto": "Determine the commit boundary from received offsets rather than requiring every integer in this range to exist. Kafka offsets need not be consecutive: if 100, 102 and 103 are delivered and completed, this scan stops at the nonexistent 101 even though there is no unfinished record. Conversely, after committing 100 and removing it, the next scan starts at 102 and commits past the gap, contradicting the added gap tests. Iterate received offsets in sorted order and stop at the first outstanding record; add a test covering legitimate skipped Kafka offsets across multiple commit cycles."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03",
+    "descricao": "OrderedQueueWorker marks a work item's offset complete in a finally block even when processing raised, so failed messages are committed and dropped, contradicting the documented guarantee of committing only after successful processing.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       144,
+       149
+      ],
+      "texto": "The worker marks the offset complete in the `finally` block even when `result_processor(...)` raises, so a message whose handling failed is reported as committable and its offset is committed (it will never be retried). This contradicts the strategy's own guarantee 'Only commits offsets after successful processing' and the new test `test_thread_queue_parallel_error_handling`, which asserts the partition is not committed after a failure. Only call `complete_offset` on the success path (or track failed offsets separately) so failures are not silently skipped."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       142,
+       149
+      ],
+      "texto": "The worker marks the offset complete in `finally` even when `result_processor` raised an exception, so a failed item's offset is reported as committable and gets committed by the commit loop. This contradicts the strategy's documented guarantee 'Only commits offsets after successful processing' and the contract asserted in test_results_consumer.py (test_thread_queue_parallel_error_handling, which expects the failed partition NOT to be committed): the failed message is committed past and never retried. Track success separately and only call `complete_offset` when processing succeeded (or make the failure explicit so the offset is withheld/retried)."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       144,
+       149
+      ],
+      "texto": "The failed item's offset is completed unconditionally in the `finally` block, so `complete_offset` runs even when `result_processor` raised. This breaks the class's documented guarantee ('Only commits offsets after successful processing', line 254): the commit loop then advances past a message that was never successfully processed, silently dropping it (and, per the PR's own test_thread_queue_parallel_error_handling, a commit is produced where none is expected). Only call `offset_tracker.complete_offset(...)` on the success path (i.e. after `result_processor` returns normally), or explicitly decide and document the at-most-once semantics; do not complete on the exception path."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#04",
+    "descricao": "test_thread_queue_parallel_error_handling's docstring says errors must not block commits for other messages, but the test asserts that nothing was committed, so it does not verify the behaviour it describes.",
+    "textoGolden": "The test test_thread_queue_parallel_error_handling has a docstring that doesn't match the test implementation.",
+    "comentarios": [
+     {
+      "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+      "lines": [
+       1911,
+       1922
+      ],
+      "texto": "The commit assertion contradicts the test's own docstring and cannot fail for the reason it claims. The docstring says \"errors in processing don't block offset commits for other messages\", but the body asserts `len(committed_offsets) == 0 or test_partition not in committed_offsets` \u2014 i.e. it passes only when nothing is committed. In queue_consumer.py ordered worker's `finally` calls `complete_offset` even after result_processor raises (lines 148-149), so offset 100 should be committable and offset 101 should advance the commit; if the whole commit path were removed (commits blocked entirely) the test would still pass. Assert the positive behaviour instead: e.g. that the failing message's offset was still completed so commits progressed (expect `committed_offsets[test_partition] == 102`, matching the follow-on offset of the successfully processed message)."
+     },
+     {
+      "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+      "lines": [
+       1874,
+       1924
+      ],
+      "texto": "test_thread_queue_parallel_error_handling claims errors don't block commits but asserts len(committed)==0 / not in, and waits only for total==0+sleep(0.2) while commit loop is 1.0s. It passes if commits are correctly made (checked before loop fires) and if commits are never made. Wait for commit condition and assert contiguous commit includes both offsets despite the exception."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#05",
+    "descricao": "The error-handling test asserts no commit happened after only a 0.2s sleep while the commit loop runs every second, so it passes without ever observing whether a failed offset gets committed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+      "lines": [
+       1915,
+       1922
+      ],
+      "texto": "The error-handling test can pass even when failed messages are committed. It waits for two processor calls, sleeps only 0.2 seconds, and asserts that no commit has happened, whereas _commit_loop waits 1 second. OrderedQueueWorker currently completes the failed offset in finally, so the unsafe commit can occur after this assertion. Synchronize with an actual commit-loop iteration before asserting that it cannot advance past the failed offset."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+    "descricao": "FixedQueuePool uses unbounded queues and the strategy never applies backpressure, so when workers fall behind the consumer keeps polling and queued work items grow memory without limit, contrary to the documented backpressure guarantee.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       184,
+       185
+      ],
+      "texto": "Each worker queue is created unbounded (queue.Queue() with no maxsize) although the class docstring promises 'Natural backpressure when queues fill up' and the strategy claims to guarantee backpressure. With no bound and no MessageRejected raised from submit(), a slow group continues to accumulate items in its queue while the consumer keeps polling, so memory grows without limit under a sustained backlog \u2014 the opposite of the intended protection. Fix: give the queues a maxsize and raise/return MessageRejected (or otherwise propagate backpressure to the caller) when a queue is full."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       246,
+       255
+      ],
+      "texto": "The `SimpleQueueProcessingStrategy` docstring promises \"Natural backpressure when queues fill up\", but the queues this strategy drives are unbounded: `FixedQueuePool` creates each one as `queue.Queue()` with no maxsize (line 185), and `submit()` puts items unconditionally. Nothing ever blocks, so no backpressure exists. Either bound the queues (pass a `maxsize` and handle `queue.Full` / block in `submit`) or correct the docstring so it does not advertise a guarantee the code does not provide."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       184,
+       185
+      ],
+      "texto": "The pool creates unbounded queues, while strategy submit always accepts messages and poll never applies backpressure. When a queue's worker is slow or ingestion exceeds processing capacity, queued WorkItems retain both decoded results and original Kafka messages without any limit, causing growing memory consumption and eventual consumer OOM. Bound queued/in-flight work and raise Arroyo MessageRejected when capacity is reached, ensuring that rejection is not swallowed by the generic submit exception handler."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10",
+    "descricao": "Graceful shutdown sets each worker's shutdown flag before draining, so workers stop with items still queued, and close() stops the commit thread first, so finished work is not committed and gets replayed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       231,
+       243
+      ],
+      "texto": "WHAT: FixedQueuePool.shutdown sets worker.shutdown=True while OrderedQueueWorker.run loops on while not self.shutdown, so workers exit without draining queued WorkItems even though queues are shut down with immediate=False. WHY: Graceful shutdown silently drops queued items and leaves their offsets in outstanding forever, causing reprocessing/duplicates and failing the claimed graceful-shutdown guarantee. HOW: Remove the shutdown-flag short-circuit and let workers drain until queue.ShutDown, e.g. loop unconditionally and break only on ShutDown."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       335,
+       345
+      ],
+      "texto": "close() stops the commit thread and shuts down workers before draining accepted work, and join() only repeats close() instead of waiting for processing and making a final commit. Pool shutdown sets worker.shutdown before workers can drain their queues, so assignment revocation abandons queued results and completed in-flight work is not finally committed, causing replay and allowing unfinished old work to overlap a new owner. Make close() stop acceptance without blocking, then have join() drain accepted work within its timeout and commit completed offsets before releasing workers."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       233,
+       238
+      ],
+      "texto": "Do not set worker.shutdown before draining the queues during graceful shutdown. If a worker is processing A while B is queued, shutdown sets the flag; after A finishes, the worker exits at `while not self.shutdown` without ever retrieving B. Calling queue.shutdown(immediate=False) does not override that loop condition. Drain accepted work before stopping workers, and keep committing available until that drain completes; currently close stops the commit thread before the workers as well, so even work finished during shutdown is not finally committed."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+    "descricao": "The strategy's close() shuts down the factory-owned shared queue pool, so after a partition rebalance the next strategy reuses a dead pool; submissions fail and the error handler marks their offsets complete, committing messages that were never processed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       335,
+       338
+      ],
+      "texto": "SimpleQueueProcessingStrategy.close() shuts down the FixedQueuePool, but that pool is a singleton owned by the factory (created once in ResultsStrategyFactory.__init__ and never recreated). Arroyo calls strategy.close() then join() on every assignment revocation/rebalance, and the factory's create_with_partitions is called again for the next assignment; the new strategy then reuses the already-shut-down queue_pool. Because q.shutdown(immediate=False) makes subsequent put() raise queue.ShutDown, submit()'s except branch (lines 317-325) swallows it and marks the offset complete, so after any rebalance every message is committed as processed without ever being handled \u2014 silent data loss. Fix: either let the factory own the pool lifecycle (don't shut it down from the strategy's close) and create a fresh pool per create_with_partitions, or reset/recreate factory.queue_pool when the strategy is closed."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       335,
+       342
+      ],
+      "texto": "WHAT: SimpleQueueProcessingStrategy.close/terminate shuts down the factory-owned shared FixedQueuePool. WHY: ResultsStrategyFactory creates one queue_pool and hands it to every strategy from create_with_partitions, so Arroyo rebalance (close old strategy, create new one reusing factory.queue_pool) reuses a dead pool with joined workers and shut-down queues, stalling all further processing. HOW: Make pool lifecycle owned only by the factory: strategy close should only stop its commit thread, not call queue_pool.shutdown()."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       335,
+       345
+      ],
+      "texto": "SimpleQueueProcessingStrategy.close(), terminate() and join() shut down the FixedQueuePool, but that pool is created once by ResultsStrategyFactory and shared by every strategy it creates. After a rebalance, Arroyo closes the old strategy and then calls create_with_partitions again, which reuses the dead pool. Messages then fail to enqueue, and the submit() exception handler marks them complete, so their offsets get committed without the messages being processed. The strategy should only stop its own commit thread. The pool should be shut down only by factory.shutdown(), or the pool should be created per strategy."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#12",
+    "descricao": "The strategy invokes Arroyo's commit callback from a background thread rather than from submit/poll on the consumer thread, so commits can race with polling and partition revocation on a non-thread-safe consumer.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       273,
+       291
+      ],
+      "texto": "`commit_function` is called from the background commit thread, but arroyo's commit callback is expected to be called from the main consumer thread, and the Kafka consumer is not thread-safe. Committing from another thread risks races with polling and with rebalances."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#15",
+    "descricao": "The WorkItem docstring says the original message is kept for offset tracking, but offset tracking only uses partition and offset and the message field is never used.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       24,
+       31
+      ],
+      "texto": "The `WorkItem` docstring says it \"includes the original message for offset tracking\", but the `message` field is never used for offset tracking \u2014 `OffsetTracker` and the commit loop only ever read `partition`/`offset`, and `submit()` even re-derives the offset from `message.value` rather than from the stored `message`. Update the docstring to describe what the field is actually for (or remove the unused field) so it does not misdescribe the dataclass contract."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       24,
+       31
+      ],
+      "texto": "`WorkItem.message` is declared with the comment 'includes the original message for offset tracking' and is populated in `SimpleQueueProcessingStrategy.submit`, but nothing ever reads it \u2014 offset tracking uses the separate `partition`/`offset` fields. The declared purpose does not match any actual use, so the field (and the extra reference to each Kafka message it keeps alive) is dead; either use it for offset tracking or remove it."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#16",
+    "descricao": "The tests named for concurrent processing across groups only check that all items were processed and all groups seen, so a fully serial implementation would pass and concurrency is never verified.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py",
+      "lines": [
+       137,
+       173
+      ],
+      "texto": "Test named/docstringed \"Test that different groups are processed concurrently\" never verifies concurrency. The body only asserts all 6 items ran and that three distinct group numbers were seen \u2014 a single worker draining one queue, or a fully serial FixedQueuePool, would satisfy both assertions. Either measure actual overlap (e.g. have result_processor block on a barrier/event until all three groups have entered, and fail on timeout) or drop the concurrency claim from the name/docstring."
+     },
+     {
+      "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+      "lines": [
+       1780,
+       1822
+      ],
+      "texto": "test_thread_queue_parallel_concurrent_subscriptions claims to verify that different subscriptions are processed concurrently, but the only assertion is `mock_processor_call.call_count == 2`, which a strictly serial implementation also satisfies. Add a real concurrency signal (e.g. a barrier in the mocked processor that requires both calls to be in flight simultaneously before either returns), otherwise this test cannot detect loss of parallelism."
+     },
+     {
+      "file": "tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py",
+      "lines": [
+       137,
+       173
+      ],
+      "texto": "test_concurrent_processing_across_groups claims concurrent processing but only asserts 6 items processed and 3 groups seen. A serial/single-queue implementation would still pass. Verify overlap (blocking processor + timing/thread IDs) or remove concurrency claim."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#17",
+    "descricao": "The strategy ordering test submits identical messages and only checks the count processed, so it cannot detect out-of-order processing within a group.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py",
+      "lines": [
+       302,
+       312
+      ],
+      "texto": "The strategy ordering test submits five identical decoded results for sub1 and only asserts their count. Processing them in reverse order would still pass. Give each message a distinguishable sequence value and assert the exact processed sequence, so this tests ordering through SimpleQueueProcessingStrategy rather than only delivery."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#18",
+    "descricao": "The graceful-shutdown test only asserts that the factory cleared its queue_pool reference, which shutdown always does, so it does not verify that pending work is drained or workers stop.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+      "lines": [
+       2004,
+       2005
+      ],
+      "texto": "This does not verify graceful shutdown: factory.shutdown unconditionally clears queue_pool after calling pool.shutdown, so the assertion passes even if pending messages are abandoned or worker threads remain alive. Retain the pool reference and assert that all submitted work completed and its workers stopped; the current worker shutdown flag can stop workers without draining their queues."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#20",
+    "descricao": "The polling bound max_wait = 50 is repeated as a magic number across the thread-queue-parallel tests instead of a named constant.",
+    "textoGolden": "The magic number 50 for max_wait is used repeatedly throughout the tests. Consider extracting this as a named constant to improve maintainability.",
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-01",
+    "descricao": "OffsetTracker.get_committable_offsets starts scanning at max(last_committed + 1, min_offset); after mark_committed prunes offsets, a gap is skipped on the next cycle, so offsets are committed past a missing offset, contrary to the 'highest contiguous offset' guarantee.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-02",
+    "descricao": "The test's wait loop stops at the first recorded commit but asserts the committed offset is exactly 105, so a commit fired mid-processing can record a lower offset and make the test flaky.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#oph-01",
+    "descricao": "The per-worker queue_depth gauge is tagged only with identifier, so all queues report into one series and the metric shows whichever queue reported last.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#musep-01",
+    "descricao": "SimpleQueueProcessingStrategy.terminate signals the commit thread without joining it, so the background thread is claimed to keep committing offsets for revoked partitions after terminate.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#muse13-02",
+    "descricao": "SimpleQueueProcessingStrategy passes FilteredPayload to decode_payload, whose assert raises instead of returning None, so filtered messages go through the error path.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "ce2dcc537b4b1f98a335e88cfe8e0b804483252a",
+  "base": "85737f52b59aa2e3403c9b8e48acf71ccc5bfae3",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "services/src/main/java/org/keycloak/forms/login/freemarker/model/RecoveryAuthnCodeInputLoginBean.java",
+    "lines": [
+     17,
+     19
+    ],
+    "texto": "WHAT: credentialModelOpt.get() is called without checking isPresent(), so a missing recovery-codes credential in both federated and local storage throws NoSuchElementException. WHY: This crashes the login form rendering when the credential is absent, instead of failing gracefully or redirecting to setup. HOW: Check credentialModelOpt.isPresent() before .get(), and throw a meaningful runtime exception or redirect if the credential is missing."
+   },
+   {
+    "id": "S2",
+    "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java",
+    "lines": [
+     80,
+     89
+    ],
+    "texto": "WHAT: After resolving a credential through RecoveryAuthnCodesUtils.getCredential, the code removes an exhausted credential via authenticatedUser.credentialManager().removeStoredCredentialById(...), which only removes locally stored credentials. WHY: When the credential lives in federated/user storage, removeStoredCredentialById cannot remove it, so the exhausted credential remains and the user is stuck with an unremovable credential or spurious re-configuration prompts. HOW: Distinguish federated vs local credentials; for federated credentials invoke disableCredentialType(RecoveryAuthnCodesCredentialModel.TYPE) or route removal through the user storage provider instead of removeStoredCredentialById."
+   },
+   {
+    "id": "S3",
+    "file": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+    "lines": [
+     117,
+     125
+    ],
+    "texto": "WHAT: createRecoveryCodesCredential serializes the raw generated recovery codes to JSON and passes them as the challengeResponse of a UserCredentialModel to user storage, while the local-storage path stores hashed codes through RecoveryAuthnCodesCredentialProvider. WHY: A user storage provider that persists the CredentialInput value (as the test BackwardsCompatibilityUserStorage does) stores recovery codes in plain text, exposing high-value backup credentials if the external store or its backups are compromised. HOW: Pass the codes in a form that lets the storage provider hash them before persistence, or document that user storage providers must hash the value themselves and update the test provider to hash before storing and compare hashed values during validation."
+   },
+   {
+    "id": "S4",
+    "file": "server-spi/src/main/java/org/keycloak/models/utils/RecoveryAuthnCodesUtils.java",
+    "lines": [
+     40,
+     43
+    ],
+    "texto": "The recovery code verification uses direct String.equals() on hashed secrets, which is vulnerable to timing attacks. Use a constant-time comparison function (e.g., MessageDigest.isEqual) to compare the hashed input against each stored hashed recovery code."
+   },
+   {
+    "id": "S5",
+    "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+    "lines": [
+     326,
+     341
+    ],
+    "texto": "The recovery key validation compares raw input recovery codes against stored values using key.equals(input.getChallengeResponse()) inside a stream, which performs a non-constant-time comparison and leaks timing information. Use a constant-time comparison function for each candidate recovery code."
+   },
+   {
+    "id": "S6",
+    "file": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+    "lines": [
+     115,
+     131
+    ],
+    "texto": "createRecoveryCodesCredential passes the raw generatedCodes JSON to user storage via updateCredential, while falling back to the credentialModel (which holds hashed codes) for local storage. This creates a representation split: user-storage providers receive and typically store plaintext recovery codes, whereas the local DB provider stores hashed codes. The validation path in the test user storage then compares raw input to raw stored codes, inconsistent with the normal hashed validation. The method should pass equivalent credential material to both paths, e.g., by using the credential model's serialized/hashed data for user storage as well, or by documenting and enforcing that user-storage providers must hash the received codes."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#01",
+    "descricao": "The test user-storage provider validates recovery codes without consuming the used code, so the same code can be replayed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       326,
+       340
+      ],
+      "texto": "WHAT: The new recovery-codes branch of isValid only checks whether the submitted code appears in the stored list and never removes the consumed entry. WHY: Unlike the local RecoveryAuthnCodesCredentialProvider.isValid (which calls removeRecoveryAuthnCode()+updateStoredCredential), the federated path never consumes a code and allCodesUsed() can never become true, so a used recovery code remains valid and can be replayed indefinitely. HOW: On a successful match, remove that entry from the stored codes (rewrite recoveryCodes.credentialData), mirroring the local provider's consume-on-success semantics."
+     },
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       340,
+       340
+      ],
+      "texto": "The new recovery-code validator accepts any code in the original list without consuming the accepted code. Repeating a successful login with the same code succeeds indefinitely, while getCredentials reconstructs all original codes so the login form never advances or detects exhaustion. Validate the next unused code and persist its consumption before returning success."
+     },
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       340,
+       340
+      ],
+      "texto": "The new federated recovery-code validator accepts any code in the original list but never removes a successfully used code from myUser.recoveryCodes. Consequently the same recovery code remains valid on subsequent logins, and getCredentials reconstructs the full original set every time. Consume and persist the successfully validated code (and test a second login/replay), so federated recovery codes retain their one-time semantics."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#02",
+    "descricao": "getCredentials rebuilds the recovery-codes credential without copying the stored credential id, so the returned federated credential has a null id and cannot be targeted by id-based removal.",
+    "textoGolden": "After creating the RecoveryAuthnCodesCredentialModel, consider setting its id from the stored credential (e.g., myUser.recoveryCodes.getId()); otherwise getId() will be null and downstream removal by id (e.g., removeStoredCredentialById in the authenticator flow) may not work.",
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       237,
+       242
+      ],
+      "texto": "WHAT: getCredentials builds the RecoveryAuthnCodesCredentialModel via createFromValues but never sets its id from the stored myUser.recoveryCodes.getId() (createFromValues does not populate id). WHY: The returned federated model has a null id, so callers that identify/delete the credential by id \u2014 e.g. RecoveryAuthnCodesFormAuthenticator.removeStoredCredentialById(recoveryCodeCredentialModel.getId()) when all codes are used, or federated-credential deletion via getFederatedCredentialsStream \u2014 cannot target the actual credential. HOW: call model.setId(myUser.recoveryCodes.getId()) after createFromValues."
+     },
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       237,
+       242
+      ],
+      "texto": "getCredentials rebuilds the recovery-code model without copying the ID assigned during updateCredential. createFromValues does not assign an ID, so the exposed federated credential has a null ID and CredentialDeleteHelper cannot resolve it by the stored credential ID for account deletion. Copy myUser.recoveryCodes.getId() to the reconstructed model before returning it."
+     },
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       237,
+       242
+      ],
+      "texto": "The CredentialModel returned from getCredentials for recovery codes is built with createFromValues and never gets the stored credential's id (myUser.recoveryCodes.getId()). RecoveryAuthnCodesFormAuthenticator later calls removeStoredCredentialById(model.getId()) once all codes are used, and this would pass a null id. Fix: call model.setId(myUser.recoveryCodes.getId()) after creating the model."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#05",
+    "descricao": "Creating recovery codes in external storage does not remove a previously stored local recovery-codes credential, and validation falls back to local storage, so the replaced codes still authenticate.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+      "lines": [
+       125,
+       129
+      ],
+      "texto": "Successful recovery-code creation in external storage leaves any existing locally stored recovery-code credential active. For a federated user who previously stored codes locally and now has an external provider supporting this type, regeneration no longer calls RecoveryAuthnCodesCredentialProvider.createCredential's replacement cleanup; UserCredentialManager.isValid falls back to the local validator when external validation rejects an old code, so the supposedly replaced codes still authenticate. Remove the previous local recovery-code credential after successful external creation."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#06",
+    "descricao": "Exhausted recovery codes are removed with removeStoredCredentialById, which only covers local storage, so a federated recovery-codes credential is never removed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java",
+      "lines": [
+       80,
+       88
+      ],
+      "texto": "RecoveryAuthnCodesUtils.getCredential() can now return a credential from user storage (federated), but this code still calls removeStoredCredentialById() on it once all codes are used. That removal only targets local stored credentials, so a federated credential may not be removed. The user could then be left with an exhausted credential in user storage. Remove federated credentials through the federated path, or confirm the removal reaches user storage."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java",
+      "lines": [
+       80,
+       88
+      ],
+      "texto": "RecoveryAuthnCodesUtils.getCredential can now return a credential from user storage, but exhausted codes are cleaned up with removeStoredCredentialById, which only targets the local DB. For a federated credential (possibly with a null id), the exhausted credential is never removed or the call misbehaves, so the user keeps a dead credential. Remove federated credentials through a path that covers user storage, for example by checking where the credential came from."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java",
+      "lines": [
+       80,
+       89
+      ],
+      "texto": "RecoveryAuthnCodesUtils.getCredential can now return a federated credential. The authenticator still removes an exhausted one with removeStoredCredentialById(getId()), which only deletes from the local store, and the federated model's id may be null. Remove the credential through the path that matches where it was found, for example by checking whether it came from the federated stream and using the federated removal."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-01",
+    "descricao": "Looking up recovery codes now always queries the federated provider first, which for LDAP users adds an LDAP round-trip and can throw IllegalStateException, failing recovery-code login with a 500.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-03",
+    "descricao": "An error log in the test user storage hard-codes the credential type as 'recovery-codes' instead of using RecoveryAuthnCodesCredentialModel.TYPE ('recovery-authn-codes').",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "authzservice-improve-authz-caching-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "7562f37880367411a62304bcdcdc178bced23906",
+  "base": "5634ca44f799a82161f0401dadc286452f3bdbf8",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/services/authz/rbac/cache.go",
+    "lines": [
+     30,
+     32
+    ],
+    "texto": "WHAT: The denial cache key concatenates resource name and parent folder using `_` separators without escaping them. WHY: A resource named `x_y` inside folder `z` produces the same key as a resource named `x` inside folder `y_z`, so a denial for one resource can be incorrectly returned for the other. HOW: Encode or escape underscores in `name` and `parent` before building the key, or use a structured key format (e.g., JSON/protobuf) that cannot collide."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/services/authz/rbac/service.go",
+    "lines": [
+     153,
+     155
+    ],
+    "texto": "WHAT: The denial cache stores negative authorization decisions for `shortCacheTTL` (30 seconds) and is never invalidated. WHY: If a user is denied access, then an admin grants permission to that exact resource, subsequent Check calls hit the cached denial and return false until the TTL expires, contradicting the PR goal of letting users access newly authorized dashboards and folders. HOW: Invalidate the matching denial cache entry whenever the user's permissions for the action are refreshed or updated; alternatively, skip denial caching for wildcard-capable actions or reduce the TTL if invalidation is not feasible."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/services/authz/rbac/service.go",
+    "lines": [
+     123,
+     137
+    ],
+    "texto": "WHAT: When permissions are found in the permission cache but `checkPermission` returns false, the code increments `permissionCacheUsage` with label `false` as if the cache missed. WHY: This metric conflates actual cache misses with cache hits that did not grant access, making cache-hit observability inaccurate. HOW: Increment the cache-usage metric with `true` immediately after a successful `getCachedIdentityPermissions` return, before evaluating whether the permission grants access."
+   },
+   {
+    "id": "S4",
+    "file": "pkg/services/authz/rbac/cache.go",
+    "lines": [
+     30,
+     32
+    ],
+    "texto": "userPermDenialCacheKey concatenates namespace, userUID, action, name and parent with only underscores as separators. Grafana folder/dashboard UIDs can contain underscores, so different (name, parent) pairs can produce the same key (e.g. name=\"a_b\", parent=\"c\" vs name=\"a\", parent=\"b_c\"). A collision makes the denial cache return a false denial for a different resource. Use an unambiguous encoding such as null-byte delimiters or a hash of the components."
+   },
+   {
+    "id": "S5",
+    "file": "pkg/services/authz/rbac/service.go",
+    "lines": [
+     116,
+     155
+    ],
+    "texto": "Check consults permDenialCache before the permission cache and DB, and only writes to it when the DB lookup denies. If a user's permissions change from deny to allow, the stale denial entry remains for the cache TTL and continues to deny access even though the current permission set would grant it. Either delete the denial entry when a Check finally allows, or avoid negative caching in the authorization path."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#01",
+    "descricao": "The denial cache key joins name and parent folder with underscores, so different name/parent pairs can collide and a cached denial for one resource denies another until TTL expiry.",
+    "textoGolden": "The cache key construction in `userPermDenialCacheKey` uses simple string concatenation with underscores, which can lead to ambiguous keys and collision risks when any component contains underscores or is empty. This could result in incorrect denial cache hits, affecting user permissions.",
+    "comentarios": [
+     {
+      "file": "pkg/services/authz/rbac/cache.go",
+      "lines": [
+       30,
+       31
+      ],
+      "texto": "The denial cache key does not distinguish underscores inside resource and parent UIDs from its field separators. For the same namespace, user and action, (name=\"a_b\", parent=\"c\") and (name=\"a\", parent=\"b_c\") generate the same key, so denying the first request makes Check return false for the second even if its permissions explicitly allow it. Encode the components unambiguously, for example as a JSON tuple or length-prefixed fields."
+     },
+     {
+      "file": "pkg/services/authz/rbac/cache.go",
+      "lines": [
+       30,
+       31
+      ],
+      "texto": "The denial cache key is not injective: for the same namespace, user and action, `(name=\"a_b\", parent=\"c\")` and `(name=\"a\", parent=\"b_c\")` produce the same key. After the first request stores a denial, Check's new early cache return denies the second request without checking its permissions, even if it is allowed. Encode the components unambiguously (for example a JSON tuple or length-prefixed components) and add a test verifying that these two requests do not share a denial entry."
+     },
+     {
+      "file": "pkg/services/authz/rbac/cache.go",
+      "lines": [
+       30,
+       31
+      ],
+      "texto": "Make the denial-cache key encode component boundaries unambiguously (for example, length-prefix or serialize the components). For the same namespace, user and action, name `a_b` with parent `c` and name `a` with parent `b_c` both produce the suffix `_a_b_c`. Underscores can occur in resource UIDs, so denying the first request caches a key that causes Check to immediately deny the second request without evaluating its permissions, even if that resource is allowed."
+     }
+    ]
+   },
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#04",
+    "descricao": "The explicit denial-cache test seeds the cached permission as false instead of true, so it would pass without the denial-cache short-circuit and does not verify it.",
+    "textoGolden": "The test comment says the cached permissions 'allow access', but the map stores false for dashboards:uid:dash1, so checkPermission will still treat this scope as not allowed.",
+    "comentarios": [
+     {
+      "file": "pkg/services/authz/rbac/service_test.go",
+      "lines": [
+       973,
+       995
+      ],
+      "texto": "This test claims to prove the permDenialCache short-circuit (service.go:116-121) denies access, but it seeds the cached permission as map[string]bool{\"dashboards:uid:dash1\": false} (a deny), contradicting its comment \"Allow access to the dashboard to prove this is not checked\". Because the cached set is already a deny, checkPermission returns allowed=false, the code falls through to the DB path, and the fake store also returns no permissions, so Allowed stays false. The assertion passes even if the entire permDenialCache early-return were deleted. Seed the cached permission as true (map[string]bool{\"dashboards:uid:dash1\": true}) so that only the denial-cache entry can force Allowed=false; otherwise the test does not verify the feature."
+     },
+     {
+      "file": "pkg/services/authz/rbac/service_test.go",
+      "lines": [
+       981,
+       982
+      ],
+      "texto": "The comment says \"Allow access to the dashboard to prove this is not checked\", but the code sets the permCache entry to `false`, which is a deny. The test therefore does not show that the permission cache is skipped. Set the value to `true`, or change the comment to match."
+     },
+     {
+      "file": "pkg/services/authz/rbac/service_test.go",
+      "lines": [
+       973,
+       995
+      ],
+      "texto": "The 'Should deny on explicit cache deny entry' test would still pass if the permDenialCache check were removed. permCache is seeded with dash1:false, not true as the comment claims, so the normal path also denies. Seed permCache with {\"dashboards:uid:dash1\": true} and a store that grants the permission, so Allowed=false can only come from the denial entry."
+     }
+    ]
+   },
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#05",
+    "descricao": "A cached permission set that denies a resource always triggers a full DB permission reload, so checks over many inaccessible dashboards issue one query per resource instead of being served from cache.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/authz/rbac/service.go",
+      "lines": [
+       123,
+       139
+      ],
+      "texto": "Every distinct resource denied by the cached permission map triggers a reload of the entire user's action permission set, because the denial cache is resource-specific and a cached false result always falls through to getIdentityPermissions. Sequential checks of N inaccessible dashboards therefore execute N full permission queries and cache rewrites even with a current action-wide cache; getUserPermissions' singleflight only merges overlapping requests. Bound refreshes per user/action with a short refresh cooldown or generation marker so different resource misses can share a recent refresh."
+     }
+    ]
+   },
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#08",
+    "descricao": "The Service struct comment listing its caches was not updated for the new permDenialCache field.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/authz/rbac/service.go",
+      "lines": [
+       55,
+       58
+      ],
+      "texto": "The struct doc comment still reads \"// Cache for user permissions, user team memberships and user basic roles\", but this PR added the new `permDenialCache` field (line 58). The comment no longer enumerates what the struct actually holds and misleads a reader about the new denial-cache field; update it to mention the permission-denial cache so the prose matches the fields."
+     }
+    ]
+   }
+  ]
+ },
+ "unified-storage-performance-optimizations-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "26fed312840cd76b766cbd2158e17a7e6c0ec548",
+  "base": "871af07203177ce59a24e742107119409274f48a",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/storage/unified/search/bleve.go",
+    "lines": [
+     87,
+     141
+    ],
+    "texto": "WHAT: Removing the coarse cacheMu lock at the start of BuildIndex leaves concurrent calls for the same NamespacedResource key unsynchronized. WHY: Two goroutines that reach BuildIndex for the same key (e.g., concurrent Search requests or a Search racing with a watch event via getOrCreateIndex) both create indexes; for file-backed indexes they collide on the same directory, and the second writer overwrites the first in the cache without closing it, leaking the index. HOW: Reintroduce per-key synchronization that still allows different keys to build concurrently\u2014check the cache under a per-key lock/mutex before starting, return the existing index if present, and only write the newly built index if no other builder won the race."
+   },
+   {
+    "id": "S2",
+    "file": "server.go",
+    "lines": [
+     258,
+     262
+    ],
+    "texto": "NewResourceServer now invokes s.Init(ctx) during construction (lines 258-262), which is a behavioral contract change: construction previously returned a server that still required a separate Init call. Any consumer that calls Init after construction would be affected, though no such consumer-side breakage is visible in the changed code in this diff."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#01",
+    "descricao": "BuildIndex now locks only the final cache assignment, so concurrent callers for the same uncached key all build the same expensive index in parallel and the last one overwrites the others.",
+    "textoGolden": "A race condition in BuildIndex allows multiple goroutines to concurrently build the same expensive index for the same key. This is caused by moving the b.cacheMu lock from protecting the entire function to only protecting the final cache assignment. ",
+    "comentarios": [
+     {
+      "file": "pkg/storage/unified/search/bleve.go",
+      "lines": [
+       137,
+       139
+      ],
+      "texto": "WHAT: Removing the function-wide `b.cacheMu.Lock()/defer Unlock()` and keeping only the lock around `b.cache[key]=idx` removes the only thing that serialized GetIndex against an in-flight build. WHY: getOrCreateIndex (resource/search.go:287-307) does GetIndex -> if nil -> build; previously BuildIndex held the write lock for its whole body so a concurrent caller's GetIndex (RLock) blocked until the first build cached the index and then saw it (no second build). Now GetIndex can return nil while a build for the same key is still running, so two requests/watch events build the SAME key concurrently \u2014 producing two distinct index instances where the caller holding the non-cached one never observes later writes (stale search results), and, for file-backed indices (size > FileThreshold), two concurrent `bleve.New(dir, mapper)` opening the same on-disk directory. HOW: guard the build per key (e.g. re-check the cache under the write lock after acquiring it, or use a per-key single-flight/lock so only one build runs per NamespacedResource), rather than relying on a global write lock held for the entire body."
+     },
+     {
+      "file": "pkg/storage/unified/search/bleve.go",
+      "lines": [
+       137,
+       139
+      ],
+      "texto": "The cache mutex was moved to cover only the cache assignment, removing the serialization that previously surrounded the whole BuildIndex. Two concurrent BuildIndex calls for the same key can now both construct an index (including `bleve.New(dir, mapper)` on the same on-disk path) and both write `b.cache[key]`; the second overwrites the first, so callers get distinct index instances for one key and writes made through the losing instance are invisible to readers of the cached one (and the file-backed build may collide on the same directory). Keep the build for a given key serialized (e.g. restore the lock around the build, or take a per-key lock) instead of locking only the map write."
+     },
+     {
+      "file": "pkg/storage/unified/search/bleve.go",
+      "lines": [
+       137,
+       139
+      ],
+      "texto": "Locking only cache publication allows concurrent requests for the same uncached key to build separate indexes and overwrite each other's cache entries. Search and handleEvent both call getOrCreateIndex, whose GetIndex previously blocked behind the build-wide lock; now an event can update one newly built index before another build replaces it, losing that update from subsequent search results and leaving the discarded index open. Serialize builds per NamespacedResource and recheck the cache after acquiring that per-key guard."
+     }
+    ]
+   },
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#02",
+    "descricao": "The new startup log calls TotalDocs, which iterates the index cache without a lock, after the event goroutine that can add indexes has started, so a concurrent map read and write can crash the process.",
+    "textoGolden": "Calling s.search.TotalDocs() here may race with concurrent index creation: TotalDocs iterates b.cache without synchronization, and the event watcher goroutine started just above could trigger BuildIndex writes concurrently, potentially causing a concurrent map read/write panic.",
+    "comentarios": [
+     {
+      "file": "pkg/storage/unified/resource/search.go",
+      "lines": [
+       216,
+       216
+      ],
+      "texto": "The newly added `s.search.TotalDocs()` call is unsafe: `bleveBackend.TotalDocs()` (pkg/storage/unified/search/bleve.go:144-150) iterates `b.cache` without holding `cacheMu`, while the bleve.go hunk in this same PR keeps `cacheMu` for the `b.cache[key] = idx` write only. Because search.go:207-213 already started the watch-event goroutine that can call `build` \u2192 `BuildIndex` \u2192 cache write, line 216 can iterate the map concurrently with that write, causing a `concurrent map iteration and map write` panic or data race. Either guard the `TotalDocs` read with `cacheMu`, or move this call to a point where no build can run concurrently."
+     },
+     {
+      "file": "pkg/storage/unified/resource/search.go",
+      "lines": [
+       216,
+       216
+      ],
+      "texto": "The new startup log calls TotalDocs after launching the write-event listener, but bleveBackend.TotalDocs iterates b.cache without cacheMu.RLock. A write event for an unindexed resource can concurrently publish an index through BuildIndex, causing a map iteration/write race and potentially a fatal runtime error during initialization. Protect TotalDocs cache iteration with the same read lock used by GetIndex."
+     },
+     {
+      "file": "pkg/storage/unified/search/bleve.go",
+      "lines": [
+       137,
+       139
+      ],
+      "texto": "BuildIndex now writes b.cache under Lock while TotalDocs (called from search.init after the watch goroutine starts) ranges over b.cache without any lock. This can cause a concurrent map read/write fatal error. Fix by taking cacheMu.RLock in TotalDocs."
+     }
+    ]
+   },
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#03",
+    "descricao": "NewResourceServer returns an error when Init fails without cancelling the server context created earlier.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/storage/unified/resource/server.go",
+      "lines": [
+       258,
+       262
+      ],
+      "texto": "WHAT: NewResourceServer now calls s.Init(ctx) and, on error, returns `nil, err` without invoking the `cancel` func created at line 229 and without running any lifecycle cleanup. WHY: Init may have already started long-lived goroutines \u2014 searchSupport.init's event-consumption loop uses context.Background() (resource/search.go:202) and initWatcher starts a watcher bound to s.ctx (server.go:752-770) \u2014 so if search.init succeeds and initWatcher (or a later step) fails, the constructor discards the server while those goroutines keep running with no way to stop them, leaking the internal context and watcher goroutines. HOW: on the error path call `cancel()` (and any needed lifecycle.Stop) before returning, or defer the cancel until success."
+     },
+     {
+      "file": "pkg/storage/unified/resource/server.go",
+      "lines": [
+       258,
+       262
+      ],
+      "texto": "WHAT: NewResourceServer calls s.Init(ctx) synchronously but returns nil,err without calling the cancel created for s.ctx. WHY: Failed startup leaks the server context (and any lifecycle/watch resources partially started by Init), leaving goroutines/channel watches alive. HOW: On Init error call s.cancel() (and lifecycle Stop cleanup) before returning."
+     }
+    ]
+   },
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#sncc-01",
+    "descricao": "The PR skips the storage-server module integration test on postgres instead of fixing the failure, removing coverage of the new eager initialization on postgres.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "github-oauth-security-enhancement-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "bb75657fc8f13923c1d7983f422290908a1e7310",
+  "base": "344aa102e7818606e29426ebe69d5a680d8727c6",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     500,
+     505
+    ],
+    "texto": "WHAT: The new user-mismatch check reads integration.metadata['sender']['login'] without verifying that the 'sender' key exists. WHY: Integrations that pre-date this metadata field or were created without the installation webhook will raise KeyError and crash the installation pipeline instead of showing the intended error page. HOW: Use a safe lookup for the sender login and treat a missing sender as an unverifiable request."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     129,
+     146
+    ],
+    "texto": "The `error_short` strings (`\"Invalid installation request.\"`, `\"GitHub installation pending deletion.\"`, `\"Github installed on another Sentry organization.\"`) are user-facing messages, but they are passed as plain string literals to `error()` rather than being wrapped in `_()`. Because they are only used inside the function as `_(error_short)`, gettext extraction tools cannot discover them, so they will never be translated. Define module-level constants for these short messages wrapped in `_()`, and use those constants as the default and call-site values (mirroring how `error_long` already uses `ERR_INTEGRATION_*` constants)."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#01",
+    "descricao": "error() calls _(error_short) on a variable and callers pass plain literals, so the short error strings are no longer extractable for translation.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       129,
+       146
+      ],
+      "texto": "The helper calls `_(error_short)` on a variable, and callers pass plain string literals. The translation extractor cannot see these strings, so the short error messages sent to the user are no longer translatable; the old code wrapped the literals directly in `_()`. Mark the literals with gettext_lazy at the call sites and the default, and pass them through without wrapping again."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       129,
+       146
+      ],
+      "texto": "error_short strings bypass translation extraction: _(error_short) uses a variable so makemessages cannot collect them. Wrap literals at definition/call sites, e.g. error_short=_(\"Invalid installation request.\") and pass _(\"...\") literals, then use data error value directly without re-wrapping."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       132,
+       141
+      ],
+      "texto": "Translate the short-message literals at their definition/call sites instead of calling `_(error_short)` on a variable. Django's message extraction cannot extract the default `\"Invalid installation request.\"` or the plain-string arguments at the two call sites from this dynamic gettext invocation. The existing pending-deletion and already-installed messages previously appeared directly inside `_()`; this refactor removes their extraction sites, and the new default message cannot enter translation catalogs. Use a translated default and translated arguments, then place `error_short` directly into the payload so these user-facing errors remain localizable."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#02",
+    "descricao": "The org parameter of error()/get_document_origin is actually the active-organization context, not an Organization, so the name is misleading.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       149,
+       152
+      ],
+      "texto": "The parameter is named `org` but the code treats it as the pipeline's active-organization context: it dereferences `org.organization` and every caller (error() and the GitHubInstallation sites) passes `self.active_organization`, not an Organization. The name misstates the argument's type/contract \u2014 a caller following the name and passing a real Organization would hit AttributeError on `.organization`. Rename the parameter (e.g. `active_organization`) and correct the corresponding name in `error()` at line 131 so the two signatures match what is actually passed."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#03",
+    "descricao": "The GitHub OAuth state is pipeline.signature, a static md5 of the pipeline view names, instead of a per-attempt random nonce, so it gives no CSRF protection.",
+    "textoGolden": "OAuth state uses pipeline.signature (static) instead of a per-request random value",
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       401,
+       412
+      ],
+      "texto": "The OAuth state is pipeline.signature, which Pipeline.__init__ computes solely from pipeline view class names and therefore shares across all users and installation attempts. An attacker can obtain an OAuth code for their own GitHub account and send a callback using this known state to a victim with an active installation pipeline, binding the attacker's GitHub identity to the victim's flow instead of rejecting the forged callback. Generate a random per-attempt nonce, store it in pipeline state, and validate that nonce on the OAuth callback."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       401,
+       413
+      ],
+      "texto": "Do not use pipeline.signature as OAuth state. It is a deterministic MD5 of the pipeline identifiers, not an unpredictable nonce tied to this user's authorization attempt (the tests reuse it across users). An attacker can know the expected state and submit a callback containing a code authorized under the attacker's GitHub account, defeating the OAuth login-CSRF protection and the intended binding to the installing user. Generate a cryptographically random per-attempt state, store it in the session/pipeline, and validate and consume it on callback."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#05",
+    "descricao": "The new OAuth step's token exchange and user lookup are not wrapped in error handling, so GitHub/network failures surface as 500s instead of the installation-failed page.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       423,
+       425
+      ],
+      "texto": "The token request is executed outside the try block. If GitHub's token endpoint is unavailable or the request fails with a connection/timeout error, safe_urlopen raises before the guarded response parsing is reached, and this new installation step returns an unhandled server error instead of the installation-failed response. Include the request itself in the error handling and handle the relevant transport exceptions."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       423,
+       436
+      ],
+      "texto": "WHAT: safe_urlopen token exchange and get_user_info() (which calls resp.raise_for_status()) are called with no exception handling. WHY: Any network error, timeout, or non-2xx from GitHub bubbles up as an unhandled exception and 500s the install instead of rendering the invalid-request page. HOW: Wrap the exchange plus get_user_info in try/except and return error() on failure."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       422,
+       436
+      ],
+      "texto": "safe_urlopen() and get_user_info() are called outside any try/except, so network errors, non-2xx responses, or API failures raise unhandled exceptions instead of returning error(). Wrap the token exchange + user-info fetch in try/except and return error() on failure, matching the handled missing-access_token path."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#06",
+    "descricao": "When no Integration exists yet for the installation_id the pipeline advances without comparing the OAuth user to the installer, bypassing the new ownership check.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       481,
+       482
+      ],
+      "texto": "The missing Integration branch advances the pipeline without verifying that github_authenticated_user installed the supplied installation_id. When the installation webhook has not created a record, or the local record was deleted, finish_pipeline calls build_integration using app credentials and attaches the installation without checking the OAuth user's access, allowing a user with another account's installation ID to bypass the new ownership check. Fail closed until trusted installer information is available and apply the ownership check before every successful next_step."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       481,
+       482
+      ],
+      "texto": "The record-absent path advances the pipeline before checking whether the authenticated GitHub user installed this app. Installation IDs arrive from the request, and a missing Integration record (for example before the installation webhook is processed) does not establish ownership. As a result, this path can attach an installation belonging to a different GitHub user despite the new authenticity check. Verify the authenticated user's authorization for the installation before advancing in this branch too, rather than relying on the webhook-created record existing."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       481,
+       482
+      ],
+      "texto": "When no Integration row exists for the installation_id, the code calls next_step() without comparing the OAuth-authenticated GitHub user to the installer. An attacker can supply an installation_id they do not own before the installation webhook has created the row, and bypass the new verification. Do not skip the check in this branch. Either fail closed, or verify ownership another way, for example by confirming the user can access the installation through the GitHub API."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#09",
+    "descricao": "The installer check indexes integration.metadata['sender']['login'] without checking that sender exists, raising KeyError for integrations created without sender metadata.",
+    "textoGolden": "The code attempts to access integration.metadata[sender][login] without checking for the existence of the sender key. This causes a KeyError for integrations where the sender metadata was not set during creation",
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       500,
+       505
+      ],
+      "texto": "integration.metadata[\"sender\"][\"login\"] is indexed without checking that \"sender\" exists, so an ACTIVE integration whose metadata has no sender raises KeyError (500) here. metadata[\"sender\"] is only populated when state.get(\"sender\") is set (integration.py:376-377), and the only writer of that state is the installation webhook (webhook.py:202-208); integrations created through the pipeline itself carry no sender (confirmed by installation.py:44 which explicitly guards `if \"sender\" not in integration.metadata`, and by the pipeline-created integration in test_integration.py:730-743). Previously this branch only bound state and called pipeline.next_step(), so this crash is newly introduced. Fix: guard the lookup, e.g. `if pipeline.fetch_state(\"github_authenticated_user\") != (integration.metadata.get(\"sender\") or {}).get(\"login\"):` and decide the desired fallback when sender is absent."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       500,
+       505
+      ],
+      "texto": "`integration.metadata[\"sender\"][\"login\"]` can raise KeyError. build_integration (line 376-377) only sets metadata[\"sender\"] when state.get(\"sender\") is truthy, so an existing Integration without a sender entry makes this subscripting throw an unhandled KeyError (500) instead of routing to the intended error page. Use `integration.metadata.get(\"sender\", {}).get(\"login\")` (and treat a missing sender as a failed verification) so the mismatch/absence case returns error() rather than crashing."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       501,
+       503
+      ],
+      "texto": "The new ownership check indexes integration.metadata['sender']['login'] even though GitHubIntegrationProvider.build_integration omits sender for normal pipeline-created integrations. Reconnecting an existing active integration without an OrganizationIntegration and without webhook-populated sender now raises KeyError and returns a server error rather than an installation failure. Handle missing sender explicitly and return the invalid-installation response when trusted installer metadata is unavailable."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#10",
+    "descricao": "test_installation_not_found uses a wrong OAuth state, so it fails at the state check and never reaches the installation-not-found path it is meant to test.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/integrations/github/test_integration.py",
+      "lines": [
+       385,
+       396
+      ],
+      "texto": "First response (installation_id) is overwritten by second response (bad state) with no assertion, so the Integration.DoesNotExist / not-ACTIVE branch in GitHubInstallation is never verified. Keep/assert the first flow through a valid OAuth step to reach the installation check instead of only asserting the OAuth state-mismatch error."
+     },
+     {
+      "file": "tests/sentry/integrations/github/test_integration.py",
+      "lines": [
+       388,
+       396
+      ],
+      "texto": "This test no longer verifies the \"installation not found\" path it exists for. The second GET supplies state=ddd023d87a913d5226e2a882c4c4cc05, which is not the github pipeline signature (that is the 9cae5e88803f35ed7970fc131e6e65d3 asserted in test_github_setup and reused elsewhere). OAuthLoginView.dispatch (integration.py:412-413) therefore returns error() before GitHubInstallation runs, producing the same generic \"Invalid installation request.\" message and the same failed template via the state-mismatch branch. The Integration.DoesNotExist handling at integration.py:493-498 is never reached, so the test would still pass if that handling were removed or broken. Use the real pipeline state so the request advances into GitHubInstallation, or assert on something that distinguishes the state-mismatch branch from the missing-installation branch."
+     },
+     {
+      "file": "tests/sentry/integrations/github/test_integration.py",
+      "lines": [
+       388,
+       396
+      ],
+      "texto": "The replacement assertion no longer verifies that a nonexistent installation is rejected: 'Invalid installation request.' is also returned for a state mismatch, missing access token, or missing authenticated login before GitHubInstallation is reached. This test can therefore pass with installation-not-found handling broken if the callback fails OAuth validation instead. Establish a successful OAuth exchange with the actual pipeline state and verify that the nonexistent installation lookup is reached and rejected, rather than accepting this shared authentication-error message alone."
+     }
+    ]
+   }
+  ]
+ }
+}

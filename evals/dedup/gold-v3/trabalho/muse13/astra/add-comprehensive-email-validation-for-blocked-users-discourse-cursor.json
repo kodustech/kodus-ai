@@ -1,0 +1,53 @@
+{
+ "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Describes the same case-sensitive blocked-email lookup bypass and missing normalization."
+  },
+  {
+   "id": "S2",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Describes the same non-atomic statistics update that loses increments under concurrent validation."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims the computed property's array dependency fails to react to additions. This differs from retaining rejected emails indefinitely and from displaying the wrong rejection message."
+  },
+  {
+   "id": "S4",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Describes the same validation side effects that inflate match_count on repeated checks and proposes separating validation from statistics recording."
+  },
+  {
+   "id": "S5",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Describes the same block-list bypass through changes in email capitalization."
+  },
+  {
+   "id": "S6",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Describes the same read-modify-write race that loses match_count increments."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Identifies inaccurate spec prose equating a recorded match with blocking. Correcting that prose would not fix the validation side effects or counter races in issue #05."
+  },
+  {
+   "id": "S8",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Describes the same database mutations hidden inside should_block?, including the misleading predicate name explicitly covered by the known issue."
+  }
+ ]
+}

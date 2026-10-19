@@ -1,0 +1,12 @@
+{
+ "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+ "items": [
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#muse13-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The newly added pagination in app/assets/javascripts/admin/controllers/admin-group.js.es6:13 calculates three pages for 100 members at limit 50, so showingLast remains false at offset 50 and next advances to offset 100 at line 33. app/controllers/groups_controller.rb:26 applies that offset directly, returning an empty page; the proposed clamp also requires correcting totalPages.",
+   "severity": "medium"
+  }
+ ]
+}

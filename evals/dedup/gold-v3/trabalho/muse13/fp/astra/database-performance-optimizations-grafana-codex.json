@@ -1,0 +1,17 @@
+{
+ "caseId": "database-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims a race between victim selection and deletion can delete rows that have moved into the retained top-MaxCount set. None of the rejected issues describes this retention race."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Claims concurrent deletion of fetched IDs can produce zero affected rows and prematurely stop cleanup while matching rows remain. This differs from S3's retention-window race and from all rejected issues."
+  }
+ ]
+}

@@ -1,0 +1,12 @@
+{
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "items": [
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#pf-muse-C1",
+   "class": "TP",
+   "subclass": "none",
+   "severity": "medium",
+   "reply": "I retain TP: createMany inserts rows; it does not guarantee their position in the subsequently fetched attendees relation. The new handler fetches attendees without orderBy and passes that ordering directly to the new template, which interpolates attendees[0].name even though added guests have empty names. Neither mapping nor formatCalEvent restores the original booker to index zero. Also, OrganizerScheduledEmail actually uses calEvent.title for its subject, so the cited precedent does not establish correctness."
+  }
+ ]
+}

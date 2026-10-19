@@ -1,0 +1,514 @@
+{
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": [
+  {
+   "id": "S1",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "Google caller reads res.data from the raw fetch Response returned in sync mode."
+  },
+  {
+   "id": "S2",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "newGroup": null,
+   "reason": "Google persists the safeParse wrapper instead of its data as credential key."
+  },
+  {
+   "id": "S3",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "newGroup": null,
+   "reason": "Zoho Bigin passes credentialId instead of userId to refreshOAuthTokens."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Unhandled JSON.parse on OAuth state query; no golden issue covers decodeOAuthState."
+  },
+  {
+   "id": "S5",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#07",
+   "newGroup": null,
+   "reason": "Hardcoded \"refresh_token\" injected when refresh response omits it."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Broad authz design concern (single shared secret, no HMAC/replay), not the timing-unsafe comparison."
+  },
+  {
+   "id": "S7",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#13",
+   "newGroup": null,
+   "reason": "Salesforce getClient refreshes token on every construction."
+  },
+  {
+   "id": "S8",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01",
+   "newGroup": null,
+   "reason": "Non-constant-time !== comparison of webhook secret."
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Empty-string fallback for encryption key env var; not in golden set."
+  },
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": ".env.example key generation byte-length mismatch; not in golden set."
+  },
+  {
+   "id": "S11",
+   "match": "new",
+   "newGroup": "N5",
+   "reason": "JSDoc param description mismatch in createOAuthAppCredential; not in golden set."
+  },
+  {
+   "id": "S12",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "newGroup": null,
+   "reason": "Google stores safeParse wrapper as credential key."
+  },
+  {
+   "id": "S13",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "Sync-mode fetch Response lacks .data that the Google caller reads."
+  },
+  {
+   "id": "S14",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "HubSpot caller treats raw fetch Response from sync mode as HubspotToken."
+  },
+  {
+   "id": "S15",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "newGroup": null,
+   "reason": "credentialId passed as userId to refreshOAuthTokens in Zoho Bigin."
+  },
+  {
+   "id": "S16",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "newGroup": null,
+   "reason": "Google persists safeParse wrapper as credential key."
+  },
+  {
+   "id": "S17",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "newGroup": null,
+   "reason": "Google persists safeParse wrapper as credential key."
+  },
+  {
+   "id": "S18",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "Zoho Bigin caller reads axios-style .data from the raw fetch Response in sync mode."
+  },
+  {
+   "id": "S19",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#07",
+   "newGroup": null,
+   "reason": "At parseRefreshTokenResponse it injects the literal \"refresh_token\" destroying the real token (also mentions wrapper)."
+  },
+  {
+   "id": "S20",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "Sync branch of refreshOAuthTokens returns raw Response while callers expect provider shape."
+  },
+  {
+   "id": "S21",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#03",
+   "newGroup": null,
+   "reason": "Non-atomic findFirst-then-create race in webhook."
+  },
+  {
+   "id": "S22",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Unhandled JSON.parse on OAuth state, same as S4."
+  }
+ ],
+ "replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "S1",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "zip(error_ids, events.values()) misaligns ids with nodestore results."
+  },
+  {
+   "id": "S2",
+   "match": "replays-self-serve-bulk-delete-system-sentry#01",
+   "newGroup": null,
+   "reason": "Truthiness check lets age=0/timestamp=0 bypass mutual exclusion."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Detector update reads detector_type instead of type; not in golden set."
+  },
+  {
+   "id": "S4",
+   "match": "replays-self-serve-bulk-delete-system-sentry#12",
+   "newGroup": null,
+   "reason": "Flagged branch renders TableWidgetVisualization with hardcoded empty data."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Missing guard on tableData.meta in column fallback; different code from #12."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Analytics recorded before feature-flag check; not in golden set."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "Attribute key not URL-encoded in request path; not in golden set."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N5",
+   "reason": "No batch size cap on unauthenticated report list; not in golden set."
+  },
+  {
+   "id": "S9",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "zip over get_multi values misaligns ids."
+  },
+  {
+   "id": "S10",
+   "match": "replays-self-serve-bulk-delete-system-sentry#01",
+   "newGroup": null,
+   "reason": "Truthiness-based mutual exclusion check misses zero values."
+  },
+  {
+   "id": "S11",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "zip over get_multi values misaligns ids."
+  }
+ ],
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": [
+  {
+   "id": "S1",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "newGroup": null,
+   "reason": "Dayjs objects compared with === so zero-length overrides never detected."
+  },
+  {
+   "id": "S2",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "end computed from slotStartTime instead of slotEndTime."
+  },
+  {
+   "id": "S3",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "end computed from slotStartTime instead of slotEndTime."
+  },
+  {
+   "id": "S4",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "newGroup": null,
+   "reason": "=== on Dayjs objects is always false."
+  },
+  {
+   "id": "S5",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03",
+   "newGroup": null,
+   "reason": "Date override returns true before busy check."
+  },
+  {
+   "id": "S6",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#07",
+   "newGroup": null,
+   "reason": "Weekday with no working-hours entry treated as available."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "dayjs.tz throws on undefined/invalid zone in lib/slots.ts; not in golden set."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Invalid organizerTimeZone throws in checkIfIsAvailable; different code than S7."
+  },
+  {
+   "id": "S9",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "Upper bound uses slotStartTime instead of slotEndTime."
+  },
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "checkIfIsAvailable ignores per-override timeZone; not in golden set."
+  }
+ ],
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
+  {
+   "id": "S1",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "queued default timezone.now() evaluated at class definition."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "to_dict keeps datetime, not JSON-serializable for celery kwargs; not in golden set."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "from_dict does not coerce queued and returns None disabling cycle guard; different code than N1."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "sync_status_outbound override signature mismatch; not in golden set."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Datetime in to_dict not serializable for celery, same as S2."
+  },
+  {
+   "id": "S6",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "queued default evaluated once at import."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Datetime in to_dict not serializable for celery, same as S2."
+  },
+  {
+   "id": "S8",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#03",
+   "newGroup": null,
+   "reason": "test_from_dict_empty_array actually passes an empty dict."
+  },
+  {
+   "id": "S9",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#02",
+   "newGroup": null,
+   "reason": "Typo inalid in test name."
+  }
+ ],
+ "sms-workflow-reminder-retry-count-tracking-cal-com": [
+  {
+   "id": "S1",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "retryCount OR branch lacks SMS method filter."
+  },
+  {
+   "id": "S2",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#01",
+   "newGroup": null,
+   "reason": "Non-atomic retryCount + 1 from stale value."
+  },
+  {
+   "id": "S3",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
+   "newGroup": null,
+   "reason": "Unguarded update in catch block can throw out of the loop."
+  },
+  {
+   "id": "S4",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#07",
+   "newGroup": null,
+   "reason": "No index for the retryCount OR arm."
+  },
+  {
+   "id": "S5",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#03",
+   "newGroup": null,
+   "reason": "Cleanup comment omits the retryCount deletion branch."
+  },
+  {
+   "id": "S6",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "retryCount OR branch lacks SMS method filter."
+  },
+  {
+   "id": "S7",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#01",
+   "newGroup": null,
+   "reason": "Non-atomic retryCount increment."
+  },
+  {
+   "id": "S8",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "retryCount OR branch lacks SMS method filter."
+  }
+ ],
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": [
+  {
+   "id": "S1",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#01",
+   "newGroup": null,
+   "reason": "getSubGroupsCount returns null violating contract."
+  },
+  {
+   "id": "S2",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "Reader thread not joined before asserting no exceptions."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reader thread busy-spins unpaginated listings; not in golden set."
+  },
+  {
+   "id": "S4",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "Reader thread not joined before assertion."
+  },
+  {
+   "id": "S5",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "Reader thread not joined before assertion."
+  },
+  {
+   "id": "S6",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "Reader thread not joined before assertion."
+  },
+  {
+   "id": "S7",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "Reader thread not joined before assertion."
+  }
+ ],
+ "advanced-sql-analytics-framework-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "DB stub methods return not implemented; not in golden set."
+  },
+  {
+   "id": "S2",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "enableSqlExpressions returns false on both branches."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "DB stub returns not implemented, same as S1."
+  },
+  {
+   "id": "S4",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-02",
+   "newGroup": null,
+   "reason": "Variable enabled holds the negated flag so its name is inverted."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "NewInMemoryDB function name misleading for a stub; different from the duckDB variable name in #06."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "QueryFramesInto stub returns not implemented, same as S1."
+  }
+ ],
+ "feature-localization-fallbacks-server-side-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "nil default_locale.to_sym before compact; not in golden set."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Unsanitized locale interpolated into regexp; not in golden set."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Per-request locale loading/SiteSetting lookups cost; not the fallback-catalog or cache-key issues."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "nil default_locale.to_sym before compact, same as S1."
+  }
+ ],
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "include_website_name lacks the ? suffix."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Scheme-less website yields nil host; not in golden set."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Query/fragment dropped from displayed path; not in golden set."
+  },
+  {
+   "id": "S4",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "include_website_name lacks the ? suffix."
+  }
+ ],
+ "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": [
+  {
+   "id": "S1",
+   "match": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02",
+   "newGroup": null,
+   "reason": "Transformed config copy computed but original monitor.config returned."
+  }
+ ]
+}

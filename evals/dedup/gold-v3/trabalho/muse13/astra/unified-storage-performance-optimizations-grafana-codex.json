@@ -1,0 +1,23 @@
+{
+ "caseId": "unified-storage-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "unified-storage-performance-optimizations-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Describes the same loss of same-key build serialization when cacheMu protects only the final cache assignment, allowing duplicate concurrent index builds."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes a watch-stream gap caused by starting initWatcher after indexing. None of the golden issues concerns watcher initialization order or missed writes during indexing."
+  },
+  {
+   "id": "S3",
+   "match": "unified-storage-performance-optimizations-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Describes the same Init failure path returning without cancelling the server context or cleaning up partially started resources."
+  }
+ ]
+}

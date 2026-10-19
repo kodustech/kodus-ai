@@ -1,0 +1,11 @@
+{
+ "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+ "items": [
+  {
+   "id": "S4",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#04",
+   "newGroup": null,
+   "reason": "This is the stale-device case of #04: the time-window predicate excludes the expired row, and updateDevice maps the resulting zero-row update to ErrDeviceLimitReached. Suggesting removal of the predicate does not change the underlying claim."
+  }
+ ]
+}

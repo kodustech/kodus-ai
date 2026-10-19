@@ -1,0 +1,11 @@
+{
+ "caseId": "advanced-query-processing-architecture-grafana-codex",
+ "items": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This claims the interpolation change loses the datasource reference needed for downstream routing. The rejected shard-interpolation claim concerns stripped scoped variables leaving $__auto uninterpolated, a different cause and defect."
+  }
+ ]
+}

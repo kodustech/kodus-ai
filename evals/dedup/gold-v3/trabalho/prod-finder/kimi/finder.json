@@ -1,0 +1,1968 @@
+{
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "L1",
+   "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+   "lines": [
+    114,
+    121
+   ],
+   "cortado": "C1"
+  },
+  {
+   "id": "L2",
+   "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+   "lines": [
+    133,
+    135
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L3",
+   "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+   "lines": [
+    57,
+    61
+   ],
+   "publicado": "S3"
+  },
+  {
+   "id": "L4",
+   "file": "authz/client/src/main/java/org/keycloak/authorization/client/AuthzClient.java",
+   "lines": [
+    94,
+    96
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L5",
+   "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+   "lines": [
+    114,
+    121
+   ],
+   "cortado": "C2"
+  },
+  {
+   "id": "L6",
+   "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+   "lines": [
+    133,
+    135
+   ],
+   "cortado": "C3"
+  },
+  {
+   "id": "L7",
+   "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+   "lines": [
+    57,
+    62
+   ],
+   "cortado": "C4"
+  }
+ ],
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "L1",
+   "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+   "lines": [
+    381,
+    381
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+   "lines": [
+    381,
+    381
+   ],
+   "cortado": "C1"
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "L1",
+   "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+   "lines": [
+    187,
+    205
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L2",
+   "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+   "lines": [
+    148,
+    150
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L3",
+   "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+   "lines": [
+    136,
+    142
+   ],
+   "cortado": "C1"
+  },
+  {
+   "id": "L4",
+   "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+   "lines": [
+    172,
+    205
+   ],
+   "cortado": "C2"
+  },
+  {
+   "id": "L5",
+   "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+   "lines": [
+    147,
+    150
+   ],
+   "cortado": "C3"
+  },
+  {
+   "id": "L6",
+   "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+   "lines": [
+    124,
+    145
+   ],
+   "publicado": "S3"
+  }
+ ],
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "L1",
+   "file": "lib/validators/email_validator.rb",
+   "lines": [
+    18,
+    21
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "app/models/blocked_email.rb",
+   "lines": [
+    11,
+    19
+   ],
+   "publicado": "S3"
+  },
+  {
+   "id": "L3",
+   "file": "app/assets/javascripts/discourse/controllers/create_account_controller.js",
+   "lines": [
+    17,
+    17
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L4",
+   "file": "app/models/blocked_email.rb",
+   "lines": [
+    11,
+    12
+   ],
+   "cortado": "C1"
+  },
+  {
+   "id": "L5",
+   "file": "app/models/blocked_email.rb",
+   "lines": [
+    12,
+    16
+   ],
+   "publicado": "S4"
+  }
+ ],
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "L1",
+   "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+   "lines": [
+    64,
+    71
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+   "lines": [
+    131,
+    135
+   ],
+   "cortado": "C1"
+  },
+  {
+   "id": "L3",
+   "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+   "lines": [
+    121,
+    123
+   ],
+   "publicado": "S2"
+  }
+ ],
+ "add-guest-management-functionality-to-existing-bookings-cal-com": [
+  {
+   "id": "L1",
+   "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+   "lines": [
+    46,
+    48
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+   "lines": [
+    74,
+    78
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L3",
+   "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+   "lines": [
+    167,
+    171
+   ],
+   "publicado": "S3"
+  },
+  {
+   "id": "L4",
+   "file": "packages/emails/email-manager.ts",
+   "lines": [
+    525,
+    549
+   ],
+   "publicado": "S7"
+  },
+  {
+   "id": "L5",
+   "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+   "lines": [
+    167,
+    173
+   ],
+   "publicado": "S6"
+  },
+  {
+   "id": "L6",
+   "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+   "lines": [
+    74,
+    106
+   ],
+   "publicado": "S4"
+  },
+  {
+   "id": "L7",
+   "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+   "lines": [
+    92,
+    106
+   ],
+   "publicado": "S5"
+  }
+ ],
+ "add-html-sanitizer-for-translated-message-resources-keycloak": [
+  {
+   "id": "L1",
+   "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+   "lines": [
+    124,
+    127
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+   "lines": [
+    74,
+    75
+   ],
+   "publicado": "S3"
+  },
+  {
+   "id": "L3",
+   "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+   "lines": [
+    76,
+    80
+   ],
+   "publicado": "S4"
+  },
+  {
+   "id": "L4",
+   "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+   "lines": [
+    65,
+    80
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L5",
+   "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+   "lines": [
+    145,
+    145
+   ],
+   "cortado": "C1"
+  }
+ ],
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": [
+  {
+   "id": "L1",
+   "file": "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/UpdateCompatibilityCheck.java",
+   "lines": [
+    46,
+    50
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "operator/src/test/java/org/keycloak/operator/testsuite/integration/UpgradeTest.java",
+   "lines": [
+    105,
+    115
+   ],
+   "cortado": "C1"
+  },
+  {
+   "id": "L3",
+   "file": "operator/src/test/java/org/keycloak/operator/testsuite/integration/UpgradeTest.java",
+   "lines": [
+    102,
+    116
+   ],
+   "cortado": "C2"
+  },
+  {
+   "id": "P2",
+   "publicado": "S2"
+  }
+ ],
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": [
+  {
+   "id": "L1",
+   "file": "packages/trpc/server/routers/viewer/slots.ts",
+   "lines": [
+    139,
+    145
+   ],
+   "cortado": "C1"
+  },
+  {
+   "id": "L2",
+   "file": "packages/trpc/server/routers/viewer/slots.ts",
+   "lines": [
+    113,
+    115
+   ],
+   "cortado": "C2"
+  },
+  {
+   "id": "L3",
+   "file": "packages/trpc/server/routers/viewer/slots.ts",
+   "lines": [
+    133,
+    135
+   ],
+   "publicado": "S3"
+  },
+  {
+   "id": "L4",
+   "file": "packages/trpc/server/routers/viewer/slots.ts",
+   "lines": [
+    141,
+    142
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L5",
+   "file": "packages/trpc/server/routers/viewer/slots.ts",
+   "lines": [
+    114,
+    114
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L6",
+   "file": "packages/trpc/server/routers/viewer/slots.ts",
+   "lines": [
+    133,
+    135
+   ],
+   "cortado": "C3"
+  }
+ ],
+ "advanced-query-processing-architecture-grafana-codex": [
+  {
+   "id": "L1",
+   "file": "public/app/plugins/datasource/loki/querySplitting.ts",
+   "lines": [
+    296,
+    299
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "public/app/plugins/datasource/loki/shardQuerySplitting.ts",
+   "lines": [
+    49,
+    52
+   ],
+   "cortado": "C1"
+  },
+  {
+   "id": "L3",
+   "file": "public/app/plugins/datasource/loki/querySplitting.ts",
+   "lines": [
+    296,
+    300
+   ],
+   "cortado": "C2"
+  },
+  {
+   "id": "L4",
+   "file": "public/app/plugins/datasource/loki/shardQuerySplitting.ts",
+   "lines": [
+    48,
+    54
+   ],
+   "cortado": "C3"
+  }
+ ],
+ "advanced-sql-analytics-framework-grafana-codex": [
+  {
+   "id": "L1",
+   "file": "pkg/expr/reader.go",
+   "lines": [
+    194,
+    200
+   ],
+   "publicado": "S1"
+  }
+ ],
+ "anonymous-add-configurable-device-limit-grafana-codex": [
+  {
+   "id": "L1",
+   "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+   "lines": [
+    105,
+    118
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "pkg/services/anonymous/anonimpl/client.go",
+   "lines": [
+    44,
+    50
+   ],
+   "publicado": "S3"
+  },
+  {
+   "id": "L3",
+   "file": "pkg/services/anonymous/anonimpl/impl.go",
+   "lines": [
+    144,
+    148
+   ],
+   "publicado": "S2"
+  }
+ ],
+ "async-import-of-the-appstore-packages-cal-com": [
+  {
+   "id": "L1",
+   "file": "packages/app-store/vital/lib/reschedule.ts",
+   "lines": [
+    125,
+    134
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "packages/app-store/wipemycalother/lib/reschedule.ts",
+   "lines": [
+    125,
+    134
+   ],
+   "cortado": "C1"
+  },
+  {
+   "id": "L3",
+   "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+   "lines": [
+    458,
+    470
+   ],
+   "cortado": "C2"
+  },
+  {
+   "id": "L4",
+   "file": "packages/trpc/server/routers/viewer/bookings.tsx",
+   "lines": [
+    553,
+    567
+   ],
+   "cortado": "C3"
+  },
+  {
+   "id": "L5",
+   "file": "packages/core/videoClient.ts",
+   "lines": [
+    21,
+    36
+   ],
+   "publicado": "S2"
+  }
+ ],
+ "authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "L1",
+   "file": "pkg/services/authz/rbac/service.go",
+   "lines": [
+    180,
+    196
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L2",
+   "file": "pkg/services/authz/rbac/service.go",
+   "lines": [
+    116,
+    121
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L3",
+   "file": "pkg/services/authz/rbac/service.go",
+   "lines": [
+    116,
+    155
+   ],
+   "cortado": "C1"
+  }
+ ],
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+  {
+   "id": "L1",
+   "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+   "lines": [
+    484,
+    497
+   ],
+   "cortado": "C1"
+  },
+  {
+   "id": "L2",
+   "file": "packages/features/bookings/lib/handleNewBooking.ts",
+   "lines": [
+    964,
+    975
+   ],
+   "publicado": "S3"
+  },
+  {
+   "id": "L3",
+   "file": "packages/trpc/server/routers/viewer/bookings.tsx",
+   "lines": [
+    487,
+    494
+   ],
+   "cortado": "C2"
+  },
+  {
+   "id": "L4",
+   "file": "packages/trpc/server/routers/viewer/workflows.tsx",
+   "lines": [
+    211,
+    218
+   ],
+   "cortado": "C3"
+  },
+  {
+   "id": "L5",
+   "file": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+   "lines": [
+    213,
+    223
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L6",
+   "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+   "lines": [
+    56,
+    74
+   ],
+   "publicado": "S2"
+  }
+ ],
+ "database-performance-optimizations-grafana-codex": [
+  {
+   "id": "L1",
+   "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+   "lines": [
+    534,
+    579
+   ],
+   "cortado": "C1"
+  },
+  {
+   "id": "L2",
+   "file": "pkg/services/cleanup/cleanup.go",
+   "lines": [
+    77,
+    77
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L3",
+   "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+   "lines": [
+    609,
+    613
+   ],
+   "publicado": "S2"
+  }
+ ],
+ "dual-storage-architecture-grafana-codex": [
+  {
+   "id": "L1",
+   "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+   "lines": [
+    42,
+    48
+   ],
+   "cortado": "C1"
+  },
+  {
+   "id": "L2",
+   "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+   "lines": [
+    96,
+    97
+   ],
+   "cortado": "C2"
+  },
+  {
+   "id": "L3",
+   "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+   "lines": [
+    100,
+    106
+   ],
+   "cortado": "C3"
+  },
+  {
+   "id": "L4",
+   "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+   "lines": [
+    125,
+    132
+   ],
+   "cortado": "C4"
+  },
+  {
+   "id": "L5",
+   "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+   "lines": [
+    161,
+    167
+   ],
+   "cortado": "C5"
+  },
+  {
+   "id": "L6",
+   "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+   "lines": [
+    134,
+    141
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L7",
+   "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+   "lines": [
+    50,
+    57
+   ],
+   "publicado": "S2"
+  }
+ ],
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "L1",
+   "file": "app/views/embed/best.html.erb",
+   "lines": [
+    8,
+    8
+   ],
+   "publicado": "S3"
+  },
+  {
+   "id": "L2",
+   "file": "app/jobs/scheduled/poll_feed.rb",
+   "lines": [
+    35,
+    36
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L3",
+   "file": "app/assets/javascripts/embed.js",
+   "lines": [
+    17,
+    17
+   ],
+   "publicado": "S4"
+  },
+  {
+   "id": "L4",
+   "file": "app/models/topic_embed.rb",
+   "lines": [
+    13,
+    13
+   ],
+   "publicado": "S8"
+  },
+  {
+   "id": "L5",
+   "file": "app/jobs/scheduled/poll_feed.rb",
+   "lines": [
+    28,
+    37
+   ],
+   "publicado": "S5"
+  },
+  {
+   "id": "L6",
+   "file": "app/models/topic_embed.rb",
+   "lines": [
+    44,
+    53
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L7",
+   "file": "lib/topic_retriever.rb",
+   "lines": [
+    35,
+    46
+   ],
+   "publicado": "S6"
+  },
+  {
+   "id": "L8",
+   "file": "app/models/topic_embed.rb",
+   "lines": [
+    15,
+    30
+   ],
+   "publicado": "S7"
+  }
+ ],
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": [
+  {
+   "id": "L1",
+   "file": "src/sentry/api/paginator.py",
+   "lines": [
+    838,
+    840
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "src/sentry/api/paginator.py",
+   "lines": [
+    182,
+    184
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L3",
+   "file": "src/sentry/api/paginator.py",
+   "lines": [
+    877,
+    882
+   ],
+   "cortado": "C1"
+  },
+  {
+   "id": "L4",
+   "file": "src/sentry/api/paginator.py",
+   "lines": [
+    891,
+    892
+   ],
+   "publicado": "S3"
+  }
+ ],
+ "feat-2fa-backup-codes-cal-com": [
+  {
+   "id": "L1",
+   "file": "packages/features/auth/lib/next-auth-options.ts",
+   "lines": [
+    121,
+    131
+   ],
+   "cortado": "C1"
+  },
+  {
+   "id": "L2",
+   "file": "packages/features/auth/lib/next-auth-options.ts",
+   "lines": [
+    139,
+    156
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L3",
+   "file": "packages/features/auth/lib/next-auth-options.ts",
+   "lines": [
+    131,
+    156
+   ],
+   "publicado": "S2"
+  }
+ ],
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+  {
+   "id": "L1",
+   "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+   "lines": [
+    1023,
+    1024
+   ],
+   "publicado": "S3"
+  },
+  {
+   "id": "L2",
+   "file": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+   "lines": [
+    42,
+    50
+   ],
+   "publicado": "S4"
+  },
+  {
+   "id": "L3",
+   "file": "packages/trpc/server/routers/viewer/calendars/connectedCalendars.handler.ts",
+   "lines": [
+    27,
+    29
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L4",
+   "file": "packages/trpc/server/routers/viewer/calendars/deleteCache.handler.ts",
+   "lines": [
+    24,
+    26
+   ],
+   "publicado": "S5"
+  },
+  {
+   "id": "L5",
+   "file": "packages/trpc/server/routers/viewer/calendars/deleteCache.handler.ts",
+   "lines": [
+    17,
+    22
+   ],
+   "publicado": "S2"
+  }
+ ],
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": [
+  {
+   "id": "L1",
+   "file": "packages/lib/server/service/insightsBooking.ts",
+   "lines": [
+    29,
+    63
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "packages/lib/server/service/insightsBooking.ts",
+   "lines": [
+    29,
+    66
+   ],
+   "cortado": "C1"
+  }
+ ],
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
+  {
+   "id": "L1",
+   "file": "src/sentry/integrations/services/assignment_source.py",
+   "lines": [
+    14,
+    18
+   ],
+   "publicado": "S1"
+  }
+ ],
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": [
+  {
+   "id": "L1",
+   "file": "src/sentry/api/endpoints/organization_events_stats.py",
+   "lines": [
+    218,
+    220
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "src/sentry/api/helpers/error_upsampling.py",
+   "lines": [
+    38,
+    44
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L3",
+   "file": "src/sentry/api/endpoints/organization_events_stats.py",
+   "lines": [
+    218,
+    220
+   ],
+   "cortado": "C1"
+  },
+  {
+   "id": "L4",
+   "file": "src/sentry/api/helpers/error_upsampling.py",
+   "lines": [
+    38,
+    44
+   ],
+   "cortado": "C2"
+  }
+ ],
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+  {
+   "id": "L1",
+   "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+   "lines": [
+    83,
+    94
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+   "lines": [
+    185,
+    186
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L3",
+   "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+   "lines": [
+    211,
+    212
+   ],
+   "publicado": "S3"
+  },
+  {
+   "id": "L4",
+   "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+   "lines": [
+    231,
+    243
+   ],
+   "publicado": "S4"
+  },
+  {
+   "id": "L5",
+   "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+   "lines": [
+    273,
+    291
+   ],
+   "publicado": "S5"
+  },
+  {
+   "id": "L6",
+   "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+   "lines": [
+    1921,
+    1924
+   ],
+   "publicado": "S6"
+  }
+ ],
+ "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": [
+  {
+   "id": "L1",
+   "file": "src/sentry/incidents/grouptype.py",
+   "lines": [
+    10,
+    12
+   ],
+   "cortado": "C1"
+  },
+  {
+   "id": "L2",
+   "file": "src/sentry/incidents/grouptype.py",
+   "lines": [
+    11,
+    12
+   ],
+   "publicado": "S1"
+  }
+ ],
+ "feature-automatically-downsize-large-images-discourse-cursor": [
+  {
+   "id": "L1",
+   "file": "app/models/optimized_image.rb",
+   "lines": [
+    145,
+    151
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "app/assets/javascripts/discourse/lib/utilities.js",
+   "lines": [
+    182,
+    186
+   ],
+   "publicado": "S6"
+  },
+  {
+   "id": "L3",
+   "file": "app/controllers/uploads_controller.rb",
+   "lines": [
+    65,
+    69
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L4",
+   "file": "app/controllers/uploads_controller.rb",
+   "lines": [
+    64,
+    70
+   ],
+   "publicado": "S3"
+  },
+  {
+   "id": "L5",
+   "file": "app/assets/javascripts/discourse/lib/utilities.js",
+   "lines": [
+    245,
+    248
+   ],
+   "cortado": "C1"
+  },
+  {
+   "id": "L6",
+   "file": "app/controllers/uploads_controller.rb",
+   "lines": [
+    64,
+    64
+   ],
+   "publicado": "S4"
+  },
+  {
+   "id": "L7",
+   "file": "app/controllers/uploads_controller.rb",
+   "lines": [
+    67,
+    67
+   ],
+   "publicado": "S5"
+  }
+ ],
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "L1",
+   "file": "app/controllers/admin/embeddable_hosts_controller.rb",
+   "lines": [
+    9,
+    18
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L2",
+   "file": "app/models/embeddable_host.rb",
+   "lines": [
+    5,
+    8
+   ],
+   "publicado": "S3"
+  },
+  {
+   "id": "L3",
+   "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+   "lines": [
+    9,
+    25
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L4",
+   "file": "app/assets/javascripts/admin/components/embeddable-host.js.es6",
+   "lines": [
+    30,
+    40
+   ],
+   "publicado": "S5"
+  },
+  {
+   "id": "L5",
+   "file": "app/models/topic.rb",
+   "lines": [
+    868,
+    869
+   ],
+   "publicado": "S6"
+  },
+  {
+   "id": "L6",
+   "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+   "lines": [
+    3,
+    7
+   ],
+   "publicado": "S4"
+  }
+ ],
+ "feature-localization-fallbacks-server-side-discourse-cursor": [
+  {
+   "id": "L1",
+   "file": "app/controllers/application_controller.rb",
+   "lines": [
+    159,
+    159
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L2",
+   "file": "config/initializers/i18n.rb",
+   "lines": [
+    8,
+    9
+   ],
+   "publicado": "S3"
+  },
+  {
+   "id": "L3",
+   "file": "lib/freedom_patches/translate_accelerator.rb",
+   "lines": [
+    62,
+    65
+   ],
+   "publicado": "S1"
+  }
+ ],
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": [
+  {
+   "id": "L1",
+   "file": "app/controllers/topics_controller.rb",
+   "lines": [
+    105,
+    113
+   ],
+   "publicado": "S1"
+  }
+ ],
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": [
+  {
+   "id": "L1",
+   "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+   "lines": [
+    274,
+    275
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+   "lines": [
+    139,
+    157
+   ],
+   "publicado": "S2"
+  }
+ ],
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "id": "L1",
+   "file": "packages/core/EventManager.ts",
+   "lines": [
+    118,
+    119
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "packages/features/bookings/lib/handleNewBooking.ts",
+   "lines": [
+    1063,
+    1079
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L3",
+   "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+   "lines": [
+    254,
+    256
+   ],
+   "cortado": "C1"
+  },
+  {
+   "id": "L4",
+   "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+   "lines": [
+    314,
+    317
+   ],
+   "publicado": "S5"
+  },
+  {
+   "id": "L5",
+   "file": "packages/core/EventManager.ts",
+   "lines": [
+    553,
+    564
+   ],
+   "publicado": "S3"
+  },
+  {
+   "id": "L6",
+   "file": "packages/trpc/server/routers/viewer/organizations/create.handler.ts",
+   "lines": [
+    151,
+    153
+   ],
+   "publicado": "S4"
+  },
+  {
+   "id": "L7",
+   "file": "packages/core/EventManager.ts",
+   "lines": [
+    339,
+    369
+   ],
+   "publicado": "S6"
+  },
+  {
+   "id": "L8",
+   "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+   "lines": [
+    422,
+    441
+   ],
+   "cortado": "C2"
+  }
+ ],
+ "fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "L1",
+   "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+   "lines": [
+    6,
+    38
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L2",
+   "file": "app/assets/javascripts/discourse/models/group.js",
+   "lines": [
+    20,
+    21
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L3",
+   "file": "app/controllers/admin/groups_controller.rb",
+   "lines": [
+    71,
+    75
+   ],
+   "publicado": "S3"
+  }
+ ],
+ "fixing-re-authentication-with-passkeys-keycloak": [],
+ "frontend-asset-optimization-grafana-codex": [
+  {
+   "id": "L1",
+   "file": "pkg/api/webassets/webassets.go",
+   "lines": [
+    48,
+    52
+   ],
+   "cortado": "C1"
+  },
+  {
+   "id": "L2",
+   "file": "pkg/api/webassets/webassets.go",
+   "lines": [
+    41,
+    52
+   ],
+   "publicado": "S1"
+  }
+ ],
+ "github-oauth-security-enhancement-sentry": [
+  {
+   "id": "L1",
+   "file": "src/sentry/integrations/github/integration.py",
+   "lines": [
+    500,
+    505
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "src/sentry/integrations/github/integration.py",
+   "lines": [
+    434,
+    436
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L3",
+   "file": "tests/sentry/integrations/github/test_integration.py",
+   "lines": [
+    388,
+    396
+   ],
+   "cortado": "C1"
+  },
+  {
+   "id": "L4",
+   "file": "src/sentry/integrations/github/integration.py",
+   "lines": [
+    500,
+    505
+   ],
+   "cortado": "C2"
+  },
+  {
+   "id": "L5",
+   "file": "src/sentry/integrations/github/integration.py",
+   "lines": [
+    434,
+    439
+   ],
+   "cortado": "C3"
+  },
+  {
+   "id": "L6",
+   "file": "tests/sentry/integrations/github/test_integration.py",
+   "lines": [
+    388,
+    396
+   ],
+   "cortado": "C4"
+  }
+ ],
+ "implement-access-token-context-encoding-framework-keycloak": [
+  {
+   "id": "L1",
+   "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+   "lines": [
+    69,
+    73
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+   "lines": [
+    476,
+    491
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L3",
+   "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+   "lines": [
+    69,
+    78
+   ],
+   "cortado": "C1"
+  },
+  {
+   "id": "L4",
+   "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+   "lines": [
+    476,
+    491
+   ],
+   "cortado": "C2"
+  }
+ ],
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "L1",
+   "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+   "lines": [
+    237,
+    242
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L2",
+   "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+   "lines": [
+    193,
+    201
+   ],
+   "publicado": "S3"
+  },
+  {
+   "id": "L3",
+   "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+   "lines": [
+    326,
+    340
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L4",
+   "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+   "lines": [
+    326,
+    341
+   ],
+   "cortado": "C1"
+  }
+ ],
+ "notification-rule-processing-engine-grafana-codex": [
+  {
+   "id": "L1",
+   "file": "public/app/features/alerting/unified/rule-list/FilterView.tsx",
+   "lines": [
+    154,
+    163
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx",
+   "lines": [
+    104,
+    106
+   ],
+   "cortado": "C1"
+  }
+ ],
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": [
+  {
+   "id": "L1",
+   "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+   "lines": [
+    5,
+    11
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+   "lines": [
+    3,
+    19
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L3",
+   "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+   "lines": [
+    85,
+    94
+   ],
+   "publicado": "S3"
+  },
+  {
+   "id": "L4",
+   "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+   "lines": [
+    96,
+    108
+   ],
+   "publicado": "S4"
+  },
+  {
+   "id": "L5",
+   "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+   "lines": [
+    25,
+    27
+   ],
+   "publicado": "S5"
+  },
+  {
+   "id": "L6",
+   "file": "apps/web/pages/api/webhook/app-credential.ts",
+   "lines": [
+    56,
+    89
+   ],
+   "publicado": "S6"
+  },
+  {
+   "id": "L7",
+   "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+   "lines": [
+    97,
+    100
+   ],
+   "publicado": "S7"
+  },
+  {
+   "id": "L8",
+   "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+   "lines": [
+    86,
+    86
+   ],
+   "publicado": "S8"
+  }
+ ],
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
+  {
+   "id": "L1",
+   "file": "app/assets/stylesheets/common/foundation/mixins.scss",
+   "lines": [
+    117,
+    123
+   ],
+   "cortado": "C1"
+  }
+ ],
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "id": "L1",
+   "file": "src/sentry/scripts/spans/add-buffer.lua",
+   "lines": [
+    47,
+    53
+   ],
+   "publicado": "S3"
+  },
+  {
+   "id": "L2",
+   "file": "src/sentry/scripts/spans/add-buffer.lua",
+   "lines": [
+    46,
+    54
+   ],
+   "cortado": "C1"
+  },
+  {
+   "id": "L3",
+   "file": "src/sentry/scripts/spans/add-buffer.lua",
+   "lines": [
+    62,
+    64
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L4",
+   "file": "src/sentry/spans/consumers/process/factory.py",
+   "lines": [
+    135,
+    143
+   ],
+   "publicado": "S2"
+  }
+ ],
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+  {
+   "id": "L1",
+   "file": "pkg/plugins/log/fake.go",
+   "lines": [
+    46,
+    48
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "pkg/services/pluginsintegration/pluginsintegration.go",
+   "lines": [
+    159,
+    161
+   ],
+   "cortado": "C1"
+  }
+ ],
+ "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": [
+  {
+   "id": "L1",
+   "file": "src/sentry/monitors/logic/incident_occurrence.py",
+   "lines": [
+    159,
+    171
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "src/sentry/monitors/logic/incident_occurrence.py",
+   "lines": [
+    159,
+    171
+   ],
+   "cortado": "C1"
+  }
+ ],
+ "replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "L1",
+   "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+   "lines": [
+    164,
+    175
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+   "lines": [
+    50,
+    60
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L3",
+   "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+   "lines": [
+    110,
+    120
+   ],
+   "publicado": "S3"
+  },
+  {
+   "id": "L4",
+   "file": "src/sentry/integrations/source_code_management/commit_context.py",
+   "lines": [
+    577,
+    606
+   ],
+   "publicado": "S4"
+  }
+ ],
+ "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": [
+  {
+   "id": "L1",
+   "file": "app/assets/stylesheets/mobile/modal.scss",
+   "lines": [
+    102,
+    102
+   ],
+   "cortado": "C1"
+  },
+  {
+   "id": "L2",
+   "file": "app/assets/stylesheets/desktop/topic-post.scss",
+   "lines": [
+    291,
+    291
+   ],
+   "cortado": "C2"
+  },
+  {
+   "id": "L3",
+   "file": "app/assets/stylesheets/mobile/topic-post.scss",
+   "lines": [
+    182,
+    182
+   ],
+   "cortado": "C3"
+  },
+  {
+   "id": "L4",
+   "file": "app/assets/stylesheets/desktop/user.scss",
+   "lines": [
+    522,
+    522
+   ],
+   "cortado": "C4"
+  },
+  {
+   "id": "L5",
+   "file": "app/assets/stylesheets/mobile/user.scss",
+   "lines": [
+    497,
+    497
+   ],
+   "cortado": "C5"
+  },
+  {
+   "id": "L6",
+   "file": "app/assets/stylesheets/mobile/modal.scss",
+   "lines": [
+    102,
+    102
+   ],
+   "cortado": "C6"
+  },
+  {
+   "id": "L7",
+   "file": "app/assets/stylesheets/desktop/topic-post.scss",
+   "lines": [
+    291,
+    291
+   ],
+   "cortado": "C7"
+  },
+  {
+   "id": "L8",
+   "file": "app/assets/stylesheets/mobile/topic-post.scss",
+   "lines": [
+    182,
+    182
+   ],
+   "cortado": "C8"
+  },
+  {
+   "id": "L9",
+   "file": "app/assets/stylesheets/desktop/user.scss",
+   "lines": [
+    522,
+    522
+   ],
+   "cortado": "C9"
+  },
+  {
+   "id": "L10",
+   "file": "app/assets/stylesheets/mobile/user.scss",
+   "lines": [
+    497,
+    497
+   ],
+   "cortado": "C10"
+  }
+ ],
+ "sms-workflow-reminder-retry-count-tracking-cal-com": [
+  {
+   "id": "L1",
+   "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+   "lines": [
+    28,
+    45
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+   "lines": [
+    178,
+    200
+   ],
+   "cortado": "C1"
+  },
+  {
+   "id": "L3",
+   "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+   "lines": [
+    38,
+    43
+   ],
+   "cortado": "C2"
+  },
+  {
+   "id": "L4",
+   "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+   "lines": [
+    38,
+    43
+   ],
+   "cortado": "C3"
+  },
+  {
+   "id": "L5",
+   "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+   "lines": [
+    189,
+    199
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L6",
+   "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+   "lines": [
+    39,
+    41
+   ],
+   "publicado": "S3"
+  }
+ ],
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
+  {
+   "id": "L1",
+   "file": "src/sentry/spans/consumers/process/flusher.py",
+   "lines": [
+    51,
+    66
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "src/sentry/spans/consumers/process/flusher.py",
+   "lines": [
+    297,
+    304
+   ],
+   "publicado": "S3"
+  },
+  {
+   "id": "L3",
+   "file": "src/sentry/spans/consumers/process/flusher.py",
+   "lines": [
+    127,
+    132
+   ],
+   "cortado": "C1"
+  },
+  {
+   "id": "L4",
+   "file": "src/sentry/spans/consumers/process/flusher.py",
+   "lines": [
+    253,
+    257
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L5",
+   "file": "src/sentry/spans/consumers/process/flusher.py",
+   "lines": [
+    185,
+    199
+   ],
+   "cortado": "C2"
+  }
+ ],
+ "unified-storage-performance-optimizations-grafana-codex": [
+  {
+   "id": "L1",
+   "file": "pkg/storage/unified/search/bleve.go",
+   "lines": [
+    137,
+    141
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L2",
+   "file": "pkg/storage/unified/resource/server.go",
+   "lines": [
+    258,
+    262
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L3",
+   "file": "pkg/storage/unified/search/bleve.go",
+   "lines": [
+    137,
+    140
+   ],
+   "cortado": "C1"
+  }
+ ],
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": [
+  {
+   "id": "L1",
+   "file": "app/serializers/user_serializer.rb",
+   "lines": [
+    153,
+    155
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "app/serializers/user_serializer.rb",
+   "lines": [
+    137,
+    150
+   ],
+   "cortado": "C1"
+  },
+  {
+   "id": "L3",
+   "file": "app/serializers/user_serializer.rb",
+   "lines": [
+    153,
+    155
+   ],
+   "cortado": "C2"
+  }
+ ]
+}

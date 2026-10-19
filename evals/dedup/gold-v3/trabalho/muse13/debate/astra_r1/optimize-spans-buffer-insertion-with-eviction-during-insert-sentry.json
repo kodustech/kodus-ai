@@ -1,0 +1,19 @@
+{
+ "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+ "items": [
+  {
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#muse13-01",
+   "class": "FP",
+   "subclass": "none",
+   "severity": "medium",
+   "reply": "Changed to FP. buffer.py uses the supplied timestamp for retention ordering, but the affected set is scoped to one project's trace segment, and flushing uses server-side now plus a timeout. The base already allowed a sender injecting enough spans into that segment to make the entire segment exceed max_segment_spans and be discarded. The comment therefore does not establish a new security weakness beyond the sender's existing ability to poison that segment."
+  },
+  {
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#muse13-02",
+   "class": "FP",
+   "subclass": "none",
+   "severity": "medium",
+   "reply": "Changed the subclass from hallucination to none. Separate batches can recreate a source set and repeatedly merge it into the growing destination, so conditional unions and unlinking do not rule out the described quadratic copying. The base performs SUNIONSTORE under the same conditions; the PR replaces it with ZUNIONSTORE, so the reported repeated full-set merging is pre-existing."
+  }
+ ]
+}

@@ -1,0 +1,59 @@
+{
+ "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+   "newGroup": null,
+   "reason": "The empty update data fails to refresh SelectedCalendar.updatedAt; explicitly setting the timestamp addresses the golden issue."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This describes bypassing the cache-enabled repository factory in connectedCalendars, which is not covered by any golden issue."
+  },
+  {
+   "id": "S3",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#03",
+   "newGroup": null,
+   "reason": "Cache deletion does not invalidate connectedCalendars, leaving the displayed cache status stale."
+  },
+  {
+   "id": "S4",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#07",
+   "newGroup": null,
+   "reason": "The script uses macOS-specific sed in-place syntax that fails on GNU/Linux and prevents the webhook URL update."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "This alleges a predictable temporary-log path permits symlink-based file overwrites, a separate problem from the script issues in the golden set."
+  },
+  {
+   "id": "S6",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+   "newGroup": null,
+   "reason": "The same empty update data prevents the intended SelectedCalendar.updatedAt refresh."
+  },
+  {
+   "id": "S7",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+   "newGroup": null,
+   "reason": "The empty update does not trigger @updatedAt, leaving the cache-refresh timestamp unchanged."
+  },
+  {
+   "id": "S8",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+   "newGroup": null,
+   "reason": "This identifies the same empty-data update call and missing timestamp bump, while additionally claiming a runtime validation error."
+  },
+  {
+   "id": "S9",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#04",
+   "newGroup": null,
+   "reason": "The cache timestamp uses hard-coded en-US formatting instead of the user's active locale."
+  }
+ ]
+}

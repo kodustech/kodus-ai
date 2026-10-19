@@ -1,0 +1,17 @@
+{
+ "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims the auto-downsize branch corrupts SVGs through raster conversion. This differs from the rejected download-cap and SSRF-bandwidth claim."
+  },
+  {
+   "id": "S5",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Makes the same claim that replacing the configured API URL download limit with a larger fixed cap increases SSRF bandwidth."
+  }
+ ]
+}

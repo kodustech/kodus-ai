@@ -1,0 +1,12 @@
+{
+ "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+ "items": [
+  {
+   "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#kimi-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "In tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:139-149, the newly added reader thread catches only Exception, so an Error terminates it without entering caughtExceptions. The assertion at line 157 checks only that list, allowing the test to pass despite the reader failing; the Error may print to stderr rather than being literally swallowed.",
+   "severity": "medium"
+  }
+ ]
+}

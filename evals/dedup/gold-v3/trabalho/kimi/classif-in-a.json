@@ -1,0 +1,666 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "a308075bc39b77ed7059b0cae9d443d669a7bf98",
+  "head": "de628295646d0848226618108a52f2f1e5d04ac0",
+  "prTitle": "fix: handle collective multiple host on destinationCalendar",
+  "issues": [
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S8",
+      "file": "packages/core/CalendarManager.ts",
+      "lines": [
+       228,
+       231
+      ],
+      "texto": "The string \"Notes have been hidden by the organizer\" is written directly into calEvent.additionalNotes and shown to users in calendar events, but it is not routed through the project's i18n system. The existing TODO even notes this. The PR changed the spelling of this line without resolving the localization gap, so attendees/organizers whose locale is not English still see an untranslated message. Replace the hard-coded string with a translated key (e.g., t(\"notes_hidden_by_organizer\")) and add it to the locale files."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "add-guest-management-functionality-to-existing-bookings-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "b004587262e8221083bafbe9a0c515e7becaa7b3",
+  "head": "92f44dcea7ff19e9123a30c63c167a2938df5a55",
+  "prTitle": "Add guest management functionality to existing bookings",
+  "issues": [
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S10",
+      "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+      "lines": [
+       26,
+       29
+      ],
+      "texto": "The uniqueness refine uses `new Set(emails)`, which compares strings case-sensitively. Email addresses are case-insensitive identity data, so `A@example.com` and `a@example.com` pass validation as unique but refer to the same mailbox. Normalize emails with `toLowerCase()` before the Set comparison (and ideally persist the normalized form) to prevent case-variation duplicates and any downstream bypass of case-sensitive attendee or blacklist checks."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "bc89fe00ea84d20bedcec782f0701b9711dc8201",
+  "head": "9fde0e906897cc0f4f71793f647dd629faba3317",
+  "prTitle": "OAuth credential sync and app integration enhancements",
+  "issues": [
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S8",
+      "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+      "lines": [
+       8,
+       14
+      ],
+      "texto": "WHAT: The fetch to CALCOM_CREDENTIAL_SYNC_ENDPOINT has no timeout or abort signal. WHY: If the external endpoint hangs, the calling calendar/video request also hangs indefinitely, consuming workers and potentially blocking user-facing operations. HOW: Add an AbortController with a timeout and handle abort errors."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#kimi-02",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S15",
+      "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+      "lines": [
+       3,
+       5
+      ],
+      "texto": "The guard uses `userId` in a boolean context, so a user id of `0` is treated as absent and the code falls back to the local refresh instead of calling the configured `CALCOM_CREDENTIAL_SYNC_ENDPOINT`. Because the parameter is typed `number | null`, the only value that should disable sync is `null` (team credentials). Use an explicit `userId !== null` check so `0` is handled like any other valid user id."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "sms-workflow-reminder-retry-count-tracking-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "917c7b0764f4c6bfdca95db2c5f73dbfdbe11757",
+  "head": "c790227e0cda780e6fea9bb03af27948d9e286b9",
+  "prTitle": "SMS workflow reminder retry count tracking",
+  "issues": [
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S1",
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       189,
+       199
+      ],
+      "texto": "WHAT: The catch block increments retryCount for any error in the try block, not only for SMS scheduling failures. WHY: Failures from `prisma.profile.findFirst`, `getBookerBaseUrl`, or other unrelated setup can mark a reminder for deletion even though Twilio was never attempted. HOW: Wrap only the `twilio.scheduleSMS` call and the successful update in try/catch, or restructure so retryCount is incremented only when scheduling itself fails."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#kimi-02",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S5",
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       198,
+       198
+      ],
+      "texto": "The catch block logs the raw `error` object from SMS scheduling. Provider error responses often include PII such as recipient/sender phone numbers and message bodies. Redact or summarize the error before logging (e.g., log only the provider error code and a generic message) to prevent leaking sensitive data into application logs."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "c9a47dd0cebd121ff73f24e1f8c1829579daf8e3",
+  "head": "da09bc0808e7c6df1bc10e00d5acf764d94c7cc7",
+  "prTitle": "feat: convert InsightsBookingService to use Prisma.sql raw queries",
+  "issues": [
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S2",
+      "file": "packages/lib/server/service/insightsBooking.ts",
+      "lines": [
+       100,
+       112
+      ],
+      "texto": "`this.filters.eventTypeId` and `this.filters.memberUserId` are optional `number`s, but the code tests them with `if (this.filters.eventTypeId)` and `if (this.filters.memberUserId)`. A caller passing the perfectly valid numeric ID `0` will be treated as if no filter was supplied, causing rows for ID 0 to be excluded or, worse, included when they shouldn't be. Use explicit null/undefined checks such as `this.filters.eventTypeId != null` or `typeof this.filters.eventTypeId !== \"undefined\"` instead of truthiness."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#kimi-02",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S3",
+      "file": "packages/lib/server/service/insightsBooking.ts",
+      "lines": [
+       164,
+       174
+      ],
+      "texto": "buildOrgAuthorizationCondition always emits `(\"teamId\" = ANY(${teamIds}))`. When the organization has no child teams, `teamIds` is empty and PostgreSQL cannot infer the element type of the empty array parameter, causing a runtime error. Guard the team branch the same way the user branch is guarded, and fall back to `1=0` (NOTHING_CONDITION) when both lists are empty."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#kimi-03",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S4",
+      "file": "packages/lib/server/service/insightsBooking.ts",
+      "lines": [
+       29,
+       34
+      ],
+      "texto": "InsightsBookingServicePublicOptions makes teamId optional for scope \"team\", but buildTeamAuthorizationCondition assumes it is defined and interpolates `options.teamId` directly into Prisma.sql. Either keep the schema discriminated-union type in the constructor (requiring teamId for team scope) or validate/throw before using options.teamId, so the previous invariant is not broken."
+     },
+     {
+      "gid": "kimi-kimi:S5",
+      "file": "packages/lib/server/service/insightsBooking.ts",
+      "lines": [
+       29,
+       34
+      ],
+      "texto": "The exported `InsightsBookingServicePublicOptions` type marks `teamId` as optional, but the `insightsBookingServiceOptionsSchema` and the team-scope authorization logic require it. A caller can pass `{ scope: \"team\", userId, orgId }` without `teamId`; runtime validation fails, `this.options` is set to `null`, and `getAuthorizationConditions()` returns `Prisma.sql`1=0``, producing empty results with no error. Align the public type with the schema so missing `teamId` is caught at compile time, e.g. replace the manual type with `z.input<typeof insightsBookingServiceOptionsSchema>` or use a discriminated union that requires `teamId` for `scope: \"team\"`."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "62db063e1e1abe691313ab42682a68f796d63769",
+  "head": "4f8aed295a29954023b2849c060ef4fb299d1b5d",
+  "prTitle": "Enhance embed URL handling and validation system",
+  "issues": [
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S5",
+      "file": "lib/topic_retriever.rb",
+      "lines": [
+       48,
+       50
+      ],
+      "texto": "WHAT: fetch_http calls SiteSetting.embed_by_username.downcase without verifying the setting is present. WHY: If feed polling is disabled and embed_by_username is blank, the retrieve job raises NoMethodError on nil.downcase instead of failing gracefully. HOW: Return early when the username setting is blank, matching the guard in PollFeed."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-02",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S7",
+      "file": "app/jobs/scheduled/poll_feed.rb",
+      "lines": [
+       28,
+       37
+      ],
+      "texto": "WHAT: poll_feed calls open(feed_url).read without a timeout and iterates rss.items without any limit. WHY: A slow or unresponsive feed can hold a worker indefinitely, and a very large feed can consume excessive memory and time importing every item. HOW: Add a read timeout to open and cap the number of items processed per run."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-03",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S10",
+      "file": "spec/components/topic_retriever_spec.rb",
+      "lines": [
+       9,
+       44
+      ],
+      "texto": "The tests 'does not call perform_retrieve when embeddable_host is not set', 'different than the host of the URL', and 'embed url is not a url' stub SiteSetting.embeddable_host and assert that perform_retrieve is never called. But they also stub retrieve_recently? implicitly only in later tests. The implementation's invalid_host? raises URI::InvalidURIError; if invalid_host? were removed or always returned false, retrieve_recently? would still gate perform_retrieve. Because perform_retrieve is the actual private method being mocked, a bug in invalid_host? does not cause these tests to fail; the tests exercise the mock, not the real host-matching logic. Replace the mock of perform_retrieve with direct assertion about the side effect (e.g. no HTTP fetch, no TopicEmbed import) or call invalid_host? directly and assert its result."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-04",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S11",
+      "file": "spec/controllers/embed_controller_spec.rb",
+      "lines": [
+       40,
+       52
+      ],
+      "texto": "The 'tells the topic retriever to work' and 'creates a topic view' tests stub TopicEmbed.topic_id_for_embed, TopicRetriever.new, TopicView.new, and the retriever's retrieve method. They therefore pass even if the controller action's real logic for calling TopicRetriever, TopicView, or rendering 'loading' is removed or inverted. These tests assert only that mocks are called with the expected arguments, which by construction matches the test setup; they do not verify the actual response body, template, or that an embed record is created. Add expectations on response.body/rendered_template (e.g. assert the loading partial is rendered when no topic exists and the topic view partial is rendered when one exists) and use real collaborators or at least assert the side effects."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-05",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S12",
+      "file": "spec/jobs/poll_feed_spec.rb",
+      "lines": [
+       12,
+       37
+      ],
+      "texto": "The execute tests stub all three SiteSetting predicates and assert that poll_feed is or is not called. If the execute method's guard condition were changed to ignore any of those settings (e.g. always call poll_feed), the tests using stubs with expects(:poll_feed).never would still catch it, but the 'delegates to poll_feed' test only verifies that poll_feed is called once when all settings are stubbed true; it does not verify that poll_feed actually opens the configured URL, parses it, or calls TopicEmbed.import. The poll_feed method itself has no dedicated test. Add a test that stubs an RSS response and asserts TopicEmbed.import is called with the expected arguments, otherwise a broken parser or wrong argument order could go undetected."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "913c3d6f636d02b3dd6c2c022ca1af2bec95d752",
+  "head": "d1c69189f3c90ecf56013a8da904da9bff9a8e19",
+  "prTitle": "FEATURE: Can edit category/host relationships for embedding",
+  "issues": [
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S3",
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       17,
+       17
+      ],
+      "texto": "WHAT: `record_for_host` queries with `lower(host) = ?` but the table has no index on `host`. WHY: This lookup runs on every embedded request, and as the allowed-hosts list grows it degrades to a full table scan. HOW: Add an index on `host` in the migration, ideally `lower(host)` if the database supports expression indexes, or a standard btree index with case-insensitive comparisons in the query."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-02",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S5",
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       36,
+       43
+      ],
+      "texto": "WHAT: `TopicEmbed.import` now passes `category: eh.try(:category_id)`, which becomes nil when no embeddable host matches the URL. WHY: Previously the default `SiteSetting.embed_category` was always used; feed polling and import scripts that call `import` directly can now create topics with no explicit category, changing behavior for URLs that do not match a configured host. HOW: Fall back to the uncategorized category or the old default when `eh` is blank, matching the controller's blank-category handling."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-03",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S9",
+      "file": "app/controllers/admin/embeddable_hosts_controller.rb",
+      "lines": [
+       22,
+       25
+      ],
+      "texto": "`host.category_id = SiteSetting.uncategorized_category_id if host.category_id.blank?` treats `0` and empty string the same as `nil`. If category id `0` is ever meaningful, it will be silently replaced. Use `if host.category_id.nil?` to test for an explicitly absent value rather than any falsy/blank value."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-04",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S11",
+      "file": "spec/models/embeddable_host_spec.rb",
+      "lines": [
+       23,
+       23
+      ],
+      "texto": "The describe block is named 'allows_embeddable_host' but the model method added in this PR is 'host_allowed?'. The test description names a non-existent method, which is confusing and will break navigation/expectations. Rename the describe block to 'host_allowed?' to match the actual API."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-05",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S12",
+      "file": "app/assets/javascripts/admin/templates/components/embeddable-host.hbs",
+      "lines": [
+       3,
+       3
+      ],
+      "texto": "The input placeholder is hardcoded English text 'example.com' instead of using the I18n translation mechanism. This bypasses localization and will appear untranslated for non-English users. Add a translation key (e.g. admin.embedding.host_placeholder) and use it here."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-06",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S13",
+      "file": "spec/controllers/admin/embeddable_hosts_controller_spec.rb",
+      "lines": [
+       1,
+       9
+      ],
+      "texto": "The spec added for Admin::EmbeddableHostsController only checks that it is a subclass of Admin::AdminController. It does not exercise create, update, or destroy. Those actions could be completely broken and this spec would still pass, so it does not verify the controller behaviour it appears to cover. Add request specs for the actual actions, or at least assert that saving/destroying a host has the expected side effects."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-07",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S14",
+      "file": "spec/controllers/admin/embedding_controller_spec.rb",
+      "lines": [
+       1,
+       9
+      ],
+      "texto": "The spec added for Admin::EmbeddingController only checks that it inherits from Admin::AdminController. It does not call show or update, which in this PR return a serialized embedding object. Those actions could be removed or broken and the spec would still pass. Add tests that hit the routes and verify the serialized response contains the embeddable hosts."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "98fa098e6fade3097a11fe7f99a98a4e6ffb4728",
+  "head": "5b229316ee4c661836ed1161139692a3e8527444",
+  "prTitle": "Optimize header layout performance with flexbox mixins",
+  "issues": [
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S3",
+      "file": "app/assets/stylesheets/common/base/topic-post.scss",
+      "lines": [
+       264,
+       270
+      ],
+      "texto": "`.small-action` is now a flex container, so `.topic-avatar` is a flex item and its `float: left` declaration is ignored by the flex layout algorithm. Remove the dead `float: left` from `.topic-avatar` since the horizontal placement is now handled by flexbox."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feature-automatically-downsize-large-images-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "3f71fa15c93bb0b751bb92abae1b5dc9a21bd4ca",
+  "head": "ffbaf8c54269df2ce510de91245760fddce09896",
+  "prTitle": "FEATURE: automatically downsize large images",
+  "issues": [
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S10",
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       67,
+       67
+      ],
+      "texto": "`OptimizedImage.downsize(tempfile.path, tempfile.path, \"80%\", ...)` asks ImageMagick to read from and write to the same file. The model's `convert_with` builds a `convert <from> ... <to>` shell command and assumes distinct paths; overwriting the source during conversion can corrupt or truncate the upload. Downsize to a temporary path and then replace the original."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "fix-proper-handling-of-group-memberships-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "4975fc28903a84418f546b2809370f19abf10e08",
+  "head": "060cda77729cb1c4a827560e09e89a7b22078ba9",
+  "prTitle": "FIX: proper handling of group memberships",
+  "issues": [
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S6",
+      "file": "app/controllers/admin/groups_controller.rb",
+      "lines": [
+       37,
+       37
+      ],
+      "texto": "params[:alias_level].present? returns false for the integer 0, so selecting the \"nobody\" alias level (value 0) leaves the existing alias_level unchanged. Use an existence check that accepts 0 while still skipping absent/blank values."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feature-localization-fallbacks-server-side-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "728845d008f06828630a632e5c7d67e11bf15deb",
+  "head": "ecfa17b5a79dfdc91e7a4d50b42ae78a35d0a293",
+  "prTitle": "FEATURE: Localization fallbacks (server-side)",
+  "issues": [
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S1",
+      "file": "config/initializers/i18n.rb",
+      "lines": [
+       12,
+       24
+      ],
+      "texto": "WHAT: FallbackLocaleList subclasses Hash but leaves the underlying hash empty, so every method other than `[]` (e.g. `each`, `keys`, `defaults`, `map`) sees an empty collection. WHY: This violates the I18n::Locale::Fallbacks/Hash contract; any future caller that iterates or inspects `I18n.fallbacks` will get no locales even though `I18n.fallbacks[:en]` returns a fallback chain. HOW: Delegate storage to a real Hash by calling `super` in `[]` and populating defaults explicitly, or do not inherit from Hash and instead implement only the small interface I18n::Backend::Fallbacks actually needs (e.g. `def [](locale); ... end`)."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "anonymous-add-configurable-device-limit-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "50f4e78a39914711d0d231a501ba215becf17ebc",
+  "head": "bbd8c507cdf56f6b884373809e0b24abd4a2353d",
+  "prTitle": "Anonymous: Add configurable device limit",
+  "issues": [
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S5",
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       18,
+       18
+      ],
+      "texto": "The error message 'device limit reached' is user-facing but is a hard-coded English literal. It bypasses Grafana's i18n/translation system, so users in other locales will see untranslated English text. This string should be passed through the project's translation mechanism (e.g., i18n.Translate) and added to the relevant locale file(s)."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "58ba11ecbd60863e2bfc6e32f0399ed4feb3927a",
+  "head": "303cdc2caf256aa5df660611120c2e3f7392365d",
+  "prTitle": "Plugins: Chore: Renamed instrumentation middleware to metrics middleware",
+  "issues": [
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S2",
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+      "lines": [
+       144,
+       167
+      ],
+      "texto": "WHAT: QueryData and CallResource look up the plugin target from the registry twice per request (once for size and once for duration). WHY: The duplicated registry lookup doubles the work on every plugin request for the two instrumented endpoints. HOW: Resolve the target once per method and pass it into both instrumentPluginRequestSize and instrumentPluginRequest, or add a helper that records size and duration with a single lookup."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "dual-storage-architecture-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "66c4dff17e9147b11fb9b14c6ed63089a599da65",
+  "head": "e369f24665ec70e1e3700f457d25ef83301d931a",
+  "prTitle": "Dual Storage Architecture",
+  "issues": [
+   {
+    "issueId": "dual-storage-architecture-grafana-codex#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S6",
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       50,
+       167
+      ],
+      "texto": "WHAT: Every Create, Update, Delete, and DeleteCollection spawns a new goroutine that can live up to 10 seconds with no concurrency limit or backpressure. WHY: Under high write throughput this creates unbounded goroutine fanout and memory growth, especially if the legacy store is slow or times out. HOW: Bound concurrency with a worker pool or semaphore, or use a rate-limited background queue for legacy writes."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "notification-rule-processing-engine-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "47e5bd23163e6037fc0741068ac78930bba2769f",
+  "head": "8df850371034b73dc4dd9908cc30fa09f12a1f97",
+  "prTitle": "Notification Rule Processing Engine",
+  "issues": [
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S5",
+      "file": "GrafanaGroupLoader",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The key={promRule.uid} could be problematic if uids are not unique within a group, though this is noted as a pre-existing data contract issue."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#kimi-02",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S7",
+      "file": "useAbilities.ts",
+      "lines": [
+       289,
+       289
+      ],
+      "texto": "Line 289 has a stray `// duplicate` comment next to `useIsGrafanaPromRuleEditable(rule)`; it appears to be a stray comment, not a code defect."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "c834e7473c02f11451216b3fbf355f953cfd95e9",
+  "head": "4def149a50c4b9b2c24fbb753ac60fe4f4df0cac",
+  "prTitle": "Fix concurrent group access to prevent NullPointerException",
+  "issues": [
+   {
+    "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S1",
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+      "lines": [
+       137,
+       149
+      ],
+      "texto": "WHAT: The reader thread in the new test catches only Exception, so any Error (e.g., AssertionError, OutOfMemoryError) thrown during concurrent group reads is silently swallowed. WHY: The main thread then asserts caughtExceptions is empty and passes even though the reader thread failed, masking real failures and making the test give false confidence. HOW: Change the catch to Throwable, keep the exception list typed as Throwable, and use assertTrue(caughtThrowables.isEmpty(), ...) so any failure fails the test visibly."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ }
+}

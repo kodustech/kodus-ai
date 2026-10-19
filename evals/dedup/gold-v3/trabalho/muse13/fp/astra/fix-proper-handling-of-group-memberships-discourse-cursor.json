@@ -1,0 +1,53 @@
+{
+ "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+ "items": [
+  {
+   "id": "S2",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "Same claim that add_members fails to strip whitespace from comma-separated usernames, causing lookups to miss members."
+  },
+  {
+   "id": "S5",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Same claimed route parameter mismatch: add_members requires group_id while the route supplies id, causing ParameterMissing."
+  },
+  {
+   "id": "S6",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Same claimed route parameter mismatch in remove_member: requiring group_id when the route supplies id causes ParameterMissing."
+  },
+  {
+   "id": "S7",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Same claim that add_members always fails because it requires group_id instead of the route's id parameter."
+  },
+  {
+   "id": "S8",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Same claim that remove_member always fails because it requires group_id instead of the route's id parameter."
+  },
+  {
+   "id": "S11",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims an incorrect frontend pagination clamp permits an empty page. None of the rejected issues describes this defect; the endpoint limit/offset claim concerns unbounded data loading."
+  },
+  {
+   "id": "S12",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Same claimed group_id versus id mismatch causing ParameterMissing in add_members; mentioning the frontend URL adds detail to the same claim."
+  },
+  {
+   "id": "S13",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Same claimed group_id versus id mismatch causing ParameterMissing in remove_member; mentioning the frontend URL adds detail to the same claim."
+  }
+ ]
+}

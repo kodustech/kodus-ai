@@ -1,0 +1,23 @@
+{
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "items": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Alleges a race in per-partition lock creation, which is distinct from every rejected claim."
+  },
+  {
+   "id": "S5",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#prod-01",
+   "newGroup": null,
+   "reason": "Repeats the claim that the committable-offset loop scans the numeric offset span and burns CPU across large gaps. The min/max and backlog details supplement the same alleged problem."
+  },
+  {
+   "id": "S11",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Alleges that filtered payloads reach a decoder assertion instead of the skip-and-commit path. None of the rejected claims concerns filtered-payload decoding."
+  }
+ ]
+}

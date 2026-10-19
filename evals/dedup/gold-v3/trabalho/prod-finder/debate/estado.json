@@ -1,0 +1,305 @@
+{
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#pf-muse-C3": {
+  "caseId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+  "issue": {
+   "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#pf-muse-C3",
+   "comentarios": [
+    {
+     "gid": "prodfinder-muse:C3",
+     "file": "app/assets/stylesheets/common/base/topic.scss",
+     "lines": [
+      29,
+      35
+     ],
+     "texto": "WHAT: Removed &.bullet{margin-top:5px} while parent stays float-based, not flex. WHY: The 5px compensation for the floated bullet is lost on topic pages where order() is a no-op, shifting bullet badges up relative to title text."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "none",
+    "text": "The claim rests on .extra-info-wrapper's parent staying float-based so order() is a no-op, but .extra-info-wrapper is rendered only by header-extra-info inside the header .contents (header.hbs:94), which this PR turns into a flex container (common/base/header.scss:16-18). The removed 5px bullet offset is replaced by flex align-items:center plus line-height:1.5 (topic.scss:30-32)."
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "low",
+    "text": "The float-based main topic title still retains its bullet margin at app/assets/stylesheets/common/base/topic.scss:10-13. The removed margin belongs to the header, where the category renders below the heading (app/assets/javascripts/discourse/templates/components/header-extra-info.hbs:13-15), and the PR changes both header alignment and line-height; removing that spacing does not establish the claimed alignment defect."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "none",
+    "text": "The comment's premise is that the parent of .extra-info-wrapper stays float-based so order() is a no-op. At head .extra-info-wrapper is rendered only by header-extra-info (header-extra-info.hbs:1), invoked inside the header's div.contents (header.hbs:2, :94), and this PR makes .contents a flex container with align-items:center (common/base/header.scss:15-18). So order(2) is not a no-op and the parent is not float-based; the removed 5px offset is replaced by flex centering plus line-height:1.5 (topic.scss:30-32). The #topic-title bullet margin is untouched (topic.scss:10-14). Since the stated fact is false, this is a hallucination, not merely an unproven defect.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "low",
+    "text": "I retain FP/none: the main topic title's floated bullet retains its 5px margin, while the removed margin affects the header category rendered below its heading with newly adjusted line-height. The reviewer's assertion that order(2) works is incorrect: header-extra-info retains Ember's default component wrapper, so .extra-info-wrapper is not a direct flex child of .contents. That ineffective order does not establish the claimed bullet alignment defect."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "none",
+    "text": "Astra is right that header-extra-info is an Ember.Component with no tagName (components/header-extra-info.js.es6:1), so its default div wrapper, not .extra-info-wrapper (header-extra-info.hbs:1), is the flex child of .contents (header.hbs:94, header.scss:15-18); order(2) at topic.scss:30 is indeed a no-op, so my hallucination call was wrong. The comment's remaining claim, that dropping the 5px bullet margin (topic.scss diff :32-34) misaligns the badge, is unproven: the badge sits below the h1 (header-extra-info.hbs:4-15), the PR adds line-height:1.5 to the wrapper, and the #topic-title bullet margin is untouched (topic.scss:10-14). A deliberate spacing change in a layout PR with no demonstrated defect is FP with no subclass.",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "add-html-sanitizer-for-translated-message-resources-keycloak#pf-kimi-C1": {
+  "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+  "issue": {
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#pf-kimi-C1",
+   "comentarios": [
+    {
+     "gid": "prodfinder-kimi:C1",
+     "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+     "lines": [
+      145,
+      145
+     ],
+     "texto": "WHAT: The anchor pattern Pattern.compile(\"</?a[^>]*>\") matches any tag whose name begins with 'a', such as <abbr>, <address>, and <area>, not just anchor tags. WHY: Non-anchor 'a' tags are treated as anchors, so the verifier can emit misleading \"Didn't find anchor tag\" errors, or silently strip a non-anchor tag before the HTML policy runs when English contains the same tag. HOW: Require a word boundary after the 'a', e.g., </?a(?:\\s[^>]*)?>, so only <a ...>, </a>, and <a> are matched."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "ANCHOR_PATTERN = Pattern.compile(\"</?a[^>]*>\") (VerifyMessageProperties.java:145) does match <abbr>, <address>, <area> etc. as anchors. No message properties at head contain such tags (git grep finds none), so this is a theoretical imprecision in a build-time verifier."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "VerifyMessageProperties.java:145 matches tags such as <abbr>, and lines 154\u2013155 remove them when identical tags appear in English. Because removal precedes policy validation at lines 88\u201392, these non-anchor tags bypass the allowed-element policy; this PR introduces the defect."
+   },
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "The regex is imprecise as stated: ANCHOR_PATTERN \"</?a[^>]*>\" (VerifyMessageProperties.java:145) also matches <abbr>, <area>, <audio>, and santizeAnchors strips such a tag before the policy runs (lines 88, 153-155). But it strips only a tag that is byte-identical to one in the English source, so a translation can only carry a tag the project's own English file already has, which is the exemption the method is designed to grant anchors. No message bundle at head contains such tags, and this is a build-time verifier, not a runtime sanitizer. Real but no practical effect: nit.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "I retain TP: the newly introduced regex strips non-anchor tags before policy validation, producing incorrect validation results. English bundles are also verified against themselves, so an English value containing `<abbr>text</abbr>` passes despite `abbr` being excluded from the allowed elements. Matching the English source therefore does not eliminate the defect. The absence of affected tags in current bundles limits its incidence, but this is incorrect behavior for uncommon input, not a cosmetic nit."
+   },
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "ANCHOR_PATTERN \"</?a[^>]*>\" (VerifyMessageProperties.java:145) matches <abbr>, <area>, <audio> etc., and santizeAnchors (:150-162) removes such a tag before the policy runs (:88-92). Astra's point holds: the English file maps to itself (:74-75 replaceAll to _en.properties), so an English value with <abbr> strips against itself and passes even though only br/p/strong/b are allowed (:58-61). That makes the new verifier silently miss disallowed HTML for uncommon input, a real wrong result rather than a nit; no current bundle triggers it, which keeps it at medium.",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "implement-recovery-key-support-for-user-storage-providers-keycloak#pf-ds-C1": {
+  "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+  "issue": {
+   "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#pf-ds-C1",
+   "comentarios": [
+    {
+     "gid": "prodfinder-ds:C1",
+     "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+     "lines": [
+      235,
+      246
+     ],
+     "texto": "WHAT: getCredentials() rebuilds the recovery-codes model with RecoveryAuthnCodesCredentialModel.createFromValues(...), which hashes the codes and always reproduces them in original order, so the model returned by the federated store never reflects consumed codes. WHY: RecoveryAuthnCodeInputLoginBean derives the 'next code to enter' number from this model and RecoveryAuthnCodesFormAuthenticator relies on allCodesUsed() to decide whether to remove the credential; with a freshly rebuilt model the displayed code number can be stale and the removal branch is driven by clone state rather than persisted state, producing wrong results for federated users. HOW: Persist and rehydrate the hashed secretData (and consumed-code state) instead of regenerating it from the raw list on each read."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "In the test-only BackwardsCompatibilityUserStorage, getCredentials (lines 230-252) rebuilds the model with RecoveryAuthnCodesCredentialModel.createFromValues from the raw stored list each time, and isValid (lines 326-341) accepts any code via anyMatch without consuming it, so consumed-code state is never persisted. This is a simplification of a testsuite fixture provider, not production code."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "The added BackwardsCompatibilityUserStorage.java:237-242 rebuilds credentials from the original list, while validation at :334-340 never removes accepted codes; RecoveryAuthnCodesCredentialModel.java:65-71 consequently recreates every code with numbering starting at one. RecoveryAuthnCodeInputLoginBean.java:21 therefore keeps requesting code 1, and RecoveryAuthnCodesFormAuthenticator.java:85-91 never detects exhaustion or requests replacement codes. This is a functional defect in the test storage provider introduced by this PR."
+   },
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "The facts hold: getCredentials rebuilds the model from the raw list via createFromValues (BackwardsCompatibilityUserStorage.java:237-241), and isValid accepts any stored code via anyMatch without consuming it (:326-340). But this is a testsuite fixture provider with no real federated users. The only test added (BackwardsCompatibilityUserStorageTest testRecoveryKeysSetupAndLogin) does one login that expects code 0, which the fixture handles correctly. The simplified consumption state affects no production path and no test assertion, so it is a real but non-impactful fixture shortcut: nit.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "I change my classification to TP/nit. The added getCredentials() recreates the complete code list, and isValid() never consumes accepted codes, so the state limitation is real. However, this provider is a testsuite fixture, and testRecoveryKeysSetupAndLogin exercises only setup and the first recovery-code login, which this implementation supports. The reported limitation neither affects production users nor invalidates that test\u2019s assertions."
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "add-guest-management-functionality-to-existing-bookings-cal-com#pf-muse-C1": {
+  "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+  "issue": {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#pf-muse-C1",
+   "comentarios": [
+    {
+     "gid": "prodfinder-muse:C1",
+     "file": "packages/emails/templates/organizer-add-guests-email.ts",
+     "lines": [
+      26,
+      30
+     ],
+     "texto": "WHAT: Organizer subject uses attendees[0].name after nameless guests are added. WHY: New guests are created with name \"\" so the subject renders an empty or wrong booker name. HOW: Use the original booker/organizer name instead of attendees[0]."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "none",
+    "text": "organizer-add-guests-email.ts:28 uses attendees[0].name and addGuests.handler.ts:85 creates guests with name \"\", but attendees[0] is the original booker: the new guests are appended by createMany after the existing attendees (addGuests.handler.ts:92-106), the same attendees[0] convention as OrganizerScheduledEmail. The empty name only appears if a new guest were first, which this code does not do."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "New guests receive an empty name in packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:83-89, and the updated attendees are fetched without ordering at lines 92-108, so the original booker is not guaranteed to remain first. packages/emails/templates/organizer-add-guests-email.ts:26-29 directly interpolates attendees[0].name, allowing a nameless guest to produce a blank booker name in the subject."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "none",
+    "text": "Guests are created with name \"\" (addGuests.handler.ts:83-90) and appended to the existing booking via createMany (:92-106), so the original booker row, inserted earlier, is attendees[0] in practice. organizer-add-guests-email.ts:28 follows the same attendees[0] convention as OrganizerScheduledEmail and the rest of cal.com's emails. The missing orderBy is a theoretical ordering guarantee shared by every booking email, not a defect this PR introduces. The comment's claim that adding nameless guests makes the subject render an empty name does not happen on the normal path.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "I retain TP: createMany inserts rows; it does not guarantee their position in the subsequently fetched attendees relation. The new handler fetches attendees without orderBy and passes that ordering directly to the new template, which interpolates attendees[0].name even though added guests have empty names. Neither mapping nor formatCalEvent restores the original booker to index zero. Also, OrganizerScheduledEmail actually uses calEvent.title for its subject, so the cited precedent does not establish correctness."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "none",
+    "text": "I accept the correction that OrganizerScheduledEmail's subject uses calEvent.title (organizer-scheduled-email.ts:50), but attendees[0].name as the booker is the established cal.com convention (organizer-location-change-email.ts:28, attendee-request-email.ts:24, broken-integration-email.ts:32, organizer-payment-refund-failed-email.ts:15). The new guests are appended via createMany to an existing booking (addGuests.handler.ts:92-106), so the original booker row precedes them and is attendees[0] on the normal path. The missing orderBy is a theoretical guarantee shared by every one of those emails, not a defect introduced here, and the comment's claim that adding guests makes the subject blank does not follow from this code.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "I retain TP: createMany inserts related rows; it does not append them to an ordered attendee array. The new handler retrieves attendees without orderBy, and neither its mapping nor formatCalEvent establishes the original booker as index zero. Consequently, the new template can interpolate a nameless guest into the subject, although this need not happen on every execution. Existing templates sharing this assumption do not make the newly introduced handler and template pre-existing code."
+   }
+  ],
+  "fechado": "humano",
+  "decisaoHumana": {
+   "quem": "Junior",
+   "data": "2026-10-19",
+   "class": "FP",
+   "subclass": "none",
+   "nota": "attendees[0] is the original booker in practice and follows the convention of the other cal.com emails (posicao do Opus)"
+  }
+ },
+ "feat-2fa-backup-codes-cal-com#pf-muse-C2": {
+  "caseId": "feat-2fa-backup-codes-cal-com",
+  "issue": {
+   "issueId": "feat-2fa-backup-codes-cal-com#pf-muse-C2",
+   "comentarios": [
+    {
+     "gid": "prodfinder-muse:C2",
+     "file": "apps/web/pages/api/auth/two-factor/totp/disable.ts",
+     "lines": [
+      48,
+      52
+     ],
+     "texto": "WHAT: The new missing-encryption-key branch throws instead of returning a JSON error response. WHY: Throwing from the Next API route yields a non-JSON 500 page, so the caller's await response.json() rejects and the UI can only show a generic error with an unhandled server exception. HOW: Return res.status(500).json({ error: ErrorCode.InternalServerError }) like the surrounding branches."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "none",
+    "text": "The new backup-code branch throws when CALENDSO_ENCRYPTION_KEY is missing (disable.ts:49-52), exactly as the existing TOTP branch does (disable.ts:75-83, which also throw). It only fires on a server misconfiguration and follows the file's established convention, so there is no defect introduced."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "The PR adds an uncaught throw for a missing encryption key in apps/web/pages/api/auth/two-factor/totp/disable.ts:48-51, producing a framework 500 instead of a JSON error response. The caller unconditionally parses unsuccessful responses as JSON at apps/web/components/settings/DisableTwoFactorModal.tsx:66, so this response causes a parsing failure handled by the generic-error catch at lines 80-82. The UI catches the failure, but the new branch still breaks the expected error-response format."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "none",
+    "text": "The new branch throws on a missing CALENDSO_ENCRYPTION_KEY (disable.ts:49-52), matching the existing TOTP branch, which also throws for the same misconfiguration (disable.ts:75-83, 86-91). Even a JSON {error: InternalServerError} would hit the else branch and show 'something_went_wrong' (DisableTwoFactorModal.tsx:77-78), which is exactly what the catch at :80-82 shows for the thrown 500. So there is no user-visible difference. It fires only on a server misconfiguration, so there is nothing to report.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "I change my classification to FP. The new branch does throw, but DisableTwoFactorModal.tsx:80-84 catches the parsing failure, displays the same message as a JSON InternalServerError response, and resets the loading state. The existing TOTP branch also throws for this server misconfiguration, and neither approach can proceed without the encryption key. The cited code therefore establishes no broken caller or user-visible error-handling defect."
+   }
+  ],
+  "fechado": "consenso"
+ }
+}

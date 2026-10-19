@@ -1,0 +1,750 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Hard-coded untranslated notes string; no rejected issue concerns i18n."
+  }
+ ],
+ "add-guest-management-functionality-to-existing-bookings-cal-com": [
+  {
+   "id": "S5",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#snloop-01",
+   "newGroup": null,
+   "reason": "Same claim: error toast renders raw server error message/code, exposing backend details."
+  },
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Case-sensitive uniqueness check in the dialog form validation; #07 concerns includes() routing of stored attendees, a different place."
+  }
+ ],
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": [
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Missing timeout on credential-sync fetch; not among rejected claims."
+  },
+  {
+   "id": "S10",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#snloop-01",
+   "newGroup": null,
+   "reason": "Same claim: decrypt key falls back to empty string instead of failing fast."
+  },
+  {
+   "id": "S13",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#06",
+   "newGroup": null,
+   "reason": "Same claim: bare JSON.parse of OAuth state throws on malformed input."
+  },
+  {
+   "id": "S15",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "userId 0 truthiness guard in refreshOAuthTokens; no matching rejected claim."
+  }
+ ],
+ "sms-workflow-reminder-retry-count-tracking-cal-com": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "catch increments retryCount for unrelated setup errors; #05/#08 concern empty message and success path."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Logging raw provider error with PII; not among rejected claims."
+  }
+ ],
+ "feat-2fa-backup-codes-cal-com": [
+  {
+   "id": "S5",
+   "match": "feat-2fa-backup-codes-cal-com#06",
+   "newGroup": null,
+   "reason": "Same claim: toBeTruthy on an un-awaited isChecked() Promise always passes."
+  },
+  {
+   "id": "S8",
+   "match": "feat-2fa-backup-codes-cal-com#08",
+   "newGroup": null,
+   "reason": "Same claim: backup code lookup via indexOf is a non-constant-time comparison."
+  }
+ ],
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": [
+  {
+   "id": "S1",
+   "match": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#06",
+   "newGroup": null,
+   "reason": "Same claim: toEqual between flat Prisma.sql literal and nested Sql composition fails."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Truthiness check drops filter id 0; not among rejected claims."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Empty teamIds array parameter in ANY() causing type inference error; #02 is about user ids not fetched, a different cause."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Public options type makes teamId optional for team scope; no rejected claim on this."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Same as S4: teamId optional in public type versus schema requiring it."
+  }
+ ],
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "S3",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Same claim: comments.appendChild on null when #discourse-comments is absent."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "nil.downcase on blank embed_by_username in TopicRetriever; not among rejected claims."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "No timeout and no item cap in poll_feed; #05 is about missing conditional GET, a different cause."
+  },
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N5",
+   "reason": "TopicRetriever specs mock perform_retrieve so host logic is untested; #31 attributes the vacuous test to blank embeddable_host, a different cause."
+  },
+  {
+   "id": "S11",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Embed controller specs only assert mocks; #03 claims the spec fails because best enqueues a job, a different claim."
+  },
+  {
+   "id": "S12",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "poll_feed has no dedicated test; not among rejected claims."
+  },
+  {
+   "id": "S13",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#28",
+   "newGroup": null,
+   "reason": "Same claim: cook_method default 1 equals raw_html so posts skip cooking."
+  },
+  {
+   "id": "S15",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#28",
+   "newGroup": null,
+   "reason": "Same claim: cook_method default 1 equals raw_html."
+  },
+  {
+   "id": "S16",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#28",
+   "newGroup": null,
+   "reason": "Same claim: cook_method default 1 equals raw_html."
+  },
+  {
+   "id": "S17",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#23",
+   "newGroup": null,
+   "reason": "Same claim: `end if` in best.html.erb is invalid Ruby and raises SyntaxError."
+  }
+ ],
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Missing index on embeddable_hosts.host; muse13-02 concerns replacing an in-memory check with a query, a different cause."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "import now passes nil category when no host matches; muse13-01 is about try on false raising, a different defect."
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "blank? treats category_id 0 as absent; not among rejected claims."
+  },
+  {
+   "id": "S11",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "Spec describe block names a non-existent method; not among rejected claims."
+  },
+  {
+   "id": "S12",
+   "match": "new",
+   "newGroup": "N5",
+   "reason": "Hard-coded placeholder not localized; not among rejected claims."
+  },
+  {
+   "id": "S13",
+   "match": "new",
+   "newGroup": "N6",
+   "reason": "EmbeddableHostsController spec only checks inheritance; not among rejected claims."
+  },
+  {
+   "id": "S14",
+   "match": "new",
+   "newGroup": "N7",
+   "reason": "EmbeddingController spec only checks inheritance; not among rejected claims."
+  }
+ ],
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Dead float:left on .topic-avatar as a flex item; musep-01 concerns floated buttons collapsing, a different element and claim."
+  }
+ ],
+ "feature-automatically-downsize-large-images-discourse-cursor": [
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Downsizing in place with same source and destination path; #07 is about download size limit."
+  }
+ ],
+ "fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "S3",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Same claim: params.require(:group_id) while routes supply :id, so ParameterMissing."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "alias_level 0 skipped by present?; not among rejected claims."
+  }
+ ],
+ "feature-localization-fallbacks-server-side-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "FallbackLocaleList leaves the underlying Hash empty for non-[] methods; not among rejected claims."
+  }
+ ],
+ "anonymous-add-configurable-device-limit-grafana-codex": [
+  {
+   "id": "S4",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Same claim: zero-row update for a stale existing device is reported as ErrDeviceLimitReached."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Untranslated error message literal; not among rejected claims."
+  }
+ ],
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Same claim: middleware factory reuses one instance and mutates its next field."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Duplicate registry lookup per request; not among rejected claims."
+  },
+  {
+   "id": "S4",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Same claim: request-size metric help text says returned."
+  }
+ ],
+ "dual-storage-architecture-grafana-codex": [
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Unbounded goroutine fanout for legacy writes; #12 is about a data race on obj."
+  }
+ ],
+ "unified-storage-performance-optimizations-grafana-codex": [
+  {
+   "id": "S2",
+   "match": "unified-storage-performance-optimizations-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Same claim: NewResourceServer now calls Init, changing the constructor contract."
+  }
+ ],
+ "notification-rule-processing-engine-grafana-codex": [
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Possible non-unique uid as React key; not among rejected claims."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Stray // duplicate comment; not among rejected claims."
+  },
+  {
+   "id": "S9",
+   "match": "notification-rule-processing-engine-grafana-codex#muse13-02",
+   "newGroup": null,
+   "reason": "Same claim: groups.at(0)?.rules without ?? [] makes .map throw on empty groups."
+  }
+ ],
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reader thread catches only Exception, masking Errors; muse13-01 is about load from busy-looping."
+  },
+  {
+   "id": "S6",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#snloop-01",
+   "newGroup": null,
+   "reason": "Same claim: getSubGroupsStream still dereferences modelSupplier.get() without null check."
+  }
+ ],
+ "add-html-sanitizer-for-translated-message-resources-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Case-sensitive tag regexes cause false positives with uppercase tags; not among rejected claims."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Absolute file paths in build error messages; not among rejected claims."
+  },
+  {
+   "id": "S9",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#prod-01",
+   "newGroup": null,
+   "reason": "Same claim: PropertyResourceBundle(InputStream) decodes as ISO-8859-1, corrupting UTF-8 translations."
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "S2",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#13",
+   "newGroup": null,
+   "reason": "Same claim: hasPermission does not filter returned permissions by resource id."
+  },
+  {
+   "id": "S3",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#14",
+   "newGroup": null,
+   "reason": "Same claim: getClientsWithPermission evaluates each client resource, O(N)."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Javadoc mentions VIEW_SCOPE that V2 canView never checks; not among rejected claims."
+  },
+  {
+   "id": "S7",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#12",
+   "newGroup": null,
+   "reason": "Same defect: ClientPermissionsV2 isPermissionsEnabled/setPermissionsEnabled throw UnsupportedOperationException, breaking callers such as the management-permissions endpoint."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Test indexes default client scopes without size check; not among rejected claims."
+  },
+  {
+   "id": "S9",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02",
+   "newGroup": null,
+   "reason": "Same claim: ClientRemovedEvent handler calls throwing setPermissionsEnabled, failing client deletion."
+  },
+  {
+   "id": "S10",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02",
+   "newGroup": null,
+   "reason": "Same claim: setPermissionsEnabled throwing breaks client deletion cleanup; suggests no-op."
+  }
+ ],
+ "fixing-re-authentication-with-passkeys-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Stale comment on USER_SET_BEFORE_USERNAME_PASSWORD_AUTH; not among rejected claims."
+  }
+ ],
+ "replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "In-place sort of error_events; not among rejected claims."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Broad except Exception swallowed in get_environment_info; #21 is an N+1 concern."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Truncated title exceeds max length by ellipsis; prod-01 is about AttributeError."
+  }
+ ],
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
+  {
+   "id": "S2",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#04",
+   "newGroup": null,
+   "reason": "Same claim: to_dict returns raw datetime that fails JSON serialization in Celery kwargs."
+  },
+  {
+   "id": "S6",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#05",
+   "newGroup": null,
+   "reason": "Same claim: assignment_source was not added to sync_assignee_outbound, the method that receives it."
+  }
+ ],
+ "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": [
+  {
+   "id": "S1",
+   "match": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#snloop-01",
+   "newGroup": null,
+   "reason": "Same claim: comment says commits instead of check-ins."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Hard-coded user-facing strings not wrapped with gettext; not among rejected claims."
+  }
+ ],
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": [
+  {
+   "id": "S5",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: different-timezone test expects same UTC slots and would pass if the fix were reverted."
+  },
+  {
+   "id": "S8",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-04",
+   "newGroup": null,
+   "reason": "Same claim: selectedSlots call omits dateOverrides/workingHours, so those checks are skipped."
+  },
+  {
+   "id": "S9",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#08",
+   "newGroup": null,
+   "reason": "Same claim: checkIfIsAvailable converts overrides with organizerTimeZone instead of each override timeZone."
+  }
+ ],
+ "async-import-of-the-appstore-packages-cal-com": [
+  {
+   "id": "S4",
+   "match": "async-import-of-the-appstore-packages-cal-com#03",
+   "newGroup": null,
+   "reason": "Same claim: getCalendarCredentials returns an un-awaited Promise as calendar."
+  }
+ ],
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+  {
+   "id": "S1",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#12",
+   "newGroup": null,
+   "reason": "Same claim: immediateDelete=true cancels SendGrid but leaves the WorkflowReminder row orphaned."
+  },
+  {
+   "id": "S4",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#12",
+   "newGroup": null,
+   "reason": "Same claim: immediateDelete path neither deletes nor flags the row."
+  }
+ ],
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reports no data-exposure issue in CredentialActionsDropdown; no matching rejected claim."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Reports no data-exposure issue in the cache repository; no matching rejected claim."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Reports no data-exposure issue in selectedCalendar; snloop-01 concerns googleChannelId selection in the session query."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "Reports no data-exposure issue in deleteCache handler."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N5",
+   "reason": "Reports no data-exposure issue in the webhook test script."
+  }
+ ],
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "nil email reaching =~ in EmailValidator; not among rejected claims."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Validator spec uses stubs so the blocked branch is untested; not among rejected claims."
+  }
+ ],
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Memoized topic_user shows stale notification level after unsubscribe; not among rejected claims."
+  },
+  {
+   "id": "S8",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Same claim: topic title rendered unescaped via triple braces, HTML injection."
+  },
+  {
+   "id": "S9",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Same claim: per-topic unsubscribe URL in email is relative."
+  }
+ ],
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "rescue nil swallows parse errors without logging; not among rejected claims."
+  }
+ ],
+ "advanced-query-processing-architecture-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "advanced-query-processing-architecture-grafana-codex#muse13-01",
+   "newGroup": null,
+   "reason": "Same claim: applyTemplateVariables drops the datasource ref that interpolateVariablesInQueries added."
+  }
+ ],
+ "advanced-sql-analytics-framework-grafana-codex": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Raw user SQL logged in warning; not among rejected claims."
+  }
+ ],
+ "authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "S2",
+   "match": "authzservice-improve-authz-caching-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "Same claim: denial cache never invalidated, so new grants stay denied for the TTL."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Cache-usage metric labels a cache hit that denies as a miss; not among rejected claims."
+  },
+  {
+   "id": "S5",
+   "match": "authzservice-improve-authz-caching-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "Same claim: stale denial entry consulted first keeps denying after permissions change."
+  }
+ ],
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "readInteger accepts constructed INTEGER tags; not among rejected claims."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "debugf called with non-format string; not among rejected claims."
+  },
+  {
+   "id": "S9",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-03",
+   "newGroup": null,
+   "reason": "Same claim: integerToBytes silently truncates oversized r/s values."
+  }
+ ],
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Interface Javadoc does not match V1 implementation; not among rejected claims."
+  }
+ ],
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "S1",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#07",
+   "newGroup": null,
+   "reason": "Same claim: Optional.get() on getCredential without isPresent."
+  },
+  {
+   "id": "S3",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: plaintext recovery codes sent to user storage while local path hashes."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Non-constant-time equals in pre-existing RecoveryAuthnCodesUtils hashed-code verify; #03 targets the new validator in the PR, a different place."
+  },
+  {
+   "id": "S5",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#03",
+   "newGroup": null,
+   "reason": "Same claim: recovery-code validator in the test user storage uses non-constant-time equals."
+  },
+  {
+   "id": "S6",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: raw codes passed to user storage vs hashed locally."
+  }
+ ],
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": [
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "value_from_cursor drops prev-cursor +1 boundary; not among rejected claims."
+  },
+  {
+   "id": "S11",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "get_item_key omits callable-key branch; #05 claims self.key is undefined, a different cause."
+  }
+ ],
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": [
+  {
+   "id": "S2",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#01",
+   "newGroup": null,
+   "reason": "Same claim: truthiness check on client_sample_rate drops 0.0."
+  },
+  {
+   "id": "S3",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#snloop-01",
+   "newGroup": null,
+   "reason": "Same claim: comments say 1 event while assertions expect 10."
+  },
+  {
+   "id": "S6",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: upsampled_count registered only in Discover config, errors dataset may fail."
+  }
+ ],
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+  {
+   "id": "S5",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#prod-01",
+   "newGroup": null,
+   "reason": "Same claim: committable-offset loop iterates the whole numeric offset span."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Review-incomplete note on queue_consumer.py; no claim."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Review-incomplete note on result_consumer.py; no claim."
+  }
+ ],
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "id": "S1",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-02",
+   "newGroup": null,
+   "reason": "Same claim: process_batch indexes end_timestamp_precise directly and raises KeyError."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "No finiteness check on ZADD score; muse13-01 is about attacker far-future timestamps."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "set_key name no longer matches sorted-set type; not among rejected claims."
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Backpressure test uses identical timestamps; not among rejected claims."
+  }
+ ]
+}

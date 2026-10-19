@@ -1,0 +1,2536 @@
+{
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "4f8aed295a29954023b2849c060ef4fb299d1b5d",
+  "base": "62db063e1e1abe691313ab42682a68f796d63769",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/models/topic_embed.rb",
+    "lines": [
+     10,
+     14
+    ],
+    "texto": "WHAT: embed_url is interpolated unescaped into stored raw HTML while cook_method raw_html bypasses sanitization. WHY: attacker-controlled URL path/query breaks out of the href attribute and persists as stored XSS, rendered via raw post.cooked. HOW: HTML-escape url before interpolation and sanitize stored content even for raw_html."
+   },
+   {
+    "id": "S2",
+    "file": "app/views/layouts/embed.html.erb",
+    "lines": [
+     11,
+     11
+    ],
+    "texto": "WHAT: request.referer is reflected unescaped into a JS string and used as postMessage targetOrigin. WHY: a referer containing quote or </script> breaks out to reflected XSS, and a full URL with path is an invalid targetOrigin so resize messaging fails. HOW: escape with j() and pass only origin (scheme://host[:port])."
+   },
+   {
+    "id": "S3",
+    "file": "app/jobs/scheduled/poll_feed.rb",
+    "lines": [
+     35,
+     36
+    ],
+    "texto": "WHAT: i.content is assumed present and scrubbed unconditionally. WHY: Atom/RSS items without content (title/link only, or description-only) make i.content nil so nil.scrub raises NoMethodError and aborts the hourly poll. HOW: fall back to description/summary and guard nil before scrub/unescape."
+   },
+   {
+    "id": "S4",
+    "file": "app/models/topic_embed.rb",
+    "lines": [
+     44,
+     53
+    ],
+    "texto": "WHAT: import_remote passes open(url).read into Readability and doc.content into import without nil/error handling. WHY: network errors raise out of the job and a nil doc.content crashes on contents <<, losing the embed and retrying. HOW: rescue OpenURI/network errors and guard nil title/content before import."
+   },
+   {
+    "id": "S5",
+    "file": "app/jobs/scheduled/poll_feed.rb",
+    "lines": [
+     28,
+     37
+    ],
+    "texto": "WHAT: hourly job fetches the full feed with open() and imports every item in a blocking loop. WHY: unbounded item count each doing TopicEmbed.import transactions stalls the scheduler, and defined feed_key conditional-GET is never used. HOW: use If-Modified-Since/ETag via feed_key and cap processed items per run."
+   },
+   {
+    "id": "S6",
+    "file": "app/jobs/scheduled/poll_feed.rb",
+    "lines": [
+     31,
+     37
+    ],
+    "texto": "i.content is nil for many RSS/ATOM items (e.g. description-only items). Calling i.content.scrub raises NoMethodError and aborts the whole hourly poll, so no items are imported. Fall back to description/empty string before scrub/unescape."
+   },
+   {
+    "id": "S7",
+    "file": "app/models/topic_embed.rb",
+    "lines": [
+     20,
+     30
+    ],
+    "texto": "Check-then-insert on embed_url is racy: two concurrent importers (PollFeed vs RetrieveTopic, or two jobs) both see embed.blank? and both execute create!, violating the unique index on topic_embeds.embed_url. The loser raises ActiveRecord::RecordNotUnique (unhandled execution break) and can leave a duplicate orphaned topic/post. Handle the unique violation by reloading the winner's embed."
+   },
+   {
+    "id": "S8",
+    "file": "app/models/topic_embed.rb",
+    "lines": [
+     10,
+     13
+    ],
+    "texto": "url comes from RSS/remote input and is validated only by /^https?\\:\\/\\//, so single-quotes/HTML break out of <a href='...'>. Combined with raw_html storage and raw rendering in embed/best, this is stored XSS. Escape the URL for HTML before interpolating into the link."
+   },
+   {
+    "id": "S9",
+    "file": "app/views/embed/best.html.erb",
+    "lines": [
+     19,
+     19
+    ],
+    "texto": "Post.cook returns raw unconditionally for cook_method raw_html and this view outputs it with raw, so arbitrary RSS/readability HTML imported by TopicEmbed is rendered unsanitized in the embed iframe. Sanitize or escape cooked HTML before output."
+   },
+   {
+    "id": "S10",
+    "file": "app/views/layouts/embed.html.erb",
+    "lines": [
+     11,
+     11
+    ],
+    "texto": "request.referer is attacker-controlled (Referer header) and interpolated into a single-quoted JS string without JS escaping, allowing quote-breakout and XSS inside the embed layout. Apply escape_javascript (j) helper."
+   },
+   {
+    "id": "S11",
+    "file": "app/views/embed/best.html.erb",
+    "lines": [
+     14,
+     14
+    ],
+    "texto": "strftime('%e %b %Y') hard-codes English month abbreviations while neighbouring strings in the same template go through I18n.t('embed.*'). Use I18n.l for the date so translated/localized formats apply."
+   },
+   {
+    "id": "S12",
+    "file": "app/views/layouts/embed.html.erb",
+    "lines": [
+     7,
+     12
+    ],
+    "texto": "Second arg to postMessage must be the origin (scheme+host+port), not the full request.referer which includes path/query. As written the targetOrigin never matches e.origin checked in embed.js, so the discourse-resize message is dropped and the iframe height is never updated. Send only the origin derived from the referer."
+   },
+   {
+    "id": "S13",
+    "file": "app/assets/javascripts/embed.js",
+    "lines": [
+     15,
+     17
+    ],
+    "texto": "Receiver/argument and index test are inverted: it tests whether discourseUrl contains e.origin anywhere instead of whether e.origin equals the expected origin/prefix. Any e.origin that appears as a substring at a non-zero offset passes (e.g. bare host inside full URL). Require prefix/equality in the correct direction."
+   },
+   {
+    "id": "S14",
+    "file": "spec/controllers/embed_controller_spec.rb",
+    "lines": [
+     40,
+     46
+    ],
+    "texto": "Controller no longer calls TopicRetriever directly \u2014 it does Jobs.enqueue(:retrieve_topic, ...) and the RetrieveTopic job calls the retriever later. The spec still mocks TopicRetriever.new/retrieve around GET, so it will fail. Update the spec to expect the enqueue instead of the synchronous retriever call."
+   },
+   {
+    "id": "S15",
+    "file": "spec/jobs/poll_feed_spec.rb",
+    "lines": [
+     12,
+     28
+    ],
+    "texto": "The 'requires feed_polling_url' and 'requires embed_by_username' (and 'requires enabled?') tests never enable the other two preconditions, which default to false/blank, so poll_feed is blocked regardless. If the condition under test were deleted from Jobs::PollFeed#execute the test would still pass. Stub the other two settings to truthy values in each negative test so each test isolates exactly one guard."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#01",
+    "descricao": "The postMessage handler in embed.js checks the sender with discourseUrl.indexOf(e.origin), a substring test instead of exact origin equality, so a page on an origin that is a substring of the Discourse URL can send forged discourse-resize messages to the embedding page.",
+    "textoGolden": "The current origin validation using indexOf is insufficient and can be bypassed. An attacker could use a malicious domain like evil-discourseUrl.com to pass this check.",
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/embed.js",
+      "lines": [
+       15,
+       17
+      ],
+      "texto": "The message-origin check uses substring matching: `discourseUrl.indexOf(e.origin) === -1`. Any origin that is a substring of discourseUrl is accepted (e.g. discourseUrl `https://discourse.example.com` accepts origin `https://discourse`), so a malicious page can post `discourse-resize` messages into the embed. Compare against the iframe's actual origin exactly (`e.origin !== expectedOrigin`) instead of a substring test."
+     },
+     {
+      "file": "embed.js",
+      "lines": [
+       17,
+       17
+      ],
+      "texto": "Uses indexOf containment instead of origin equality, but it cannot be bypassed."
+     },
+     {
+      "file": "app/assets/javascripts/embed.js",
+      "lines": [
+       15,
+       17
+      ],
+      "texto": "WHAT: postMessage origin check is reversed (`discourseUrl.indexOf(e.origin)===-1`) instead of strict origin equality. WHY: any e.origin that is a substring of discourseUrl passes, letting a foreign iframe drive `iframe.height` handling and future message branches."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#04",
+    "descricao": "The referer and embed_url host checks compare against SiteSetting.embeddable_host case-sensitively, so a host differing only in case is rejected even though hostnames are case-insensitive.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/embed_controller.rb",
+      "lines": [
+       26,
+       26
+      ],
+      "texto": "Host identity is compared case-sensitively: `URI(request.referer).host != SiteSetting.embeddable_host`. Hostnames are case-insensitive, so a referer such as `http://EVILTROUT.COM/...` never matches the configured `eviltrout.com` (and the same flaw exists in lib/topic_retriever.rb:15 for `URI(@embed_url).host`). Normalize both sides with downcase before comparing so case variations of the same host are treated identically."
+     },
+     {
+      "file": "embed_controller.rb",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The referer/host comparison does not lowercase either side, so a mixed-case host is wrongly rejected. The reviewer notes this fails closed and is not a bypass. Normalize case on both sides of the host comparison (e.g. downcase both) to avoid false rejections. The same issue applies to topic_retriever.rb."
+     },
+     {
+      "file": "topic_retriever.rb",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The host comparison does not lowercase either side, so a mixed-case host is wrongly rejected. This fails closed and is not a bypass. Normalize case on both sides of the comparison (e.g. downcase both) to avoid false rejections."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+    "descricao": "PollFeed reads i.content.scrub for every feed item, so items without a content element (common in RSS feeds that only have description) raise NoMethodError and abort the import of the remaining items.",
+    "textoGolden": "Calling `i.content.scrub` assumes that `i.content` is always populated. However, many RSS feeds do not provide a `content` field, leading to a potential nil pointer exception when `i.content` is nil. A fallback to `description` should be implemented to prevent crashes.",
+    "comentarios": [
+     {
+      "file": "app/jobs/scheduled/poll_feed.rb",
+      "lines": [
+       35,
+       35
+      ],
+      "texto": "WHAT: `CGI.unescapeHTML(i.content.scrub)` assumes every feed item has a `content` element. WHY: many RSS 2.0 items expose only `<description>` (simple-rss returns nil for `content`), so `nil.scrub` raises NoMethodError and, because the job is `sidekiq_options retry: false`, the entire hourly feed import for all items is aborted. HOW: fall back to the available field, e.g. `(i.content || i.description || i.summary).to_s.scrub`, and skip items whose body is blank."
+     },
+     {
+      "file": "app/jobs/scheduled/poll_feed.rb",
+      "lines": [
+       31,
+       36
+      ],
+      "texto": "The feed item is consumed unconditionally: url = i.link, then i.title, and content = CGI.unescapeHTML(i.content.scrub). SimpleRSS item accessors raise NoMethodError when the element is absent (RSS 2.0 feeds frequently carry only <description>, no <content>, and some items have no <link>/<title>), so a single malformed or content-less item aborts the whole hourly job with an unhandled exception instead of skipping it. The code already anticipates a blank link (line 33 fallback) but reads i.content/i.title without a nil guard; use i.content.to_s (or fall back to i.description/summary) and skip items whose content is blank."
+     },
+     {
+      "file": "app/jobs/scheduled/poll_feed.rb",
+      "lines": [
+       31,
+       37
+      ],
+      "texto": "`i.content.scrub` raises NoMethodError when a feed item has no content (only a description). The exception aborts the whole poll, so every item after it is never imported. Fall back to `i.content || i.description`, skip items with blank content, and rescue per item."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#08",
+    "descricao": "Posts imported from RSS or remote pages use cook_method raw_html, which makes Post#cook return the raw HTML without sanitization, and the embed view outputs it with raw post.cooked, allowing stored XSS from imported content.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/post.rb",
+      "lines": [
+       130,
+       136
+      ],
+      "texto": "WHAT: the new `return raw if cook_method == Post.cook_methods[:raw_html]` makes `Post#cook` return completely unsanitized HTML, and Jobs::PollFeed stores untrusted feed content this way (poll_feed.rb:35-36 \u2192 TopicEmbed.import, unlike import_remote which sanitizes via Readability's tag/attribute whitelist). WHY: the stored `cooked` value is then emitted with `<%= raw post.cooked %>` in app/views/embed/best.html.erb:19, and that page is served from the forum's own origin \u2014 so a malicious/compromised RSS feed item containing `<script>` or `onerror=` runs attacker JavaScript in the forum origin and can read cookies/session and perform authenticated actions (stored XSS). HOW: sanitize the raw HTML before persisting it (e.g. run the feed content through the same HTML sanitizer used for regular posts, or restrict the raw_html cook path to trusted, pre-sanitized sources only)."
+     },
+     {
+      "file": "app/models/post.rb",
+      "lines": [
+       130,
+       133
+      ],
+      "texto": "WHAT: Post#cook returns raw verbatim for cook_method raw_html, skipping the cooking/sanitization pipeline and plugin filters. WHY: any RSS/readability HTML imported via TopicEmbed is rendered unsanitized in embed/best.html.erb, executing attacker script in the Discourse origin."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       22,
+       22
+      ],
+      "texto": "Feed-provided HTML is persisted with raw_html cooking after only Nokogiri parsing and URL rewriting, which do not sanitize scripts or event-handler attributes. A malicious feed entry containing executable HTML is stored as post.cooked and executed under the forum origin when rendered, including through the new raw cooked embed view. Sanitize imported HTML with an explicit safe tag, attribute and URL-scheme allowlist before storing it or returning it from the raw_html cooking path."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
+    "descricao": "TopicEmbed.import appends a footer that interpolates the URL unescaped into an <a href='...'> tag in raw HTML that is later rendered unsanitized, so a crafted URL can inject markup; it also appends to contents with << without handling nil.",
+    "textoGolden": "The TopicEmbed.import method is susceptible to a NoMethodError if the contents parameter is nil when attempting to append a string, and an XSS vulnerability due to unescaped url interpolation in the generated HTML.",
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       10,
+       13
+      ],
+      "texto": "WHAT: TopicEmbed.import interpolates feed-controlled url unescaped into raw HTML (`<a href='#{url}'>#{url}</a>`) and stores feed HTML as raw_html. WHY: url passing /^https?\\:\\/\\// can still contain `'`, `>` or script, and RSS content is never sanitized, giving stored XSS when rendered via `raw post.cooked`. HOW: HTML-escape url and sanitize content instead of raw_html passthrough."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       10,
+       14
+      ],
+      "texto": "TopicEmbed.import interpolates feed-controlled url unescaped into HTML link stored with cook_method raw_html (Post#cook returns raw, bypassing pipeline) and rendered with raw post.cooked: XSS via quote/script break-out. Escape url for text and attribute contexts before storing."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       13,
+       13
+      ],
+      "texto": "The url is interpolated unescaped into `<a href='#{url}'>#{url}</a>`. The post is stored with cook_method raw_html and rendered with `raw post.cooked`, so a url containing a quote or markup is output as live HTML. Escape it with ERB::Util.html_escape (or CGI.escapeHTML) for both the href and the link text."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#16",
+    "descricao": "TopicEmbed.import appends the footer with contents <<, mutating the caller's string in place instead of building a new string.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       13,
+       13
+      ],
+      "texto": "`contents <<` mutates the caller's string in place. This raises FrozenError for frozen strings and appends the footer twice if the same string is imported again. Use `contents = contents + ...` instead."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#17",
+    "descricao": "TopicEmbed.import checks for an existing embed and then creates the post and TopicEmbed without handling the unique-index conflict, so two concurrent imports of the same URL make one job fail with RecordNotUnique.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       15,
+       30
+      ],
+      "texto": "TopicEmbed.import does a check-then-insert on embed_url (where(...).first, then TopicEmbed.create!) with no rescue for the unique index declared on topic_embeds.embed_url. The only guard against concurrent intake is the Redis throttle in TopicRetriever, which is bypassed for staff (retrieve_topic.rb:17 passes no_throttle: user.try(:staff?)) and can expire while a slow retrieval (which may synchronously run a full PollFeed, topic_retriever.rb:41) is still running. Two interleaved retrievals for the same URL both see embed.blank? and both attempt creation; the loser raises ActiveRecord::RecordNotUnique, which is unhandled anywhere in the job path, breaking execution. Guard the create against the race (rescue/retry on RecordNotUnique, or use find_or_create_by on embed_url inside the transaction) so concurrent retrievals cannot raise."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       20,
+       28
+      ],
+      "texto": "Make creation idempotent under concurrent imports. Two workers can both read no embed at line 15 and create posts before attempting the same unique embed_url insert. The unique index correctly rolls back the losing transaction, but its unhandled uniqueness exception aborts that job (and potentially the rest of a feed polling run). This is reachable when scheduled polling overlaps retrieval-triggered polling; the per-URL retrieval throttle does not serialize those paths. Handle the conflict outside the transaction and return the winning embed/post, or serialize imports for the URL."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       20,
+       30
+      ],
+      "texto": "Race on check-then-create: two concurrent imports both see TopicEmbed.where(embed_url:url).first blank, both create Post + TopicEmbed.create!. Unique index on embed_url then raises RecordNotUnique (unhandled) or creates duplicates. Need atomic find-or-create / rescue unique violation."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#18",
+    "descricao": "When the embedded post has been deleted, TopicEmbed.import's update path passes a nil embed.post to PostRevisor and crashes on every later import of that URL.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       31,
+       39
+      ],
+      "texto": "On the update path `embed.post` can be nil if the post was deleted. `PostRevisor.new(nil)` then raises NoMethodError, and every later import of that URL fails the same way. Guard against a nil post, for example by skipping the revision or recreating the topic."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       32,
+       37
+      ],
+      "texto": "WHAT: update path uses `embed.post` without nil guard then `PostRevisor.new(post)`. WHY: if the first post was deleted, post is nil and revise! dereferences nil, crashing feed-poll updates instead of recreating/skipping."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       31,
+       37
+      ],
+      "texto": "Orphan-post crash on update path: post = embed.post can be nil if the post/topic was deleted, then PostRevisor.new(nil).revise! raises NoMethodError. Must handle missing post (recreate or skip) instead of assuming present."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#19",
+    "descricao": "Claims import_remote crashes on unparseable pages (nil content) and dead URLs because it does no nil check or network error handling around open(url).read.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       44,
+       52
+      ],
+      "texto": "WHAT: import_remote passes `doc.content` (and title) directly to import where `contents <<` assumes a String, with no nil check or network-error handling around `open(url).read`. WHY: unparseable pages (nil content) raise NoMethodError and dead URLs raise OpenURI errors, crashing RetrieveTopic/Disqus imports with no topic created."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+    "descricao": "absolutize_urls only handles root-relative paths: protocol-relative URLs like //cdn.example.com/x.png are rewritten to http://host/cdn.example.com/x.png and path-relative links are left unresolved, breaking links and images in imported posts.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       64,
+       71
+      ],
+      "texto": "The URL rewrite treats protocol-relative URLs such as `//cdn.example.com/image.jpg` as paths on the article host, producing `http://article-host/cdn.example.com/image.jpg`. Imported images and links using protocol-relative external URLs therefore point to the wrong server. Resolve both href and src using URI joining against the article URL, which also handles ordinary relative paths correctly."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       62,
+       72
+      ],
+      "texto": "Resolve relative href/src references with URI joining rather than handling only leading slashes. For an article at http://example.com/blog/article, href='next' and src='images/photo.jpg' remain relative and resolve against the forum instead of the imported article. Moreover, '//cdn.example.com/photo.jpg' is rewritten to 'http://example.com/cdn.example.com/photo.jpg'. Both yield incorrect links/images in imported posts; apply proper URI resolution to both anchors and images."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       62,
+       73
+      ],
+      "texto": "absolutize_urls treats any href or src starting with '/' as site-relative and strips all leading slashes. Protocol-relative URLs like '//cdn.example.com/a.png' are rewritten to 'http://site/cdn.example.com/a.png', which is broken. Skip values starting with '//' (or prefix them with the scheme) and only rewrite single-slash paths."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#24",
+    "descricao": "The embed view formats post dates with a hard-coded strftime pattern, so users in non-English locales see English month names and a fixed order while the rest of the view is translated.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/views/embed/best.html.erb",
+      "lines": [
+       14,
+       14
+      ],
+      "texto": "The post date uses a hard-coded strftime format `\"%e %b %Y\"`. `%b` emits English month abbreviations (Jan, Feb, ...) no matter what locale the viewer is in, so the date is frozen to en-US while the surrounding strings in this same view are localized via I18n.t. This is a locale-pinned user-facing format; it should be localized (e.g. via the app's localized date helper / l( ) rather than a literal strftime pattern)."
+     },
+     {
+      "file": "app/views/embed/best.html.erb",
+      "lines": [
+       14,
+       14
+      ],
+      "texto": "Use a localized date formatter rather than strftime(\"%e %b %Y\"). %b produces English month abbreviations and the fixed day-month-year order ignores the selected locale, although the neighbouring header and footer labels are translated. Embedded comments therefore show English-formatted dates for users of other locales."
+     },
+     {
+      "file": "app/views/embed/best.html.erb",
+      "lines": [
+       14,
+       14
+      ],
+      "texto": "Date uses strftime(\"%e %b %Y\") hard-coding one locale's month names/order while neighbouring strings go through I18n.t. Use I18n.l with a locale date format so non-English users see localized dates."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#29",
+    "descricao": "The Disqus importer now creates topics through TopicEmbed.import_remote, dropping the thread's created_at and the category option and requiring a live HTTP fetch per thread, so imported topics get wrong dates/categories and a dead link aborts the import.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "lib/tasks/disqus.thor",
+      "lines": [
+       143,
+       149
+      ],
+      "texto": "WHAT: Disqus import replaced PostCreator (title/raw/created_at/category) with `TopicEmbed.import_remote` per thread, dropping category_id, created_at, and strip handling. WHY: imported topics lose categories/timestamps and now require a live HTTP fetch per thread, failing when links are dead."
+     },
+     {
+      "file": "lib/tasks/disqus.thor",
+      "lines": [
+       148,
+       148
+      ],
+      "texto": "Preserve the Disqus thread creation timestamp when switching to TopicEmbed.import_remote. The previous PostCreator call passed `created_at: Date.parse(t[:created_at])`, but this replacement passes only the title, and TopicEmbed.import_remote/import never forward a timestamp to PostCreator. Imported historical topics now get the migration time as their initial post creation date while their replies retain historical dates, losing the importer's chronological fidelity. Extend the import options to forward created_at and pass the thread timestamp here."
+     },
+     {
+      "file": "lib/tasks/disqus.thor",
+      "lines": [
+       148,
+       148
+      ],
+      "texto": "The Disqus import now calls TopicEmbed.import_remote instead of PostCreator. This silently drops the `--category` option and the `created_at` from the Disqus thread, and the `--category` method_option was removed from the CLI. It also now makes a live HTTP fetch of every thread link, and `open(url)` raises on a failure that previously could not happen, aborting the whole import. Keep the category and date handling, and rescue fetch errors per thread."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#30",
+    "descricao": "Every retrieval of an article not yet embedded synchronously polls and imports the entire RSS feed, and since throttling is per URL, many different article requests repeat the full feed download and processing.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "lib/topic_retriever.rb",
+      "lines": [
+       40,
+       42
+      ],
+      "texto": "Every uncached article retrieval synchronously downloads and processes the complete configured feed before fetching the article. Because the retrieval throttle is keyed by individual embed URL, simultaneous requests for different articles each repeat the feed download and all per-item database lookups/imports, multiplying worker load by the number of requests times feed size. Coalesce feed polling with a feed-wide throttle or lock and reuse its recent results instead of executing a full poll per article."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#32",
+    "descricao": "The 'is 404 without an embed_url' spec never sets an embeddable host, so the request is rejected by ensure_embeddable before the embed_url check runs, and the test would pass even without that check.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "spec/controllers/embed_controller_spec.rb",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "The test is named 'is 404 without an embed_url' but passes for the wrong reason: it never sets embeddable_host, which defaults to '' so the before_filter `ensure_embeddable` raises at the blank-host check before `params.require(:embed_url)` is reached. The request is rejected regardless of whether the embed_url requirement exists, so the test would still pass if that requirement were removed. Stub a valid embeddable_host here so the failure is actually attributable to the missing embed_url."
+     },
+     {
+      "file": "spec/controllers/embed_controller_spec.rb",
+      "lines": [
+       8,
+       10
+      ],
+      "texto": "The missing-embed_url test does not establish a valid embeddable host and referer, so ensure_embeddable rejects this request before best reaches params.require(:embed_url). It also only checks non-success despite claiming a 404. Removing the required-parameter check would therefore leave this test green. Configure an allowed host/referer for this case and assert the intended missing-parameter response."
+     },
+     {
+      "file": "spec/controllers/embed_controller_spec.rb",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "The 'is 404 without an embed_url' test never sets embeddable_host, so ensure_embeddable rejects the request before params.require(:embed_url) runs. It passes without the embed_url check. Stub embeddable_host and the referer so the missing param is the only failure cause."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#33",
+    "descricao": "The 'requires feed_polling_url' and 'requires embed_by_username' specs leave feed_polling_enabled at its false default, so they never reach the condition they name and would pass with those checks deleted.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "spec/jobs/poll_feed_spec.rb",
+      "lines": [
+       12,
+       28
+      ],
+      "texto": "The three 'requires ...' tests do not isolate the guard they name: each stubs only one setting to falsy while the other two remain falsy by default, so poll_feed is never called even if the named check were deleted. Stub the other two settings to truthy values in each test so removing the named guard would cause poll_feed to run and fail the test."
+     },
+     {
+      "file": "spec/jobs/poll_feed_spec.rb",
+      "lines": [
+       18,
+       28
+      ],
+      "texto": "These two tests do not verify the conditions they name. `execute` is guarded by `feed_polling_enabled? && feed_polling_url.present? && embed_by_username.present?`, and feed_polling_enabled defaults to false. Neither test stubs feed_polling_enabled? to true, so the guard short-circuits at the first clause and poll_feed is never called no matter what feed_polling_url/embed_by_username are. Both would still pass if the URL/username checks were deleted entirely. Stub `SiteSetting.stubs(:feed_polling_enabled?).returns(true)` in each so the specific condition under test is actually reached."
+     },
+     {
+      "file": "spec/jobs/poll_feed_spec.rb",
+      "lines": [
+       18,
+       27
+      ],
+      "texto": "The URL and username prerequisite tests never enable feed polling (whose configured default is false) or supply the other required setting. execute consequently short-circuits at feed_polling_enabled? and never evaluates the prerequisite each test claims to cover. Both tests still pass if their corresponding presence checks are removed. Set all other prerequisites to valid values before making only the setting under test absent, so the poll_feed.never expectation actually detects removal of that guard."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-02",
+    "descricao": "PollFeed.feed_key computes a per-feed cache key that is never used, so the feed is re-fetched and re-processed every hour without a modified-since check.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-03",
+    "descricao": "The embed layout references the 'embed' stylesheet and embed.js, but neither is in config.assets.precompile, so with precompiled assets in production the embed page fails to load them.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-01",
+    "descricao": "The retrieve throttle is keyed by the full embed URL, so an anonymous client can vary the query string on the embeddable host to bypass it and make the server create an unbounded number of topics.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-04",
+    "descricao": "The \"requires feed_polling_enabled?\" spec leaves feed_polling_url and embed_by_username at their blank defaults, so poll_feed is skipped regardless and the test would pass even without the enabled check.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "303cdc2caf256aa5df660611120c2e3f7392365d",
+  "base": "58ba11ecbd60863e2bfc6e32f0399ed4feb3927a",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+    "lines": [
+     76,
+     82
+    ],
+    "texto": "WHAT: NewMetricsMiddleware creates one MetricsMiddleware and mutates its next field on every CreateClientMiddleware call instead of returning a new instance. WHY: The middlewares slice is reused to build many decorator chains so concurrent/sequential builds overwrite imw.next causing wrong delegation and a data race. HOW: Return a new wrapper per call like ContextualLoggerMiddleware does, e.g. copy the struct and set next on the copy."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/services/pluginsintegration/clientmiddleware/contextual_logger_middleware.go",
+    "lines": [
+     39,
+     42
+    ],
+    "texto": "WHAT: QueryData/CallResource/CheckHealth/CollectMetrics dereference req.PluginContext without the nil-req guard that LoggerMiddleware has. WHY: A nil request panics the backend plugin path instead of delegating to next. HOW: Add the same if req == nil { return m.next.X(ctx, req) } guard to each method."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+    "lines": [
+     144,
+     151
+    ],
+    "texto": "WHAT: QueryData ranges over req.Queries and CallResource reads len(req.Body) without nil-req guards. WHY: A nil request panics where LoggerMiddleware explicitly delegates nil requests to next. HOW: Add if req == nil { return m.next.X(...) } guards matching LoggerMiddleware."
+   },
+   {
+    "id": "S4",
+    "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+    "lines": [
+     149,
+     151
+    ],
+    "texto": "WHAT: instrumentPluginRequestSize/instrumentPluginRequest return plugins.ErrPluginNotRegistered when the plugin is missing from the registry and callers return before invoking next. WHY: An observability lookup failure fails the functional plugin request (QueryData returns nil plus error) instead of best-effort metrics. HOW: Log the target-lookup error and still call next instead of returning early."
+   },
+   {
+    "id": "S5",
+    "file": "pkg/services/pluginsintegration/clientmiddleware/logger_middleware.go",
+    "lines": [
+     49,
+     58
+    ],
+    "texto": "WHAT: LoggerMiddleware removed explicit pluginId, endpoint, dsName/dsUID, uname and traceID fields and relies solely on FromContext, but instrumentContext never adds traceID. WHY: Plugin Request Completed logs lose traceID correlation (and all fields when Logger is used without Contextual middleware first). HOW: Re-add traceID via tracing.TraceIDFromContext or make instrumentContext include it."
+   },
+   {
+    "id": "S6",
+    "file": "pkg/plugins/log/fake.go",
+    "lines": [
+     46,
+     48
+    ],
+    "texto": "WHAT: TestLogger.FromContext returns a fresh NewTestLogger instead of the receiver. WHY: LoggerMiddleware now logs via m.logger.FromContext(ctx).Info so assertions on the injected fake never see the call and counts/messages are lost. HOW: Return f (or a wrapper sharing the same Logs pointers) instead of a new instance."
+   },
+   {
+    "id": "S7",
+    "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+    "lines": [
+     44,
+     50
+    ],
+    "texto": "HELP text says 'returned' implying response size, but instrumentPluginRequestSize observes inbound sizes (len(Query.JSON), len(CallResource Body)). Users reading Prometheus HELP will misinterpret the metric. Remove 'returned'."
+   },
+   {
+    "id": "S8",
+    "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+    "lines": [
+     21,
+     21
+    ],
+    "texto": "File and constructor were renamed NewInstrumentationMiddleware -> NewMetricsMiddleware/metrics_middleware.go, but test function still named TestInstrumentationMiddleware. Stale name misdescribes what is tested and confuses navigation."
+   },
+   {
+    "id": "S9",
+    "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+    "lines": [
+     144,
+     158
+    ],
+    "texto": "Missing nil-request guard causes panic: QueryData dereferences req.Queries, CallResource dereferences req.Body, CheckHealth/CollectMetrics dereference req.PluginContext. LoggerMiddleware in the same chain guards req==nil, proving nil is reachable. Add if req==nil passthrough before instrumenting, matching LoggerMiddleware."
+   },
+   {
+    "id": "S10",
+    "file": "pkg/services/pluginsintegration/clientmiddleware/contextual_logger_middleware.go",
+    "lines": [
+     39,
+     57
+    ],
+    "texto": "Missing nil-request guard causes panic: all four methods dereference req.PluginContext via instrumentContext without checking req==nil. LoggerMiddleware guards this case so nil reaches the chain. Add if req==nil passthrough to next before calling instrumentContext in QueryData, CallResource, CheckHealth, CollectMetrics."
+   },
+   {
+    "id": "S11",
+    "file": "pkg/plugins/log/fake.go",
+    "lines": [
+     46,
+     48
+    ],
+    "texto": "Fake violates Logger.FromContext contract (ifaces.go: has this logger's context plus given context) by returning a fresh unrelated logger. LoggerMiddleware calls m.logger.FromContext(ctx).Info, so with TestLogger the log goes to a new instance and is unobservable/loses base context. Return the receiver (or a copy preserving it) instead."
+   },
+   {
+    "id": "S12",
+    "file": "pkg/services/pluginsintegration/clientmiddleware/contextual_logger_middleware.go",
+    "lines": [
+     27,
+     36
+    ],
+    "texto": "logger_middleware.go removed explicit traceID log param assuming FromContext supplies it, but instrumentContext only adds endpoint/pluginId/dsName/dsUID/uname and never propagates tracing.TraceIDFromContext. Trace correlation in Plugin Request Completed logs is lost. Propagate traceID into WithContextualAttributes or retain explicit logging."
+   },
+   {
+    "id": "S13",
+    "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+    "lines": [
+     127,
+     136
+    ],
+    "texto": "Incorrect measurement: float64(elapsed/time.Millisecond) divides Durations as int64 nanoseconds first, truncating sub-millisecond fractions to 0 and all other values down to whole ms. Buckets start at 0.005ms so precision matters, and the seconds histogram on the same request uses precise elapsed.Seconds(). Convert first: float64(elapsed)/float64(time.Millisecond). Applies to both Observe and ObserveWithExemplar paths."
+   },
+   {
+    "id": "S14",
+    "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+    "lines": [
+     132,
+     153
+    ],
+    "texto": "Logic error: foundLabels is declared outside the per-metric loop and never reset, so counts accumulate across series; combined with returning an error on the first label-value mismatch instead of skipping that series, a family with more than one series will miscount or falsely fail. Reset the counter per metric and skip non-matching series."
+   },
+   {
+    "id": "S15",
+    "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+    "lines": [
+     101,
+     109
+    ],
+    "texto": "The shouldInstrumentRequestSize=false cases (CheckHealth, CollectMetrics) are never asserted: the if at line 101 has no else, so if those endpoints incorrectly started emitting grafana_plugin_request_size_bytes the test would still pass. Add an else asserting CollectAndCount(metricRequestSize)==0."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#03",
+    "descricao": "TestLogger.FromContext returns a fresh TestLogger instead of the receiver, so logs written via the contextual logger are lost to assertions on the original fake.",
+    "textoGolden": "The `TestLogger.FromContext` method returns a new `TestLogger` instance via `NewTestLogger()` instead of returning the receiver (f). This causes logs to be recorded on an un-referenced instance, leading to broken test assertions that expect logs to be recorded on the original logger.",
+    "comentarios": [
+     {
+      "file": "pkg/plugins/log/fake.go",
+      "lines": [
+       46,
+       48
+      ],
+      "texto": "WHAT: TestLogger.FromContext returns a fresh NewTestLogger instead of the receiver. WHY: LoggerMiddleware calls m.logger.FromContext(ctx).Info so the write goes to a throwaway instance and assertions on the original TestLogger Calls/Message never observe it, diverging from real wrapper that preserves logger context. HOW: Return f (or a child sharing f) instead of NewTestLogger."
+     }
+    ]
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#06",
+    "descricao": "The test function is still named TestInstrumentationMiddleware after the middleware was renamed to MetricsMiddleware.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+      "lines": [
+       21,
+       21
+      ],
+      "texto": "TestInstrumentationMiddleware still carries the old name even though this PR renamed the middleware under test to MetricsMiddleware (newMetricsMiddleware/NewMetricsMiddleware) and the file to metrics_middleware_test.go. The identifier advertises the superseded \"InstrumentationMiddleware\" name; rename it (e.g. TestMetricsMiddleware) so the test name matches the code it exercises."
+     },
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+      "lines": [
+       21,
+       21
+      ],
+      "texto": "Test function still named TestInstrumentationMiddleware but it constructs and asserts MetricsMiddleware (newMetricsMiddleware). Rename to TestMetricsMiddleware to match the renamed middleware."
+     }
+    ]
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#sncc-02",
+    "descricao": "The FromContext doc comment is copied from New() and misdescribes the method, which attaches attributes stored in the context.Context.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "3162ad68a5c87666788b27a44eb31235025091a9",
+  "base": "de11fb0166a7244115bb066edd65ec0d6b7e365c",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     253,
+     257
+    ],
+    "texto": "WHAT: isinstance(process, multiprocessing.Process) is False for processes created via mp_context.Process (SpawnProcess is a sibling of multiprocessing.Process, both subclass BaseProcess). WHY: kill() in _ensure_processes_alive and terminate() in join() are therefore never executed for real flusher processes, leaving hung/crashed processes alive while a replacement is started (duplicate flushing, fd/Kafka-producer leak, zombie on shutdown). HOW: drop the isinstance gate and duck-type (try kill/terminate, ignore ValueError/AttributeError for threading.Thread) or check multiprocessing.process.BaseProcess."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     51,
+     60
+    ],
+    "texto": "WHAT: Negative max_processes passes the `or` fallback and min() yields a negative num_processes, so range() is empty and no flusher process is ever created. WHY: Consumer keeps committing offsets while nothing ever flushes Redis, causing unbounded Redis growth and silent segment loss. HOW: Clamp/validate to >=1 and raise on invalid values."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     299,
+     301
+    ],
+    "texto": "WHAT: get_memory_info() returns cluster-wide iter_cluster_memory_usage via the same Redis client for every shard_buffer, but submit() calls it once per flusher process and sums the duplicated results. WHY: Performs N redundant Redis INFO scans per message (plus N record_stored_segments pipelines at lines 269-270), scaling linearly with flusher_processes on every submit. HOW: Query memory info once from a single buffer/client."
+   },
+   {
+    "id": "S4",
+    "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+    "lines": [
+     60,
+     62
+    ],
+    "texto": "WHAT: time.sleep is monkeypatched to `lambda _: None` at test start, so the added time.sleep(0.1) does nothing. WHY: Flusher thread may not observe current_drift before join() sets stopped, making the single-message assertion flaky/races. HOW: Use the real clock for the wait or poll until messages appear with a deadline."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     29,
+     32
+    ],
+    "texto": "Docstring is made untrue by the sharding pool added in this PR: num_processes can be less than shard count via max_processes/flusher_processes, with multiple shards per process. Update docstring to describe distribution rather than one-process-per-shard."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     185,
+     199
+    ],
+    "texto": "wait_produce timer uses tag key shards while produce timer and segment_size in the same function use shard. The keys must agree or dashboards/alerts filtering by one key will miss the other series. Change shards to shard."
+   },
+   {
+    "id": "S7",
+    "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+    "lines": [
+     57,
+     63
+    ],
+    "texto": "time.sleep is patched to a no-op at test start, so the added time.sleep(0.1) meant to let flusher threads process returns immediately. The assertion after races with background threads and would pass/fail independent of flush completion."
+   },
+   {
+    "id": "S8",
+    "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+    "lines": [
+     113,
+     123
+    ],
+    "texto": "test_flusher_processes_limit only asserts internal counts (num processes and mapped shard total) and joins without producing anything. If shard sharing/mapping were broken (wrong shards per process, dropped data, no flush when processes < shards) the test would still pass."
+   },
+   {
+    "id": "S9",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     253,
+     257
+    ],
+    "texto": "Processes are created via get_context('spawn').Process but restart checks isinstance against default multiprocessing.Process, which fails for SpawnProcess so hung flusher is never killed before replacement."
+   },
+   {
+    "id": "S10",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     346,
+     348
+    ],
+    "texto": "Same mismatch in join(): spawn processes fail isinstance check so terminate() is skipped, leaking workers on shutdown."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#01",
+    "descricao": "The wait_produce timer is tagged with 'shards' while sibling flusher metrics use 'shard' for the same value, so per-shard dashboards miss it.",
+    "textoGolden": "In the SpanFlusher flush loop, metric tags inconsistently use 'shard' (e.g., in spans.buffer.flusher.produce and spans.buffer.segment_size_bytes) and 'shards' (in spans.buffer.flusher.wait_produce) for the same shard identifier value. This prevents correct metric aggregation across flush stages \u2014 dashboards and alerts filtering by tag 'shard' will miss data tagged as 'shards' and vice versa.",
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       199,
+       199
+      ],
+      "texto": "The `spans.buffer.flusher.wait_produce` timer is tagged with the key `\"shards\"`, while the other two metrics emitted in this same loop (`spans.buffer.flusher.produce` at line 185 and `spans.buffer.segment_size_bytes` at line 195) use the key `\"shard\"`. All three carry the same `shard_tag` value, so this is a pure key-name disagreement: any dashboard or alert that groups/filters by the `shard` tag will silently receive no data from `wait_produce`. Rename the tag key to `\"shard\"` so all flusher metrics share one tag."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       199,
+       199
+      ],
+      "texto": "The `spans.buffer.flusher.wait_produce` timer is tagged with key `shards` while every sibling metric introduced/updated in the same method (`spans.buffer.flusher.produce`, `spans.buffer.segment_size_bytes`) uses the singular key `shard`. Anything consuming this metric family by the `shard` tag (dashboards, alerts, tag-based aggregation) will silently receive no data for `wait_produce`, and per-shard breakdowns of produce latency will be incomplete. Change the tag to `tags={\"shard\": shard_tag}` so the tag contract matches the other flusher metrics."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       199,
+       199
+      ],
+      "texto": "The wait_produce timer tags with \"shards\", while the sibling metrics in the same loop use \"shard\" for the same value (shard_tag). Use one tag key, \"shard\", so queries and dashboards that group by it cover all of these metrics."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#02",
+    "descricao": "The time.sleep(0.1) added to test_basic to let flusher threads process is a no-op because the test monkeypatches time.sleep.",
+    "textoGolden": "The test_basic function in test_consumer.py uses a monkeypatched time.sleep that returns immediately, but then calls time.sleep(0.1) expecting it to actually wait.",
+    "comentarios": [
+     {
+      "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+      "lines": [
+       60,
+       62
+      ],
+      "texto": "WHAT: The added synchronization point `time.sleep(0.1)` added after the second `step.poll()` is neutralized by the test's own `monkeypatch.setattr(\"time.sleep\", lambda _: None)` at line 15 (same `time` module), so it does not actually wait. WHY: The comment says it 'Give[s] flusher threads time to process after drift change', but the call is a no-op, so the test still races the background flusher thread before `step.join()` and is liable to be flaky / to not exercise the intended post-drift flush path. HOW: Use a non-monkeypatched wait (e.g. capture the real sleep before patching, or use the flusher's thread/process join, or poll until `messages` is non-empty with a real timeout)."
+     },
+     {
+      "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+      "lines": [
+       60,
+       62
+      ],
+      "texto": "The added `time.sleep(0.1)` does not wait: line 15 of the same test does `monkeypatch.setattr(\"time.sleep\", lambda _: None)`, which replaces `sleep` on the global `time` module, so this call (and the flusher's own `time.sleep`) is a no-op. The comment 'Give flusher threads time to process after drift change' is therefore false \u2014 the call returns instantly and provides no synchronisation, so the test does not actually wait for the flusher to process after the drift change. Either synchronise on a real condition (e.g. wait until the expected message is produced) or, if the original `time.sleep` is needed here, patch a module-scoped reference instead of the global `time.sleep`."
+     },
+     {
+      "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+      "lines": [
+       60,
+       62
+      ],
+      "texto": "The added `time.sleep(0.1)` is a no-op because the test patches `time.sleep` to `lambda _: None`, so nothing waits for the flusher threads before `step.join()` and the `messages` assertion. Replace it with a condition-based wait, such as polling until `messages` is non-empty with a deadline. Use the real sleep saved before patching if a delay is needed."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+    "descricao": "The restart path only kills a hung flusher if it is a multiprocessing.Process, but spawn-context workers are SpawnProcess, so hung processes are never killed and a duplicate flusher is started for the same shards.",
+    "textoGolden": "Because flusher processes are created via multiprocessing.get_context('spawn').Process, they are instances of multiprocessing.context.SpawnProcess, which on POSIX is not a subclass of multiprocessing.Process, so this isinstance check will always be false and hung processes won't be killed here.",
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       253,
+       255
+      ],
+      "texto": "The new isinstance(process, multiprocessing.Process) guard does not match the SpawnProcess instances created by self.mp_context.Process. When a worker hangs, the guard skips kill() and the replacement starts while the original worker remains alive, allowing overlapping flushing of the same shards if the original resumes and leaking hung workers. Check against multiprocessing.process.BaseProcess or self.mp_context.Process, and kill and join the old worker before replacing it."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       253,
+       255
+      ],
+      "texto": "The workers are created with get_context(\"spawn\").Process, which produces SpawnProcess instances; these are not instances of multiprocessing.Process (the default-context Process class). Consequently this guard skips kill() for actual production workers. When a worker hangs, the replacement starts while the original remains alive and can resume flushing the same shards. Use multiprocessing.process.BaseProcess or the spawn-context Process class for the check, and fix the identical check in join() so shutdown also terminates surviving workers."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       254,
+       255
+      ],
+      "texto": "Workers created by multiprocessing.get_context(\"spawn\").Process are SpawnProcess instances, not instances of the separate multiprocessing.Process class. Consequently this guard skips kill() for production workers. When a live worker exceeds max-unhealthy-seconds, the code starts a replacement and overwrites its handle while the original is still running. If the original resumes, both workers flush the same shards, and repeated hangs can exceed the configured process limit. Check against multiprocessing.process.BaseProcess (or explicitly distinguish threads) and stop the old worker before replacing it."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+    "descricao": "join() breaks out of the per-process loop when the shared deadline expires, skipping termination of the remaining flusher processes and leaving them running after shutdown.",
+    "textoGolden": "Breaking out of the loop when the deadline has elapsed can skip terminating remaining flusher processes, potentially leaving them running after shutdown; consider ensuring termination is attempted even if the deadline is exceeded.",
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       338,
+       341
+      ],
+      "texto": "join() breaks out of the worker loop when the shared deadline expires, skipping cleanup for every remaining worker. If next_step.join consumes the timeout or an earlier worker exhausts it, remaining flushers can continue running after shutdown or partition reassignment. Use the deadline only to limit waiting and still terminate and reap every remaining process."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       337,
+       341
+      ],
+      "texto": "Do not break out of worker cleanup when the join deadline expires. If the first worker consumes the timeout, the next iteration breaks before terminating that worker or any subsequent workers. They may still be blocked in Redis or producer calls despite the shared stopped flag, leaving old workers running after strategy shutdown/reassignment. Apply the deadline only to waiting, and perform termination cleanup for every worker regardless of remaining time (using a type check that recognizes spawn-context workers)."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       337,
+       344
+      ],
+      "texto": "join() waits for processes sequentially against a single shared deadline and breaks without terminating remaining processes once it expires, leaking them."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#05",
+    "descricao": "The SpanFlusher docstring says it creates one process per shard, but shards are distributed across at most max_processes processes.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       30,
+       32
+      ],
+      "texto": "The docstring says the flusher \"Creates one process per shard for parallel processing,\" but the code at lines 60-66 shares shards across a capped number of processes (num_processes = min(self.max_processes, len(buffer.assigned_shards)); each shard assigned via i % self.num_processes). With the new --flusher-processes default of 1, a single process handles every shard, so the documented contract is the opposite of the behaviour this PR introduces (confirmed by test_flusher_processes_limit, which asserts 4 shards served by 2 processes). Update the docstring to say shards are distributed across up to max_processes flusher processes."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       31,
+       32
+      ],
+      "texto": "The new docstring says this creates one process per shard, but workers are capped by max_processes and shards are distributed among them. In particular, the CLI default of 1 means all assigned shards share one process. Describe capped workers with potentially multiple shards per worker so callers do not rely on per-shard process isolation."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       31,
+       32
+      ],
+      "texto": "The docstring says the flusher 'Creates one process per shard', but the number of processes is capped by max_processes (--flusher-processes), and shards are shared across processes via i % num_processes. Reword it to say that shards are distributed across at most max_processes processes."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#06",
+    "descricao": "max_processes uses a truthiness fallback, so --flusher-processes 0 silently becomes one process per shard instead of being rejected.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       51,
+       51
+      ],
+      "texto": "`max_processes or len(buffer.assigned_shards)` treats a falsy value as 'not provided'. The new `--flusher-processes` click option is `type=int`, so a user can pass `0`; that legitimate-but-falsy value is discarded and the flusher silently spawns one process per shard instead of honoring the requested limit. Use an explicit None check, e.g. `self.max_processes = max_processes if max_processes is not None else len(buffer.assigned_shards)` (and validate/reject 0 upstream)."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       51,
+       51
+      ],
+      "texto": "An explicit max_processes=0 is treated as an omitted limit by `or`, so passing `--flusher-processes 0` starts one process per assigned shard instead of respecting or rejecting the supplied zero limit. The CLI accepts zero as an integer and the factory forwards it unchanged. Default only when max_processes is None, and explicitly validate that supplied process limits are positive so zero cannot silently enable potentially many workers."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       51,
+       51
+      ],
+      "texto": "`max_processes or len(buffer.assigned_shards)` uses a truthiness test, so an explicit 0 is treated as 'unset' and silently expands to one process per shard. Use `max_processes if max_processes is not None else len(buffer.assigned_shards)` and reject values below 1."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#07",
+    "descricao": "A negative --flusher-processes value is not validated and makes SpanFlusher construction fail with KeyError.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       60,
+       66
+      ],
+      "texto": "`flusher_processes` is not validated to be >= 1. `self.max_processes = max_processes or len(buffer.assigned_shards)` lets a negative value through (it is truthy), so `self.num_processes = min(self.max_processes, len(...))` becomes negative and `range(self.num_processes)` is empty, leaving `process_to_shards_map` as `{}`. The following loop computes `process_index = i % self.num_processes`, which for any negative divisor is 0, so `self.process_to_shards_map[0].append(shard)` raises KeyError and the consumer fails to construct. Since `flusher_processes` is exposed as an int CLI option (`--flusher-processes`), a negative value is reachable from configuration. Guard with `max(1, self.num_processes)` / validate the input."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       60,
+       66
+      ],
+      "texto": "negative max_processes flows through `or` guard into min() -> empty map -> KeyError on i % num_processes; empty assigned_shards yields zero processes."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08",
+    "descricao": "submit() queries cluster-wide Redis memory once per flusher buffer, repeating identical INFO calls per process on every submit.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       299,
+       301
+      ],
+      "texto": "The new loop calls get_memory_info() once per flusher buffer even though SpansBuffer.get_memory_info delegates to iter_cluster_memory_usage(self.client), which fetches INFO for the entire Redis cluster regardless of assigned_shards. With P flusher processes and memory backpressure enabled, each submitted batch now performs P identical cluster-wide memory queries on the consumer thread instead of one, increasing Redis traffic and blocking ingestion. Fetch cluster memory information once from a single buffer."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       299,
+       301
+      ],
+      "texto": "submit() loop calls buffer.get_memory_info() per flusher but each call is cluster-wide from same client, repeating identical INFO N\u00d7 per submit."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#10",
+    "descricao": "_create_process_for_shard is added but never called.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       127,
+       132
+      ],
+      "texto": "WHAT: `_create_process_for_shard(self, shard)` is newly added but has no caller anywhere (grep for `_create_process_for_shard(` finds only its definition); the restart path actually used is `_create_process_for_shards(process_index, shards)`. WHY: This is dead code that indicates the intended per-shard restart wiring was left incomplete \u2014 any future caller relying on restarting only the process owning a given shard will silently do nothing, and it is confusing which restart path is authoritative. HOW: Remove `_create_process_for_shard`, or wire it into `_ensure_processes_alive` if per-shard restart was intended."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#12",
+    "descricao": "test_flusher_processes_limit counts assigned shards instead of checking that each shard is assigned exactly once.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+      "lines": [
+       119,
+       121
+      ],
+      "texto": "The assertion counts shard entries rather than verifying shard assignment. A broken distribution such as {0: [0, 1], 1: [0, 1]} still passes all assertions in this test while shards 2 and 3 are never flushed. Assert that the flattened mapping contains exactly the expected assigned shards, with no duplicates (and verify each worker's shard buffer uses that mapping), rather than only asserting a total of four."
+     }
+    ]
+   }
+  ]
+ },
+ "notification-rule-processing-engine-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "8df850371034b73dc4dd9908cc30fa09f12a1f97",
+  "base": "47e5bd23163e6037fc0741068ac78930bba2769f",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "public/app/features/alerting/unified/rule-list/FilterView.tsx",
+    "lines": [
+     154,
+     163
+    ],
+    "texto": "WHAT: Grafana branch of FilterViewResults renders GrafanaRuleListItem without key={key} while sibling branches pass key. WHY: Causes React reconciliation warnings and state/action reuse across rows when the filtered list changes. HOW: Restore key={key} on GrafanaRuleListItem."
+   },
+   {
+    "id": "S2",
+    "file": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx",
+    "lines": [
+     81,
+     83
+    ],
+    "texto": "WHAT: canPause can become true via grafana promRule ability while Pause menu item still requires rulerRuleType.grafana.rule(rulerRule). WHY: In ruler-free list view rulerRule is undefined so Pause never renders despite allowed ability \u2014 dead action path. HOW: Gate Pause item on (rulerRule or promRule) Grafana rule, or pass promRule-derived pause handler."
+   },
+   {
+    "id": "S3",
+    "file": "public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx",
+    "lines": [
+     56,
+     61
+    ],
+    "texto": "WHAT: Silence ability is now grantable via promRule alone, but SilenceGrafanaRuleDrawer only renders when rulerRuleType.grafana.alertingRule(rule) holds. WHY: Clicking Silence on prom-only rows sets showSilenceDrawer with no drawer rendered \u2014 silent no-op. HOW: Render drawer from promRule when ruler rule absent or hide Silence when no rulerRule available."
+   },
+   {
+    "id": "S4",
+    "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx",
+    "lines": [
+     68,
+     79
+    ],
+    "texto": "WHAT: Loader now maps only promResponse rules and dropped matchRules Creating/Deleting handling. WHY: Transient deleting rules (prom-only) render as normal rows with full Edit/More actions instead of Deleting state without actions, and creating rules vanish. HOW: Restore operation-aware rendering for prom-only rows or filter/suppress actions while ruler/prom diverge."
+   },
+   {
+    "id": "S5",
+    "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx",
+    "lines": [
+     24,
+     28
+    ],
+    "texto": "Doc block still says the loader loads from 'Prometheus and Ruler endpoints' but this PR removed the Ruler query (useGetGrafanaRulerGroupQuery/matchRules) so it now loads only from Prometheus. Update the comment to describe Prometheus-only loading to avoid misleading callers."
+   },
+   {
+    "id": "S6",
+    "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx",
+    "lines": [
+     66,
+     68
+    ],
+    "texto": "Optional chain stops at .rules, so empty groups yields undefined.map() throw. Default to empty array: (groups.at(0)?.rules ?? []).map(...)."
+   },
+   {
+    "id": "S7",
+    "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx",
+    "lines": [
+     85,
+     102
+    ],
+    "texto": "Test named 'with action menu options' never clicks More nor asserts menuitems; it passes even if dropdown is empty/broken. Click More and assert menu items or rename to cover only the button."
+   },
+   {
+    "id": "S8",
+    "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+    "lines": [
+     310,
+     318
+    ],
+    "texto": "useAllGrafanaPromRuleAbilities(undefined) on the skipToken path leaves duplicateSupported=AlwaysSupported with allowed=grafana create permission, so useGrafanaPromRuleAbilities(skipToken) returns [true,true] for Duplicate and AlertRuleMenu ORs ruler||grafana to true for cloud rules that should be gated only by ruler abilities."
+   },
+   {
+    "id": "S9",
+    "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx",
+    "lines": [
+     66,
+     76
+    ],
+    "texto": "Comment states location is redundant in folder>group hierarchy but no showLocation={false} is passed and GrafanaRuleListItem defaults to true, so grouped rules show location contrary to declared intent."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#01",
+    "descricao": "The pause menu item is still gated on a Grafana ruler rule, but the list view now passes only the Prometheus rule, so Pause/Resume disappears for list-view rules even when the user may pause them.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx",
+      "lines": [
+       83,
+       83
+      ],
+      "texto": "The new Prometheus-based pause ability cannot display Pause or Resume for list-view rules because the menu still requires rulerRuleType.grafana.rule(rulerRule) before rendering MenuItemPauseRule. GrafanaRuleListItem now supplies only promRule, so these actions disappear even for editable rules. Adapt the pause menu item to accept the Grafana identifier and Prometheus pause state, or load the ruler rule on demand."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#02",
+    "descricao": "The Delete menu item still requires a ruler rule, which list-view Grafana rules no longer provide, so users with delete permission lose the Delete action.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx",
+      "lines": [
+       85,
+       87
+      ],
+      "texto": "The new Prometheus-based delete ability is still gated by `canDelete && rulerRule` when rendering the Delete item. Both Grafana list-view paths now omit rulerRule, so users with delete permission lose the Delete action entirely. Render deletion using the available identifier and group identifier instead of requiring the ruler DTO, adapting the callback contract accordingly."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#03",
+    "descricao": "When the Grafana prom-rule branch is skipped (datasource rules), useAllGrafanaPromRuleAbilities(undefined) still reports Duplicate as supported and allowed by Grafana create permission, and AlertRuleMenu ORs it with the ruler ability, so Duplicate appears on cloud rules even when the ruler check denies it.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx",
+      "lines": [
+       89,
+       92
+      ],
+      "texto": "WHAT: canDuplicate ORs ruler ability with grafana ability where grafana path is skipToken=>undefined for cloud rules, and useAllGrafanaPromRuleAbilities(undefined) returns Duplicate=[true,true] whenever the user has global Grafana create permission. WHY: Any user with Grafana rule-create gets Duplicate menu item on cloud/Mimir rules even when ruler abilities deny it \u2014 incorrect authorization gating. HOW: Return NotSupported for all abilities when rule is skipToken/undefined, or gate grafana branch on prometheusRuleType.grafana.rule(promRule) before ORing."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       307,
+       314
+      ],
+      "texto": "useAllGrafanaPromRuleAbilities returns AlwaysSupported for Duplicate when rule is undefined (skipToken): loading is false from the !rule early-return, so MaybeSupported=true and duplicateSupported=true. ORed in AlertRuleMenu/RuleActionsButtons this leaks Grafana create permission into non-Grafana rules. Gate MaybeSupported/duplicateSupported on rule existence (e.g. NotSupported when !rule)."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       287,
+       318
+      ],
+      "texto": "useAllGrafanaPromRuleAbilities must return NotSupported for all actions when rule is undefined (skipToken). Currently MaybeSupported falls back to AlwaysSupported when !loading, so Duplicate=[true, global-create] is true for a cloud rule passed as skipToken, and AlertRuleMenu/RuleActionsButtons OR-logic then incorrectly enables Duplicate (and Explore). Guard with if (!rule) return all-NotSupported abilities or make MaybeSupported require rule."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#04",
+    "descricao": "The refactor of useAllAlertRuleAbilities into useAllRulerRuleAbilities drops the isFederatedRuleGroup check (isFederated is hardcoded false), so federated Mimir rules are reported as editable and deletable.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       223,
+       228
+      ],
+      "texto": "useAllAlertRuleAbilities now delegates to useAllRulerRuleAbilities, which hardcodes isFederated = false. The previous isFederatedRuleGroup(rule.group) check is gone, so federated Mimir rules are no longer treated as immutable and can show edit and delete abilities. Keep the federation check in this wrapper, or pass the federation state into the shared hook."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       227,
+       228
+      ],
+      "texto": "Delegating useAllAlertRuleAbilities to useAllRulerRuleAbilities discards the group's federation status and replaces the previous isFederatedRuleGroup(rule.group) check with a constant false. Legacy RuleActionsButtons consequently enables editing rules in groups with source_tenants, although these groups were explicitly immutable before this change. Preserve the CombinedRule federation check in the wrapper or pass federation status into the delegated ability calculation."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       227,
+       228
+      ],
+      "texto": "Preserve the federated-group immutability check when delegating this CombinedRule hook. Previously useAllAlertRuleAbilities inspected rule.group with isFederatedRuleGroup and disabled modification/removal for federated rules. The replacement delegates to a hook that hardcodes isFederated=false and receives no group information. Existing useAlertRuleAbility/useAlertRuleAbilities consumers therefore now receive supported update/delete abilities for federated rules when datasource permissions allow them, exposing operations that the previous contract explicitly prohibited. Pass the federation state through or retain that restriction in this wrapper."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#05",
+    "descricao": "The Grafana prom-rule abilities gate Pause, Restore, Export and DeletePermanently on alertingRule(rule) while the comment claims it checks Grafana-managed rules, so Grafana recording rules lose these actions in the list view.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       301,
+       302
+      ],
+      "texto": "The comment says all GrafanaPromRuleDTO rules are Grafana-managed, but the variable it describes is `isAlertingRule`. That variable is true only for alerting rules and false for Grafana recording rules. Fix the comment, or rename the variable, so it says the check is for alerting rules. As written, readers will expect Pause, Export and Silence to be enabled for recording rules."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       301,
+       328
+      ],
+      "texto": "The comment says all GrafanaPromRuleDTO rules are Grafana-managed, but the check used is alertingRule(rule), which is false for recording rules. Pause, Restore, ModifyExport and DeletePermanently are therefore wrongly disabled for Grafana recording rules, where the old isGrafanaManagedAlertRule check allowed them. Use prometheusRuleType.grafana.rule(rule) for these abilities, and keep alertingRule only for Silence."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#06",
+    "descricao": "The comment claims GrafanaPromRuleDTO abilities have no loading state, but the next line makes support depend on the folder loading flag.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       308,
+       309
+      ],
+      "texto": "The comment says there is no loading state, but the next line is `loading ? NotSupported : AlwaysSupported`. `loading` comes from the folder fetch. Update the comment to say that support depends on the folder loading state."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#07",
+    "descricao": "The Grafana branch of the filtered rule list renders GrafanaRuleListItem without a key prop, so React reconciles the streaming list by index and warns about missing keys.",
+    "textoGolden": "The rendered GrafanaRuleListItem is missing the required key prop for React list items. This can cause rendering issues when the list order changes.",
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/rule-list/FilterView.tsx",
+      "lines": [
+       157,
+       162
+      ],
+      "texto": "WHAT: The grafana branch of the filtered list renders <GrafanaRuleListItem .../> without a `key` prop, dropping the `key={key}` that the replaced <GrafanaRuleLoader key={key} .../> had. WHY: `rules.map` renders a dynamic list keyed by getRuleKey/hashRule; without a key React logs duplicate-key warnings and reconciles rows by index, so as the async rule stream updates/reorders the wrong rule row can be reused/mutated (stale state, swapped actions). HOW: add `key={key}` (the value is already destructured on line 152) to the <GrafanaRuleListItem> element."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/FilterView.tsx",
+      "lines": [
+       157,
+       162
+      ],
+      "texto": "WHAT: Grafana branch of FilterViewResults renders GrafanaRuleListItem without key={key} while datasource and unknown branches pass key. WHY: Breaks React list reconciliation \u2014 wrong item reuse, stale actions/state and console key warnings for every Grafana hit. HOW: Add key={key} to the GrafanaRuleListItem element."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#08",
+    "descricao": "The test named 'should render More button with action menu options' only checks the More button exists, never the menu options.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx",
+      "lines": [
+       85,
+       101
+      ],
+      "texto": "The test 'should render More button with action menu options' only checks that the More button exists. It finds the button by name 'More', so the aria-label and text assertions are tautological. It would pass even if the menu had no actions or the abilities were broken. Click the button and assert the expected menu items, or rename the test to match what it checks."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx",
+      "lines": [
+       85,
+       102
+      ],
+      "texto": "Test named 'should render More button with action menu options' never verifies any action menu option: the body only asserts the More button exists and has aria-label/text 'More'. It would still pass if the dropdown were rendered empty (Silence/Duplicate/Copy link/Export all missing), i.e. the behaviour the name promises is not covered. Either open the menu and assert the menu items, or rename the test to reflect that it only checks the trigger button's rendering/accessibility."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx",
+      "lines": [
+       85,
+       102
+      ],
+      "texto": "Test named 'should render More button with action menu options' never opens the menu nor asserts menu items \u2014 it only checks More button presence/aria/text. Click More and assert expected menuitems (or rename to 'should render More button') so it fails if menu actions break."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#09",
+    "descricao": "GrafanaGroupLoader's JSDoc still says it loads from Prometheus and Ruler endpoints after the ruler query was removed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx",
+      "lines": [
+       24,
+       28
+      ],
+      "texto": "The JSDoc for GrafanaGroupLoader still says \"Loads an evaluation group from Prometheus and Ruler endpoints.\" but this PR removed the ruler API query entirely \u2014 the component now only calls useGetGrafanaGroupsQuery (Prometheus). The documentation describes a data source the function no longer consumes; update it to state only the Prometheus endpoint is loaded (and the same stale \"Ruler response\" reference in the expectedRulesCount prop doc at lines 18\u201319 should be corrected)."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#11",
+    "descricao": "For list-view Grafana rules RuleActionsButtons gets only promRule, so the Silence menu item is shown but the silence drawer, still gated on a ruler alerting rule, never renders and clicking Silence does nothing.",
+    "textoGolden": "RuleActionsButtons is invoked with only promRule, but SilenceGrafanaRuleDrawer inside RuleActionsButtons still depends on a Grafana Ruler rule being present, so for Grafana rules coming from list views the 'Silence notifications' menu entry (now driven by Grafana Prom abilities) will toggle showSilenceDrawer without ever rendering the drawer. This means clicking 'Silence notifications' for these rules has no visible effect, even when abilities indicate silencing is allowed.",
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx",
+      "lines": [
+       47,
+       47
+      ],
+      "texto": "Passing only promRule enables the Silence notifications menu item but leaves RuleActionsButtons.V2 unable to render its silence drawer, which is guarded by rulerRuleType.grafana.alertingRule(rule). Clicking Silence only updates showSilenceDrawer and displays nothing because rule is undefined. Update the drawer to accept a rule UID\u2014the inspected SilenceGrafanaRuleDrawer only needs grafana_alert.uid\u2014and allow the Prometheus alerting-rule path to render it."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx",
+      "lines": [
+       47,
+       47
+      ],
+      "texto": "The new list item passes only promRule to RuleActionsButtons, but that component renders SilenceGrafanaRuleDrawer only under `rulerRuleType.grafana.alertingRule(rule) && showSilenceDrawer`. With rule undefined, clicking the newly enabled 'Silence notifications' action only sets state and never opens a drawer. Adapt the silence rendering path to load/use the rule by its Prometheus identifier before switching this caller to promRule-only."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx",
+      "lines": [
+       130,
+       144
+      ],
+      "texto": "WHAT: getEditableIdentifier now enables a prom-only path (Grafana uid identifier with rulerRule undefined) but the silence drawer still renders only when rulerRuleType.grafana.alertingRule(rule) is true. WHY: In the list view Silence menu item can be shown via grafana abilities, clicking it sets showSilenceDrawer but the drawer never mounts, so Silence silently does nothing. HOW: Gate the drawer on promRule as well or provide a prom-based silence drawer."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#opa-01",
+    "descricao": "RulesTable RBAC tests only mock useGrafanaPromRuleAbilities and leave useRulerRuleAbilities denied, so the ruler-based Delete permission branch of AlertRuleMenu is never tested.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "d38c4d5f7443223c81529c22470293771baf9f38",
+  "base": "7554b5e3c458dc79b591d5e874e79ab10cf30c2f",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/assets/stylesheets/desktop/topic-post.scss",
+    "lines": [
+     288,
+     292
+    ],
+    "texto": "WHAT: Light-theme branch uses $lightness 70% while the original was $lightness 30%. WHY: Light-theme users see a much lighter/washed-out author link, a visual regression vs pre-PR. HOW: Restore first arg to scale-color($primary, $lightness: 30%) with secondary complement 70%."
+   },
+   {
+    "id": "S2",
+    "file": "app/assets/stylesheets/mobile/modal.scss",
+    "lines": [
+     100,
+     103
+    ],
+    "texto": "WHAT: Light-theme branch uses $lightness 30% while the original was $lightness 70%. WHY: Light-theme hint text becomes much darker than intended, breaking the de-emphasized hint style. HOW: Restore first arg to scale-color($primary, $lightness: 70%) with secondary complement 30%."
+   },
+   {
+    "id": "S3",
+    "file": "app/assets/stylesheets/mobile/topic-post.scss",
+    "lines": [
+     179,
+     183
+    ],
+    "texto": "WHAT: Light-theme branch uses $lightness 50% while the original was $lightness 20%. WHY: Light-theme topic-map heading renders lighter than designed, reducing hierarchy/contrast. HOW: Restore first arg to scale-color($primary, $lightness: 20%) with secondary complement 80%."
+   },
+   {
+    "id": "S4",
+    "file": "app/assets/stylesheets/desktop/user.scss",
+    "lines": [
+     519,
+     523
+    ],
+    "texto": "WHAT: Light-theme branch uses $lightness 50% while the original was $lightness 30% for .group-member-info .name. WHY: Light-theme username renders lighter than before, inconsistent with adjacent elements and original design. HOW: Restore first arg to scale-color($primary, $lightness: 30%) with secondary complement 70%."
+   },
+   {
+    "id": "S5",
+    "file": "app/assets/stylesheets/mobile/user.scss",
+    "lines": [
+     494,
+     498
+    ],
+    "texto": "WHAT: Light-theme branch uses $lightness 50% while the original was $lightness 30% for .name. WHY: Same light-theme regression as desktop \u2014 username appears lighter than intended. HOW: Restore first arg to scale-color($primary, $lightness: 30%) with secondary complement 70%."
+   },
+   {
+    "id": "S6",
+    "file": "app/assets/stylesheets/desktop/topic-post.scss",
+    "lines": [
+     288,
+     292
+    ],
+    "texto": "Original was scale-color($primary, $lightness: 30%) but replacement uses 70% as first arg of dark-light-choose, changing light-theme output. Every other 30% conversion in this PR preserves 30%/70%. Fix first arg back to 30% / second to 70%."
+   },
+   {
+    "id": "S7",
+    "file": "app/assets/stylesheets/mobile/modal.scss",
+    "lines": [
+     100,
+     103
+    ],
+    "texto": "Same selector .custom-message-length in desktop/modal.scss converts 70% to 70%/30% but mobile converts 70% to 30%/70%. The two sites must agree; mobile first arg should be 70% lightness, second 30%."
+   },
+   {
+    "id": "S8",
+    "file": "app/assets/stylesheets/mobile/topic-post.scss",
+    "lines": [
+     179,
+     183
+    ],
+    "texto": "Original h3 was scale-color($primary, $lightness: 20%) and desktop/topic-post.scss correctly converts to 20%/80%, but mobile converts to 50%/50%. Light-theme value changes and desktop/mobile disagree. Restore 20%/80%."
+   },
+   {
+    "id": "S9",
+    "file": "app/assets/stylesheets/desktop/user.scss",
+    "lines": [
+     519,
+     523
+    ],
+    "texto": "Original .name was scale-color($primary, $lightness: 30%) but replacement uses 50%/50%, changing light-theme output. The matching .name in common/base/user.scss correctly uses 30%/70%. Fix to 30%/70%."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+    "descricao": "In .topic-meta-data h5 a, the light-theme color changed from scale-color($primary, 30%) to 70% because the dark-light-choose arguments were inverted, making the link much paler in light themes.",
+    "textoGolden": "In .topic-meta-data h5 a, the original code had color: scale-color($primary, $lightness: 30%) but was changed to dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%)). The lightness for the light theme changed from 30% to 70%, which is a dramatic inversion",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/desktop/topic-post.scss",
+      "lines": [
+       291,
+       291
+      ],
+      "texto": "The light-theme argument was changed from the original lightness. WHAT: the original was `scale-color($primary, $lightness: 30%)`, but the new value uses `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))` \u2014 the first (light-theme) argument is now 70%, not 30%. WHY: this silently darkens the light-theme color for `.topic-meta-data h5 a` (post-author link) from a 30% to a 70% tint, a light-theme regression outside the PR's dark-theme-only intent; the values also are inverted relative to the (X, 100\u2212X) convention used everywhere else (should be 30/70). HOW: use `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/desktop/topic-post.scss",
+      "lines": [
+       291,
+       291
+      ],
+      "texto": "The original value was scale-color($primary, $lightness: 30%). After conversion the light-mode argument became $primary:70% and dark-mode $secondary:30% \u2014 both inverted away from the original 30%. Should be dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%)). As written the light-mode color is dramatically lighter than intended."
+     },
+     {
+      "file": "app/assets/stylesheets/desktop/topic-post.scss",
+      "lines": [
+       291,
+       291
+      ],
+      "texto": "This bold link inside `.reply`/`nav.post-controls` was originally `scale-color($primary, $lightness: 30%)`. The rewrite uses 70% as the light-theme argument, inverting the intended value (the complementary pair should be 30/70, not 70/30). The light theme now shows this link far lighter than before; the first argument must remain the original 30%."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+    "descricao": "In mobile .custom-message-length the light-theme lightness changed from 70% to 30% (inverted pair), making the hint text much darker than before and than desktop.",
+    "textoGolden": "In topic-post.css the original code used $lightness: 70% but the replacement uses $lightness: 30% for the light theme. This makes the text significantly darker than intended.",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/mobile/modal.scss",
+      "lines": [
+       102,
+       102
+      ],
+      "texto": "The light-theme argument was changed from the original lightness. WHAT: the original was `scale-color($primary, $lightness: 70%)`, but the new value is `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))` \u2014 the first argument is now 30%, not 70%. WHY: this changes the light-theme color of `.custom-message-length` from a 70% to a 30% tint (a light-theme regression), and the pair is inverted vs. the (X, 100\u2212X) convention; the desktop counterpart at desktop/modal.scss:94 correctly kept 70/30. HOW: use `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/mobile/modal.scss",
+      "lines": [
+       102,
+       102
+      ],
+      "texto": "The original `.custom-message-length` color was `scale-color($primary, $lightness: 70%)`. The refactor changed the light-theme argument to 30%, so the light theme now renders this hint much darker than before (a 40-point lightness jump). It also no longer matches its desktop counterpart (desktop/modal.scss keeps `70%, 30%`). The first argument must stay at the original 70%: `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/mobile/modal.scss",
+      "lines": [
+       100,
+       102
+      ],
+      "texto": "`.custom-message-length` now contradicts the desktop rule for the same class. desktop/modal.scss (line 94) converted the original `scale-color($primary, $lightness: 70%)` to `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))` (keeping 70%), while this hunk produced `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`, flipping the primary lightness 70\u219230. Both files started from 70%, so mobile should be 70/30 to agree with desktop and preserve the original value."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+    "descricao": "In desktop/user.scss .name the light-theme lightness was changed from 30% to 50%, lightening the name in light themes instead of only adding a dark-theme value.",
+    "textoGolden": "This change for desktop/user.css changes $primary from 30% to 50% for the light theme; most other changes preserve the original $primary value and move the complement to $secondary for dark. Consider reviewing this (also applies to a similar .name change in the mobile variant).",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/desktop/user.scss",
+      "lines": [
+       522,
+       522
+      ],
+      "texto": "The `.name` color was `scale-color($primary, $lightness: 30%)` and is now `50%` in the light branch. This changes the light-theme color. Use `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/desktop/user.scss",
+      "lines": [
+       522,
+       522
+      ],
+      "texto": "The .name color was scale-color($primary, $lightness: 30%) but the light argument was changed to 50%, so the light theme loses its contrast. Use dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))."
+     },
+     {
+      "file": "app/assets/stylesheets/desktop/user.scss",
+      "lines": [
+       522,
+       522
+      ],
+      "texto": "The .name light value was changed from primary 30% to 50%, which lightens the text in light mode. Use dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+    "descricao": "In mobile/user.scss .name the light-theme lightness was changed from 30% to 50% instead of preserving 30% with a 70% secondary for dark themes.",
+    "textoGolden": "In mobile/user.scss line 497, the lightness value for dark themes should be inverted to 70% instead of being changed to 50%. This change may lead to unintended visual regressions in light themes.",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/desktop/user.scss",
+      "lines": [
+       522,
+       522
+      ],
+      "texto": "The light-theme value no longer matches the original. WHAT: `.group-member-info .name` was `scale-color($primary, $lightness: 30%)` and now is `dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%))` (30% \u2192 50%). WHY: this lightens the name link in the light theme, an unintended light-theme change; the equivalent rule in common/base/user.scss:124 correctly preserved 30% (30/70). HOW: use `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/mobile/user.scss",
+      "lines": [
+       497,
+       497
+      ],
+      "texto": "The light-theme value no longer matches the original. WHAT: `.group-member-info .name` was `scale-color($primary, $lightness: 30%)` and now is `dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%))` (30% \u2192 50%). WHY: this lightens the name link in the light theme, an unintended light-theme change inconsistent with the mobile/desktop counterpart that preserved 30%; desktop/user.scss:522 has the same defect. HOW: use `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/desktop/user.scss",
+      "lines": [
+       522,
+       522
+      ],
+      "texto": ".group-member-info .name originally used scale-color($primary, $lightness: 30%). The conversion changed the light-mode argument to 50% (making it 50/50), altering the intended color. Should preserve the original: dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+    "descricao": "In mobile topic-post a.star h3 the light-theme lightness changed from 20% to 50%, fading the heading and diverging from the desktop 20%/80% conversion.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/mobile/topic-post.scss",
+      "lines": [
+       182,
+       182
+      ],
+      "texto": "The light-theme value no longer matches the original. WHAT: `.topic-map h3` was `scale-color($primary, $lightness: 20%)` and now is `dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%))` (20% \u2192 50%). WHY: this visibly lightens the topic-map heading in the light theme; the desktop counterpart at desktop/topic-post.scss:321 correctly kept 20% (20/80), so mobile diverged. HOW: use `dark-light-choose(scale-color($primary, $lightness: 20%), scale-color($secondary, $lightness: 80%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/mobile/topic-post.scss",
+      "lines": [
+       182,
+       182
+      ],
+      "texto": "Original was scale-color($primary, $lightness: 20%). The conversion changed it to 50%/50%, but the desktop mirror of this rule (desktop/topic-post.scss h3) uses 20%/80%. The two files must agree; should be dark-light-choose(scale-color($primary, $lightness: 20%), scale-color($secondary, $lightness: 80%))."
+     },
+     {
+      "file": "app/assets/stylesheets/mobile/topic-post.scss",
+      "lines": [
+       182,
+       182
+      ],
+      "texto": "This `h3` was originally `scale-color($primary, $lightness: 20%)`. The rewrite changed the light-theme argument to 50%, so the light theme renders the heading lighter than before; the correct pair is 20/80, not 50/50. The first argument must keep the original 20%."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#07",
+    "descricao": "The comment describing the topic-list cell default color still names a plain scale-color($primary, 50%) rule that the PR replaced with dark-light-choose.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/base/discourse.scss",
+      "lines": [
+       72,
+       76
+      ],
+      "texto": "The comment at lines 72-74 states \"the default for table cells in topic list is scale-color($primary, $lightness: 50%)\", but the rule it documents was converted by this PR to `dark-light-choose(scale-color($primary, $lightness: X%), scale-color($secondary, $lightness: 100-X%))` (here for coldmap-high/med/low and in common/base/_topic-list.scss th/td). The prose still names a single `$primary` expression, so it no longer describes the code: a reader comparing the two will look for a plain `$primary` 50% rule that no longer exists. Update the comment to describe the dark-light-choose baseline (e.g. \"is dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%))\")."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#08",
+    "descricao": "In dark themes the notification badge background becomes a lightened $secondary while its text stays $secondary, giving dark text on a dark background with poor contrast.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/components/badges.css.scss",
+      "lines": [
+       239,
+       239
+      ],
+      "texto": "The dark-theme notification badge background now uses a lightened $secondary while its text still uses the unmodified $secondary. This puts dark text on a dark background for plain badges such as category unread counts in site-map.hbs:73; with $secondary black, the foreground is #000 and the background is approximately #4d4d4d (about 2.5:1 contrast), making the small count text difficult to read. Set the default badge foreground, including its &[href] rule, to a contrasting dark-theme color such as $primary when selecting this dark background."
+     }
+    ]
+   }
+  ]
+ },
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "5f8a130277dbddc95d133cd2832be639baf89213",
+  "base": "e25638dab0d4b98f99c8fe8976ccaae8f4fb9db3",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/models/blocked_email.rb",
+    "lines": [
+     11,
+     12
+    ],
+    "texto": "WHAT: BlockedEmail.should_block? looks up with exact case-sensitive `where(email: email)` on the raw value. WHY: An attacker blocked as `bad@spam.com` can sign up as `BAD@spam.com` (or with case/whitespace variants) because email identity is case-insensitive, defeating the block. HOW: Normalize with `Email.downcase(email.to_s.strip)` on write and lookup, or query case-insensitively."
+   },
+   {
+    "id": "S2",
+    "file": "app/models/blocked_email.rb",
+    "lines": [
+     14,
+     16
+    ],
+    "texto": "WHAT: should_block? does read-modify-write `match_count += 1` followed by `save`. WHY: Concurrent blocked signups read the same count and overwrite each other, losing increments and making last_match_at ordering unreliable. HOW: Use atomic `increment_counter`/`update_counters` for match_count plus a separate timestamp update."
+   },
+   {
+    "id": "S3",
+    "file": "app/assets/javascripts/discourse/controllers/create_account_controller.js",
+    "lines": [
+     93,
+     96
+    ],
+    "texto": "WHAT: emailValidation depends on `rejectedEmails.@each` while the array holds primitive strings pushed via `pushObject`. WHY: `@each` observes properties of array items, not membership, so pushing a blocked email does not invalidate the computed property and the error is not shown until the email field itself changes. HOW: Depend on `rejectedEmails.[]` (or `rejectedEmails.length) instead of `rejectedEmails.@each`."
+   },
+   {
+    "id": "S4",
+    "file": "lib/validators/email_validator.rb",
+    "lines": [
+     13,
+     15
+    ],
+    "texto": "WHAT: validate_each calls should_block?, which does a SELECT plus a synchronous UPDATE (`match_count`/`last_match_at` save) inside the validation path. WHY: Every User validation with a changed email pays an extra read and, on match, a write; repeated valid? calls inflate match_count and slow the signup hot path with avoidable writes. HOW: Split into a side-effect-free check for validation and update stats once when the signup actually fails."
+   },
+   {
+    "id": "S5",
+    "file": "app/models/blocked_email.rb",
+    "lines": [
+     11,
+     12
+    ],
+    "texto": "Case-sensitivity bypass: should_block? uses exact-case where(email: email) while sibling checks are case-insensitive. Blocked bad@spam.com can be bypassed with BAD@Spam.COM. Normalize both sides before comparing email identity."
+   },
+   {
+    "id": "S6",
+    "file": "app/models/blocked_email.rb",
+    "lines": [
+     11,
+     17
+    ],
+    "texto": "Read-modify-write (match_count+=1 + save) races: two concurrent should_block? calls read the same count and both write count+1, losing an increment and racing last_match_at. Use an atomic DB increment (update_all/increment_counter) instead of in-memory += and save."
+   },
+   {
+    "id": "S7",
+    "file": "spec/models/blocked_email_spec.rb",
+    "lines": [
+     12,
+     15
+    ],
+    "texto": "Comment claims last_match_at indicates 'have ever been blocked', but BlockedEmail.should_block? updates match_count/last_match_at for every match including action_type :do_nothing (proven by shared examples for both :block and :do_nothing). A do_nothing hit sets last_match_at without blocking, so the prose is untrue. Fix the comment to say matched/seen, not blocked."
+   },
+   {
+    "id": "S8",
+    "file": "app/models/blocked_email.rb",
+    "lines": [
+     11,
+     18
+    ],
+    "texto": "Name should_block? promises a pure predicate but the body writes to the DB (match_count increment, last_match_at update, save) on every call, even for :do_nothing. Callers reading the name expect no mutation. Rename to reflect the recording side effect or split query from recording."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#02",
+    "descricao": "When the server rejects an email, the signup form marks it with the generic 'invalid email' text instead of the server's reason (blocked or not allowed).",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/discourse/controllers/create_account_controller.js",
+      "lines": [
+       69,
+       74
+      ],
+      "texto": "The message shown for a rejected email disagrees with the reason the code is reacting to. This branch fires when the server rejected the email (result.errors.email), and this PR gives that condition its own server string \u2014 user.email.blocked, added in config/locales/server.en.yml as \"is not allowed.\" \u2014 but the client re-labels it with the generic I18n.t('user.email.invalid'). A user whose address is perfectly well-formed but blocked/hosted on a blacklisted domain is therefore told their email is invalid, contradicting the reason just returned by the server. Use the blocked/not-allowed message (and add a matching client locale key) instead of user.email.invalid. Notice the same generic string is used at line ~94 for validation failures, so it should not be reused to represent a distinct server-side rejection."
+     }
+    ]
+   },
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+    "descricao": "BlockedEmail.should_block? looks up the email with a case-sensitive exact match and no normalisation, so changing the letter case of a blocked address bypasses the block list.",
+    "textoGolden": "The case-sensitive email lookup in `BlockedEmail.should_block?` creates a bypass risk, allowing 'User@Example.com' to bypass a block on 'user@example.com'. This can lead to unauthorized access to blocked users.",
+    "comentarios": [
+     {
+      "file": "app/models/blocked_email.rb",
+      "lines": [
+       12,
+       12
+      ],
+      "texto": "Blocked-email lookup compares the raw email without normalizing its domain. A signup for block@SPAMFROMHOME.ORG does not match a blocked record for block@spamfromhome.org despite identifying the same mailbox, allowing the signup restriction to be bypassed by changing domain capitalization. Normalize domains using Email.downcase both when storing blocked emails and when looking them up."
+     },
+     {
+      "file": "app/models/blocked_email.rb",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "Canonicalize blocked emails consistently with the application's Email.downcase identity handling, both when storing entries and when looking them up. This exact equality query is case-sensitive, and BlockedEmail's validation callback only defaults action_type. A block-list entry such as `Block@SpamFromHome.org` therefore does not block the same identity submitted/stored as `block@spamfromhome.org`. This is particularly relevant to the explicitly supported manually populated block list. Normalize existing/imported entries as well as new ones, and add a test with differing casing between the stored entry and the lookup."
+     },
+     {
+      "file": "app/models/blocked_email.rb",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "Case-sensitivity bypass: BlockedEmail.where(email: email) is exact case-sensitive with no normalization, while sibling checks are case-insensitive. Normalize (downcase/strip) on write and lookup."
+     }
+    ]
+   },
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+    "descricao": "BlockedEmail.should_block? updates match_count and last_match_at as a side effect of email validation, so each signup attempt (validated twice) inflates the counter and concurrent updates can lose increments.",
+    "textoGolden": "BlockedEmail.should_block_email? method has side effects during a read operation - it updates statistics even when just checking if an email should be blocked. This could cause race conditions in concurrent environments and makes the method name misleading.",
+    "comentarios": [
+     {
+      "file": "app/models/blocked_email.rb",
+      "lines": [
+       11,
+       18
+      ],
+      "texto": "WHAT: should_block? mutates match_count/last_match_at via read-modify-write save inside a validator. WHY: Every validation call (including re-validations of the same attempt or attempts failing on unrelated fields like username) inflates stats, and concurrent signups lose increments with no atomic update. HOW: Move stats update out of validation or use atomic increment (update_counters/increment_counter) only on actual blocked rejections."
+     },
+     {
+      "file": "app/models/blocked_email.rb",
+      "lines": [
+       11,
+       19
+      ],
+      "texto": "WHAT: `should_block?` mutates state (increments `match_count`, sets `last_match_at`, calls `record.save`) inside a method that is invoked from the model validation callback, and the signup controller runs validation twice per attempt (`user.valid?` at users_controller.rb:168 then `user.save` at :172). WHY: a single signup attempt increments `match_count` twice and rewrites `last_match_at`, so the per-email block statistics the feature was built to track are wrong. HOW: make the read side non-mutating for validation and record the match separately (e.g. move the increment out of validation, or guard it so it runs once per attempt), keeping the predicate pure."
+     },
+     {
+      "file": "app/models/blocked_email.rb",
+      "lines": [
+       13,
+       17
+      ],
+      "texto": "WHAT: `record.match_count += 1; record.last_match_at = ...; record.save` is a non-atomic read-modify-write with no lock or unique constraint protection. WHY: two concurrent signup attempts with the same blocked email can both read the same `match_count` and one write overwrites the other, losing counts, so the tracked statistics drift under load. HOW: use an atomic update such as `BlockedEmail.where(id: record.id).update_all('match_count = match_count + 1, last_match_at = ...')` or a database-level counter increment."
+     }
+    ]
+   },
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#07",
+    "descricao": "Claims the 'returns false' spec cannot distinguish nil from false because be_false is a truthiness matcher.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "spec/models/blocked_email_spec.rb",
+      "lines": [
+       22,
+       24
+      ],
+      "texto": "This test is named \"returns false if a record with the email doesn't exist,\" but it cannot verify that. `BlockedEmail.should_block?` returns `record && record.action_type == actions[:block]`, which yields `nil` (not `false`) when no record exists, and under this suite's RSpec 2 semantics `subject.should be_false` is a truthiness matcher that passes for any falsy value including `nil`. The assertion therefore passes on the nil the code actually returns and would only fail on an outright `true`; it does not pin the `false`/`nil` distinction its name asserts. Assert the value exactly (e.g. `subject.should == false`, or `be_falsey`/`be_nil` if nil is intended) so a regression returning a non-false falsy value is caught."
+     }
+    ]
+   },
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#08",
+    "descricao": "The domain whitelist/blacklist regex @(domains) is not anchored at the end, so an address like user@example.com.evil.com matches a whitelist entry for example.com and bypasses the restriction.",
+    "textoGolden": "The regex pattern @(#{domains}) in email_in_restriction_setting? method only matches domain suffixes, not full domains with proper boundary anchoring. An attacker can register evil.example.com to bypass a whitelist entry for example.com.",
+    "comentarios": [
+     {
+      "file": "lib/validators/email_validator.rb",
+      "lines": [
+       18,
+       22
+      ],
+      "texto": "WHAT: email_in_restriction_setting? builds unanchored Regexp \"@(domains)\" with only '.' escaped. WHY: Whitelist 'gmail.com' substring-matches 'victim@gmail.com.evil.com', so an attacker registers with an unapproved domain and bypasses the allow-list; blacklist similarly over/under-matches and other regex metachars are unescaped. HOW: Anchor and escape domains (e.g. Regexp.escape per domain split on '|' plus /\\A[^@\\s]+@(?:domain)\\z/i)."
+     }
+    ]
+   },
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#prod-01",
+    "descricao": "Emails rejected by the server are cached in rejectedEmails for the controller's lifetime and never cleared, so an address that later becomes valid keeps failing client-side validation until reload.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "71826eb08fc7ea35a5925ad223296feadd5c5e29",
+  "base": "e805e472f4a80017957e2fbec975ea78c6ee45ed",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/api/helpers/error_upsampling.py",
+    "lines": [
+     76,
+     78
+    ],
+    "texto": "WHAT: _should_apply_sample_weight_transform returns True for the errors dataset while upsampled_count is only registered in DiscoverDatasetConfig. WHY: An allowlisted errors-dataset stats query is rewritten to upsampled_count() which the errors resolver cannot resolve, failing the query instead of upsampling. HOW: Remove the errors fast-path or register an equivalent upsampled_count function for the errors dataset path."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/api/endpoints/organization_events_stats.py",
+    "lines": [
+     218,
+     220
+    ],
+    "texto": "WHAT: _get_event_stats gates upsampling on the outer closure dataset instead of its scoped_dataset argument. WHY: Dashboard-split paths execute the query against a different scoped_dataset (e.g. discover for error splits while dataset is metrics), so the gate decides for the wrong dataset and upsampling is skipped or applied to the wrong query. HOW: Pass scoped_dataset to the helper, or move the check to each call site with the dataset actually queried."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/api/helpers/error_upsampling.py",
+    "lines": [
+     100,
+     103
+    ],
+    "texto": "WHAT: _is_error_focused_query uses substring `\"event.type:error\" in query`. WHY: A negated filter `!event.type:error` still contains the substring and is wrongly upsampled, while error-only split queries like `(query) AND !event.type:transaction` contain no such substring and are wrongly not upsampled, returning wrong counts. HOW: Parse the query condition properly (handle `!`/NOT) instead of substring matching."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/api/helpers/error_upsampling.py",
+    "lines": [
+     58,
+     60
+    ],
+    "texto": "WHAT: transform_query_columns_for_error_upsampling only rewrites the exact string `count()` and passes everything else through. WHY: Allowlisted queries using `count() as alias`, `eps()`, `epm()` or multi-yAxis combos silently keep raw counts, mixing un-upsampled series into results the caller treats as upsampled. HOW: Match/normalize the function name plus alias handling and extend to eps/epm (or explicitly refuse to upsample unsupported aggregations)."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/testutils/factories.py",
+    "lines": [
+     353,
+     355
+    ],
+    "texto": "WHAT: _set_sample_rate_from_error_sampling stores any truthy float(client_sample_rate) without range validation. WHY: Values like negative, >1, inf/NaN strings become top-level sample_rate and corrupt derived sample_weight expectations in tests using error_sampling contexts. HOW: Only store when 0 < rate <= 1 and finite, catching (TypeError, ValueError) explicitly."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/testutils/factories.py",
+    "lines": [
+     344,
+     357
+    ],
+    "texto": "Presence of client_sample_rate is tested with truthiness (`if client_sample_rate:`), so a legitimate value of 0 / 0.0 is treated as missing and sample_rate is never set. Use an explicit existence check instead so 0 propagates as float 0.0"
+   },
+   {
+    "id": "S7",
+    "file": "tests/snuba/api/endpoints/test_organization_events_stats.py",
+    "lines": [
+     3654,
+     3697
+    ],
+    "texto": "test_error_upsampling_with_transaction_events cannot falsify wrongful upsampling of transactions: the fixture has no sample_weight so upsampled_count() falls back to ifNull(sample_weight,1)==1, identical to regular count(). Asserting count==1 passes on both paths."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#03",
+    "descricao": "The upsampling decision is evaluated against the request's dataset instead of the scoped_dataset actually queried, so in the dashboard discover-split path (metrics dataset) error queries run against discover skip upsampling even when all projects are allowlisted.",
+    "textoGolden": "The upsampling eligibility check passes the outer dataset instead of the actual dataset used by scoped_dataset. In paths where the query ultimately runs against discover (e.g., dashboard split) while the original dataset is metrics, upsampling may be skipped even when all projects are allowlisted.",
+    "comentarios": [
+     {
+      "file": "src/sentry/api/endpoints/organization_events_stats.py",
+      "lines": [
+       218,
+       223
+      ],
+      "texto": "The upsampling decision uses the closure variable `dataset` while the transformed `final_columns` are executed against `scoped_dataset`. In the dashboard-split path `_get_event_stats` is deliberately invoked with a different dataset (e.g. `_get_event_stats(discover, ...)` at lines 351, 365, 406, 423) than the request's `dataset`, so the `_should_apply_sample_weight_transform` branch can be evaluated against the wrong dataset and apply/skip `sum(sample_weight)` for a dataset that was never queried. Base the decision on the dataset actually being queried (`scoped_dataset`) so the transform matches the target of the query."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04",
+    "descricao": "_is_error_focused_query uses a substring match for `event.type:error` on the request query, so negated or mixed (OR transaction) discover queries are treated as error-only and get the sample_weight sum instead of count().",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/helpers/error_upsampling.py",
+      "lines": [
+       100,
+       103
+      ],
+      "texto": "`_is_error_focused_query` decides whether to apply `upsampled_count()` by doing a naive substring search for `event.type:error` in the raw request query. A query that excludes errors (e.g. `!event.type:error`) or the discover-split query `({query}) AND event.type:transaction` still contains the literal `event.type:error`, so the transform is applied to a non-error / transactions query, summing `sample_weight` where it should be a plain `count()` and producing wrong bucket values. It also ignores the actual `query` passed to `_get_event_stats`, so the decision can differ from the query that is really executed. Match on a parsed/negation-aware condition (or pass the resolved query string) instead of a raw substring test."
+     },
+     {
+      "file": "src/sentry/api/helpers/error_upsampling.py",
+      "lines": [
+       100,
+       103
+      ],
+      "texto": "The substring check treats `!event.type:error` and `event.type:error OR event.type:transaction` as error-only queries. For allowlisted projects this rewrites count() to an aggregation over sample_weight even when the Discover query includes transactions, violating the error-only restriction and potentially failing against a transaction-backed query. Determine the event-type restriction from the parsed query rather than the presence of a substring."
+     },
+     {
+      "file": "src/sentry/api/helpers/error_upsampling.py",
+      "lines": [
+       100,
+       103
+      ],
+      "texto": "Substring matching does not establish that the Discover query selects only errors. For example, `!event.type:error` and `event.type:error OR event.type:transaction` both return True here, causing count() to be replaced with the sample-weight aggregation for non-error or mixed results in allowlisted projects. This contradicts the error-only guard and can produce incorrect counts. Parse the query and establish an error-only restriction (including negation and Boolean structure), or conservatively skip transformation when that restriction cannot be proven."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#05",
+    "descricao": "test_error_upsampling_with_transaction_events cannot detect upsampling being applied to transaction queries, because the transaction has no sample_weight and upsampled_count() equals count() for it.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/snuba/api/endpoints/test_organization_events_stats.py",
+      "lines": [
+       3654,
+       3697
+      ],
+      "texto": "test_error_upsampling_with_transaction_events would still pass if upsampling were wrongly applied to transaction queries. The transaction event has no sample_weight, and upsampled_count uses ifNull(sample_weight, 1), so the result is still 1 and 0. Give the transaction a non-default sample rate or weight so an upsampled count would differ from a plain count, or assert that the transform was not applied."
+     },
+     {
+      "file": "tests/snuba/api/endpoints/test_organization_events_stats.py",
+      "lines": [
+       3654,
+       3697
+      ],
+      "texto": "test_error_upsampling_with_transaction_events cannot falsify over-application of upsampling: the stored transaction has no sample_weight so upsampled_count() (sum(ifNull(sample_weight,1))) returns 1, same as count(). Give the transaction a sample_weight/client_sample_rate that would diverge (e.g. count 10 if upsampled vs 1 if not), or assert via mock that transform_query_columns_for_error_upsampling was not called / yAxes were not rewritten."
+     },
+     {
+      "file": "tests/snuba/api/endpoints/test_organization_events_stats.py",
+      "lines": [
+       3655,
+       3697
+      ],
+      "texto": "test_error_upsampling_with_transaction_events cannot detect upsampling being wrongly applied to transaction queries. The stored transaction event has no error_sampling context, so sample_weight is null, and upsampled_count = toInt64(sum(ifNull(sample_weight,1))) evaluates to 1 for it \u2014 identical to count(). If _should_apply_sample_weight_transform/_is_error_focused_query were broken so that a discover query with event.type:transaction gets upsampled, the assertion count==1 (and 0 in the empty bucket) would still pass. Add an event with a known non-1 sample_weight (or assert the emitted query uses count() and not upsampled_count) so the test actually fails when the transaction exclusion is bypassed."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#06",
+    "descricao": "The test factory helper's docstring promises a valid client sample rate but it copies any truthy float-convertible value (negative, >1, strings), unlike production validation.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/testutils/factories.py",
+      "lines": [
+       344,
+       357
+      ],
+      "texto": "WHAT: _set_sample_rate_from_error_sampling uses `if client_sample_rate: float(...)` with no type/range check, unlike production _derive_client_error_sampling_rate which requires isinstance(int,float) and 0<rate<=1. WHY: string '0.1', bool True, or out-of-range 5.0 get stored as sample_rate in fixtures while production drops them, making upsampling tests diverge from prod. HOW: mirror production validation before assigning sample_rate."
+     },
+     {
+      "file": "src/sentry/testutils/factories.py",
+      "lines": [
+       345,
+       345
+      ],
+      "texto": "The new docstring says the client sample rate must be 'present and valid', but the implementation only checks truthiness and float conversion. Negative rates, rates greater than 1, and float-convertible non-finite values are all accepted and written to sample_rate. This falsely tells test authors that this helper enforces sample-rate validity. Either document that it merely copies truthy float-convertible values, or validate the supported sample-rate range and finiteness before setting the field."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#08",
+    "descricao": "With upsampling active, top-events queries pick and order the top N groups by raw count() (selected_columns/orderby are not transformed) while the plotted series use upsampled_count(), so ranking can disagree with the displayed weighted counts.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/endpoints/organization_events_stats.py",
+      "lines": [
+       242,
+       248
+      ],
+      "texto": "Only timeseries_columns are upsampled while selected_columns and orderby used to select the Top N remain based on raw count(). discover.top_events_timeseries first queries those unchanged selected columns to choose groups, so a group with fewer retained events but a higher weighted count is omitted in favor of a lower-volume group. Apply the weighted-count transformation consistently to Top N selection and its ordering as well as the displayed timeseries."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#09",
+    "descricao": "_are_all_projects_error_upsampled and its caller take an organization argument that is never read.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/helpers/error_upsampling.py",
+      "lines": [
+       28,
+       44
+      ],
+      "texto": "`_are_all_projects_error_upsampled` takes an `organization` argument \u2014 also threaded in from the public `is_errors_query_for_error_upsampled_projects` \u2014 but never reads it: the body uses only `project_ids` and the global option `issues.client_error_sampling.project_allowlist`. The declared parameter is dead. Either the allowlist check is meant to be organization-scoped (the body must actually consult `organization`) or the parameter should be removed from both functions; as written the signature advertises an organization-scoped decision the implementation never makes."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#14",
+    "descricao": "Claims only bare count() is rewritten, so aliased count, eps(), epm(), count_unique() etc. stay un-upsampled.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/helpers/error_upsampling.py",
+      "lines": [
+       54,
+       64
+      ],
+      "texto": "WHAT: transform_query_columns_for_error_upsampling only rewrites exact bare `count()` and passes everything else through unchanged. WHY: yAxes like `count() as foo`, `eps()`, `epm()`, `count_unique()`, `count_if()` keep raw counts while should_upsample is true, returning under-counted timeseries. HOW: parse/normalize the function (strip alias, match function name with args) and rewrite all count-equivalent aggs or explicitly fall back to no-upsampling."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#15",
+    "descricao": "Rewriting count() to `upsampled_count() as count` breaks responses for transformAliasToInputFormat=1: the result column is translated to the rewritten field string while the serializer still reads `count()`.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/helpers/error_upsampling.py",
+      "lines": [
+       58,
+       60
+      ],
+      "texto": "Replacing count() with `upsampled_count() as count` breaks requests using transformAliasToInputFormat=1. QueryBuilder.process_results translates the count alias to the replacement field string, but the endpoint serializer still resolves the original axis as `count()`, so it cannot read the weighted count from the returned rows. Preserve the original public field name in the result mapping when rewriting the internal aggregation."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#16",
+    "descricao": "upsampled_count truncates the weighted sum with toInt64 instead of rounding, under-counting the estimate by up to one per bucket.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/search/events/datasets/discover.py",
+      "lines": [
+       1044,
+       1049
+      ],
+      "texto": "`upsampled_count` wraps the sum in `toInt64`, which truncates toward zero: `sum(ifNull(sample_weight, 1))` of e.g. 1.5 or 3.33 yields 1 or 3 instead of the nearest integer, systematically under-counting the upsampled estimate (worst when weights are just below an integer). Use a rounding aggregation (e.g. `toInt64(round(sum(...)))`) so the reconstructed count reflects the intended estimate rather than a floored value."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#18",
+    "descricao": "The 'no project IDs' test case runs with an empty allowlist mock, so it passes via the empty-allowlist branch and does not verify the empty project_ids guard.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/api/helpers/test_error_upsampling.py",
+      "lines": [
+       51,
+       52
+      ],
+      "texto": "The 'no project IDs provided' case does not exercise the `if not project_ids: return False` guard. mock_options.get.return_value was set to [] just above (line 48), so removing the project_ids guard still returns False via the `if not allowlist` branch, and this assertion passes either way. Re-mock options.get to return a non-empty allowlist (e.g. self.project_ids) before calling with project_ids=[], so the empty-project guard is actually falsifiable."
+     }
+    ]
+   }
+  ]
+ },
+ "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "8422030ef456e3a898415e96475b4d8ddfc7640f",
+  "base": "bdd229e3f22e307fe40b30ef99e92ff3f6723da4",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/incidents/grouptype.py",
+    "lines": [
+     11,
+     12
+    ],
+    "texto": "WHAT: MetricAlertDetectorHandler subclasses StatefulDetectorHandler but implements none of its abstractmethods (counter_names, get_dedupe_value, get_group_key_values, build_occurrence_and_event_data). WHY: Instantiating it via Detector.detector_handler (group_type.detector_handler(self)) raises TypeError, crashing process_detectors for metric_alert_fire detectors instead of returning []. HOW: Implement the required abstractmethods/stubs or keep it as a plain DetectorHandler until the stateful implementation exists."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/workflow_engine/processors/detector.py",
+    "lines": [
+     226,
+     233
+    ],
+    "texto": "Docstring says evaluate returns a list of DetectorEvaluationResult, but the implementation (and process_detectors/tests) now return dict[DetectorGroupKey, DetectorEvaluationResult]. Update the prose to describe the dict return so callers do not rely on the old list shape."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/incidents/grouptype.py",
+    "lines": [
+     11,
+     12
+    ],
+    "texto": "StatefulDetectorHandler gained required abstract build_occurrence_and_event_data (plus counter_names/get_dedupe_value/get_group_key_values) but MetricAlertDetectorHandler was switched to it with just pass. Instantiation via detector_handler will raise TypeError for abstract class. Implement the required members until the handler is built."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/incidents/grouptype.py",
+    "lines": [
+     10,
+     12
+    ],
+    "texto": "MetricAlertDetectorHandler now subclasses StatefulDetectorHandler but implements none of its required abstracts (counter_names, get_dedupe_value, get_group_key_values, and the newly added build_occurrence_and_event_data that evaluate() unconditionally calls for non-OK status). The class remains abstract and cannot be instantiated via Detector.detector_handler; if instantiated it would fail on evaluate. Implement the required methods or revert to DetectorHandler until the stateful implementation exists."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#01",
+    "descricao": "The TODO above MetricAlertDetectorHandler says it will become a stateful detector, but the class already subclasses StatefulDetectorHandler.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/incidents/grouptype.py",
+      "lines": [
+       10,
+       12
+      ],
+      "texto": "The comment 'TODO: This will be a stateful detector when we build that abstraction' is now stale. MetricAlertDetectorHandler already subclasses StatefulDetectorHandler. Remove or reword the TODO."
+     },
+     {
+      "file": "src/sentry/incidents/grouptype.py",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "Remove or revise the adjacent TODO saying this will become a stateful detector 'when we build that abstraction'. The class now inherits StatefulDetectorHandler, so the comment describes already-completed work as a future migration and misleads maintainers about which abstraction this handler uses."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+    "descricao": "MetricAlertDetectorHandler subclasses StatefulDetectorHandler without implementing its abstract methods, so instantiating it for metric alert detectors raises TypeError where it previously returned an empty-result handler.",
+    "textoGolden": "MetricAlertDetectorHandler inherits from StatefulDetectorHandler but only contains pass, failing to implement its required abstract methods: counter_names (property), get_dedupe_value(), get_group_key_values(), and build_occurrence_and_event_data(). This will cause a TypeError at runtime when the class is instantiated.",
+    "comentarios": [
+     {
+      "file": "src/sentry/incidents/grouptype.py",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "WHAT: MetricAlertDetectorHandler now subclasses StatefulDetectorHandler with an empty body, so it does not implement the abstract methods counter_names, get_dedupe_value, get_group_key_values, and build_occurrence_and_event_data declared on StatefulDetectorHandler. WHY: the class is now abstract, and Detector.detector_handler (src/sentry/workflow_engine/models/detector.py:86) instantiates it via group_type.detector_handler(self), so any detector whose type resolves to this grouptype will raise TypeError: Can't instantiate abstract class MetricAlertDetectorHandler \u2014 the previous version implemented evaluate and was instantiable. HOW: implement the required abstract methods (or keep a concrete evaluate override) so the handler can be constructed."
+     },
+     {
+      "file": "src/sentry/incidents/grouptype.py",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "MetricAlertDetectorHandler now subclasses StatefulDetectorHandler but with `pass`, so it implements none of the abstract methods it inherits (counter_names, get_dedupe_value, get_group_key_values, and the newly added build_occurrence_and_event_data). The class is therefore still abstract and instantiating it (it is registered as `detector_handler` on MetricAlertFire and is constructed by Detector.detector_handler) raises `TypeError: Can't instantiate abstract class MetricAlertDetectorHandler with abstract methods ...`. Before this change it subclassed DetectorHandler and implemented the single abstract `evaluate`, so it was instantiable; the PR makes the metric-alert handler path throw. Either implement the required abstract methods or keep the class free of unimplemented abstracts."
+     },
+     {
+      "file": "src/sentry/incidents/grouptype.py",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "MetricAlertDetectorHandler now subclasses StatefulDetectorHandler (an abc.ABC) with only `pass`. StatefulDetectorHandler declares four abstract methods \u2014 counter_names, get_dedupe_value, get_group_key_values, and the newly added build_occurrence_and_event_data (detector.py:142-170) \u2014 none of which are implemented here. The class therefore remains abstract and cannot be instantiated; Detector.detector_handler's `group_type.detector_handler(self)` will raise `TypeError: Can't instantiate abstract class MetricAlertDetectorHandler` for the metric_alert_fire group type. Previously this class was a concrete DetectorHandler with an implemented evaluate, so this PR newly makes it uninstantiable. Implement the required abstract methods (or revert to a concrete handler) to satisfy the base-class contract."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#03",
+    "descricao": "The evaluate() docstring says it returns a list of DetectorEvaluationResult, but it now returns a dict keyed by group key.",
+    "textoGolden": "Docstring says this returns a list of DetectorEvaluationResult, but the method now returns a dict keyed by DetectorGroupKey. Consider updating the docstring to match the new return type.",
+    "comentarios": [
+     {
+      "file": "src/sentry/workflow_engine/processors/detector.py",
+      "lines": [
+       226,
+       228
+      ],
+      "texto": "Update evaluate's adjacent docstring to describe a dictionary keyed by DetectorGroupKey rather than a list of DetectorEvaluationResult. This change returns a dictionary and callers now consume .values(), but the documented return contract still tells readers to expect a list; iterating the documented result as a list would instead yield group keys."
+     },
+     {
+      "file": "src/sentry/workflow_engine/processors/detector.py",
+      "lines": [
+       226,
+       231
+      ],
+      "texto": "Docstring says 'returns a list of DetectorEvaluationResult' but signature/body now return dict[DetectorGroupKey, DetectorEvaluationResult]. Update docstring to describe dict keyed by group_key."
+     },
+     {
+      "file": "src/sentry/workflow_engine/processors/detector.py",
+      "lines": [
+       226,
+       233
+      ],
+      "texto": "The evaluate() docstring still says it returns a list of `DetectorEvaluationResult`. The method now returns a dict mapping group key to `DetectorEvaluationResult`. Update the docstring to describe the dict return shape."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#04",
+    "descricao": "The mock occurrence builder ignores its value argument, so tests (e.g. group_2 expected with 6 while the packet carries 10) pass regardless of which value is passed to build_occurrence_and_event_data.",
+    "textoGolden": "Wrong value `6` passed for `group_2` occurrence \u2014 the data packet specifies `\"group_2\": 10`. Should be `10` to accurately reflect the test scenario, which will ensure the test produces the correct occurrence data.",
+    "comentarios": [
+     {
+      "file": "tests/sentry/workflow_engine/processors/test_detector.py",
+      "lines": [
+       244,
+       265
+      ],
+      "texto": "The new occurrence builder accepts `value` but never incorporates or asserts it, so the occurrence tests cannot detect incorrect forwarding of the measured value to `build_occurrence_and_event_data`. For example, `test_state_results_multi_group` supplies 10 for group_2 but builds its expected occurrence with 6 and still passes. A regression that passes a constant or another group's measurement at the new production hook would therefore go unnoticed. Include the value in the mock occurrence's evidence and use the actual expected measurement, or assert the hook's arguments directly."
+     },
+     {
+      "file": "tests/sentry/workflow_engine/processors/test_detector.py",
+      "lines": [
+       244,
+       275
+      ],
+      "texto": "`build_mock_occurrence_and_event` accepts `value: int` but never uses it (the occurrence is built only from `group_key`/`new_status`), and this same helper is also the implementation of `MockDetectorStateHandler.build_occurrence_and_event_data`. Because neither the expected occurrence nor the handler output depends on the value, tests like `test_state_results_multi_group` (which incorrectly builds the group_2 occurrence with `value=6` while the packet carries `10`) and `TestEvaluate.test_dedupe` (expected built with 6 vs packet 8) pass regardless of the value actually passed into `build_occurrence_and_event_data`. If evaluation passed a wrong value, these tests would still pass, so they do not verify the value/threshold path they appear to cover. Include `value` in a field of the occurrence (or assert on it in the handler) and fix the wrong expected values so the argument is actually checked."
+     },
+     {
+      "file": "tests/sentry/workflow_engine/processors/test_detector.py",
+      "lines": [
+       244,
+       275
+      ],
+      "texto": "`build_mock_occurrence_and_event` accepts a `value: int` parameter but never uses it \u2014 the returned IssueOccurrence is derived only from `group_key` and `new_status`. Because `value` is dead, callers can pass a mismatched value with no failure: in `test_state_results_multi_group` the packet contains `group_2: 10`, but the expected occurrence for `group_2` is built with `6`. Either use `value` when constructing the occurrence so the test validates the group value, or drop the unused parameter and pass the correct value; otherwise the test silently accepts wrong group values."
+     }
+    ]
+   }
+  ]
+ },
+ "unified-storage-performance-optimizations-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "26fed312840cd76b766cbd2158e17a7e6c0ec548",
+  "base": "871af07203177ce59a24e742107119409274f48a",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/storage/unified/search/bleve.go",
+    "lines": [
+     137,
+     140
+    ],
+    "texto": "WHAT: Removing the whole-function cacheMu lock leaves only the final map write locked, so two concurrent BuildIndex calls for the same NamespacedResource both run bleve.New/list/build simultaneously. WHY: For file-backed indexes both create the same dir (filepath.Join Root/namespace/resource.group), causing lock contention/corruption, leaked index handles, double IndexTenants.Inc, and last-writer-wins cache churn when init errgroup and Search-triggered getOrCreateIndex race. HOW: Deduplicate same-key builds with per-key singleflight/locking while keeping cross-key parallelism."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/storage/unified/resource/server.go",
+    "lines": [
+     303,
+     311
+    ],
+    "texto": "WHAT: initWatcher was moved to run after the lengthy search.init, so the broadcaster captures its since-RV only after indexing finishes. WHY: Writes committed during index building are invisible to Watch clients (gap in broadcast stream) whereas starting the watcher first buffered/replayed them; it also delays serving watches by the full index duration. HOW: Restore watcher-before-index order or capture the since-RV before indexing and replay deltas after."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/storage/unified/resource/server.go",
+    "lines": [
+     258,
+     262
+    ],
+    "texto": "WHAT: NewResourceServer creates a cancellable watcher context (ctx,cancel) then returns nil,err on Init failure without calling cancel or stopping already-started search watch goroutines. WHY: Leaks context resources and leaves the search.init WatchWriteEvents background loop running after the server is discarded, holding DB pollers open. HOW: Call cancel() (and stop any partially-initialized components) on the Init error path."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#01",
+    "descricao": "BuildIndex now locks only the final cache assignment, so concurrent callers for the same uncached key all build the same expensive index in parallel and the last one overwrites the others.",
+    "textoGolden": "A race condition in BuildIndex allows multiple goroutines to concurrently build the same expensive index for the same key. This is caused by moving the b.cacheMu lock from protecting the entire function to only protecting the final cache assignment. ",
+    "comentarios": [
+     {
+      "file": "pkg/storage/unified/search/bleve.go",
+      "lines": [
+       137,
+       139
+      ],
+      "texto": "WHAT: Removing the function-wide `b.cacheMu.Lock()/defer Unlock()` and keeping only the lock around `b.cache[key]=idx` removes the only thing that serialized GetIndex against an in-flight build. WHY: getOrCreateIndex (resource/search.go:287-307) does GetIndex -> if nil -> build; previously BuildIndex held the write lock for its whole body so a concurrent caller's GetIndex (RLock) blocked until the first build cached the index and then saw it (no second build). Now GetIndex can return nil while a build for the same key is still running, so two requests/watch events build the SAME key concurrently \u2014 producing two distinct index instances where the caller holding the non-cached one never observes later writes (stale search results), and, for file-backed indices (size > FileThreshold), two concurrent `bleve.New(dir, mapper)` opening the same on-disk directory. HOW: guard the build per key (e.g. re-check the cache under the write lock after acquiring it, or use a per-key single-flight/lock so only one build runs per NamespacedResource), rather than relying on a global write lock held for the entire body."
+     },
+     {
+      "file": "pkg/storage/unified/search/bleve.go",
+      "lines": [
+       137,
+       139
+      ],
+      "texto": "The cache mutex was moved to cover only the cache assignment, removing the serialization that previously surrounded the whole BuildIndex. Two concurrent BuildIndex calls for the same key can now both construct an index (including `bleve.New(dir, mapper)` on the same on-disk path) and both write `b.cache[key]`; the second overwrites the first, so callers get distinct index instances for one key and writes made through the losing instance are invisible to readers of the cached one (and the file-backed build may collide on the same directory). Keep the build for a given key serialized (e.g. restore the lock around the build, or take a per-key lock) instead of locking only the map write."
+     },
+     {
+      "file": "pkg/storage/unified/search/bleve.go",
+      "lines": [
+       137,
+       139
+      ],
+      "texto": "Locking only cache publication allows concurrent requests for the same uncached key to build separate indexes and overwrite each other's cache entries. Search and handleEvent both call getOrCreateIndex, whose GetIndex previously blocked behind the build-wide lock; now an event can update one newly built index before another build replaces it, losing that update from subsequent search results and leaving the discarded index open. Serialize builds per NamespacedResource and recheck the cache after acquiring that per-key guard."
+     }
+    ]
+   },
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#02",
+    "descricao": "The new startup log calls TotalDocs, which iterates the index cache without a lock, after the event goroutine that can add indexes has started, so a concurrent map read and write can crash the process.",
+    "textoGolden": "Calling s.search.TotalDocs() here may race with concurrent index creation: TotalDocs iterates b.cache without synchronization, and the event watcher goroutine started just above could trigger BuildIndex writes concurrently, potentially causing a concurrent map read/write panic.",
+    "comentarios": [
+     {
+      "file": "pkg/storage/unified/resource/search.go",
+      "lines": [
+       216,
+       216
+      ],
+      "texto": "The newly added `s.search.TotalDocs()` call is unsafe: `bleveBackend.TotalDocs()` (pkg/storage/unified/search/bleve.go:144-150) iterates `b.cache` without holding `cacheMu`, while the bleve.go hunk in this same PR keeps `cacheMu` for the `b.cache[key] = idx` write only. Because search.go:207-213 already started the watch-event goroutine that can call `build` \u2192 `BuildIndex` \u2192 cache write, line 216 can iterate the map concurrently with that write, causing a `concurrent map iteration and map write` panic or data race. Either guard the `TotalDocs` read with `cacheMu`, or move this call to a point where no build can run concurrently."
+     },
+     {
+      "file": "pkg/storage/unified/resource/search.go",
+      "lines": [
+       216,
+       216
+      ],
+      "texto": "The new startup log calls TotalDocs after launching the write-event listener, but bleveBackend.TotalDocs iterates b.cache without cacheMu.RLock. A write event for an unindexed resource can concurrently publish an index through BuildIndex, causing a map iteration/write race and potentially a fatal runtime error during initialization. Protect TotalDocs cache iteration with the same read lock used by GetIndex."
+     },
+     {
+      "file": "pkg/storage/unified/search/bleve.go",
+      "lines": [
+       137,
+       139
+      ],
+      "texto": "BuildIndex now writes b.cache under Lock while TotalDocs (called from search.init after the watch goroutine starts) ranges over b.cache without any lock. This can cause a concurrent map read/write fatal error. Fix by taking cacheMu.RLock in TotalDocs."
+     }
+    ]
+   },
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#03",
+    "descricao": "NewResourceServer returns an error when Init fails without cancelling the server context created earlier.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/storage/unified/resource/server.go",
+      "lines": [
+       258,
+       262
+      ],
+      "texto": "WHAT: NewResourceServer now calls s.Init(ctx) and, on error, returns `nil, err` without invoking the `cancel` func created at line 229 and without running any lifecycle cleanup. WHY: Init may have already started long-lived goroutines \u2014 searchSupport.init's event-consumption loop uses context.Background() (resource/search.go:202) and initWatcher starts a watcher bound to s.ctx (server.go:752-770) \u2014 so if search.init succeeds and initWatcher (or a later step) fails, the constructor discards the server while those goroutines keep running with no way to stop them, leaking the internal context and watcher goroutines. HOW: on the error path call `cancel()` (and any needed lifecycle.Stop) before returning, or defer the cancel until success."
+     },
+     {
+      "file": "pkg/storage/unified/resource/server.go",
+      "lines": [
+       258,
+       262
+      ],
+      "texto": "WHAT: NewResourceServer calls s.Init(ctx) synchronously but returns nil,err without calling the cancel created for s.ctx. WHY: Failed startup leaks the server context (and any lifecycle/watch resources partially started by Init), leaving goroutines/channel watches alive. HOW: On Init error call s.cancel() (and lifecycle Stop cleanup) before returning."
+     }
+    ]
+   },
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#sncc-01",
+    "descricao": "The PR skips the storage-server module integration test on postgres instead of fixing the failure, removing coverage of the new eager initialization on postgres.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "frontend-asset-optimization-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "b1613e320acff00623e6efc59f00ee68c7684a97",
+  "base": "3ce1a5b0caab215346a51629b0344b90d67e9478",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/api/webassets/webassets.go",
+    "lines": [
+     41,
+     49
+    ],
+    "texto": "WHAT: GetWebAssets acquires the exclusive entryPointAssetsCacheMu and holds it across readWebAssetsFromFile/CDN IO with no second cache check after Lock. WHY: N concurrent cold-start (or every Dev-mode) requests serialize on the write lock and each performs redundant file/CDN reads while blocking all RLock readers. HOW: Re-check entryPointAssetsCache after acquiring the write lock and return early on hit, and ideally do the file/CDN load outside the lock then re-lock only to publish."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "frontend-asset-optimization-grafana-codex#01",
+    "descricao": "GetWebAssets does not re-check the cache after acquiring the write lock, so concurrent callers that missed the cache each reload the assets manifest.",
+    "textoGolden": "The GetWebAssets function implements an incomplete double-checked locking pattern for caching web assets. The function first checks if the cache is populated using a read lock (RLock), and if the cache is empty, it acquires a write lock to populate it. However, it fails to re-check whether the cache was populated by another goroutine while waiting to acquire the write lock.",
+    "comentarios": [
+     {
+      "file": "pkg/api/webassets/webassets.go",
+      "lines": [
+       48,
+       69
+      ],
+      "texto": "WHAT: The exclusive lock acquired at line 48 is held (via defer on line 49) across the blocking file read / synchronous CDN HTTP request (lines 56-67) and there is no re-check of entryPointAssetsCache after acquiring the lock. WHY: On a cold cache, all concurrent callers (api/index.go:82, api/frontendsettings.go:62, middleware/recovery.go:141) block on the write lock and then each sequentially re-executes the full load (file I/O or blocking http.DefaultClient.Do), producing a thundering-herd serialization and N redundant loads instead of one; in Dev mode this happens on every request since the fast path is skipped, serializing all concurrent page loads. HOW: after `entryPointAssetsCacheMu.Lock()` re-check the cache (`if cfg.Env != setting.Dev && entryPointAssetsCache != nil { return entryPointAssetsCache, nil }`) so only the first goroutine performs the load, and drop the defer in favor of releasing the lock immediately after assigning `entryPointAssetsCache = result` to avoid holding it during I/O."
+     },
+     {
+      "file": "pkg/api/webassets/webassets.go",
+      "lines": [
+       41,
+       48
+      ],
+      "texto": "cache is not re-checked under the lock after re-acquiring write Lock, so concurrent callers can each recompute web assets"
+     },
+     {
+      "file": "pkg/api/webassets/webassets.go",
+      "lines": [
+       48,
+       49
+      ],
+      "texto": "The cache is not rechecked after acquiring the write lock, so concurrent production requests that initially observe a nil cache each reload and decode the manifest even after another request has populated it. During a cold-start request burst, these redundant filesystem reads and JSON decodes execute serially under the global lock, delaying queued page and frontend-settings requests and blocking cache readers while each reload runs. After acquiring the write lock, return the populated cache when cfg.Env != setting.Dev before performing asset loading."
+     }
+    ]
+   },
+   {
+    "issueId": "frontend-asset-optimization-grafana-codex#sncc-02",
+    "descricao": "GetWebAssets holds a global exclusive mutex through the whole manifest load, so in Dev mode, where the cache is bypassed, every request serializes behind it.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ }
+}

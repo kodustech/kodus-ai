@@ -1,0 +1,17 @@
+{
+ "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "Both describe queued sharing an import-time timestamp instead of evaluating timezone.now() per instance."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This describes datetime serialization and rehydration in the Celery payload. Fixing that would not fix the shared import-time default timestamp, and no other golden issue covers it."
+  }
+ ]
+}

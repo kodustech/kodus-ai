@@ -1,0 +1,24 @@
+{
+ "caseId": "database-performance-optimizations-grafana-codex",
+ "prTitle": "Database Performance Optimizations",
+ "upstream": "grafana/grafana",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/grafana",
+ "base": "a886bd3c79a417a70b51509384d1f1ec3e87e96b",
+ "head": "04cfa3bfd469c035ff8b35f9a66867c4e8d5dcf4",
+ "prOriginalConhecido": {
+  "numero": 80329,
+  "url": "https://github.com/grafana/grafana/pull/80329",
+  "mergedAt": "2024-01-12",
+  "nota": "PR 'Annotations: Split cleanup into separate queries and deletes to avoid deadlocks on MySQL' (branch alexweav/split-queries); its last commit is the benchmark head 04cfa3bf. Squash commit 81c45bfe on main has the same content as the head for the three PR files (cleanup_test.go, xorm_store.go, cleanup.go)."
+ },
+ "tps": [
+  {
+   "issueId": "database-performance-optimizations-grafana-codex#muse13-01",
+   "severity": "medium",
+   "category": "concurrency",
+   "bug": "MaxCount annotation cleanup reads victim IDs with LIMIT/OFFSET and deletes them in a separate non-atomic statement, so concurrent deletions can make it delete annotations that should be retained.",
+   "evidenciaOpus": "xorm_store.go:547-560 now fetches IDs with ORDER BY id DESC LIMIT/OFFSET MaxCount and deletes them in a separate statement; the old code did both in one DELETE ... IN (subquery). If newer annotations are deleted between fetch and delete, fetched IDs that now belong to the newest MaxCount are still deleted, over-deleting beyond the retention limit.",
+   "evidenciaAstra": "The PR replaces an atomic DELETE with separate selection and deletion at pkg/services/annotations/annotationsimpl/xorm_store.go:549-556; the helpers use separate sessions and delete solely by captured IDs (:591-593, :616-622). Concurrent deletion through :413-419 can remove a newer annotation between these operations, promoting a selected victim into the newest MaxCount rows without preventing its deletion. This can permanently delete annotations that now fall within the retention window, constituting persisted-data loss under the severity rubric."
+  }
+ ]
+}

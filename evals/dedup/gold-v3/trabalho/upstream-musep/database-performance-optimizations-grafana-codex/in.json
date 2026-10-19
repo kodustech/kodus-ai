@@ -1,0 +1,24 @@
+{
+ "caseId": "database-performance-optimizations-grafana-codex",
+ "prTitle": "Database Performance Optimizations",
+ "upstream": "grafana/grafana",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/grafana",
+ "base": "a886bd3c79a417a70b51509384d1f1ec3e87e96b",
+ "head": "04cfa3bfd469c035ff8b35f9a66867c4e8d5dcf4",
+ "prOriginalConhecido": {
+  "numero": 80329,
+  "url": "https://github.com/grafana/grafana/pull/80329",
+  "mergedAt": "2024-01-12",
+  "nota": "PR 'Annotations: Split cleanup into separate queries and deletes to avoid deadlocks on MySQL' (branch alexweav/split-queries); its last commit is the benchmark head 04cfa3bf. Squash commit 81c45bfe on main has the same content as the head for the three PR files (cleanup_test.go, xorm_store.go, cleanup.go)."
+ },
+ "tps": [
+  {
+   "issueId": "database-performance-optimizations-grafana-codex#musep-01",
+   "severity": "low",
+   "category": "concurrency",
+   "bug": "The annotation cleanup loop stops on a batch whose IDs were already deleted by a concurrent cleaner, leaving the remaining work to the next cycle; checking the fetched count instead would avoid that.",
+   "evidenciaOpus": "untilDoneOrCancelled stops when a batch reports 0 affected rows (xorm_store.go:650-654), and the batch returns deleteByIDs' RowsAffected. If another deleter removes the fetched IDs between fetchIDs and deleteByIDs, the loop ends early. The only effect is that the remaining rows are cleaned on the next cycle, which the PR's own comment already accepts for concurrent inserts.",
+   "evidenciaAstra": "The PR separates the limited SELECT from DELETE at pkg/services/annotations/annotationsimpl/xorm_store.go:529-538, returning RowsAffected from line 626; the loop exits when that count is zero at lines 656-657. A concurrent deletion through lines 423-430 can remove every selected row while other eligible rows remain outside the batch, causing cleanup to finish prematurely until the next cycle."
+  }
+ ]
+}

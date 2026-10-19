@@ -1,0 +1,12 @@
+{
+ "caseId": "frontend-asset-optimization-grafana-codex",
+ "items": [
+  {
+   "issueId": "frontend-asset-optimization-grafana-codex#musep-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "The shared pointer does reach hooks through pkg/api/index.go:137 and :159, but the only registered hook modifies NavTree, not Assets (pkg/services/licensing/oss.go:57-71). Asset URL mutation occurs before cache publication (pkg/api/webassets/webassets.go:64-69), so no concurrent asset mutation is demonstrated. The base already returned the same cached pointer; this PR adds synchronization without introducing the alleged mutation path.",
+   "severity": "high"
+  }
+ ]
+}

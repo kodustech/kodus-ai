@@ -1,0 +1,12 @@
+{
+ "caseId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor",
+ "items": [
+  {
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#kimi-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "app/serializers/user_serializer.rb:138-140 does silently rescue parsing errors, but explicitly handles them by returning nil for the optional website label. app/assets/javascripts/discourse/templates/user/user.hbs:66-73 guards that label; the comment establishes no defect requiring logging of malformed profile URLs.",
+   "severity": "low"
+  }
+ ]
+}

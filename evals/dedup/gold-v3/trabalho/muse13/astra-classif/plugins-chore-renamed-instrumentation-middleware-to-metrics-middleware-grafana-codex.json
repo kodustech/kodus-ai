@@ -1,0 +1,12 @@
+{
+ "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+ "items": [
+  {
+   "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#muse13-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "The client decorator rejects nil requests before invoking middleware at pkg/plugins/manager/client/decorator.go:30,40,53,62, so LoggerMiddleware\u2019s defensive guards do not establish reachability. The dereferences at pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go:146,161,171,180 also existed unchanged in the base instrumentation_middleware.go:163,178,188,197; this rename introduces no nil-request regression.",
+   "severity": "medium"
+  }
+ ]
+}

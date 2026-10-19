@@ -1,0 +1,19 @@
+{
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "items": [
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#kimi-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "The cited range contains queue submission at src/sentry/remote_subscriptions/consumers/queue_consumer.py:204 and strategy lifecycle methods at :335\u2013345. The comment only reports incomplete review coverage and explicitly identifies no defect; it makes no behavioral claim to substantiate.",
+   "severity": "low"
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#kimi-02",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "The code selects queue processing at src/sentry/remote_subscriptions/consumers/result_consumer.py:209\u2013210 and constructs its strategy at :244\u2013259. The comment only requests reading the remaining range and explicitly reports no identified mismatch, so it presents no code defect.",
+   "severity": "low"
+  }
+ ]
+}

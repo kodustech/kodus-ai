@@ -1,0 +1,32 @@
+{
+ "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+ "prTitle": "Enhance embed URL handling and validation system",
+ "upstream": "discourse/discourse",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/discourse",
+ "base": "62db063e1e1abe691313ab42682a68f796d63769",
+ "head": "4f8aed295a29954023b2849c060ef4fb299d1b5d",
+ "prOriginalConhecido": {
+  "numero": null,
+  "url": "https://github.com/discourse/discourse/commit/4f8aed295a29954023b2849c060ef4fb299d1b5d",
+  "mergedAt": "2013-12-31",
+  "nota": "Benchmark head 4f8aed2 is itself on upstream main: direct commit by Robin Ward, 2013-12-31 ('FEATURE: Embeddable Discourse comments, now with simple-rss instead of feedzirra'), no PR associated (gh commits/<sha>/pulls empty). Base 62db063 is the revert of the earlier attempt; diff identical to the benchmark."
+ },
+ "tps": [
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#musep-01",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "TopicEmbed.import_remote fetches the embed URL with open(url).read and no timeout or size limit, so a slow or huge remote page can block the background job and exhaust memory.",
+   "evidenciaOpus": "TopicEmbed.import_remote (topic_embed.rb:48) reads the remote page with Kernel open(url).read. The PR sets no open/read timeout and no size cap, so a slow or very large page ties up the job worker or memory.",
+   "evidenciaAstra": "The new app/models/topic_embed.rb:48 calls open(url).read without explicit timeouts or a response-size limit. It runs through app/jobs/regular/retrieve_topic.rb:17 and lib/topic_retriever.rb:52, while app/jobs/base.rb:136 joins without a deadline, so a continuously streaming or huge response can occupy worker capacity indefinitely or exhaust resources."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#musep-02",
+   "severity": "medium",
+   "category": "concurrency",
+   "bug": "The retrieve throttle sets the Redis key with setnx and sets its TTL in a separate expire call, so a crash between the two leaves a key without expiry that blocks retrieval of that URL forever.",
+   "evidenciaOpus": "TopicRetriever.retrieved_recently? calls $redis.setnx and then $redis.expire as two separate commands (topic_retriever.rb:27-28). If the process dies between them, the key stays forever without a TTL, and every later retrieve of that URL is treated as recent and skipped.",
+   "evidenciaAstra": "The new lib/topic_retriever.rb:27-28 creates the Redis key with SETNX and applies its expiration in a separate command, leaving a persistent key if execution stops between them. Subsequent throttled attempts return true at line 32 and skip retrieval at line 9 indefinitely; the staff bypass at line 23 does not repair the key."
+  }
+ ]
+}

@@ -1,0 +1,138 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "a308075bc39b77ed7059b0cae9d443d669a7bf98",
+  "head": "de628295646d0848226618108a52f2f1e5d04ac0",
+  "issues": {
+   "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#kimi-01": {
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S8",
+      "file": "packages/core/CalendarManager.ts",
+      "lines": [
+       228,
+       231
+      ],
+      "texto": "The string \"Notes have been hidden by the organizer\" is written directly into calEvent.additionalNotes and shown to users in calendar events, but it is not routed through the project's i18n system. The existing TODO even notes this. The PR changed the spelling of this line without resolving the localization gap, so attendees/organizers whose locale is not English still see an untranslated message. Replace the hard-coded string with a translated key (e.g., t(\"notes_hidden_by_organizer\")) and add it to the locale files."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "low",
+      "text": "packages/core/CalendarManager.ts:230 the PR edits the hard-coded 'Notes have been hidden by the organizer' string (spelling only) and keeps the existing '// TODO: i18n this string?'. The untranslated text is real but pre-dates the PR and has no behavioural impact beyond localization."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "packages/core/CalendarManager.ts:229-230 assigns a hard-coded English message when hideCalendarNotes is enabled, and this PR edits that exact assignment. packages/lib/CalEventParser.ts:67-73 translates the notes heading but interpolates additionalNotes verbatim, so the message remains English regardless of locale."
+     },
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "low",
+      "text": "I am changing my label to FP (none), not adopting TP. The PR's only change to this line is a spelling fix, and the English literal and its TODO were already there at base. diff: `-    calEvent.additionalNotes = \"Notes have been hidden by the organiser\"; // TODO: i18n this string?` / `+    ... \"Notes have been hidden by the organizer\"; // TODO: i18n this string?` (CalendarManager.ts:230). The ruling says code the PR only moves or re-indents without changing its logic counts as pre-existing. A one-letter spelling edit is the same kind of change: no logic changes. So the missing localization is a pre-existing gap in code this PR does not change in substance, and that makes it FP (none). Rated as stated, an untranslated note does not change what the program does, so severity is low.",
+      "concede": false
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "I retain TP: the PR changes the user-visible string assigned in CalendarManager.ts:230, so the exemption for code merely moved or re-indented does not apply. CalEventParser.ts interpolates additionalNotes verbatim while translating its heading, confirming that the edited message remains English for non-English locales. This affects rendered calendar content, making it a localization defect rather than a wording nit; medium reflects the incorrect localized output when hideCalendarNotes is enabled."
+     },
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "low",
+      "text": "Partly agree: the PR does edit the assigned literal (CalendarManager.ts:230, '-...organiser' -> '+...organizer'), so the moved/re-indented exemption does not strictly apply and I drop FP. But the missing localization is not introduced or worsened by this PR: the English literal and its '// TODO: i18n this string?' are identical at base apart from one letter, and the PR's subject (collective hosts' destinationCalendar) is unrelated. Asking a spelling fix to add i18n is a comment a developer would not want on this PR; the message is only shown when hideCalendarNotes is on and is still readable. TP nit, low.",
+      "concede": false
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "I retain TP: CalendarManager.ts:230 changes the assigned user-visible literal, so the explicit exemption for moved or re-indented code does not apply. CalEventParser.ts:getAdditionalNotes translates the heading but interpolates this message verbatim, leaving it English regardless of locale. Although the localization gap predates this edit, it affects code the PR changes and user-facing output; readability for non-English users cannot be assumed, making this a localized-output defect rather than a wording nit."
+     }
+    ]
+   }
+  }
+ },
+ "advanced-sql-analytics-framework-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "cbe1e7d63f098e306058c0fbcab2f5c30602fa7d",
+  "head": "f3317b329b4eb8fd96f99dd86525bc4a22d20248",
+  "issues": {
+   "advanced-sql-analytics-framework-grafana-codex#kimi-01": {
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S3",
+      "file": "pkg/expr/sql_command.go",
+      "lines": [
+       30,
+       36
+      ],
+      "texto": "Replacing the real in-memory DB with a stub means `sql.TablesList(rawSQL)` always fails, so the existing `logger.Warn(\"invalid sql query\", \"sql\", rawSQL, \"error\", err)` at lines 32-35 now logs the full raw SQL for every SQL expression. User-supplied SQL can contain sensitive values or schema information and should not be logged verbatim. Avoid logging `rawSQL` or redact it before logging."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The logger.Warn(\"invalid sql query\", \"sql\", rawSQL, ...) in sql_command.go NewSQLCommand is unchanged by this PR; logging the expression query on parse failure is pre-existing, intended diagnostic behaviour. The PR only swaps duck.NewInMemoryDB for a stub (pkg/expr/sql/db.go)."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "high",
+      "text": "The PR switches TablesList to the stub database in pkg/expr/sql/parser.go:23, whose RunCommands always returns an error at pkg/expr/sql/db.go:16-17. Consequently, every nonempty SQL expression reaches pkg/expr/sql_command.go:32 and logs the complete raw SQL at warning level, potentially exposing sensitive literals to log readers."
+     },
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The log line is not touched by the PR. The diff of sql_command.go only swaps `duck.NewInMemoryDB()` for `sql.NewInMemoryDB()` in Execute. `logger.Warn(\"invalid sql query\", \"sql\", rawSQL, \"error\", err)` in NewSQLCommand and `logger.Warn(\"no tables found in SQL query\", \"sql\", rawSQL)` already logged the expression text at base. Logging the user's SQL expression (a dashboard/query definition, not data or credentials) on a parse failure is the intended diagnostic behaviour that predates the PR. The real consequence of the stub is that SQL expressions stop working, but that is a different issue. On the claim made here (sensitive data in logs), no new defect exists.",
+      "concede": false
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "high",
+      "text": "The unchanged warning becomes reachable for every nonempty SQL expression passed to NewSQLCommand because this PR changes TablesList to use a stub whose RunCommands always fails. Previously, valid queries referencing tables logged their SQL only at debug level; they now expose it at warning level. The path remains reachable through buildCMDNode \u2192 UnmarshalSQLCommand when expressionParser is disabled. Thus the PR introduces broader raw-SQL logging despite leaving the logging statement unchanged; sensitive literals create a conditional security weakness."
+     },
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "I correct one fact: the PR also changes parser.go:23 (`-duckDB := duck.NewInMemoryDB()` / `+duckDB := NewInMemoryDB()`), and the new stub's RunCommands always returns 'not implemented' (sql/db.go:16-17), so every SQL expression now reaches the warning at sql_command.go:32. But the expression text was already logged at base for valid queries too (`logger.Debug(\"REF tables\", \"tables\", tables, \"sql\", rawSQL)` :41, plus the warning at :38 for queries with no tables). The text is a Grafana SQL expression over other queries' refIDs in a dashboard definition, not credentials or tenant data, and server logs are read by operators. Moving it from debug to warn level is not a security defect. The real problem the stub causes is that SQL expressions stop working, which is a different issue. FP (none). Rated as stated (a conditional exposure to privileged log readers), medium.",
+      "concede": false
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "high",
+      "text": "The changed TablesList implementation invokes the new stub, whose RunCommands always fails, causing every nonempty SQL expression reaching NewSQLCommand to log rawSQL at warning level. With the default info logging threshold in conf/defaults.ini, valid table-referencing queries now enter logs where their previous debug messages were suppressed. Referencing dashboard query IDs does not prevent SQL from containing sensitive literals, and the code applies no redaction. The unchanged warning statement therefore gains new exposure through this PR\u2019s changed execution path; high matches the rubric\u2019s conditional security weakness."
+     }
+    ]
+   }
+  }
+ }
+}

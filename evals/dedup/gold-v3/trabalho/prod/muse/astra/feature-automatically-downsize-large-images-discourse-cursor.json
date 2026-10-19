@@ -1,0 +1,35 @@
+{
+ "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes SVG corruption from rasterizing vector uploads, distinct from the known conversion-failure retries and animated GIF problems."
+  },
+  {
+   "id": "S2",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Identifies the duplicate downsize definition overriding the existing signature and breaking ResizeEmoji with ArgumentError."
+  },
+  {
+   "id": "S3",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Identifies the hardcoded client limit replacing per-type settings, blocking permitted uploads and allowing files the server rejects."
+  },
+  {
+   "id": "S4",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Describes up to five synchronous, CPU-heavy conversion passes stalling request workers and enabling resource exhaustion."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Challenges the increased server-side URL download cap as amplifying SSRF bandwidth, distinct from the client-side validation limit and shell command injection."
+  }
+ ]
+}

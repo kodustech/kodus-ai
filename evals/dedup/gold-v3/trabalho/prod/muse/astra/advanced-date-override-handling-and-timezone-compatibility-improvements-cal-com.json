@@ -1,0 +1,41 @@
+{
+ "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "newGroup": null,
+   "reason": "Describes the same reference-equality comparison between Dayjs objects that prevents detection of zero-length day-off overrides."
+  },
+  {
+   "id": "S2",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "Describes the same calculation of end from slotStartTime, allowing events to extend beyond working hours."
+  },
+  {
+   "id": "S3",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03",
+   "newGroup": null,
+   "reason": "Describes the same early return for matching overrides that bypasses busy-time conflict checks."
+  },
+  {
+   "id": "S4",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#04",
+   "newGroup": null,
+   "reason": "Describes the same rejection of split-schedule slots when any working-hours interval excludes them."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes missing schedule arguments at the held-slot call site. This is distinct from the golden issues concerning how supplied overrides and working hours are evaluated."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Describes handling an undefined override timezone when calculating the offset. The golden timezone issues concern discarded date rollover and local-versus-UTC day comparisons; fixing those would not address this missing-timezone claim."
+  }
+ ]
+}

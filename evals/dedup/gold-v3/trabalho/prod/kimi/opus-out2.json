@@ -1,0 +1,304 @@
+{
+ "add-guest-management-functionality-to-existing-bookings-cal-com": [
+  {
+   "id": "S1",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "newGroup": null,
+   "reason": "isTeamAdminOrOwner uses && so team admins are rejected."
+  },
+  {
+   "id": "S2",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "newGroup": null,
+   "reason": "Blacklist is lowercased but guest emails are not normalized, case variants bypass it."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "sendAddGuestsEmails failures are only logged so the caller sees success; not in golden set."
+  },
+  {
+   "id": "S4",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#04",
+   "newGroup": null,
+   "reason": "Check-then-insert without unique constraint lets concurrent calls insert duplicate attendees."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "No seatsPerTimeSlot capacity check when adding guests; not in golden set."
+  },
+  {
+   "id": "S6",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "newGroup": null,
+   "reason": "Unfiltered guests list passed to sendAddGuestsEmails, existing attendees get scheduled email."
+  },
+  {
+   "id": "S7",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#16",
+   "newGroup": null,
+   "reason": "sendAddGuestsEmails ignores the event type disable-standard-emails settings."
+  }
+ ],
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Performance of scanning the full offset range under the partition lock; golden #01 is about gaps blocking commits, a different problem."
+  },
+  {
+   "id": "S2",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "newGroup": null,
+   "reason": "Unbounded queues, no backpressure, memory grows without limit."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Offset recorded before work_queue.put can stay outstanding forever if put fails; not in golden set."
+  },
+  {
+   "id": "S4",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10",
+   "newGroup": null,
+   "reason": "Shutdown flag set before draining queues, workers stop with items still queued."
+  },
+  {
+   "id": "S5",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10",
+   "newGroup": null,
+   "reason": "Commit loop exits on shutdown without a final commit, so finished work is not committed and gets replayed."
+  },
+  {
+   "id": "S6",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#04",
+   "newGroup": null,
+   "reason": "Error-handling test asserts nothing committed, contradicting the intended behaviour that errors do not block other commits."
+  }
+ ],
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "id": "S1",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "mainHostDestinationCalendar.integration read without optional chaining throws for empty destinationCalendar."
+  },
+  {
+   "id": "S2",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "newGroup": null,
+   "reason": "destinationCalendar null when organizer has none, so other hosts' calendars are never pushed."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Merge path deletes only the first old _calendar reference via find(); golden #13 concerns recurring cancellation elsewhere."
+  },
+  {
+   "id": "S4",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#04",
+   "newGroup": null,
+   "reason": "Organization slug condition inverted on IS_TEAM_BILLING_ENABLED."
+  },
+  {
+   "id": "S5",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "When externalCalendarId is absent the lookup matches on the absent value, so the configured destination calendar is not used."
+  },
+  {
+   "id": "S6",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#10",
+   "newGroup": null,
+   "reason": "Per-host credential findUnique inside loops instead of one batched query."
+  }
+ ],
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Eager CryptoIntegration.init in AuthzClient.create can pin the minimal provider; not in golden set."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "readLength accepts indefinite-length 0x80 marker; golden kimi-01 is about constructed INTEGER tags, a different check."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "readSequence length underflow on oversized element silently truncates; not in golden set."
+  }
+ ],
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": [
+  {
+   "id": "S1",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "Working-hours end computed from slotStartTime instead of slotEndTime."
+  },
+  {
+   "id": "S2",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "newGroup": null,
+   "reason": "dayjs objects compared with ===, zero-length overrides never detected."
+  },
+  {
+   "id": "S3",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03",
+   "newGroup": null,
+   "reason": "Early return true on date override skips busy-time check."
+  }
+ ],
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": [
+  {
+   "id": "S1",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+   "newGroup": null,
+   "reason": "math.floor/ceil on datetime raises TypeError in OptimizedCursorPaginator for -datetime ordering."
+  },
+  {
+   "id": "S2",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "BasePaginator passes negative prev-cursor offsets into queryset slicing."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Length check uses signed offset instead of start_offset; not in golden set."
+  }
+ ],
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "S1",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#01",
+   "newGroup": null,
+   "reason": "Recovery code validated without consuming it, allowing replay."
+  },
+  {
+   "id": "S2",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#02",
+   "newGroup": null,
+   "reason": "Rebuilt recovery-codes credential lacks the stored id."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Test storage persists raw recovery codes unhashed; not in golden set."
+  }
+ ],
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
+  {
+   "id": "S1",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#07",
+   "newGroup": null,
+   "reason": "Negative --flusher-processes not validated, KeyError on construction."
+  },
+  {
+   "id": "S2",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "isinstance check against multiprocessing.Process never matches spawn-context processes, hung flushers not killed."
+  },
+  {
+   "id": "S3",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08",
+   "newGroup": null,
+   "reason": "get_memory_info repeats the same cluster INFO call per flusher buffer."
+  }
+ ],
+ "authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Denial cache consulted before permCache so newly granted permissions are denied for the TTL; not in golden set."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "List uses cached permissions without DB fallback, omitting newly granted resources; not in golden set."
+  }
+ ],
+ "feat-2fa-backup-codes-cal-com": [
+  {
+   "id": "S1",
+   "match": "feat-2fa-backup-codes-cal-com#07",
+   "newGroup": null,
+   "reason": "Non-atomic backup-code consumption lets a code be used twice concurrently."
+  },
+  {
+   "id": "S2",
+   "match": "feat-2fa-backup-codes-cal-com#01",
+   "newGroup": null,
+   "reason": "Password check skipped when totpCode present; backup-code branch lets login without password."
+  }
+ ],
+ "github-oauth-security-enhancement-sentry": [
+  {
+   "id": "S1",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "integration.metadata['sender']['login'] raises KeyError when sender is missing."
+  },
+  {
+   "id": "S2",
+   "match": "github-oauth-security-enhancement-sentry#05",
+   "newGroup": null,
+   "reason": "OAuth token exchange / user lookup failures not handled, surfacing as 500s."
+  }
+ ],
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Test cleanup uses literal alias 'alias', created IDPs never removed."
+  }
+ ],
+ "advanced-query-processing-architecture-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "advanced-query-processing-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "applyTemplateVariables runs before splitting and again on execution, duplicating ad hoc filters."
+  }
+ ],
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
+  {
+   "id": "S1",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "queued default timezone.now() evaluated at class definition."
+  }
+ ],
+ "frontend-asset-optimization-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "frontend-asset-optimization-grafana-codex#01",
+   "newGroup": null,
+   "reason": "No re-check of cache after acquiring write lock, concurrent callers reload manifest."
+  }
+ ],
+ "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": [
+  {
+   "id": "S1",
+   "match": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02",
+   "newGroup": null,
+   "reason": "Converted config copy discarded, raw monitor.config returned."
+  }
+ ]
+}

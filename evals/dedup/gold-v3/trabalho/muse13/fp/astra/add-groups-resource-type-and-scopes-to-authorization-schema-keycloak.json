@@ -1,0 +1,11 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This claims that removing ADMIN from UserPermissionsV2 role checks denies user view/manage access. None of the rejected issues describes this role-check change or its cause."
+  }
+ ]
+}

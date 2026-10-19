@@ -1,0 +1,35 @@
+{
+ "caseId": "replays-self-serve-bulk-delete-system-sentry",
+ "items": [
+  {
+   "id": "S3",
+   "match": "replays-self-serve-bulk-delete-system-sentry#08",
+   "newGroup": null,
+   "reason": "Same claim: update() reads detector_type instead of type, silently ignoring detector type changes."
+  },
+  {
+   "id": "S5",
+   "match": "replays-self-serve-bulk-delete-system-sentry#14",
+   "newGroup": null,
+   "reason": "Same claim: the column fallback guards tableData but not meta, causing a crash when meta is missing."
+  },
+  {
+   "id": "S6",
+   "match": "replays-self-serve-bulk-delete-system-sentry#05",
+   "newGroup": null,
+   "reason": "Same claim: assemble analytics are recorded before the feature gate, counting requests rejected by that gate."
+  },
+  {
+   "id": "S7",
+   "match": "replays-self-serve-bulk-delete-system-sentry#18",
+   "newGroup": null,
+   "reason": "Same claim: the attribute key is interpolated into the request path without encodeURIComponent, allowing path confusion."
+  },
+  {
+   "id": "S8",
+   "match": "replays-self-serve-bulk-delete-system-sentry#03",
+   "newGroup": null,
+   "reason": "Same claim: the unauthenticated endpoint processes an unbounded report array, enabling CPU exhaustion and excessive metric emissions."
+  }
+ ]
+}

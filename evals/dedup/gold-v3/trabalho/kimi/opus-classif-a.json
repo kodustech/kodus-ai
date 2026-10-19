@@ -1,0 +1,250 @@
+{
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#kimi-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "packages/core/CalendarManager.ts:230 the PR edits the hard-coded 'Notes have been hidden by the organizer' string (spelling only) and keeps the existing '// TODO: i18n this string?'. The untranslated text is real but pre-dates the PR and has no behavioural impact beyond localization.",
+    "category": "style",
+    "comment": "The hidden-notes placeholder written into calendar events is a hard-coded English string not routed through i18n.",
+    "severity": "low"
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com#kimi-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "apps/web/components/dialog/AddGuestsDialog.tsx:26-29 (new) checks uniqueness with new Set(emails), case-sensitively; addGuests.handler.ts:71-77 lowercases the blacklist but compares guest and attendee emails without normalizing, so case variants of the same address pass as distinct guests.",
+    "category": "bug",
+    "comment": "Guest email uniqueness is checked case-sensitively, so case variants of the same address are accepted as distinct guests (and slip past the lowercased blacklist).",
+    "severity": "medium"
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com#kimi-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts:8-14 indeed calls fetch with no AbortSignal, but this is a hardening suggestion about a hypothetical hanging sync endpoint, not a defect observed in the code.",
+    "category": null,
+    "comment": "The fetch to CALCOM_CREDENTIAL_SYNC_ENDPOINT has no timeout, so a hanging endpoint could block calendar/video requests.",
+    "severity": "medium"
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com#kimi-02": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "refreshOAuthTokens.ts:5 uses truthiness of userId, but user ids are autoincrement primary keys starting at 1, so userId 0 never occurs; the guard only distinguishes null team credentials.",
+    "category": null,
+    "comment": "The truthy userId check treats user id 0 as absent and skips the credential sync endpoint.",
+    "severity": "medium"
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com#kimi-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "scheduleSMSReminders.ts:189-198 the catch increments retryCount for any error in the try block, as claimed, but counting any failure to schedule a reminder toward the retry limit is the intended retry-tracking behaviour; a reminder that fails setup repeatedly also cannot be sent.",
+    "category": null,
+    "comment": "The catch block increments retryCount for any error, including setup failures unrelated to Twilio, which can delete reminders prematurely.",
+    "severity": "medium"
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com#kimi-02": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "scheduleSMSReminders.ts:199 console.log(`Error scheduling SMS with error ${error}`) is pre-existing and unchanged by the PR, which only adds the retryCount update above it.",
+    "category": null,
+    "comment": "The catch block logs the raw SMS provider error, which may leak phone numbers or message bodies into logs.",
+    "severity": "medium"
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#kimi-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "insightsBooking.ts:100-112 uses truthiness for eventTypeId/memberUserId, but these are autoincrement database ids that start at 1; id 0 never reaches this code, and the old Prisma version used the same checks.",
+    "category": null,
+    "comment": "Truthiness checks on eventTypeId and memberUserId ignore a filter value of 0.",
+    "severity": "medium"
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#kimi-02": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "insightsBooking.ts:149 builds teamIds = [options.orgId, ...teamsFromOrg.map(...)], so the array always contains orgId and is never empty; the claimed empty-array type-inference error cannot happen.",
+    "category": null,
+    "comment": "buildOrgAuthorizationCondition passes an empty teamIds array to ANY() when the org has no child teams, causing a PostgreSQL error.",
+    "severity": "high"
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#kimi-03": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "insightsBooking.ts:29-34 the PR adds InsightsBookingServicePublicOptions with teamId optional and makes the constructor accept it (line 58), replacing the discriminated union type. A team-scope call without teamId now compiles, fails safeParse (line 61-62), and silently returns the 1=0 condition with no error.",
+    "category": "api",
+    "comment": "The new public options type makes teamId optional for team scope, so a missing teamId compiles and silently yields empty insights instead of a type error.",
+    "severity": "medium"
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "config/site_settings.yml in this PR defines embed_by_username: '' (string default), so SiteSetting.embed_by_username is never nil and lib/topic_retriever.rb:48 ''.downcase cannot raise NoMethodError; a blank username just finds no user and returns.",
+    "category": null,
+    "comment": "fetch_http calls SiteSetting.embed_by_username.downcase without a presence check, raising NoMethodError when the setting is blank.",
+    "severity": "medium"
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-02": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "app/jobs/scheduled/poll_feed.rb:29 calls SimpleRSS.parse open(url) (not .read) without explicit timeouts in an hourly background job with retry disabled; open-uri/Net::HTTP already apply a read timeout. This is a hardening suggestion, not a defect.",
+    "category": null,
+    "comment": "poll_feed opens the feed URL without a timeout and imports every item without a cap, so a slow or huge feed can tie up a worker.",
+    "severity": "medium"
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-03": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "spec/components/topic_retriever_spec.rb:9-24 stub embeddable_host and exercise the real invalid_host?; if invalid_host? always returned false, retrieved_recently? would be false on first call (setnx succeeds), perform_retrieve would be called and the .never expectation would fail. The claim that a bug in invalid_host? cannot fail these tests is false.",
+    "category": null,
+    "comment": "The TopicRetriever specs mock perform_retrieve, so a bug in invalid_host? would not make them fail.",
+    "severity": "medium"
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-04": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "spec/controllers/embed_controller_spec.rb:40-52 set expectations (retriever.expects(:retrieve), TopicView.expects(:new).with(123,...)) that fail if the controller stops making those calls, and the after block asserts success and X-Frame-Options. Asking for template assertions is a test-strengthening suggestion, not a broken test.",
+    "category": null,
+    "comment": "The EmbedController success tests only assert that mocks are called and would pass even if the controller logic were removed.",
+    "severity": "medium"
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-05": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "spec/jobs/poll_feed_spec.rb tests the execute guards it was written for; poll_feed itself has no spec. That is missing coverage, not a test that fails to verify its stated behaviour.",
+    "category": null,
+    "comment": "poll_feed has no test of feed parsing or TopicEmbed.import; the specs only check the execute guards.",
+    "severity": "medium"
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "db/migrate/20150818190757_create_embeddable_hosts.rb creates embeddable_hosts with no index on host, and app/models/embeddable_host.rb:17 queries lower(host) = ?. The table holds a handful of admin-configured hosts, so the missing index is a micro-optimisation.",
+    "category": "perf",
+    "comment": "record_for_host queries lower(host) on embeddable_hosts, which has no index on host.",
+    "severity": "medium"
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-02": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "app/models/topic_embed.rb:36-43 now passes category: eh.try(:category_id), which is nil when no host matches; PostCreator then uses the uncategorized category, which is exactly the fallback the comment proposes. embed_category was migrated into per-host categories by the PR's migration, so this is intended.",
+    "category": null,
+    "comment": "TopicEmbed.import passes a nil category when no embeddable host matches the URL, dropping the old embed_category default.",
+    "severity": "medium"
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-03": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "app/controllers/admin/embeddable_hosts_controller.rb:25 uses category_id.blank?; category ids start at 1 and the value comes from request params, so a meaningful category id 0 cannot occur.",
+    "category": null,
+    "comment": "save_host replaces category_id 0 with the uncategorized category because it uses blank? instead of nil?.",
+    "severity": "low"
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-04": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "spec/models/embeddable_host_spec.rb:23 is describe 'allows_embeddable_host' while the method under test is EmbeddableHost.host_allowed? (app/models/embeddable_host.rb:20). Test naming only; it does not break anything.",
+    "category": "style",
+    "comment": "The describe block is named allows_embeddable_host but tests host_allowed?.",
+    "severity": "low"
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-05": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "embeddable-host.hbs:3 placeholder=\"example.com\" is an example domain, not translatable prose, so there is nothing to localize.",
+    "category": null,
+    "comment": "The host input placeholder 'example.com' is hard-coded instead of using I18n.",
+    "severity": "low"
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-06": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "spec/controllers/admin/embeddable_hosts_controller_spec.rb only asserts the controller subclasses Admin::AdminController, which is what the test claims to check (admin-only access). The absence of action specs is missing coverage, not a broken test.",
+    "category": null,
+    "comment": "The EmbeddableHostsController spec only checks inheritance and does not exercise create, update or destroy.",
+    "severity": "medium"
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-07": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "spec/controllers/admin/embedding_controller_spec.rb only asserts the controller subclasses Admin::AdminController, as its test name says. Missing coverage of show/update is not a test that fails to verify its stated behaviour.",
+    "category": null,
+    "comment": "The EmbeddingController spec only checks inheritance and does not exercise show or update.",
+    "severity": "medium"
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#kimi-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "topic-post.scss:264-273 the PR makes .small-action a flex container, so the existing float: left on its .topic-avatar child is now ignored. Dead CSS with no visual effect.",
+    "category": "style",
+    "comment": "After .small-action becomes a flex container, float: left on .topic-avatar is dead CSS.",
+    "severity": "low"
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor#kimi-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "uploads_controller.rb:67 calls OptimizedImage.downsize(tempfile.path, tempfile.path, ...) as claimed, but ImageMagick convert decodes the whole input before writing the output, so in-place conversion to the same path does not corrupt the file.",
+    "category": null,
+    "comment": "Downsizing uses the same path as input and output for ImageMagick convert, which can corrupt or truncate the upload.",
+    "severity": "high"
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor#kimi-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "app/controllers/admin/groups_controller.rb:37 reads params[:alias_level], which is a string from the request ('0'); '0'.present? is true (and even Integer 0.present? is true in Ruby), so selecting 'nobody' updates alias_level to 0.",
+    "category": null,
+    "comment": "params[:alias_level].present? is false for 0, so choosing the 'nobody' alias level is ignored.",
+    "severity": "medium"
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor#kimi-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "config/initializers/i18n.rb:12-24 FallbackLocaleList < Hash overrides only [] and stores nothing, as claimed, but I18n::Backend::Fallbacks only calls I18n.fallbacks[locale]; the problem is limited to hypothetical future callers that iterate it.",
+    "category": null,
+    "comment": "FallbackLocaleList subclasses Hash but leaves it empty, so iterating I18n.fallbacks returns nothing.",
+    "severity": "low"
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex#kimi-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "anonstore/database.go:18 ErrDeviceLimitReached is a Go sentinel error checked with errors.Is in client.go:45; backend error values are not translated through i18n in Grafana, so there is no defect.",
+    "category": null,
+    "comment": "The 'device limit reached' error string is hard-coded English and bypasses i18n.",
+    "severity": "low"
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#kimi-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "metrics_middleware.go QueryData/CallResource calling pluginTarget in both instrumentPluginRequestSize and instrumentPluginRequest is pre-existing; the PR only renames InstrumentationMiddleware to MetricsMiddleware and removes the contextual logger, leaving this logic unchanged.",
+    "category": null,
+    "comment": "QueryData and CallResource look up the plugin in the registry twice per request.",
+    "severity": "low"
+  },
+  "dual-storage-architecture-grafana-codex#kimi-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "dualwriter_mode3.go:50-167 does spawn a goroutine per write with a 10s timeout, as claimed, but each goroutine is bounded by that timeout and by the write rate of the API; unbounded fan-out under high throughput is speculative, not an observed defect.",
+    "category": null,
+    "comment": "Every mode-3 write spawns an unbounded goroutine for the legacy store, risking goroutine and memory growth under load.",
+    "severity": "medium"
+  },
+  "notification-rule-processing-engine-grafana-codex#kimi-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "GrafanaGroupLoader.tsx:71 key={promRule.uid}; the previous code keyed by rulerRule.grafana_alert.uid, the same rule uid, which is unique. The comment itself flags no defect.",
+    "category": null,
+    "comment": "Using promRule.uid as React key could clash if uids are not unique within a group.",
+    "severity": "low"
+  },
+  "notification-rule-processing-engine-grafana-codex#kimi-02": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "public/app/features/alerting/unified/hooks/useAbilities.ts:289 the PR adds a stray '// duplicate' comment next to useIsGrafanaPromRuleEditable(rule). Leftover comment, no behavioural effect.",
+    "category": "style",
+    "comment": "A stray '// duplicate' comment was left next to useIsGrafanaPromRuleEditable(rule) in useAllGrafanaPromRuleAbilities.",
+    "severity": "low"
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#kimi-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "GroupTest.java:137-149 the reader thread catches Exception, as claimed, but it only performs admin REST calls with no assertions; a server-side NPE surfaces as a RuntimeException that is caught and asserted. An Error such as AssertionError cannot arise there, so nothing realistic is masked.",
+    "category": null,
+    "comment": "The reader thread catches only Exception, so Errors thrown during concurrent reads are swallowed and the test passes anyway.",
+    "severity": "medium"
+  }
+}

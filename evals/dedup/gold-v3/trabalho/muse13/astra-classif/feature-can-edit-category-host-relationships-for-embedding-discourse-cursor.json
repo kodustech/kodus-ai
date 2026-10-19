@@ -1,0 +1,19 @@
+{
+ "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+ "items": [
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#muse13-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "Gemfile.lock:31 pins ActiveSupport 4.1.10, whose [try implementation](https://api.rubyonrails.org/v4.1.10/classes/Object.html#method-i-try) returns nil for unsupported methods, so false.try(:category_id) at app/models/topic_embed.rb:43 does not raise. Unknown hosts also return nil from app/models/embeddable_host.rb:17, rather than false.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#muse13-02",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "app/models/embeddable_host.rb:17 adds a single lookup for the newly database-backed host configuration, but this does not establish a meaningful performance defect. Successful comments responses enable caching at app/controllers/embed_controller.rb:35, and lib/middleware/anonymous_cache.rb:121-122 serves cache hits without invoking the controller, so the lookup does not run on every anonymous request.",
+   "severity": "medium"
+  }
+ ]
+}

@@ -1,0 +1,17 @@
+{
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "items": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes unsynchronized creation of partition locks, which can break mutual exclusion. Fixing lock creation would not stop or join the commit thread after partition revocation."
+  },
+  {
+   "id": "S11",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Describes filtered payloads reaching a decoder assertion instead of the skip-and-commit path. Fixing that handling would not address the commit thread continuing after termination."
+  }
+ ]
+}

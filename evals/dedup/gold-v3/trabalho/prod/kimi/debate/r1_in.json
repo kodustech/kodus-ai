@@ -1,0 +1,116 @@
+{
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "e25638dab0d4b98f99c8fe8976ccaae8f4fb9db3",
+  "head": "5f8a130277dbddc95d133cd2832be639baf89213",
+  "issues": {
+   "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#kimip-01": {
+    "comentarios": [
+     {
+      "gid": "kimi-kimip:S2",
+      "file": "app/assets/javascripts/discourse/controllers/create_account_controller.js",
+      "lines": [
+       17,
+       17
+      ],
+      "texto": "Because `rejectedEmails` is a mutable array on the controller prototype, every instance and modal session shares the same array, so a blocked email from one signup leaks into later attempts and shows an invalid error for unrelated users or after reopening. Move the array creation into `init` so each instance gets its own `Em.A([])`."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "create_account_controller.js:17 adds `rejectedEmails: Em.A([])` as a class property in `extend`, so the array lives on the prototype and is shared by every instance; the PR pushes rejected emails into it (line ~275) and never resets it, so rejections persist across modal sessions."
+     },
+     {
+      "who": "astra",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The prototype array exists, but emailValidation rejects only the exact previously rejected address (app/assets/javascripts/discourse/controllers/create_account_controller.js:69), populated from server email errors at lines 274\u2013275; unrelated addresses are unaffected. Modal reopening reuses controllerFor(name) (app/assets/javascripts/discourse/routes/discourse_route.js:56), so moving initialization into init would not reset this state between openings, and remembering a blocked address does not establish incorrect behavior."
+     }
+    ]
+   }
+  }
+ },
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "30a92a4d66b417f7c19dee2b343099adc6e88aa6",
+  "head": "5fd11f9faa79c4aefd39975d1b0e963e5034f793",
+  "issues": {
+   "feat-add-calendar-cache-status-and-actions-22532-cal-com#kimip-01": {
+    "comentarios": [
+     {
+      "gid": "kimi-kimip:S2",
+      "file": "packages/trpc/server/routers/viewer/calendars/deleteCache.handler.ts",
+      "lines": [
+       17,
+       22
+      ],
+      "texto": "Restricting the lookup to `userId: user.id` rejects team-owned or delegated Google Calendar credentials and does not enforce the same ownership boundary used elsewhere. Allow credentials where `userId` matches the user or the credential's team has a member with that user ID, or reuse the existing credential authorization helper."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "deleteCache.handler.ts:17-22 restricts deletion to credentials owned by the session user, a correct and stricter ownership check; the comment does not show a reachable flow where a team-owned credential's cache must be cleared by this endpoint. It is a 'consider widening' request, not a defect."
+     },
+     {
+      "who": "astra",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "medium",
+      "text": "The calendar list already restricts database credentials to userId: user.id (packages/lib/getConnectedDestinationCalendars.ts:282-290), so team-owned credentials are not exposed through this flow. Persisted delegation credentials also carry the user's ID (packages/lib/server/repository/credential.ts:226), satisfying the new check. In-memory delegation credentials use id: -1 and teamId: null (packages/lib/delegationCredential/server.ts:86-97), so adding team membership authorization would not address those either."
+     }
+    ]
+   }
+  }
+ },
+ "fix-proper-handling-of-group-memberships-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "4975fc28903a84418f546b2809370f19abf10e08",
+  "head": "060cda77729cb1c4a827560e09e89a7b22078ba9",
+  "issues": {
+   "fix-proper-handling-of-group-memberships-discourse-cursor#kimip-01": {
+    "comentarios": [
+     {
+      "gid": "kimi-kimip:S3",
+      "file": "app/controllers/admin/groups_controller.rb",
+      "lines": [
+       71,
+       75
+      ],
+      "texto": "Adding members performs one `User` query per username, so bulk additions slow linearly with the count. Load all matching users in one query with `User.where(username: usernames.split(\",\"))` before adding them to the group."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "low",
+      "text": "groups_controller.rb:71-75 in the new add_members action calls User.find_by_username per username (N+1); this is an admin-only action with small inputs, so batching is a minor optimization."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The added add_members action loops over every supplied username and calls User.find_by_username separately (app/controllers/admin/groups_controller.rb:71-74); that method executes find_by(username_lower: ...) (app/models/user.rb:175-176). Consequently, large bulk additions incur one database lookup per username, creating avoidable database round trips and latency. Batching should preserve the existing case-insensitive lookup semantics."
+     }
+    ]
+   }
+  }
+ }
+}

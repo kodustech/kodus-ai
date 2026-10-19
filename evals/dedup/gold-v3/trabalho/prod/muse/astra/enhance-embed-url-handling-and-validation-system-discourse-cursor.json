@@ -1,0 +1,47 @@
+{
+ "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This describes unescaped Referer interpolation into JavaScript in the embed layout, a separate injection point from the golden issues."
+  },
+  {
+   "id": "S2",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "Both describe stored XSS caused by interpolating an unescaped URL into the imported post's HTML footer."
+  },
+  {
+   "id": "S3",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Both describe missing feed content causing i.content.scrub to raise and abort processing of remaining items."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "This describes missing fetch timeouts and response-size limits. Issue #19 concerns unhandled fetch failures and nil content, which require different fixes."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "This describes a crash between separate Redis setnx and expire commands leaving a permanent throttle key; no golden issue covers this atomicity problem."
+  },
+  {
+   "id": "S6",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#17",
+   "newGroup": null,
+   "reason": "Both describe concurrent imports racing through check-then-create and aborting the losing job with an unhandled RecordNotUnique."
+  },
+  {
+   "id": "S7",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#30",
+   "newGroup": null,
+   "reason": "Both describe distinct article requests bypassing the per-URL throttle and repeatedly triggering synchronous full-feed downloads and imports."
+  }
+ ]
+}

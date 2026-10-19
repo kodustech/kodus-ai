@@ -1,0 +1,55 @@
+{
+ "database-performance-optimizations-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "a886bd3c79a417a70b51509384d1f1ec3e87e96b",
+  "head": "04cfa3bfd469c035ff8b35f9a66867c4e8d5dcf4",
+  "issues": {
+   "database-performance-optimizations-grafana-codex#musep-01": {
+    "comentarios": [
+     {
+      "gid": "muse-musep:S3",
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       650,
+       654
+      ],
+      "texto": "A concurrent deleter racing between `SELECT` and `DELETE` leaves work remaining until the next cycle. Check `fetched` from `batchWork` instead of `affected` to decide when `untilDoneOrCancelled` is done."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "low",
+      "text": "untilDoneOrCancelled stops when a batch reports 0 affected rows (xorm_store.go:650-654), and the batch returns deleteByIDs' RowsAffected. If another deleter removes the fetched IDs between fetchIDs and deleteByIDs, the loop ends early. The only effect is that the remaining rows are cleaned on the next cycle, which the PR's own comment already accepts for concurrent inserts."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The PR separates the limited SELECT from DELETE at pkg/services/annotations/annotationsimpl/xorm_store.go:529-538, returning RowsAffected from line 626; the loop exits when that count is zero at lines 656-657. A concurrent deletion through lines 423-430 can remove every selected row while other eligible rows remain outside the batch, causing cleanup to finish prematurely until the next cycle."
+     },
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "low",
+      "text": "We agree the race exists (`if affected == 0 { return totalAffected, nil }`, xorm_store.go:656-657, with affected from `affected, err = res.RowsAffected()`, :626). The disagreement is whether it is worth a comment. It needs a concurrent deleter to remove every one of the fetched oldest IDs between fetchIDs (:530) and deleteByIDs (:536), and the only consequence is that remaining rows are deleted on the next cleanup cycle. The PR already accepts exactly that outcome as harmless: `This may under-delete ... any such annotations will simply be cleaned on the next cycle.` (:525). No user-visible effect, so nit / low.",
+      "concede": false
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "I retain TP/medium: the new SELECT/DELETE split returns RowsAffected, and xorm_store.go:656 stops cleanup when that value is zero despite potentially remaining eligible rows. The bulk deletion path can remove every fetched ID between those statements. The concurrent-insert comment does not establish that abandoning an existing cleanup backlog is harmless; this race delays enforcement of configured retention limits. Recovery on the next cycle limits the impact, but this remains incorrect behavior under uncommon concurrency, matching medium rather than a nit."
+     }
+    ]
+   }
+  }
+ }
+}

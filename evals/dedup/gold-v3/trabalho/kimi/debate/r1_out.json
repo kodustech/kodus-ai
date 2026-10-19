@@ -1,0 +1,135 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#kimi-01": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "low",
+  "concede": false,
+  "text": "I am changing my label to FP (none), not adopting TP. The PR's only change to this line is a spelling fix, and the English literal and its TODO were already there at base. diff: `-    calEvent.additionalNotes = \"Notes have been hidden by the organiser\"; // TODO: i18n this string?` / `+    ... \"Notes have been hidden by the organizer\"; // TODO: i18n this string?` (CalendarManager.ts:230). The ruling says code the PR only moves or re-indents without changing its logic counts as pre-existing. A one-letter spelling edit is the same kind of change: no logic changes. So the missing localization is a pre-existing gap in code this PR does not change in substance, and that makes it FP (none). Rated as stated, an untranslated note does not change what the program does, so severity is low."
+ },
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com#kimi-01": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": false,
+  "text": "refreshOAuthTokens.ts:8 `const response = await fetch(process.env.CALCOM_CREDENTIAL_SYNC_ENDPOINT, {` has no signal. However, the 'else' branch it sits beside (`const response = await refreshFunction();`, :17), which calls the providers' own refresh endpoints, has no app-level timeout either. That is the codebase's existing convention for these outbound token calls. The fetch also cannot 'hang indefinitely': Node's built-in fetch (undici) applies default header and body timeouts. The endpoint is an operator-configured, self-hosted sync service. Nothing here is a defect; it is a hardening request ('add an AbortController'), so it is FP (none)."
+ },
+ "sms-workflow-reminder-retry-count-tracking-cal-com#kimi-01": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": false,
+  "text": "The facts are right: the catch at scheduleSMSReminders.ts:189-197 does `retryCount: reminder.retryCount + 1` for any error. But the feature this PR adds is 'stop retrying reminders that keep failing to schedule'. If prisma.profile.findFirst or getBookerBaseUrl (:111-121) throws on every run, the SMS can never be scheduled either, so counting that failure toward the limit is the intended semantics. A transient DB error is treated exactly like a transient Twilio error, which the PR also counts (`} else { ... retryCount: reminder.retryCount + 1`, :179-186). The comment proposes a different retry policy; it does not show a defect."
+ },
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-02": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": false,
+  "text": "poll_feed.rb:29 `rss = SimpleRSS.parse open(SiteSetting.feed_polling_url)` (not `.read`, as the comment says). It runs in an hourly scheduled job with `sidekiq_options retry: false` (:11–12) against a single admin-configured feed URL, and open-uri/Net::HTTP apply a default read timeout. RSS feeds are bounded documents published by the admin's own blog. Capping items or the total work is a hardening/performance suggestion for an admin-controlled input, with no defect shown. You agree the timeout part is overstated. The remaining 'no item cap' point is speculative, so it is FP (none)."
+ },
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-04": {
+  "class": "FP",
+  "subclass": "hallucination",
+  "severity": "medium",
+  "concede": true,
+  "text": "Concede. The comment's central claim is false: the tests 'pass even if the controller action's real logic ... is removed'. The tests use mocha `expects`, which fails when the call does not happen. embed_controller_spec.rb:43-44 `TopicRetriever.expects(:new).returns(retriever)` / `retriever.expects(:retrieve)` and :50 `TopicView.expects(:new).with(123, nil, {best: 5})`, and the after block asserts `response.should be_success`. The described problem is impossible, so the label is hallucination rather than FP (none)."
+ },
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-03": {
+  "class": "FP",
+  "subclass": "hallucination",
+  "severity": "medium",
+  "concede": true,
+  "text": "Concede. embeddable_hosts_controller.rb:24-25 `host.category_id = params[...][:category_id]` then `... if host.category_id.blank?`. category_id is an integer column, so the value is typecast, and `0.blank?` is false in Ruby. Id 0 is therefore never replaced. The claim 'treats 0 the same as nil' is false, so the label is hallucination. I adopt your severity (edge-case input → medium)."
+ },
+ "feature-automatically-downsize-large-images-discourse-cursor#kimi-01": {
+  "class": "FP",
+  "subclass": "hallucination",
+  "severity": "high",
+  "concede": true,
+  "text": "Concede. uploads_controller.rb:67 passes the same path, and optimized_image.rb's convert_with just runs `convert <from> ... <to>` without assuming distinct paths. ImageMagick reads and decodes the whole input before it writes the output, so the 'corrupt or truncate the upload' outcome the comment depends on cannot occur. The problem is impossible given the code and tool, so the label is hallucination rather than FP (none)."
+ },
+ "anonymous-add-configurable-device-limit-grafana-codex#kimi-01": {
+  "class": "FP",
+  "subclass": "hallucination",
+  "severity": "low",
+  "concede": true,
+  "text": "Concede. The claim that it is 'user-facing' is false. The only use is client.go:45 `if errors.Is(err, anonstore.ErrDeviceLimitReached) { return nil, err }`. For a non-errutil error, the auth middleware answers with `c.WriteErrOrFallback(http.StatusUnauthorized, http.StatusText(http.StatusUnauthorized), ...)` (middleware/auth.go:39). model.go only logs the error and sets `data[\"message\"] = http.StatusText(status)`. The text 'device limit reached' never reaches a user, so the label is hallucination."
+ },
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#kimi-01": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "low",
+  "concede": false,
+  "text": "You confirm yourself that 'this duplication already existed before the PR'. `git diff -M` shows instrumentation_middleware.go → metrics_middleware.go (similarity 67%). For QueryData and CallResource, the only changed lines are the receiver renames: `-func (m *InstrumentationMiddleware) QueryData(` / `+func (m *MetricsMiddleware) QueryData(`. Both `target, err := m.pluginTarget(ctx, pluginCtx.PluginID)` calls inside the helpers are unchanged context lines. Under the ruling, code the PR only moves or renames without changing its logic is pre-existing, so a defect in it is FP (none) and not TP nit."
+ },
+ "dual-storage-architecture-grafana-codex#kimi-01": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": false,
+  "text": "Each goroutine is bounded in time: dualwriter_mode3.go:51 `ctx, cancel := context.WithTimeoutCause(ctx, time.Second*10, ...)`, and the same appears at :110, :135 and :163. Because ctx derives from the request context, which is cancelled when the handler returns, most goroutines end even sooner. At most about write-rate × 10s goroutines can be outstanding, and each is a cheap goroutine holding one request object. Going from that to 'unbounded fan-out and memory growth' is a speculative capacity concern under hypothetical load, with no defect shown, so it is FP (none)."
+ },
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#kimi-01": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": false,
+  "text": "The test exists to catch the server-side NPE. That NPE reaches the reader thread as a 500 from the admin client, i.e. a RuntimeException (WebApplicationException), and `} catch (Exception e) { caughtExceptions.add(e); }` (GroupTest.java:144-146) does record it. The reader body is only `managedRealm.admin().groups().groups(null, 0, Integer.MAX_VALUE, true);` (:143), with no assertions, so no AssertionError can arise there. The remaining Errors (OOM, StackOverflow) are environment failures, not behaviour the test verifies. The test does verify what it was written for, so it is FP (none)."
+ },
+ "add-html-sanitizer-for-translated-message-resources-keycloak#kimi-01": {
+  "class": "TP",
+  "subclass": "nit",
+  "severity": "medium",
+  "concede": false,
+  "text": "The behaviour is real, but it is a robustness point in a build-time verifier. The lowercase-only pattern is deliberate: the same file distinguishes uppercase pseudo-tags from HTML (`value.replaceAll(\"CLAIM\\\\.<[A-Z]*>\", \"\")` :120, `value.replaceAll(\"<Extensions>\", \"\")` :123), and `Pattern HTML_TAGS = Pattern.compile(\"<[a-z]+[^>]*>\");` (:139) relies on lowercase to tell markup apart from placeholders. No message bundle at head uses uppercase HTML tags, so nothing fails today. A hypothetical uppercase tag would be reported as 'Illegal HTML', which is the conservative direction for a sanitizer check, and the translator just lowercases the tag. That makes it a nit and not a defect that affects users."
+ },
+ "replays-self-serve-bulk-delete-system-sentry#kimi-01": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": true,
+  "text": "Concede. `error_events.sort(key=lambda x: x[\"timestamp\"])` (project_replay_summarize_breadcrumbs.py:138) mutates a list that the endpoint builds solely for this call (:91-94). Its only consumer is `get_request_data(iter_segment_data(segments), error_events)` (:177), and nothing reuses the list afterwards. The 'break downstream logic' harm does not exist, so the behaviour is correct and the label is FP (none) rather than a nit. I adopt your severity."
+ },
+ "replays-self-serve-bulk-delete-system-sentry#kimi-03": {
+  "class": "TP",
+  "subclass": "nit",
+  "severity": "low",
+  "concede": false,
+  "text": "The constant is a maximum: `ISSUE_TITLE_MAX_LENGTH = 50` (commit_context.py:142), and `_truncate_title(title, max_length=ISSUE_TITLE_MAX_LENGTH)` returns `title[:max_length].rstrip() + \"...\"` (:582). The output therefore exceeds max_length by 3. The repo's other truncators reserve room for the ellipsis: `title = title[: GITLAB_ISSUE_TITLE_MAX_LENGTH - 3] + \"...\"` (gitlab/issues.py:99, same in vsts/issues.py:226). The docstring only says 'add ellipsis' and gives no intended over-length, so the off-by-3 is real and new in this PR. It is only a display length in a PR comment with no functional effect, so it is a nit and not FP."
+ },
+ "advanced-sql-analytics-framework-grafana-codex#kimi-01": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": false,
+  "text": "The log line is not touched by the PR. The diff of sql_command.go only swaps `duck.NewInMemoryDB()` for `sql.NewInMemoryDB()` in Execute. `logger.Warn(\"invalid sql query\", \"sql\", rawSQL, \"error\", err)` in NewSQLCommand and `logger.Warn(\"no tables found in SQL query\", \"sql\", rawSQL)` already logged the expression text at base. Logging the user's SQL expression (a dashboard/query definition, not data or credentials) on a parse failure is the intended diagnostic behaviour that predates the PR. The real consequence of the stub is that SQL expressions stop working, but that is a different issue. On the claim made here (sensitive data in logs), no new defect exists."
+ },
+ "authzservice-improve-authz-caching-grafana-codex#kimi-01": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": false,
+  "text": "The cache is trusted only for grants. When cached perms deny, Check does not answer from the cache: it falls through to `permissions, err := s.getIdentityPermissions(ctx, ...)` (service.go:139) and decides on fresh data. Labelling that request `permissionCacheUsage.WithLabelValues(\"false\", ...)` (:137) therefore correctly records that the cache could not serve the decision. The label being named cache_hit does not make a 'found but insufficient, refetched' lookup a hit, and the metric is consistent with the design. The facts are right but there is no defect, so it is FP (none)."
+ },
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#kimi-01": {
+  "class": "TP",
+  "subclass": "nit",
+  "severity": "medium",
+  "concede": false,
+  "text": "The leniency is real (tag & 0x1f), but no untrusted input reaches it. ASN1Decoder is package-private (`class ASN1Decoder {`, ASN1Decoder.java:33) and is used only in `asn1derToConcatenatedRS` (AuthzClientCryptoProvider.java:128-134), which converts the DER signature just produced by the local JCA Signature.sign() into JWS R||S format during signing. Verification uses the encoder direction (concatenatedRSToASN1DER). A constructed INTEGER can only come from a broken local JCA provider, so the missing strictness has no practical effect. That makes it a nit and not a real input-validation defect."
+ },
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#kimi-02": {
+  "class": "FP",
+  "subclass": "hallucination",
+  "severity": "medium",
+  "concede": true,
+  "text": "Concede. The comment rests on 'a provider class name containing % ... would cause MissingFormatArgumentException and abort detection'. The providers come from `ServiceLoader.load(CryptoProvider.class, classLoader)` (CryptoIntegration.java:56), and ServiceLoader rejects any provider-configuration name that is not a valid Java identifier, which '%' is not. The described failure is impossible, and the rest (debugf vs debug, trailing comma) is cosmetic. The label is hallucination, and I adopt your severity."
+ },
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#kimi-01": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": false,
+  "text": "The comment itself says the schema and producer 'are assumed to guarantee a valid number'. The value is `end_timestamp_precise=val[\"end_timestamp_precise\"]` (factory.py:141), taken from Relay-produced JSON on ingest-spans. Standard JSON has no NaN token, and the serializer of the producer does not emit one. A NaN therefore never reaches `p.zadd(set_key, {span.payload: span.end_timestamp_precise ...})` (buffer.py:197-199) through any real path. A finiteness guard would only cover an unreachable state, so this is FP (none)."
+ }
+}

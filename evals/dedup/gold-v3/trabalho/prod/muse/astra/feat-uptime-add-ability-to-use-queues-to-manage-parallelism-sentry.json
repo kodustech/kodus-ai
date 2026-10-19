@@ -1,0 +1,35 @@
+{
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03",
+   "newGroup": null,
+   "reason": "The worker unconditionally completes failed offsets in finally, allowing failed messages to be committed and skipped."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This describes terminate() failing to join the commit thread, allowing an in-progress commit iteration to continue after termination. It is distinct from background-thread commit safety and the known pool shutdown problems."
+  },
+  {
+   "id": "S3",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "newGroup": null,
+   "reason": "Unbounded worker queues provide no backpressure, allowing queued work and memory usage to grow without limit."
+  },
+  {
+   "id": "S4",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "Closing a strategy shuts down the factory-owned pool, which subsequent strategies reuse after rebalance despite its stopped workers and closed queues."
+  },
+  {
+   "id": "S5",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10",
+   "newGroup": null,
+   "reason": "Setting worker shutdown flags before draining causes workers to abandon queued items and leave their offsets outstanding."
+  }
+ ]
+}

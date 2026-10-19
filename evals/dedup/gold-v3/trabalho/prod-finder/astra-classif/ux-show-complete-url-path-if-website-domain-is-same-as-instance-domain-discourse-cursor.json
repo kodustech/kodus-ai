@@ -1,0 +1,12 @@
+{
+ "caseId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor",
+ "items": [
+  {
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#pf-kimi-C1",
+   "class": "TP",
+   "subclass": "nit",
+   "reason": "The new website_name method parses the URL at app/serializers/user_serializer.rb:138 and reparses it for the path at line 143, 146, or 149. Those branches are mutually exclusive, so the maximum is two parses, not four; reusing the parsed object would remove minor redundant work with no demonstrated user impact.",
+   "severity": "low"
+  }
+ ]
+}

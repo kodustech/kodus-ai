@@ -1,0 +1,19 @@
+{
+ "caseId": "database-performance-optimizations-grafana-codex",
+ "prOriginal": {
+  "numero": 80329,
+  "url": "https://github.com/grafana/grafana/pull/80329",
+  "mergedAt": "2024-01-12",
+  "nota": "Known from earlier check, reconfirmed: PR #80329 merged 2024-01-12, headRefOid = benchmark head 04cfa3bf, squash 81c45bfe."
+ },
+ "tps": {
+  "database-performance-optimizations-grafana-codex#muse13-01": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 1009,
+   "reason": "On main today CleanAnnotations' MaxCount branch still runs fetchIDs with ORDER BY id DESC LimitOffset(batch, MaxCount) and then deleteByIDs, a separate DELETE ... WHERE id IN (...) in its own session with no re-check or transaction. Later commits to xorm_store.go only removed the debug logs (#80670) and touched unrelated query/tag/migration code.",
+   "astra": []
+  }
+ }
+}

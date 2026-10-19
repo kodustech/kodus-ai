@@ -1,0 +1,1329 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "a308075bc39b77ed7059b0cae9d443d669a7bf98",
+  "head": "de628295646d0848226618108a52f2f1e5d04ac0",
+  "prTitle": "fix: handle collective multiple host on destinationCalendar",
+  "issues": [
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S8",
+      "file": "packages/core/CalendarManager.ts",
+      "lines": [
+       228,
+       231
+      ],
+      "texto": "The string \"Notes have been hidden by the organizer\" is written directly into calEvent.additionalNotes and shown to users in calendar events, but it is not routed through the project's i18n system. The existing TODO even notes this. The PR changed the spelling of this line without resolving the localization gap, so attendees/organizers whose locale is not English still see an untranslated message. Replace the hard-coded string with a translated key (e.g., t(\"notes_hidden_by_organizer\")) and add it to the locale files."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "add-guest-management-functionality-to-existing-bookings-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "b004587262e8221083bafbe9a0c515e7becaa7b3",
+  "head": "92f44dcea7ff19e9123a30c63c167a2938df5a55",
+  "prTitle": "Add guest management functionality to existing bookings",
+  "issues": [
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S10",
+      "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+      "lines": [
+       26,
+       29
+      ],
+      "texto": "The uniqueness refine uses `new Set(emails)`, which compares strings case-sensitively. Email addresses are case-insensitive identity data, so `A@example.com` and `a@example.com` pass validation as unique but refer to the same mailbox. Normalize emails with `toLowerCase()` before the Set comparison (and ideally persist the normalized form) to prevent case-variation duplicates and any downstream bypass of case-sensitive attendee or blacklist checks."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "bc89fe00ea84d20bedcec782f0701b9711dc8201",
+  "head": "9fde0e906897cc0f4f71793f647dd629faba3317",
+  "prTitle": "OAuth credential sync and app integration enhancements",
+  "issues": [
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S8",
+      "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+      "lines": [
+       8,
+       14
+      ],
+      "texto": "WHAT: The fetch to CALCOM_CREDENTIAL_SYNC_ENDPOINT has no timeout or abort signal. WHY: If the external endpoint hangs, the calling calendar/video request also hangs indefinitely, consuming workers and potentially blocking user-facing operations. HOW: Add an AbortController with a timeout and handle abort errors."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#kimi-02",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S15",
+      "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+      "lines": [
+       3,
+       5
+      ],
+      "texto": "The guard uses `userId` in a boolean context, so a user id of `0` is treated as absent and the code falls back to the local refresh instead of calling the configured `CALCOM_CREDENTIAL_SYNC_ENDPOINT`. Because the parameter is typed `number | null`, the only value that should disable sync is `null` (team credentials). Use an explicit `userId !== null` check so `0` is handled like any other valid user id."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "sms-workflow-reminder-retry-count-tracking-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "917c7b0764f4c6bfdca95db2c5f73dbfdbe11757",
+  "head": "c790227e0cda780e6fea9bb03af27948d9e286b9",
+  "prTitle": "SMS workflow reminder retry count tracking",
+  "issues": [
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S1",
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       189,
+       199
+      ],
+      "texto": "WHAT: The catch block increments retryCount for any error in the try block, not only for SMS scheduling failures. WHY: Failures from `prisma.profile.findFirst`, `getBookerBaseUrl`, or other unrelated setup can mark a reminder for deletion even though Twilio was never attempted. HOW: Wrap only the `twilio.scheduleSMS` call and the successful update in try/catch, or restructure so retryCount is incremented only when scheduling itself fails."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#kimi-02",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S5",
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       198,
+       198
+      ],
+      "texto": "The catch block logs the raw `error` object from SMS scheduling. Provider error responses often include PII such as recipient/sender phone numbers and message bodies. Redact or summarize the error before logging (e.g., log only the provider error code and a generic message) to prevent leaking sensitive data into application logs."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "c9a47dd0cebd121ff73f24e1f8c1829579daf8e3",
+  "head": "da09bc0808e7c6df1bc10e00d5acf764d94c7cc7",
+  "prTitle": "feat: convert InsightsBookingService to use Prisma.sql raw queries",
+  "issues": [
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S2",
+      "file": "packages/lib/server/service/insightsBooking.ts",
+      "lines": [
+       100,
+       112
+      ],
+      "texto": "`this.filters.eventTypeId` and `this.filters.memberUserId` are optional `number`s, but the code tests them with `if (this.filters.eventTypeId)` and `if (this.filters.memberUserId)`. A caller passing the perfectly valid numeric ID `0` will be treated as if no filter was supplied, causing rows for ID 0 to be excluded or, worse, included when they shouldn't be. Use explicit null/undefined checks such as `this.filters.eventTypeId != null` or `typeof this.filters.eventTypeId !== \"undefined\"` instead of truthiness."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#kimi-02",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S3",
+      "file": "packages/lib/server/service/insightsBooking.ts",
+      "lines": [
+       164,
+       174
+      ],
+      "texto": "buildOrgAuthorizationCondition always emits `(\"teamId\" = ANY(${teamIds}))`. When the organization has no child teams, `teamIds` is empty and PostgreSQL cannot infer the element type of the empty array parameter, causing a runtime error. Guard the team branch the same way the user branch is guarded, and fall back to `1=0` (NOTHING_CONDITION) when both lists are empty."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#kimi-03",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S4",
+      "file": "packages/lib/server/service/insightsBooking.ts",
+      "lines": [
+       29,
+       34
+      ],
+      "texto": "InsightsBookingServicePublicOptions makes teamId optional for scope \"team\", but buildTeamAuthorizationCondition assumes it is defined and interpolates `options.teamId` directly into Prisma.sql. Either keep the schema discriminated-union type in the constructor (requiring teamId for team scope) or validate/throw before using options.teamId, so the previous invariant is not broken."
+     },
+     {
+      "gid": "kimi-kimi:S5",
+      "file": "packages/lib/server/service/insightsBooking.ts",
+      "lines": [
+       29,
+       34
+      ],
+      "texto": "The exported `InsightsBookingServicePublicOptions` type marks `teamId` as optional, but the `insightsBookingServiceOptionsSchema` and the team-scope authorization logic require it. A caller can pass `{ scope: \"team\", userId, orgId }` without `teamId`; runtime validation fails, `this.options` is set to `null`, and `getAuthorizationConditions()` returns `Prisma.sql`1=0``, producing empty results with no error. Align the public type with the schema so missing `teamId` is caught at compile time, e.g. replace the manual type with `z.input<typeof insightsBookingServiceOptionsSchema>` or use a discriminated union that requires `teamId` for `scope: \"team\"`."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "62db063e1e1abe691313ab42682a68f796d63769",
+  "head": "4f8aed295a29954023b2849c060ef4fb299d1b5d",
+  "prTitle": "Enhance embed URL handling and validation system",
+  "issues": [
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S5",
+      "file": "lib/topic_retriever.rb",
+      "lines": [
+       48,
+       50
+      ],
+      "texto": "WHAT: fetch_http calls SiteSetting.embed_by_username.downcase without verifying the setting is present. WHY: If feed polling is disabled and embed_by_username is blank, the retrieve job raises NoMethodError on nil.downcase instead of failing gracefully. HOW: Return early when the username setting is blank, matching the guard in PollFeed."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-02",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S7",
+      "file": "app/jobs/scheduled/poll_feed.rb",
+      "lines": [
+       28,
+       37
+      ],
+      "texto": "WHAT: poll_feed calls open(feed_url).read without a timeout and iterates rss.items without any limit. WHY: A slow or unresponsive feed can hold a worker indefinitely, and a very large feed can consume excessive memory and time importing every item. HOW: Add a read timeout to open and cap the number of items processed per run."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-03",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S10",
+      "file": "spec/components/topic_retriever_spec.rb",
+      "lines": [
+       9,
+       44
+      ],
+      "texto": "The tests 'does not call perform_retrieve when embeddable_host is not set', 'different than the host of the URL', and 'embed url is not a url' stub SiteSetting.embeddable_host and assert that perform_retrieve is never called. But they also stub retrieve_recently? implicitly only in later tests. The implementation's invalid_host? raises URI::InvalidURIError; if invalid_host? were removed or always returned false, retrieve_recently? would still gate perform_retrieve. Because perform_retrieve is the actual private method being mocked, a bug in invalid_host? does not cause these tests to fail; the tests exercise the mock, not the real host-matching logic. Replace the mock of perform_retrieve with direct assertion about the side effect (e.g. no HTTP fetch, no TopicEmbed import) or call invalid_host? directly and assert its result."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-04",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S11",
+      "file": "spec/controllers/embed_controller_spec.rb",
+      "lines": [
+       40,
+       52
+      ],
+      "texto": "The 'tells the topic retriever to work' and 'creates a topic view' tests stub TopicEmbed.topic_id_for_embed, TopicRetriever.new, TopicView.new, and the retriever's retrieve method. They therefore pass even if the controller action's real logic for calling TopicRetriever, TopicView, or rendering 'loading' is removed or inverted. These tests assert only that mocks are called with the expected arguments, which by construction matches the test setup; they do not verify the actual response body, template, or that an embed record is created. Add expectations on response.body/rendered_template (e.g. assert the loading partial is rendered when no topic exists and the topic view partial is rendered when one exists) and use real collaborators or at least assert the side effects."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-05",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S12",
+      "file": "spec/jobs/poll_feed_spec.rb",
+      "lines": [
+       12,
+       37
+      ],
+      "texto": "The execute tests stub all three SiteSetting predicates and assert that poll_feed is or is not called. If the execute method's guard condition were changed to ignore any of those settings (e.g. always call poll_feed), the tests using stubs with expects(:poll_feed).never would still catch it, but the 'delegates to poll_feed' test only verifies that poll_feed is called once when all settings are stubbed true; it does not verify that poll_feed actually opens the configured URL, parses it, or calls TopicEmbed.import. The poll_feed method itself has no dedicated test. Add a test that stubs an RSS response and asserts TopicEmbed.import is called with the expected arguments, otherwise a broken parser or wrong argument order could go undetected."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "913c3d6f636d02b3dd6c2c022ca1af2bec95d752",
+  "head": "d1c69189f3c90ecf56013a8da904da9bff9a8e19",
+  "prTitle": "FEATURE: Can edit category/host relationships for embedding",
+  "issues": [
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S3",
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       17,
+       17
+      ],
+      "texto": "WHAT: `record_for_host` queries with `lower(host) = ?` but the table has no index on `host`. WHY: This lookup runs on every embedded request, and as the allowed-hosts list grows it degrades to a full table scan. HOW: Add an index on `host` in the migration, ideally `lower(host)` if the database supports expression indexes, or a standard btree index with case-insensitive comparisons in the query."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-02",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S5",
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       36,
+       43
+      ],
+      "texto": "WHAT: `TopicEmbed.import` now passes `category: eh.try(:category_id)`, which becomes nil when no embeddable host matches the URL. WHY: Previously the default `SiteSetting.embed_category` was always used; feed polling and import scripts that call `import` directly can now create topics with no explicit category, changing behavior for URLs that do not match a configured host. HOW: Fall back to the uncategorized category or the old default when `eh` is blank, matching the controller's blank-category handling."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-03",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S9",
+      "file": "app/controllers/admin/embeddable_hosts_controller.rb",
+      "lines": [
+       22,
+       25
+      ],
+      "texto": "`host.category_id = SiteSetting.uncategorized_category_id if host.category_id.blank?` treats `0` and empty string the same as `nil`. If category id `0` is ever meaningful, it will be silently replaced. Use `if host.category_id.nil?` to test for an explicitly absent value rather than any falsy/blank value."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-04",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S11",
+      "file": "spec/models/embeddable_host_spec.rb",
+      "lines": [
+       23,
+       23
+      ],
+      "texto": "The describe block is named 'allows_embeddable_host' but the model method added in this PR is 'host_allowed?'. The test description names a non-existent method, which is confusing and will break navigation/expectations. Rename the describe block to 'host_allowed?' to match the actual API."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-05",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S12",
+      "file": "app/assets/javascripts/admin/templates/components/embeddable-host.hbs",
+      "lines": [
+       3,
+       3
+      ],
+      "texto": "The input placeholder is hardcoded English text 'example.com' instead of using the I18n translation mechanism. This bypasses localization and will appear untranslated for non-English users. Add a translation key (e.g. admin.embedding.host_placeholder) and use it here."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-06",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S13",
+      "file": "spec/controllers/admin/embeddable_hosts_controller_spec.rb",
+      "lines": [
+       1,
+       9
+      ],
+      "texto": "The spec added for Admin::EmbeddableHostsController only checks that it is a subclass of Admin::AdminController. It does not exercise create, update, or destroy. Those actions could be completely broken and this spec would still pass, so it does not verify the controller behaviour it appears to cover. Add request specs for the actual actions, or at least assert that saving/destroying a host has the expected side effects."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-07",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S14",
+      "file": "spec/controllers/admin/embedding_controller_spec.rb",
+      "lines": [
+       1,
+       9
+      ],
+      "texto": "The spec added for Admin::EmbeddingController only checks that it inherits from Admin::AdminController. It does not call show or update, which in this PR return a serialized embedding object. Those actions could be removed or broken and the spec would still pass. Add tests that hit the routes and verify the serialized response contains the embeddable hosts."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "98fa098e6fade3097a11fe7f99a98a4e6ffb4728",
+  "head": "5b229316ee4c661836ed1161139692a3e8527444",
+  "prTitle": "Optimize header layout performance with flexbox mixins",
+  "issues": [
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S3",
+      "file": "app/assets/stylesheets/common/base/topic-post.scss",
+      "lines": [
+       264,
+       270
+      ],
+      "texto": "`.small-action` is now a flex container, so `.topic-avatar` is a flex item and its `float: left` declaration is ignored by the flex layout algorithm. Remove the dead `float: left` from `.topic-avatar` since the horizontal placement is now handled by flexbox."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feature-automatically-downsize-large-images-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "3f71fa15c93bb0b751bb92abae1b5dc9a21bd4ca",
+  "head": "ffbaf8c54269df2ce510de91245760fddce09896",
+  "prTitle": "FEATURE: automatically downsize large images",
+  "issues": [
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S10",
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       67,
+       67
+      ],
+      "texto": "`OptimizedImage.downsize(tempfile.path, tempfile.path, \"80%\", ...)` asks ImageMagick to read from and write to the same file. The model's `convert_with` builds a `convert <from> ... <to>` shell command and assumes distinct paths; overwriting the source during conversion can corrupt or truncate the upload. Downsize to a temporary path and then replace the original."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "fix-proper-handling-of-group-memberships-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "4975fc28903a84418f546b2809370f19abf10e08",
+  "head": "060cda77729cb1c4a827560e09e89a7b22078ba9",
+  "prTitle": "FIX: proper handling of group memberships",
+  "issues": [
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S6",
+      "file": "app/controllers/admin/groups_controller.rb",
+      "lines": [
+       37,
+       37
+      ],
+      "texto": "params[:alias_level].present? returns false for the integer 0, so selecting the \"nobody\" alias level (value 0) leaves the existing alias_level unchanged. Use an existence check that accepts 0 while still skipping absent/blank values."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feature-localization-fallbacks-server-side-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "728845d008f06828630a632e5c7d67e11bf15deb",
+  "head": "ecfa17b5a79dfdc91e7a4d50b42ae78a35d0a293",
+  "prTitle": "FEATURE: Localization fallbacks (server-side)",
+  "issues": [
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S1",
+      "file": "config/initializers/i18n.rb",
+      "lines": [
+       12,
+       24
+      ],
+      "texto": "WHAT: FallbackLocaleList subclasses Hash but leaves the underlying hash empty, so every method other than `[]` (e.g. `each`, `keys`, `defaults`, `map`) sees an empty collection. WHY: This violates the I18n::Locale::Fallbacks/Hash contract; any future caller that iterates or inspects `I18n.fallbacks` will get no locales even though `I18n.fallbacks[:en]` returns a fallback chain. HOW: Delegate storage to a real Hash by calling `super` in `[]` and populating defaults explicitly, or do not inherit from Hash and instead implement only the small interface I18n::Backend::Fallbacks actually needs (e.g. `def [](locale); ... end`)."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "anonymous-add-configurable-device-limit-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "50f4e78a39914711d0d231a501ba215becf17ebc",
+  "head": "bbd8c507cdf56f6b884373809e0b24abd4a2353d",
+  "prTitle": "Anonymous: Add configurable device limit",
+  "issues": [
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S5",
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       18,
+       18
+      ],
+      "texto": "The error message 'device limit reached' is user-facing but is a hard-coded English literal. It bypasses Grafana's i18n/translation system, so users in other locales will see untranslated English text. This string should be passed through the project's translation mechanism (e.g., i18n.Translate) and added to the relevant locale file(s)."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "58ba11ecbd60863e2bfc6e32f0399ed4feb3927a",
+  "head": "303cdc2caf256aa5df660611120c2e3f7392365d",
+  "prTitle": "Plugins: Chore: Renamed instrumentation middleware to metrics middleware",
+  "issues": [
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S2",
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+      "lines": [
+       144,
+       167
+      ],
+      "texto": "WHAT: QueryData and CallResource look up the plugin target from the registry twice per request (once for size and once for duration). WHY: The duplicated registry lookup doubles the work on every plugin request for the two instrumented endpoints. HOW: Resolve the target once per method and pass it into both instrumentPluginRequestSize and instrumentPluginRequest, or add a helper that records size and duration with a single lookup."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "dual-storage-architecture-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "66c4dff17e9147b11fb9b14c6ed63089a599da65",
+  "head": "e369f24665ec70e1e3700f457d25ef83301d931a",
+  "prTitle": "Dual Storage Architecture",
+  "issues": [
+   {
+    "issueId": "dual-storage-architecture-grafana-codex#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S6",
+      "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+      "lines": [
+       50,
+       167
+      ],
+      "texto": "WHAT: Every Create, Update, Delete, and DeleteCollection spawns a new goroutine that can live up to 10 seconds with no concurrency limit or backpressure. WHY: Under high write throughput this creates unbounded goroutine fanout and memory growth, especially if the legacy store is slow or times out. HOW: Bound concurrency with a worker pool or semaphore, or use a rate-limited background queue for legacy writes."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "notification-rule-processing-engine-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "47e5bd23163e6037fc0741068ac78930bba2769f",
+  "head": "8df850371034b73dc4dd9908cc30fa09f12a1f97",
+  "prTitle": "Notification Rule Processing Engine",
+  "issues": [
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S5",
+      "file": "GrafanaGroupLoader",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The key={promRule.uid} could be problematic if uids are not unique within a group, though this is noted as a pre-existing data contract issue."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#kimi-02",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S7",
+      "file": "useAbilities.ts",
+      "lines": [
+       289,
+       289
+      ],
+      "texto": "Line 289 has a stray `// duplicate` comment next to `useIsGrafanaPromRuleEditable(rule)`; it appears to be a stray comment, not a code defect."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "c834e7473c02f11451216b3fbf355f953cfd95e9",
+  "head": "4def149a50c4b9b2c24fbb753ac60fe4f4df0cac",
+  "prTitle": "Fix concurrent group access to prevent NullPointerException",
+  "issues": [
+   {
+    "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S1",
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+      "lines": [
+       137,
+       149
+      ],
+      "texto": "WHAT: The reader thread in the new test catches only Exception, so any Error (e.g., AssertionError, OutOfMemoryError) thrown during concurrent group reads is silently swallowed. WHY: The main thread then asserts caughtExceptions is empty and passes even though the reader thread failed, masking real failures and making the test give false confidence. HOW: Change the catch to Throwable, keep the exception list typed as Throwable, and use assertTrue(caughtThrowables.isEmpty(), ...) so any failure fails the test visibly."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "add-html-sanitizer-for-translated-message-resources-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "f3c8e8f3487112f2c99aa78400430cce2d30be39",
+  "head": "02f48f776f43734d1ac8914d3ad6a7115acdcb33",
+  "prTitle": "Add HTML sanitizer for translated message resources",
+  "issues": [
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S1",
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       139,
+       145
+      ],
+      "texto": "WHAT: The HTML tag detector and anchor matcher use case-sensitive regular expressions (`<[a-z]+[^>]*>` and `</?a[^>]*>`) even though HTML element names are case-insensitive. WHY: The OWASP sanitizer canonicalizes tag names to lowercase, so a translation with `<B>text</B>` or `<A href=\"...\">` is not matched by the anchor pre-check and is then normalized by the sanitizer to lowercase, making `sanitized != value` and causing a false-positive \"Illegal HTML\" build failure. HOW: Compile `HTML_TAGS` and `ANCHOR_PATTERN` with `Pattern.CASE_INSENSITIVE` (or add `A-Z` to the character classes for tags and `A` for anchors) so the verifier treats HTML case-insensitively."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#kimi-02",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S7",
+      "file": "VerifyMessageProperties.java",
+      "lines": [
+       70,
+       111
+      ],
+      "texto": "New error/reporting paths in verifySafeHtml() include java.io.File instances (file/englishFile) whose toString() yields absolute paths, so build logs will contain absolute filesystem paths. This occurs at lines 70 and 79 (RuntimeException with file/englishFile) and line 111 (messages.add with file). This is minor information disclosure, but it is already present in unchanged code at line 53 (MojoExecutionException with file) and is standard output for Maven plugins; the PR does not introduce a new class of sensitive-data exposure. No data-exposure defect of the assigned class is present. Note: line 157 (messages.add with matcher.group()) echoes anchor tags, which is expected behavior for a verifier and does not constitute disclosure of sensitive data."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "b8c1cd410f4499c77a8b372decfe1718b80ccfd2",
+  "head": "1950a511026d520a7329c7b6b9ee60a4af8f8b55",
+  "prTitle": "Add Client resource type and scopes to authorization schema",
+  "issues": [
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S6",
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionEvaluator.java",
+      "lines": [
+       133,
+       140
+      ],
+      "texto": "The Javadoc says 'Or if the caller has a permission to {@link AdminPermissionManagement#VIEW_SCOPE} the client. For V2 only: Also if the caller has a permission to {@link org.keycloak.authorization.AdminPermissionsSchema#VIEW} all clients.' However, ClientPermissionsV2.canView(ClientModel) only checks canView()/canConfigure(client) and AdminPermissionsSchema.VIEW; it never evaluates AdminPermissionManagement.VIEW_SCOPE. The 'Also' wording is misleading because the V1 per-client check is absent in V2."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#kimi-02",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S8",
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/PermissionClientTest.java",
+      "lines": [
+       145,
+       245
+      ],
+      "texto": "The tests call getDefaultClientScopes().get(1) and .get(0) without checking that the list contains enough elements. If the realm has fewer default scopes than assumed, the test throws IndexOutOfBoundsException before it can verify the intended ForbiddenException behavior. Guard the index access with an isEmpty()/size() check or select a scope safely, and fail with a clear message if none are available."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "fixing-re-authentication-with-passkeys-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "744e031019af8dbaacf407e792fbb3756364e2b4",
+  "head": "25bf964a844ea0bc64dc838bff038345048cb1fa",
+  "prTitle": "Fixing Re-authentication with passkeys",
+  "issues": [
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S1",
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/AbstractUsernameFormAuthenticator.java",
+      "lines": [
+       57,
+       58
+      ],
+      "texto": "The Javadoc/comment for USER_SET_BEFORE_USERNAME_PASSWORD_AUTH still describes the previous behavior of preventing user clearing on failed password authentication. After the refactor the flag is consumed only by AuthenticatorUtils.setupReauthenticationInUsernamePasswordFormError to hide the username and disable registration during re-authentication. The comment should be updated to match the current observable effect, otherwise future maintainers will look for user-clearing logic that is no longer governed by this flag."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "replays-self-serve-bulk-delete-system-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "49a275847631e231672d01b5dcd66558c069d25b",
+  "head": "ea188e2d736fd6ed27c1dba8aae63b7268e2a7a9",
+  "prTitle": "Replays Self-Serve Bulk Delete System",
+  "issues": [
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S4",
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       134,
+       139
+      ],
+      "texto": "WHAT: get_request_data sorts the error_events list in place. WHY: Callers that reuse the error_events list after calling get_request_data will see it reordered, which is an unexpected side effect and can break downstream logic. HOW: Sort a copy of the list instead of mutating the input."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#kimi-02",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S5",
+      "file": "src/sentry/integrations/source_code_management/commit_context.py",
+      "lines": [
+       584,
+       597
+      ],
+      "texto": "WHAT: get_environment_info catches the base Exception class and silently continues. WHY: Real failures (e.g., database or nodestore errors) are swallowed and hidden from monitoring, making debugging impossible and potentially masking data corruption. HOW: Catch only the specific exceptions that indicate a missing environment, and send actual infrastructure errors to sentry_sdk instead of logging at info."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#kimi-03",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S8",
+      "file": "src/sentry/integrations/source_code_management/commit_context.py",
+      "lines": [
+       577,
+       583
+      ],
+      "texto": "`_truncate_title` returns `title[:max_length].rstrip() + \"...\"` when the title exceeds `max_length`. For a 51-character title this yields 50 characters plus 3 ellipsis characters (53 total), exceeding the intended `ISSUE_TITLE_MAX_LENGTH` of 50. Either reserve room for the ellipsis before slicing (e.g., slice to `max_length - 3`) or ensure the final string is clamped to `max_length`."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "0cfc28e76ddc986d2d89dd9b9f63ee916a18a5f9",
+  "head": "dcdcadb771128e79259cc9eff9c70c38fc597976",
+  "prTitle": "ref(crons): Reorganize incident creation / issue occurrence logic",
+  "issues": [
+   {
+    "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S2",
+      "file": "src/sentry/monitors/logic/incident_occurrence.py",
+      "lines": [
+       57,
+       74
+      ],
+      "texto": "The issue_title, subtitle, evidence display names ('Failure reason', 'Environment', 'Last successful check-in'), and the fallback value 'Never' are hard-coded English strings that reach the user. Other strings in this file use gettext_lazy (`_()`). Wrap these UI strings with `_()` so they can be localized consistently with the rest of the failure evidence."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "30a92a4d66b417f7c19dee2b343099adc6e88aa6",
+  "head": "5fd11f9faa79c4aefd39975d1b0e963e5034f793",
+  "prTitle": "feat: add calendar cache status and actions (#22532)",
+  "issues": [
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S3",
+      "file": "CredentialActionsDropdown.tsx",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "Only sends credential IDs and static i18n keys; no raw errors or PII are logged or displayed. Cache timestamps shown belong to the user's own credential. No data-exposure issue found."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#kimi-02",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S4",
+      "file": "calendar-cache.repository.ts",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "Exposes only credentialId + latest cache updatedAt, used solely to enrich the caller's own connected-calendars response. No data-exposure issue found."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#kimi-03",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S5",
+      "file": "selectedCalendar.ts",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "Changes are DB-only with no logging; updateManyByCredentialId is called with empty data. No data-exposure issue found."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#kimi-04",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S6",
+      "file": "deleteCache.handler.ts",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "Returns a generic \"Credential not found or access denied\" error, which does not leak existence or details. No data-exposure issue found."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#kimi-05",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S7",
+      "file": "test-gcal-webhooks.sh",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "Echoes and logs the public tunnelmole webhook receiver URL; that URL is intended to be public and is not a secret credential or PII-bearing value. No data-exposure issue found."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "e25638dab0d4b98f99c8fe8976ccaae8f4fb9db3",
+  "head": "5f8a130277dbddc95d133cd2832be639baf89213",
+  "prTitle": "Add comprehensive email validation for blocked users",
+  "issues": [
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S2",
+      "file": "lib/validators/email_validator.rb",
+      "lines": [
+       18,
+       22
+      ],
+      "texto": "WHAT: EmailValidator#email_in_restriction_setting? calls value =~ regexp without guarding against nil. WHY: When a record has a nil email and email_changed? is true, validate_each raises NoMethodError instead of adding a clean validation error. This also makes the validator unsafe for reuse on any model without a presence validation. HOW: Return early when value is blank, e.g. return if value.blank? at the start of validate_each or email_in_restriction_setting?."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#kimi-02",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S8",
+      "file": "spec/components/validators/email_validator_spec.rb",
+      "lines": [
+       9,
+       20
+      ],
+      "texto": "The tests stub `BlockedEmail.should_block?` with Mocha `stubs`, which does not require the method to be invoked, and the positive case only asserts that some email error exists. If the blocked-email branch in EmailValidator were deleted, the first test would still pass; the second could pass from the whitelist/blacklist branch if SiteSetting is configured. Switch to `expects(:should_block?).with(record.email)` to force the call, stub `SiteSetting.email_domains_whitelist` and `email_domains_blacklist` to empty strings, and assert the exact blocked-email error message (e.g. `should include I18n.t(:'user.email.blocked')`) so the tests actually fail when the behaviour they name is broken."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "56abd247e1829cb6de82dfcc8ce04deb5f0d1e91",
+  "head": "6669a2d94d76eea3b99b8c476d12b1eb66726b07",
+  "prTitle": "FEATURE: per-topic unsubscribe option in emails",
+  "issues": [
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S2",
+      "file": "app/controllers/topics_controller.rb",
+      "lines": [
+       98,
+       115
+      ],
+      "texto": "WHAT: @topic_view is instantiated before TopicUser is modified, and TopicView.topic_user is memoized, so perform_show_response serializes the old notification_level. WHY: The user sees the pre-unsubscribe notification state on the page after clicking unsubscribe, making the action appear to have failed. HOW: Re-instantiate @topic_view after updating the notification level (or clear its @topic_user cache) before calling perform_show_response."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "7a5fbae060bd0d3e29f3a4b5c6f2bfd8b2914dc7",
+  "head": "267d8be1f556ed59639ced396c885bb44586da19",
+  "prTitle": "UX: show complete URL path if website domain is same as instance domain",
+  "issues": [
+   {
+    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S3",
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       137,
+       155
+      ],
+      "texto": "The new `website_name` method parses the serialized `website` value using `URI(...).host` and `URI(...).path`, and the `rescue nil` swallows parse errors silently without logging the URL or the error, making failures undiagnosable."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "advanced-sql-analytics-framework-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "cbe1e7d63f098e306058c0fbcab2f5c30602fa7d",
+  "head": "f3317b329b4eb8fd96f99dd86525bc4a22d20248",
+  "prTitle": "Advanced SQL Analytics Framework",
+  "issues": [
+   {
+    "issueId": "advanced-sql-analytics-framework-grafana-codex#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S3",
+      "file": "pkg/expr/sql_command.go",
+      "lines": [
+       30,
+       36
+      ],
+      "texto": "Replacing the real in-memory DB with a stub means `sql.TablesList(rawSQL)` always fails, so the existing `logger.Warn(\"invalid sql query\", \"sql\", rawSQL, \"error\", err)` at lines 32-35 now logs the full raw SQL for every SQL expression. User-supplied SQL can contain sensitive values or schema information and should not be logged verbatim. Avoid logging `rawSQL` or redact it before logging."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "authzservice-improve-authz-caching-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "5634ca44f799a82161f0401dadc286452f3bdbf8",
+  "head": "7562f37880367411a62304bcdcdc178bced23906",
+  "prTitle": "AuthZService: improve authz caching",
+  "issues": [
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S3",
+      "file": "pkg/services/authz/rbac/service.go",
+      "lines": [
+       123,
+       137
+      ],
+      "texto": "WHAT: When permissions are found in the permission cache but `checkPermission` returns false, the code increments `permissionCacheUsage` with label `false` as if the cache missed. WHY: This metric conflates actual cache misses with cache hits that did not grant access, making cache-hit observability inaccurate. HOW: Increment the cache-usage metric with `true` immediately after a successful `getCachedIdentityPermissions` return, before evaluating whether the permission grants access."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "10aca5552314d6e5c9226f3c6d0107861c38c693",
+  "head": "79d11c4890cc4792e3dc3535af59e4e5f7a2739d",
+  "prTitle": "Add AuthzClientCryptoProvider for authorization client cryptographic operations",
+  "issues": [
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S1",
+      "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+      "lines": [
+       65,
+       74
+      ],
+      "texto": "WHAT: readInteger accepts constructed INTEGER tags (e.g., 0x22) because it only masks the low 5 bits of the tag byte. WHY: DER/BER requires INTEGER to be primitive; accepting constructed encodings silently parses malformed input as a valid integer, diverging from BouncyCastle's strict parser. HOW: Reject the constructed bit by checking `(tag & ASN1Encoder.CONSTRUCTED) == 0` before reading the value."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#kimi-02",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S2",
+      "file": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+      "lines": [
+       64,
+       70
+      ],
+      "texto": "WHAT: The ignored-providers log calls `logger.debugf(builder.toString())`, but debugf expects a format string. WHY: A provider class name containing `%` (e.g., from a shaded/proxied jar) would cause `MissingFormatArgumentException` and abort detection; even without that, it is the wrong logging API. HOW: Use `logger.debug(builder.toString())` and avoid the trailing comma."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "7ea067aae9be56cb2622bce6563864817c3dfeaf",
+  "head": "7355f05e6aafe2a7acc6434fb40c686665416606",
+  "prTitle": "Add Groups resource type and scopes to authorization schema",
+  "issues": [
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S7",
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+      "lines": [
+       85,
+       92
+      ],
+      "texto": "The interface Javadoc says VIEW/MANAGE permissions grant canView(), but the legacy GroupPermissions implementation only checks admin roles. Either implement the permission check in V1 or qualify the permission path as V2-only (as was done for canList) so the contract matches all implementations."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "85737f52b59aa2e3403c9b8e48acf71ccc5bfae3",
+  "head": "ce2dcc537b4b1f98a335e88cfe8e0b804483252a",
+  "prTitle": "Implement recovery key support for user storage providers",
+  "issues": [
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S4",
+      "file": "server-spi/src/main/java/org/keycloak/models/utils/RecoveryAuthnCodesUtils.java",
+      "lines": [
+       40,
+       43
+      ],
+      "texto": "The recovery code verification uses direct String.equals() on hashed secrets, which is vulnerable to timing attacks. Use a constant-time comparison function (e.g., MessageDigest.isEqual) to compare the hashed input against each stored hashed recovery code."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "a5d290951def84afdcc4c88d2f1f20023fc36e2a",
+  "head": "8ab88145113dd23a930e23b9cbbcf8b30e4c0b17",
+  "prTitle": "Enhanced Pagination Performance for High-Volume Audit Logs",
+  "issues": [
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S10",
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       842,
+       843
+      ],
+      "texto": "OptimizedCursorPaginator.value_from_cursor returns cursor.value unchanged, while BasePaginator.value_from_cursor returns cursor.value + 1 for prev cursors. Since build_queryset uses this value as the pagination boundary, backward navigation will use an inclusive instead of exclusive boundary and can return the cursor row again or skip rows. Restore the prev-cursor increment or call the base implementation to keep boundary semantics consistent."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#kimi-02",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S11",
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       838,
+       840
+      ],
+      "texto": "OptimizedCursorPaginator.get_item_key calls getattr(item, self.key) directly and omits the callable-key branch that BasePaginator.get_item_key provides. This contradicts the docstring's claim of backward compatibility and will raise TypeError for any queryset ordered by a callable key. Add the same isinstance(self.key, Callable) branch used by BasePaginator."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "fd358e8a388939959369f08f616e29552cdaf96e",
+  "head": "9966ec5a13e331659c3ea00981f9b11b0faf821f",
+  "prTitle": "feat(uptime): Add ability to use queues to manage parallelism",
+  "issues": [
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S6",
+      "file": "queue_consumer.py",
+      "lines": [
+       204,
+       345
+      ],
+      "texto": "Review incomplete: the tail of queue_consumer.py (lines 204-345) has not been read yet. Per the coverage rules, this pending line range must be read via readFile before a final verdict can be given; no contract mismatch has been identified in this range so far."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#kimi-02",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S7",
+      "file": "result_consumer.py",
+      "lines": [
+       210,
+       280
+      ],
+      "texto": "Review incomplete: the tail of result_consumer.py (lines 210-280) has not been read yet. Per the coverage rules, this pending line range must be read via readFile before a final verdict can be given; no contract mismatch has been identified in this range so far."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "28e3db2520d4ea28c57b08da57b83917ba7b2e15",
+  "head": "eb9623b4e787303a3bd15e10bbbdb78d59875ac6",
+  "prTitle": "Optimize spans buffer insertion with eviction during insert",
+  "issues": [
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#kimi-01",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S6",
+      "file": "",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "No validation that end_timestamp_precise is finite before using it as a Redis ZADD score; Redis rejects NaN, though the schema (sentry_kafka_schemas.schema_types.ingest_spans_v1.SpanEvent) and rapidjson are assumed to guarantee a valid number."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#kimi-02",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S7",
+      "file": "src/sentry/spans/buffer.py",
+      "lines": [
+       194,
+       199
+      ],
+      "texto": "`set_key` was accurate when this key held a Redis Set, but the PR now writes it with `zadd` and reads it with `zscan`. The identifier implies plain set semantics while the implementation depends on sorted-set behavior (ordering, zpopmin trimming). Rename it to `zset_key` or `segment_key` so the code contract matches the Redis data type."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#kimi-03",
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S9",
+      "file": "tests/sentry/spans/consumers/process/test_flusher.py",
+      "lines": [
+       44,
+       73
+      ],
+      "texto": "test_backpressure constructs all spans with the same end_timestamp_precise, so it cannot catch a regression where the buffer ignores or misuses the timestamp score. Use distinct timestamps and assert that the sorted-set ordering and eviction logic are honored when backpressure limits are applied."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ }
+}

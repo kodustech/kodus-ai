@@ -1,0 +1,11 @@
+{
+ "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+   "newGroup": null,
+   "reason": "Both identify the empty data object passed to updateManyByCredentialId in fetchAvailabilityAndSetCache. Explicitly setting updatedAt fixes the shared problem, regardless of whether the empty update throws or leaves the timestamp stale."
+  }
+ ]
+}

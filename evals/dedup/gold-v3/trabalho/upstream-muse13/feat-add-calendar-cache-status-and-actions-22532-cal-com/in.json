@@ -1,0 +1,32 @@
+{
+ "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+ "prTitle": "feat: add calendar cache status and actions (#22532)",
+ "upstream": "calcom/cal.com",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/cal.com",
+ "base": "30a92a4d66b417f7c19dee2b343099adc6e88aa6",
+ "head": "5fd11f9faa79c4aefd39975d1b0e963e5034f793",
+ "prOriginalConhecido": {
+  "numero": 22532,
+  "url": "https://github.com/calcom/cal.diy/pull/22532",
+  "mergedAt": "2025-07-22",
+  "nota": "calcom/cal.com now redirects to calcom/cal.diy (renamed). PR #22532 head sha equals benchmark head 5fd11f9f; squash commit cb786923. Its tree differs from the head only by unrelated main changes (apps/web version bump, one unrelated locale key)."
+ },
+ "tps": [
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#muse13-01",
+   "severity": "low",
+   "category": "bug",
+   "bug": "connectedCalendarsHandler instantiates CalendarCacheRepository directly instead of the feature-flag-aware factory, so cache status is queried and shown even when calendar-cache is disabled.",
+   "evidenciaOpus": "connectedCalendars.handler.ts:28 does `new CalendarCacheRepository()` instead of going through CalendarCache.init (calendar-cache.ts:22-29), bypassing the feature-flag check and leaving the PR's own CalendarCacheRepositoryMock.getCacheStatusByCredentialIds dead. Effect is an extra groupBy and possibly showing stale cache timestamps while the cache is disabled.",
+   "evidenciaAstra": "connectedCalendars.handler.ts:28-29 directly constructs the repository, whose calendar-cache.repository.ts:173-182 unconditionally queries Prisma. This bypasses calendar-cache.ts:24-28 and the disabled implementation returning [] in calendar-cache.repository.mock.ts:27-29, allowing cache status and actions to remain visible while caching is disabled (CredentialActionsDropdown.tsx:69-107)."
+  },
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#muse13-02",
+   "severity": "medium",
+   "category": null,
+   "bug": "The dev script writes tunnelmole output to a fixed /tmp/tmole.log, so a local attacker's symlink at that path could make it overwrite an arbitrary file.",
+   "evidenciaOpus": "scripts/test-gcal-webhooks.sh:4,35-36 does `rm -f /tmp/tmole.log` before redirecting, which removes a pre-planted symlink; exploiting it needs a local attacker winning a race on a developer machine for a local dev helper script, so there is no practical problem to report.",
+   "evidenciaAstra": "scripts/test-gcal-webhooks.sh:4 uses a predictable shared temporary path, and lines 34-35 perform an unchecked removal followed by a symlink-following truncating redirect. Although successful removal unlinks an existing symlink, an attacker-owned link can survive a denied removal in sticky /tmp, or be inserted between removal and opening; on systems permitting symlink following, the victim's writable target is truncated."
+  }
+ ]
+}

@@ -1,0 +1,12 @@
+{
+ "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+ "items": [
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#kimi-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "app/controllers/uploads_controller.rb:67 passes the same path, but app/models/optimized_image.rb:126-134 builds a normal convert command, and :160-164 imposes no distinct-path requirement. ImageMagick supports overwriting its input after reading and processing it; identical paths do not cause the alleged truncation ([ImageMagick reference](https://www.imagemagick.org/discourse-server/viewtopic.php?t=17376)).",
+   "severity": "high"
+  }
+ ]
+}

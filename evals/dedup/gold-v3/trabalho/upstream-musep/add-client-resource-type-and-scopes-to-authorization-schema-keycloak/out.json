@@ -1,0 +1,24 @@
+{
+ "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "prOriginal": {
+  "numero": 36880,
+  "url": "https://github.com/keycloak/keycloak/pull/36880",
+  "mergedAt": "2025-02-11",
+  "nota": "Taken from prOriginalConhecido; confirmed via gh pr view: MERGED 2025-02-11, merge commit 7e5540896b (rebase of benchmark head 1950a511026d), so merged code equals the benchmark head."
+ },
+ "tps": {
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-03-27",
+    "pr": 38443,
+    "commit": "78aa8b486fb20df9c11161e6b5ac8ce1551ce61f",
+    "url": "https://github.com/keycloak/keycloak/pull/38443"
+   },
+   "removidoEm": null,
+   "diasNoAr": 44,
+   "reason": "Commit 78aa8b486f ('User not visible when permission with different scope exists', closes #38369, in PR #38443 merged 2025-03-27) passed the resource type into ResourcePermission from ClientPermissionsV2.hasPermission and made FGAPPolicyEvaluator.evaluateResourceTypePolicies also evaluate the policies of the all-clients type resource when a per-client resource is evaluated. It added ClientResourceTypeEvaluationTest.testEvaluateAllResourcePermissionsForSpecificResourcePermission, which asserts that the all-clients grant still applies once a per-client permission exists. Today's main (fgap/FGAPPolicyEvaluator + FineGrainedAdminPermissionEvaluator) keeps this behaviour.",
+   "astra": []
+  }
+ }
+}

@@ -1,0 +1,47 @@
+{
+ "caseId": "github-oauth-security-enhancement-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "Describes the same unguarded sender/login metadata lookup that raises KeyError when sender metadata is absent."
+  },
+  {
+   "id": "S2",
+   "match": "github-oauth-security-enhancement-sentry#05",
+   "newGroup": null,
+   "reason": "Describes the unhandled failures from get_user_info() in the new OAuth step, which produce a 500 instead of the installation error page."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes accepting an empty installation_id because validation checks only for None. None of the golden issues covers this validation problem."
+  },
+  {
+   "id": "S4",
+   "match": "github-oauth-security-enhancement-sentry#01",
+   "newGroup": null,
+   "reason": "Describes the same loss of static translation extraction caused by calling _(error_short) on a variable while supplying untranslated literals."
+  },
+  {
+   "id": "S5",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "Describes the same missing sender metadata guard and resulting KeyError in the ownership check."
+  },
+  {
+   "id": "S6",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "Describes the same direct sender/login metadata indexing that crashes when the metadata is missing."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Alleges an invalid webhook HMAC makes test_github_user_mismatch pass without exercising the ownership check. Issue #10 concerns a different test bypassing its intended path through an incorrect OAuth state; fixing that would not fix this alleged problem."
+  }
+ ]
+}

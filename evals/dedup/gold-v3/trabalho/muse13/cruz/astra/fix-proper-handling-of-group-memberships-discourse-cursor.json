@@ -1,0 +1,11 @@
+{
+ "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+ "items": [
+  {
+   "id": "S11",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "S11 describes an off-by-one pagination clamp that allows an empty page when the count is a multiple of the limit. The golden issue concerns remove_member failing to decrement the membership counter cache; fixing either problem would not fix the other."
+  }
+ ]
+}

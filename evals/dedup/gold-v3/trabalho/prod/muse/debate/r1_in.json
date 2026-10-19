@@ -1,0 +1,192 @@
+{
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "10aca5552314d6e5c9226f3c6d0107861c38c693",
+  "head": "79d11c4890cc4792e3dc3535af59e4e5f7a2739d",
+  "issues": {
+   "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#musep-01": {
+    "comentarios": [
+     {
+      "gid": "muse-musep:S2",
+      "file": "authz/client/src/main/java/org/keycloak/authorization/client/AuthzClient.java",
+      "lines": [
+       94,
+       96
+      ],
+      "texto": "Because `CryptoIntegration.init` is one-shot, calling `AuthzClient.create` first cements the global singleton with its own classloader and the minimal `AuthzClientCryptoProvider`, so later server init is ignored and unsupported operations break. Guard the init in `AuthzClient.create` or avoid global init from the lightweight client."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "high",
+      "text": "CryptoIntegration.init being one-shot is pre-existing; this PR makes detectProvider sort providers by order() (CryptoIntegration.java:56-57), with AuthzClientCryptoProvider at 100 and DefaultCryptoProvider at 200, so whenever the server providers are visible to the classloader they win. The 'minimal provider cemented' scenario needs a classloader split that no code here shows."
+     },
+     {
+      "who": "astra",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "high",
+      "text": "Creating AuthzClient first does not force its minimal provider: common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java:56-57 selects by descending priority, and DefaultCryptoProvider.java:83-84 assigns 200 versus AuthzClientCryptoProvider.java:70-71's 100. Furthermore, quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/KeycloakRecorder.java:210-215 explicitly sets the server provider through CryptoIntegration.setProvider, which unconditionally replaces the singleton at common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java:96-98, contradicting the claimed permanent lock-in."
+     }
+    ]
+   }
+  }
+ },
+ "add-html-sanitizer-for-translated-message-resources-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "f3c8e8f3487112f2c99aa78400430cce2d30be39",
+  "head": "02f48f776f43734d1ac8914d3ad6a7115acdcb33",
+  "issues": {
+   "add-html-sanitizer-for-translated-message-resources-keycloak#musep-01": {
+    "comentarios": [
+     {
+      "gid": "muse-musep:S1",
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       73,
+       88
+      ],
+      "texto": "Comparing an `_en` file against itself lets any anchor pass, so an unsafe anchor such as `javascript:` href is stripped before the sanitizer check and never reported. Skip anchor stripping when `file` is the English source or validate English anchors against the sanitizer policy."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "For an _en file, englishFile resolves to the same file (VerifyMessageProperties.java:77-78), so santizeAnchors strips every anchor before the sanitizer check. That is the intended model: the javadoc at line 147 says only anchors from the English source may appear in the translation, which makes the English source the trusted reference. Translations are still checked against it."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "high",
+      "text": "In misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:74-86, an English resource loads itself as the reference, producing identical normalized values. Lines 150-155 therefore strip matching anchors, including javascript: hrefs, before the sanitizer runs at lines 88-92, so unsafe English anchors escape the newly added validation. This is a security weakness requiring an unsafe anchor in an English resource."
+     }
+    ]
+   }
+  }
+ },
+ "database-performance-optimizations-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "a886bd3c79a417a70b51509384d1f1ec3e87e96b",
+  "head": "04cfa3bfd469c035ff8b35f9a66867c4e8d5dcf4",
+  "issues": {
+   "database-performance-optimizations-grafana-codex#musep-01": {
+    "comentarios": [
+     {
+      "gid": "muse-musep:S3",
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       650,
+       654
+      ],
+      "texto": "A concurrent deleter racing between `SELECT` and `DELETE` leaves work remaining until the next cycle. Check `fetched` from `batchWork` instead of `affected` to decide when `untilDoneOrCancelled` is done."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "low",
+      "text": "untilDoneOrCancelled stops when a batch reports 0 affected rows (xorm_store.go:650-654), and the batch returns deleteByIDs' RowsAffected. If another deleter removes the fetched IDs between fetchIDs and deleteByIDs, the loop ends early. The only effect is that the remaining rows are cleaned on the next cycle, which the PR's own comment already accepts for concurrent inserts."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The PR separates the limited SELECT from DELETE at pkg/services/annotations/annotationsimpl/xorm_store.go:529-538, returning RowsAffected from line 626; the loop exits when that count is zero at lines 656-657. A concurrent deletion through lines 423-430 can remove every selected row while other eligible rows remain outside the batch, causing cleanup to finish prematurely until the next cycle."
+     }
+    ]
+   }
+  }
+ },
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "fd358e8a388939959369f08f616e29552cdaf96e",
+  "head": "9966ec5a13e331659c3ea00981f9b11b0faf821f",
+  "issues": {
+   "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#musep-01": {
+    "comentarios": [
+     {
+      "gid": "muse-musep:S2",
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       340,
+       342
+      ],
+      "texto": "The background thread keeps calling `get_committable_offsets` and `commit_function` after rebalance/terminate with revoked partitions. After signaling `shutdown_event`, join `commit_thread` in `terminate` as `close` does."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "terminate() sets shutdown_event (queue_consumer.py:340-342), so _commit_loop exits after at most the iteration in progress; it does not keep committing. Any exception there is caught and logged. Not joining is consistent with terminate being the immediate, non-blocking shutdown, whereas close() is the graceful path that joins."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The newly added terminate() signals shutdown but never joins the commit thread (src/sentry/remote_subscriptions/consumers/queue_consumer.py:340-342). The loop does not recheck shutdown after wait(), so an in-flight iteration can retrieve offsets and call commit_function after terminate() returns and partitions are revoked (queue_consumer.py:274-287). It eventually exits, but the missing synchronization creates a real late-commit race."
+     }
+    ]
+   }
+  }
+ },
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "913c3d6f636d02b3dd6c2c022ca1af2bec95d752",
+  "head": "d1c69189f3c90ecf56013a8da904da9bff9a8e19",
+  "issues": {
+   "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#musep-01": {
+    "comentarios": [
+     {
+      "gid": "muse-musep:S6",
+      "file": "app/assets/javascripts/discourse/adapters/rest.js.es6",
+      "lines": [
+       21,
+       23
+      ],
+      "texto": "Model types with multiple underscores never match `ADMIN_MODELS` and get the wrong base path. Change `type.replace('_', '-')` to use `/_/g` so all underscores are replaced."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "low",
+      "text": "basePath uses type.replace('_', '-') (rest.js.es6:22), which replaces only the first underscore. All current ADMIN_MODELS entries have at most one separator, including the new 'embeddable-host', so nothing misroutes today. It only matters for a future multi-underscore admin type."
+     },
+     {
+      "who": "astra",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "app/assets/javascripts/discourse/adapters/rest.js.es6:1 lists only 'plugin', 'site-customization', and 'embeddable-host', so every supported admin model requires at most one underscore replacement. The single replacement at :22 therefore handles all entries correctly; using /_/g would not change routing for any configured admin model."
+     }
+    ]
+   }
+  }
+ }
+}

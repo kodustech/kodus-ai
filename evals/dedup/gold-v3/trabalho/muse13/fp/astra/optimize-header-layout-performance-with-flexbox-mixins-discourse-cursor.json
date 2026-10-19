@@ -1,0 +1,23 @@
+{
+ "caseId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Asserts the same off-by-one problem in the order mixin\u2019s legacy box-ordinal-group values, causing ordering to differ from modern order."
+  },
+  {
+   "id": "S2",
+   "match": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Claims the same legacy ordinal-group indexing mismatch in the order mixin. The detail about default-order siblings does not change the alleged cause."
+  },
+  {
+   "id": "S3",
+   "match": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Repeats the rejected claim that copying $val into legacy box-ordinal-group creates an off-by-one ordering discrepancy."
+  }
+ ]
+}

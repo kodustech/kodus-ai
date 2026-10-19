@@ -1,0 +1,2220 @@
+{
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "9fde0e906897cc0f4f71793f647dd629faba3317",
+  "base": "bc89fe00ea84d20bedcec782f0701b9711dc8201",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     85,
+     94
+    ],
+    "texto": "WHAT: refreshOAuthTokens is called with credentialId instead of the user's id. WHY: The helper's third parameter is documented as userId, so the credential-sync endpoint receives a credential primary key as calcomUserId and cannot look up the correct user. HOW: Pass credential.userId as the third argument."
+   },
+   {
+    "id": "S2",
+    "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+    "lines": [
+     5,
+     11
+    ],
+    "texto": "WHAT: minimumTokenResponseSchema uses computed property names [z.string().toString()] and [z.string().optional().toString()] which evaluate to a fixed string such as '[object Object]', not a pattern for arbitrary keys. WHY: When credential sync is enabled every token response will fail this schema because it lacks a property literally named by that string, causing parseRefreshTokenResponse to throw 'Invalid refreshed tokens were returned'. HOW: Replace the computed keys with a passthrough object schema or z.record."
+   },
+   {
+    "id": "S3",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     94,
+     100
+    ],
+    "texto": "WHAT: The result of parseRefreshTokenResponse (a SafeParseReturnType wrapper { success, data }) is stored directly as the credential key. WHY: The next load calls googleCredentialSchema.parse(credential.key), which expects the parsed credential shape at the top level, not an object nested under a data property; this breaks the credential after any refresh. HOW: Extract tokenResponse.data before storing."
+   },
+   {
+    "id": "S4",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     86,
+     96
+    ],
+    "texto": "WHAT: After refreshOAuthTokens, the code reads res?.data, but when credential sync is enabled refreshOAuthTokens returns a fetch Response object which has no .data property. WHY: token becomes undefined, so token.access_token throws a runtime error and the calendar refresh crashes. HOW: Normalize the helper output or fall back to parsing the Response JSON."
+   },
+   {
+    "id": "S5",
+    "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+    "lines": [
+     96,
+     108
+    ],
+    "texto": "WHAT: The code refreshes the access token, writes the new token to the database, then constructs the jsforce Connection using the old credentialKey.access_token. WHY: The refresh is effectively wasted and the connection may be initialized with an expired access token. HOW: Use the refreshed token data when building the connection."
+   },
+   {
+    "id": "S6",
+    "file": "apps/web/pages/api/webhook/app-credential.ts",
+    "lines": [
+     24,
+     29
+    ],
+    "texto": "WHAT: The webhook secret is compared with the !== operator. WHY: String comparison short-circuits on the first mismatching byte, allowing an attacker to brute-force the secret one byte at a time via timing analysis. HOW: Compare secrets with crypto.timingSafeEqual after length check."
+   },
+   {
+    "id": "S7",
+    "file": "apps/web/pages/api/webhook/app-credential.ts",
+    "lines": [
+     62,
+     92
+    ],
+    "texto": "WHAT: The handler reads the credential with findFirst and then decides to update or create, but the Credential model has no unique constraint on (userId, appId). WHY: Two concurrent webhook requests for the same user and app can both observe no credential and both insert, producing duplicate credential rows. HOW: Add a @@unique([userId, appId]) constraint and use prisma.credential.upsert with a composite key, or wrap the create in a retry on unique-violation."
+   },
+   {
+    "id": "S8",
+    "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+    "lines": [
+     8,
+     14
+    ],
+    "texto": "WHAT: The fetch to CALCOM_CREDENTIAL_SYNC_ENDPOINT has no timeout or abort signal. WHY: If the external endpoint hangs, the calling calendar/video request also hangs indefinitely, consuming workers and potentially blocking user-facing operations. HOW: Add an AbortController with a timeout and handle abort errors."
+   },
+   {
+    "id": "S9",
+    "file": "apps/web/pages/api/webhook/app-credential.ts",
+    "lines": [
+     24,
+     29
+    ],
+    "texto": "The webhook secret is validated with a direct `!==` string comparison (`req.headers[...] !== process.env.CALCOM_WEBHOOK_SECRET`). This is vulnerable to timing attacks because string comparison short-circuits at the first differing byte, allowing an attacker to iteratively guess the secret. Use a constant-time comparison such as `crypto.timingSafeEqual` after normalizing both values to equal-length buffers, or wrap the comparison in a dedicated constant-time helper."
+   },
+   {
+    "id": "S10",
+    "file": "apps/web/pages/api/webhook/app-credential.ts",
+    "lines": [
+     57,
+     59
+    ],
+    "texto": "`symmetricDecrypt(reqBody.keys, process.env.CALCOM_APP_CREDENTIAL_ENCRYPTION_KEY || \"\")` uses an empty string fallback if the encryption key environment variable is not set. This silently degrades security and could allow decryption/derivation with a known weak key. Fail fast instead (throw or return an error) when the encryption key is missing or shorter than the required 32 bytes."
+   },
+   {
+    "id": "S11",
+    "file": "apps/web/pages/api/webhook/app-credential.ts",
+    "lines": [
+     31,
+     31
+    ],
+    "texto": "appCredentialWebhookRequestBodySchema.parse(req.body) is not wrapped in try/catch. If the request body is malformed or fails validation, the thrown ZodError becomes an unhandled exception instead of a controlled 400 response. Use safeParse and return a 400 JSON error, or wrap parse in try/catch."
+   },
+   {
+    "id": "S12",
+    "file": "apps/web/pages/api/webhook/app-credential.ts",
+    "lines": [
+     57,
+     59
+    ],
+    "texto": "The decrypted `keys` string is passed directly to JSON.parse and then stored in Prisma without validating the object shape. If decryption produces non-JSON plaintext or an attacker supplies a malformed payload, this throws unhandled or writes arbitrary data into the credential key column. Validate the parsed shape before persisting and handle parse/decryption errors."
+   },
+   {
+    "id": "S13",
+    "file": "packages/app-store/_utils/oauth/decodeOAuthState.ts",
+    "lines": [
+     5,
+     11
+    ],
+    "texto": "decodeOAuthState does a bare JSON.parse(req.query.state). A malformed or tampered `state` query param throws SyntaxError, crashing the OAuth callback handler. Use a try/catch and return undefined or a controlled error. The same issue exists in encodeOAuthState.ts."
+   },
+   {
+    "id": "S14",
+    "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+    "lines": [
+     5,
+     11
+    ],
+    "texto": "minimumTokenResponseSchema uses `[z.string().toString()]` and `[z.string().optional().toString()]` as keys. `toString()` on a ZodString object does not return a wildcard pattern; it returns the object's string representation, so these keys do not validate arbitrary numeric/optional fields as intended. As a result expiry fields are not enforced and invalid token responses may pass validation, corrupting stored credentials. Use `z.record(z.string(), z.number())` or a proper index signature instead."
+   },
+   {
+    "id": "S15",
+    "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+    "lines": [
+     3,
+     5
+    ],
+    "texto": "The guard uses `userId` in a boolean context, so a user id of `0` is treated as absent and the code falls back to the local refresh instead of calling the configured `CALCOM_CREDENTIAL_SYNC_ENDPOINT`. Because the parameter is typed `number | null`, the only value that should disable sync is `null` (team credentials). Use an explicit `userId !== null` check so `0` is handled like any other valid user id."
+   },
+   {
+    "id": "S16",
+    "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+    "lines": [
+     5,
+     11
+    ],
+    "texto": "The schema tries to accept any numeric property as an expiry field, but `[z.string().toString()]` evaluates to the literal key \"[object Object]\", so the validator does not actually allow arbitrary provider response fields and may reject valid responses. Rewrite the schema to genuinely permit extra keys, for example by using `z.object({ access_token: z.string() }).passthrough()` and checking separately that at least one extra value is a number."
+   },
+   {
+    "id": "S17",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     83,
+     100
+    ],
+    "texto": "`parseRefreshTokenResponse` returns the full `SafeParseReturnType` object (with `success` and `data` properties), but this caller assigns that wrapper directly to `key` and writes it to Prisma. Other callers in the same PR read `tokenResponse.data`. The caller should extract `.data` before persisting."
+   },
+   {
+    "id": "S18",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     82,
+     94
+    ],
+    "texto": "`refreshOAuthTokens` names its third parameter `userId` and forwards it as `calcomUserId` to the credential-sync endpoint. The Zoho Bigin call site passes `credentialId`, so when credential sync is enabled the parent application receives the wrong identifier and cannot look up the correct user. Pass the Cal.com user id (e.g. `credential.userId`) instead."
+   },
+   {
+    "id": "S19",
+    "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+    "lines": [
+     1,
+     22
+    ],
+    "texto": "When `CALCOM_CREDENTIAL_SYNC_ENDPOINT` is configured, `refreshOAuthTokens` returns the raw `fetch` Response. Callers consume the result in incompatible ways: Google Calendar reads `res.data`, Hubspot casts to `HubspotToken`, and Zoho Bigin checks `.data.error`, while other callers pass the result to fetch helpers. This cross-site disagreement will fail at runtime for the integrations that expect provider-specific response objects. Normalize the helper's return value to the same shape the original refresh function would produce, or make callers branch on whether the sync path was used."
+   },
+   {
+    "id": "S20",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     85,
+     94
+    ],
+    "texto": "The third argument to `refreshOAuthTokens` is named `userId` and is forwarded to the credential-sync endpoint as `calcomUserId`. This call passes `credentialId` instead, so the endpoint receives a credential ID mislabeled as a user ID. Pass the credential's owner (`credential.userId` or equivalent) like the other calendar/video adapters do."
+   },
+   {
+    "id": "S21",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     94,
+     100
+    ],
+    "texto": "`parseRefreshTokenResponse` returns a Zod safe-parse result object (`{ success, data }`), not the parsed credentials. The code stores the whole result object in Prisma, so the credential key will contain the `success` wrapper. Use `parseRefreshTokenResponse(...).data` (or handle the success check) before updating the credential."
+   },
+   {
+    "id": "S22",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     86,
+     96
+    ],
+    "texto": "When `APP_CREDENTIAL_SHARING_ENABLED` is on, `refreshOAuthTokens` returns the raw `fetch` Response, but this caller expects the google-auth shape `{ res: { data: ... } }` and reads `res?.data`. In sync mode `res.data` is undefined, causing `token.access_token` to throw. Either normalize the sync response in `refreshOAuthTokens` or handle the Response shape here."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01",
+    "descricao": "The new app-credential webhook checks its shared secret with a plain !== string comparison instead of a constant-time comparison, leaking timing information about the secret.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       23,
+       29
+      ],
+      "texto": "Direct !== comparison of webhook secret leaks via timing attack. Use constant-time comparison (e.g., crypto.timingSafeEqual on hashed/buffered values with length check) instead of `req.headers[...] !== process.env.CALCOM_WEBHOOK_SECRET`."
+     },
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       24,
+       27
+      ],
+      "texto": "The webhook authenticates a secret using direct string inequality, which is not constant-time and can leak information about the secret through comparison timing. Compare fixed-length representations using a constant-time primitive (such as crypto.timingSafeEqual), handling absent or malformed headers safely, instead of comparing the secret strings directly."
+     },
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       24,
+       29
+      ],
+      "texto": "The webhook secret is compared with the `!==` operator, which short-circuits on the first differing byte and leaks the secret via response timing (timing attack). An attacker can iteratively recover CALCOM_WEBHOOK_SECRET and then forge requests that create/update arbitrary user credential keys (decrypted with the AES key) via this endpoint. Use a constant-time comparison, e.g. crypto.timingSafeEqual on equal-length buffers, guarding for length mismatch first."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#02",
+    "descricao": "The webhook parses the body with zod .parse and decrypts/JSON-parses the keys without error handling, so invalid payloads produce 500 errors instead of 400 responses.",
+    "textoGolden": "The `appCredentialWebhookRequestBodySchema.parse` function can throw on invalid payloads, resulting in 500 Internal Server Errors instead of the expected 400 Bad Request responses. This can lead to confusion for clients and hinder proper error handling.",
+    "comentarios": [
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       31,
+       31
+      ],
+      "texto": "WHAT: zod parse, symmetricDecrypt and JSON.parse throw unhandled (no try/catch) with no method guard. WHY: Invalid body/keys or GET request crashes handler with 500 and leaks stack, instead of 400/405. HOW: Wrap parse/decrypt in try/catch returning 400 and restrict to POST."
+     },
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       31,
+       59
+      ],
+      "texto": "schema .parse plus symmetricDecrypt/JSON.parse throw unhandled (ZodError, decrypt error, SyntaxError) on invalid body or tampered keys, crashing webhook with 500. Use safeParse and try/catch with 400 responses."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#03",
+    "descricao": "The webhook's non-atomic findFirst-then-create lets concurrent deliveries for the same user and app insert duplicate credential rows.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       62,
+       70
+      ],
+      "texto": "The webhook performs a non-atomic findFirst followed by create when no credential exists. Concurrent deliveries for the same user and app can both observe no row and insert duplicates because Credential has no unique userId/appId constraint; subsequent findFirst updates only one duplicate, leaving competing credentials stale. Serialize the lookup/create operation for each user/app pair or introduce an appropriate uniqueness constraint and atomic upsert."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#07",
+    "descricao": "parseRefreshTokenResponse writes the hardcoded string 'refresh_token' when the refresh response omits a refresh token, so the stored credential gets an invalid refresh token and later refreshes fail.",
+    "textoGolden": "The parseRefreshTokenResponse function incorrectly sets refresh_token to the hardcoded string 'refresh_token' when it's missing from the OAuth refresh token response. This invalidates the token, breaking subsequent token refreshes and causing authentication failures.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       25,
+       26
+      ],
+      "texto": "The parser fabricates the literal refresh token \"refresh_token\" whenever a successful response omits refresh_token, including when synchronization is disabled. Office365's response schema explicitly permits that omission, and its caller merges parsed data over existing credentials, replacing the valid saved refresh token with this invalid value and breaking the next refresh. Leave the property absent so the existing token survives the merge."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       25,
+       26
+      ],
+      "texto": "When a refresh response omits refresh_token, this helper manufactures the hardcoded credential \"refresh_token\". Callers such as Office365 merge this into stored credentials, overwriting the valid existing refresh token and causing subsequent provider refreshes to use a predictable invalid token. Leave the field absent and preserve the existing credential when omission is allowed by the provider, or reject the response when a refresh token is required; do not substitute a literal authentication token."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       25,
+       27
+      ],
+      "texto": "WHAT: Missing refresh_token is replaced with literal string \"refresh_token\". WHY: Stores bogus refresh token in DB, breaking all future refreshes and masking provider errors. HOW: Preserve existing credential refresh_token or throw instead of injecting placeholder."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+    "descricao": "minimumTokenResponseSchema uses computed keys from z.string().toString(), which produce a literal key rather than a wildcard, so the sync-mode schema does not validate or keep expiry and other token fields as intended.",
+    "textoGolden": "The Zod schema in parseRefreshTokenResponse uses computed property keys [z.string().toString()] and [z.string().optional().toString()] in minimumTokenResponseSchema, which is invalid Zod syntax and will throw a runtime error.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       5,
+       11
+      ],
+      "texto": "`[z.string().toString()]` evaluates to a fixed string key such as \"ZodString\", so minimumTokenResponseSchema requires a literal numeric property with that name. Every synced token response fails validation and throws \"Invalid refreshed tokens were returned\". Use `z.object({access_token: z.string()}).passthrough()` instead."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       5,
+       11
+      ],
+      "texto": "The computed keys `[z.string().toString()]` evaluate to the literal string \"[object Object]\", not a wildcard. The schema therefore requires a numeric property named \"[object Object]\", so safeParse always fails in credential-sync mode and the function throws \"Invalid refreshed tokens were returned\". Use `.passthrough()` on an object with access_token and optional numeric expiry fields instead."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       5,
+       11
+      ],
+      "texto": "The computed keys `[z.string().toString()]` evaluate to a literal string like \"ZodString\" and not to a wildcard. The schema therefore requires a numeric property with that nonsense name and never matches real token responses. In sync mode every refresh throws \"Invalid refreshed tokens were returned\". Use `.passthrough()` and a real expiry check instead."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+    "descricao": "In sync mode refreshOAuthTokens returns a raw fetch Response, but callers expect their provider-specific shapes (res.data, axios .data, HubspotToken), so token refresh breaks for Google, Zoho and HubSpot when credential sharing is on.",
+    "textoGolden": "When APP_CREDENTIAL_SHARING_ENABLED and CALCOM_CREDENTIAL_SYNC_ENDPOINT are set, the refreshFunction helper returns the fetch Response, but several callers (for example GoogleCalendarService.refreshAccessToken expecting res.data, and HubspotCalendarService.refreshAccessToken expecting a HubspotToken) assume it returns the integration-specific token object. That mismatch will cause runtime errors in the sync-enabled path unless the return type or those call sites are adjusted.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+      "lines": [
+       8,
+       15
+      ],
+      "texto": "WHAT: In the credential-sharing branch `refreshOAuthTokens` returns the raw `fetch` `Response` object instead of a parsed token payload, yet several callers treat the result as an already-parsed token object.\nWHY: Callers such as hubspot (`hubspotRefreshToken.expiresIn`), zoho-bigin (`tokenInfo.data.error`), zohocrm (`zohoCrmTokenInfo.data.error`) and googlecalendar (`res?.data`) read `.data`/token fields off the return value; a `Response` has neither, so the sync path yields `undefined`/`NaN` or throws a TypeError \u2014 the feature's primary code path is broken for those apps.\nHOW: Parse the response (e.g. `const data = await response.json(); return data;`) before returning, or make every caller await the appropriate response handler."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+      "lines": [
+       8,
+       15
+      ],
+      "texto": "In sharing mode refreshOAuthTokens returns the raw fetch Response (no `.data`), but the google caller reads `res?.data` and then `token.access_token`, throwing a TypeError swallowed by the catch, so the token is never refreshed."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       94,
+       95
+      ],
+      "texto": "`res?.data` assumes the value returned by refreshOAuthTokens has a `.data` field (true for the `fetchTokens.res` branch), but when APP_CREDENTIAL_SHARING_ENABLED the helper returns a raw `fetch()` Response, which has no `.data`. Then `token.access_token` throws. Either parse the shared-mode Response here or have refreshOAuthTokens return a normalized `{ data }` shape."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+    "descricao": "Google Calendar persists the safeParse result object instead of its data as the credential key, corrupting the stored credential so later reads fail.",
+    "textoGolden": "parseRefreshTokenResponse returns a Zod safeParse result ({ success, data, error }), not the credential key object. Persisting that as key stores the wrapper instead of the token payload; we should store the parsed data or use schema parse.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       83,
+       100
+      ],
+      "texto": "parseRefreshTokenResponse returns a SafeParse result {success,data}, not the parsed key. Storing it directly as `key` writes the wrapper to the credential. Unwrap like other callers: check .success and use .data."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       83,
+       100
+      ],
+      "texto": "parseRefreshTokenResponse returns SafeParse result {success,data}, but call site stores that wrapper as credential `key` (previously googleCredentialSchema.parse() returned the plain object). Store `key.data` / handle wrapper, otherwise persisted credential becomes {success,data} shape and subsequent credential reads fail."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       83,
+       100
+      ],
+      "texto": "parseRefreshTokenResponse returns SafeParse wrapper {success,data} but code stores the whole wrapper as credential.key. Office365calendar in same PR unwraps via .data. Persisted credential will be {success,data} instead of tokens, so next load fails validation. Unwrap to .data after success check."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#11",
+    "descricao": "After switching to parseRefreshTokenResponse, the tokenResponse.success check in Office365 refreshAccessToken is dead code and the previous error logging was dropped.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+      "lines": [
+       263,
+       264
+      ],
+      "texto": "parseRefreshTokenResponse now throws when parsing fails, so the `tokenResponse.success` check on the next line is dead code and the previous error logging was removed. A failed refresh now throws out of refreshAccessToken instead of keeping the old credentials. Catch the error or restore the previous handling."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#13",
+    "descricao": "Salesforce getClient now refreshes the OAuth token and writes the credential on every service construction, adding a network round trip and DB write even when the access token is valid.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+      "lines": [
+       75,
+       84
+      ],
+      "texto": "getClient now unconditionally exchanges the Salesforce refresh token on every service construction, even when the saved access token is valid. Each constructor invocation adds a blocking OAuth network round trip and credential database write before any Salesforce operation, replacing jsforce's existing on-demand refresh behavior. Keep refresh on demand or guard the exchange with a token-expiration check."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#14",
+    "descricao": "The new Salesforce token refresh uses prisma without importing it, so the code fails type checking and throws a ReferenceError at runtime.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+      "lines": [
+       96,
+       99
+      ],
+      "texto": "The new credential update references prisma without importing or declaring it; searching this file finds only the new usage. This fails TypeScript checking and raises ReferenceError after a successful token exchange at runtime. Import prisma from @calcom/prisma before using it."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+    "descricao": "Zoho Bigin passes the credential id instead of the user id to refreshOAuthTokens, so the sync endpoint receives the wrong calcomUserId.",
+    "textoGolden": "The `refreshOAuthTokens` function is passed `credentialId` instead of `userId`, which breaks the credential sync functionality by causing incorrect user lookups. This issue can lead to failures in syncing user credentials, impacting user experience.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+      "lines": [
+       85,
+       94
+      ],
+      "texto": "WHAT: The 3rd argument to `refreshOAuthTokens` is `credentialId` (= `credential.id`, line 53), but the function's parameter is `userId` (`refreshOAuthTokens(refreshFunction, appSlug, userId)`).\nWHY: When APP_CREDENTIAL_SHARING_ENABLED, the sync endpoint is sent `calcomUserId: <credential id>` instead of the user id, so Bigin credentials are synced against the wrong/non-existent user (all other apps correctly pass `credential.userId`).\nHOW: Pass `credential.userId` instead of `credentialId` as the third argument."
+     },
+     {
+      "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+      "lines": [
+       85,
+       94
+      ],
+      "texto": "refreshOAuthTokens' third parameter is the Cal.com userId (used as `calcomUserId` in the sync request and to decide whether sharing runs), but this call passes `credentialId`. Every other caller passes `credential.userId`, so the credential-sync endpoint receives a credential row id as the user id and shared credentials are fetched/updated for the wrong identity. Pass `credential.userId` here."
+     },
+     {
+      "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+      "lines": [
+       85,
+       94
+      ],
+      "texto": "refreshOAuthTokens' third parameter is `userId` (declared in refreshOAuthTokens.ts line 3 and used as `calcomUserId: userId.toString()`), but this call passes `credentialId` (the Credential row id, line 53) instead of the user id. When credential sharing is enabled the customer's sync endpoint receives a credential id labelled as calcomUserId and cannot resolve the correct Cal.com user. Pass `credential.userId` (the BiginToken/credential payload carries it) or plumb the user id through refreshAccessToken."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#16",
+    "descricao": "Salesforce checks response.statusText !== 'OK' instead of response.ok when refreshing the token, which can misclassify successful responses, and then ignores the refreshed token.",
+    "textoGolden": "The Salesforce integration checks `response.statusText` instead of `response.ok` when handling OAuth token refresh responses. This can lead to unreliable behavior, as a successful response may not be correctly identified, resulting in the use of stale credentials and potential authentication failures.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+      "lines": [
+       86,
+       107
+      ],
+      "texto": "WHAT: Checks response.statusText !== \"OK\" instead of response.ok and builds jsforce.Connection from stale credentialKey.access_token/instance_url ignoring accessTokenParsed.data. WHY: Refresh never takes effect (old token reused) and valid refreshes can throw on runtimes where statusText is empty. HOW: Check !response.ok and use parsed access_token/instance_url for connection and DB update."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#17",
+    "descricao": "After refreshing the Salesforce token, jsforce.Connection is created with the stale access_token and instance_url instead of the newly refreshed values.",
+    "textoGolden": "The `jsforce.Connection` is created using stale `credentialKey.access_token` and `credentialKey.instance_url` after a token refresh, which can lead to authentication failures and incorrect data access. Ensure that the connection is established using the refreshed token values instead.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+      "lines": [
+       96,
+       106
+      ],
+      "texto": "WHAT: The new block fetches and persists a fresh access token (`accessTokenParsed.data`) but then creates the `jsforce.Connection` with the stale `credentialKey.access_token` (line 106) instead of the just-refreshed token.\nWHY: The refreshed token is written to the DB but never used for the connection; if the old token was expired, jsforce must refresh again (extra round trip) or fail, and the DB/connection state diverge.\nHOW: Pass the new access token (`accessTokenParsed.data.access_token`) to the `jsforce.Connection`."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#opa-01",
+    "descricao": "The app-credential webhook looks up appStoreMetadata by app.slug, but the map is keyed by dirName, so apps whose slug differs from their directory (e.g. google-calendar) always get a 404 and their credentials cannot be synced.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "5f8a130277dbddc95d133cd2832be639baf89213",
+  "base": "e25638dab0d4b98f99c8fe8976ccaae8f4fb9db3",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/models/blocked_email.rb",
+    "lines": [
+     11,
+     19
+    ],
+    "texto": "WHAT: BlockedEmail.should_block? performs a case-sensitive lookup on the supplied email. WHY: An attacker can bypass a block for foo@example.com by signing up with FOO@EXAMPLE.COM, because the WHERE clause and stored value are not normalized to the same case. HOW: Downcase the email before storing and before looking it up, e.g. BlockedEmail.where(email: email.downcase).first and self.email = email.downcase in set_defaults or a before_validation."
+   },
+   {
+    "id": "S2",
+    "file": "lib/validators/email_validator.rb",
+    "lines": [
+     18,
+     22
+    ],
+    "texto": "WHAT: EmailValidator#email_in_restriction_setting? calls value =~ regexp without guarding against nil. WHY: When a record has a nil email and email_changed? is true, validate_each raises NoMethodError instead of adding a clean validation error. This also makes the validator unsafe for reuse on any model without a presence validation. HOW: Return early when value is blank, e.g. return if value.blank? at the start of validate_each or email_in_restriction_setting?."
+   },
+   {
+    "id": "S3",
+    "file": "app/models/blocked_email.rb",
+    "lines": [
+     13,
+     16
+    ],
+    "texto": "WHAT: BlockedEmail.should_block? reads match_count, increments it in memory, and saves, creating a read-modify-write race. WHY: Concurrent signup attempts with the same blocked email load the same counter, increment, and save; one save clobbers the other, under-counting blocks and producing incorrect last_match_at. HOW: Update the counters atomically with update_all, e.g. BlockedEmail.where(id: record.id).update_all(['match_count = match_count + 1, last_match_at = ?', Time.zone.now])."
+   },
+   {
+    "id": "S4",
+    "file": "app/models/blocked_email.rb",
+    "lines": [
+     11,
+     19
+    ],
+    "texto": "The `should_block?` method queries `BlockedEmail.where(email: email).first` and the client later checks `rejectedEmails.contains(email)`. Email addresses are case-insensitive identifiers; a record stored as `bad@example.com` can be bypassed by submitting `Bad@Example.com`. Normalize the address to lower case before both lookups (and store blocked emails in lower case), or use a case-insensitive query, to prevent case-sensitivity bypass."
+   },
+   {
+    "id": "S5",
+    "file": "lib/validators/email_validator.rb",
+    "lines": [
+     18,
+     21
+    ],
+    "texto": "`email_in_restriction_setting?` builds `/@(#{domains})/i` without anchoring the end of the address. A whitelist/blacklist entry like `example.com` will match `attacker@example.com.evil.tld` because `@example.com` appears inside the address. Anchor the match to the end of the value, e.g. `/@(#{domains})\\z/i`, and ensure the value is normalized for case consistency."
+   },
+   {
+    "id": "S6",
+    "file": "app/models/blocked_email.rb",
+    "lines": [
+     11,
+     13
+    ],
+    "texto": "`BlockedEmail.where(email: email).first` performs an exact case-sensitive match, but email addresses are normally treated as case-insensitive. Normalize the lookup value (and the stored value) to lowercase, or use a case-insensitive query, so that `Bad@SpamClub.com` is blocked when `bad@spamclub.com` is in the blocked list."
+   },
+   {
+    "id": "S7",
+    "file": "app/assets/javascripts/discourse/controllers/create_account_controller.js",
+    "lines": [
+     69,
+     74
+    ],
+    "texto": "When an email is in `rejectedEmails`, `emailMatch` always returns `I18n.t('user.email.invalid')`. The server, however, returns distinct `user.email.not_allowed` and `user.email.blocked` messages in `result.errors.email`. The client should preserve and display the server's actual rejection reason, or at least distinguish blocked emails, instead of collapsing every server rejection into the generic 'invalid' message."
+   },
+   {
+    "id": "S8",
+    "file": "spec/components/validators/email_validator_spec.rb",
+    "lines": [
+     9,
+     20
+    ],
+    "texto": "The tests stub `BlockedEmail.should_block?` with Mocha `stubs`, which does not require the method to be invoked, and the positive case only asserts that some email error exists. If the blocked-email branch in EmailValidator were deleted, the first test would still pass; the second could pass from the whitelist/blacklist branch if SiteSetting is configured. Switch to `expects(:should_block?).with(record.email)` to force the call, stub `SiteSetting.email_domains_whitelist` and `email_domains_blacklist` to empty strings, and assert the exact blocked-email error message (e.g. `should include I18n.t(:'user.email.blocked')`) so the tests actually fail when the behaviour they name is broken."
+   },
+   {
+    "id": "S9",
+    "file": "app/models/blocked_email.rb",
+    "lines": [
+     11,
+     19
+    ],
+    "texto": "should_block? reads the blocked email record, increments match_count in memory, and then calls save. Under concurrent requests with the same blocked email, two threads can read the same match_count, both compute the same incremented value, and both save, so one update is lost. Use an atomic single-statement update such as BlockedEmail.where(id: record.id).update_all(['match_count = match_count + 1, last_match_at = ?', Time.zone.now]) instead of the read-modify-save pattern."
+   },
+   {
+    "id": "S10",
+    "file": "app/assets/javascripts/discourse/controllers/create_account_controller.js",
+    "lines": [
+     271,
+     276
+    ],
+    "texto": "The server now returns a structured `errors` hash (introduced in users_controller.rb:198) that can include email errors for several reasons: blocked email, disallowed domain, or already-taken uniqueness. The controller was updated to read `result.errors.email`, but it pushes the address into `rejectedEmails` for any email error and later shows `user.email.invalid`. This conflates \"already taken\" with \"invalid/blocked\" and prevents the user from re-submitting an address they might need to log into instead. The consumer should inspect the error key/message (e.g., distinguish `user.email.blocked`/`not_allowed` from the uniqueness error) before treating the email as permanently rejected."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#02",
+    "descricao": "When the server rejects an email, the signup form marks it with the generic 'invalid email' text instead of the server's reason (blocked or not allowed).",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/discourse/controllers/create_account_controller.js",
+      "lines": [
+       69,
+       74
+      ],
+      "texto": "The message shown for a rejected email disagrees with the reason the code is reacting to. This branch fires when the server rejected the email (result.errors.email), and this PR gives that condition its own server string \u2014 user.email.blocked, added in config/locales/server.en.yml as \"is not allowed.\" \u2014 but the client re-labels it with the generic I18n.t('user.email.invalid'). A user whose address is perfectly well-formed but blocked/hosted on a blacklisted domain is therefore told their email is invalid, contradicting the reason just returned by the server. Use the blocked/not-allowed message (and add a matching client locale key) instead of user.email.invalid. Notice the same generic string is used at line ~94 for validation failures, so it should not be reused to represent a distinct server-side rejection."
+     }
+    ]
+   },
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+    "descricao": "BlockedEmail.should_block? looks up the email with a case-sensitive exact match and no normalisation, so changing the letter case of a blocked address bypasses the block list.",
+    "textoGolden": "The case-sensitive email lookup in `BlockedEmail.should_block?` creates a bypass risk, allowing 'User@Example.com' to bypass a block on 'user@example.com'. This can lead to unauthorized access to blocked users.",
+    "comentarios": [
+     {
+      "file": "app/models/blocked_email.rb",
+      "lines": [
+       12,
+       12
+      ],
+      "texto": "Blocked-email lookup compares the raw email without normalizing its domain. A signup for block@SPAMFROMHOME.ORG does not match a blocked record for block@spamfromhome.org despite identifying the same mailbox, allowing the signup restriction to be bypassed by changing domain capitalization. Normalize domains using Email.downcase both when storing blocked emails and when looking them up."
+     },
+     {
+      "file": "app/models/blocked_email.rb",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "Canonicalize blocked emails consistently with the application's Email.downcase identity handling, both when storing entries and when looking them up. This exact equality query is case-sensitive, and BlockedEmail's validation callback only defaults action_type. A block-list entry such as `Block@SpamFromHome.org` therefore does not block the same identity submitted/stored as `block@spamfromhome.org`. This is particularly relevant to the explicitly supported manually populated block list. Normalize existing/imported entries as well as new ones, and add a test with differing casing between the stored entry and the lookup."
+     },
+     {
+      "file": "app/models/blocked_email.rb",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "Case-sensitivity bypass: BlockedEmail.where(email: email) is exact case-sensitive with no normalization, while sibling checks are case-insensitive. Normalize (downcase/strip) on write and lookup."
+     }
+    ]
+   },
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+    "descricao": "BlockedEmail.should_block? updates match_count and last_match_at as a side effect of email validation, so each signup attempt (validated twice) inflates the counter and concurrent updates can lose increments.",
+    "textoGolden": "BlockedEmail.should_block_email? method has side effects during a read operation - it updates statistics even when just checking if an email should be blocked. This could cause race conditions in concurrent environments and makes the method name misleading.",
+    "comentarios": [
+     {
+      "file": "app/models/blocked_email.rb",
+      "lines": [
+       11,
+       18
+      ],
+      "texto": "WHAT: should_block? mutates match_count/last_match_at via read-modify-write save inside a validator. WHY: Every validation call (including re-validations of the same attempt or attempts failing on unrelated fields like username) inflates stats, and concurrent signups lose increments with no atomic update. HOW: Move stats update out of validation or use atomic increment (update_counters/increment_counter) only on actual blocked rejections."
+     },
+     {
+      "file": "app/models/blocked_email.rb",
+      "lines": [
+       11,
+       19
+      ],
+      "texto": "WHAT: `should_block?` mutates state (increments `match_count`, sets `last_match_at`, calls `record.save`) inside a method that is invoked from the model validation callback, and the signup controller runs validation twice per attempt (`user.valid?` at users_controller.rb:168 then `user.save` at :172). WHY: a single signup attempt increments `match_count` twice and rewrites `last_match_at`, so the per-email block statistics the feature was built to track are wrong. HOW: make the read side non-mutating for validation and record the match separately (e.g. move the increment out of validation, or guard it so it runs once per attempt), keeping the predicate pure."
+     },
+     {
+      "file": "app/models/blocked_email.rb",
+      "lines": [
+       13,
+       17
+      ],
+      "texto": "WHAT: `record.match_count += 1; record.last_match_at = ...; record.save` is a non-atomic read-modify-write with no lock or unique constraint protection. WHY: two concurrent signup attempts with the same blocked email can both read the same `match_count` and one write overwrites the other, losing counts, so the tracked statistics drift under load. HOW: use an atomic update such as `BlockedEmail.where(id: record.id).update_all('match_count = match_count + 1, last_match_at = ...')` or a database-level counter increment."
+     }
+    ]
+   },
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#07",
+    "descricao": "Claims the 'returns false' spec cannot distinguish nil from false because be_false is a truthiness matcher.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "spec/models/blocked_email_spec.rb",
+      "lines": [
+       22,
+       24
+      ],
+      "texto": "This test is named \"returns false if a record with the email doesn't exist,\" but it cannot verify that. `BlockedEmail.should_block?` returns `record && record.action_type == actions[:block]`, which yields `nil` (not `false`) when no record exists, and under this suite's RSpec 2 semantics `subject.should be_false` is a truthiness matcher that passes for any falsy value including `nil`. The assertion therefore passes on the nil the code actually returns and would only fail on an outright `true`; it does not pin the `false`/`nil` distinction its name asserts. Assert the value exactly (e.g. `subject.should == false`, or `be_falsey`/`be_nil` if nil is intended) so a regression returning a non-false falsy value is caught."
+     }
+    ]
+   },
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#08",
+    "descricao": "The domain whitelist/blacklist regex @(domains) is not anchored at the end, so an address like user@example.com.evil.com matches a whitelist entry for example.com and bypasses the restriction.",
+    "textoGolden": "The regex pattern @(#{domains}) in email_in_restriction_setting? method only matches domain suffixes, not full domains with proper boundary anchoring. An attacker can register evil.example.com to bypass a whitelist entry for example.com.",
+    "comentarios": [
+     {
+      "file": "lib/validators/email_validator.rb",
+      "lines": [
+       18,
+       22
+      ],
+      "texto": "WHAT: email_in_restriction_setting? builds unanchored Regexp \"@(domains)\" with only '.' escaped. WHY: Whitelist 'gmail.com' substring-matches 'victim@gmail.com.evil.com', so an attacker registers with an unapproved domain and bypasses the allow-list; blacklist similarly over/under-matches and other regex metachars are unescaped. HOW: Anchor and escape domains (e.g. Regexp.escape per domain split on '|' plus /\\A[^@\\s]+@(?:domain)\\z/i)."
+     }
+    ]
+   },
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#prod-01",
+    "descricao": "Emails rejected by the server are cached in rejectedEmails for the controller's lifetime and never cleared, so an address that later becomes valid keeps failing client-side validation until reload.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#muse13-01",
+    "descricao": "A spec comment says last_match_at shows whether an email has ever been blocked, but should_block? updates it on every match, including do_nothing records.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "add-html-sanitizer-for-translated-message-resources-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "02f48f776f43734d1ac8914d3ad6a7115acdcb33",
+  "base": "f3c8e8f3487112f2c99aa78400430cce2d30be39",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "lines": [
+     139,
+     145
+    ],
+    "texto": "WHAT: The HTML tag detector and anchor matcher use case-sensitive regular expressions (`<[a-z]+[^>]*>` and `</?a[^>]*>`) even though HTML element names are case-insensitive. WHY: The OWASP sanitizer canonicalizes tag names to lowercase, so a translation with `<B>text</B>` or `<A href=\"...\">` is not matched by the anchor pre-check and is then normalized by the sanitizer to lowercase, making `sanitized != value` and causing a false-positive \"Illegal HTML\" build failure. HOW: Compile `HTML_TAGS` and `ANCHOR_PATTERN` with `Pattern.CASE_INSENSITIVE` (or add `A-Z` to the character classes for tags and `A` for anchors) so the verifier treats HTML case-insensitively."
+   },
+   {
+    "id": "S2",
+    "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "lines": [
+     73,
+     80
+    ],
+    "texto": "WHAT: `verifySafeHtml` unconditionally throws `RuntimeException` when the computed English base file cannot be read. WHY: Any community translation file that does not have a matching `_en.properties` in the parallel `resources` directory will cause a `FileNotFoundException`, which is wrapped in `RuntimeException` and aborts the entire Maven build instead of reporting a verification message. HOW: Treat a missing English base as a verification message (e.g., \"Missing English base file for ...\") or fall back to an empty bundle, rather than throwing."
+   },
+   {
+    "id": "S3",
+    "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "lines": [
+     101,
+     111
+    ],
+    "texto": "The diff-prefix/suffix stripping at lines 101-111 can compute start >= value.length() - end (for example when a single character is sanitized in the middle, or when the entire value is changed). Calling value.substring(start, value.length() - end) with beginIndex > endIndex throws StringIndexOutOfBoundsException, turning an HTML validation failure into a build crash. Clamp the indices so that the substring is never inverted, e.g. ensure endIndex = Math.max(start, value.length() - end) and similarly for sanitized."
+   },
+   {
+    "id": "S4",
+    "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "lines": [
+     88,
+     150
+    ],
+    "texto": "The newly added private method is named `santizeAnchors` (line 88 and 150) but it clearly performs anchor sanitization. The rest of the file uses the correct spelling `sanitize` (e.g. `verifySafeHtml`, `policy.sanitize`, `sanitized`). Rename the method to `sanitizeAnchors` so the identifier matches its documented purpose and surrounding naming conventions."
+   },
+   {
+    "id": "S5",
+    "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+    "lines": [
+     68,
+     72
+    ],
+    "texto": "The `loginTotpStep1` message in the Lithuanian locale was changed to the Italian sentence \"Installa una delle seguenti applicazioni sul tuo cellulare:\". This breaks localization because the file is for Lithuanian users. Restore a proper Lithuanian translation that matches the new English source text."
+   },
+   {
+    "id": "S6",
+    "file": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties",
+    "lines": [
+     98,
+     102
+    ],
+    "texto": "The `totpStep1` message in the Lithuanian account messages file was changed to the Italian sentence \"Installa una delle seguenti applicazioni sul tuo cellulare:\". This is a localization defect in a Lithuanian resource bundle. It should be translated into Lithuanian."
+   },
+   {
+    "id": "S7",
+    "file": "VerifyMessageProperties.java",
+    "lines": [
+     70,
+     111
+    ],
+    "texto": "New error/reporting paths in verifySafeHtml() include java.io.File instances (file/englishFile) whose toString() yields absolute paths, so build logs will contain absolute filesystem paths. This occurs at lines 70 and 79 (RuntimeException with file/englishFile) and line 111 (messages.add with file). This is minor information disclosure, but it is already present in unchanged code at line 53 (MojoExecutionException with file) and is standard output for Maven plugins; the PR does not introduce a new class of sensitive-data exposure. No data-exposure defect of the assigned class is present. Note: line 157 (messages.add with matcher.group()) echoes anchor tags, which is expected behavior for a verifier and does not constitute disclosure of sensitive data."
+   },
+   {
+    "id": "S8",
+    "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "lines": [
+     65,
+     80
+    ],
+    "texto": "verifySafeHtml() wraps I/O failures in RuntimeException, which escapes verify()'s IOException catch block and crashes the Maven plugin instead of producing a controlled MojoExecutionException. Change the catch blocks to throw MojoExecutionException (or let the IOException propagate so verify() handles it)."
+   },
+   {
+    "id": "S9",
+    "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "lines": [
+     67,
+     80
+    ],
+    "texto": "Replace the FileInputStream-based PropertyResourceBundle construction with UTF-8 Reader-based construction. The existing verify() path uses Files.readString (UTF-8), but PropertyResourceBundle(InputStream) decodes as ISO-8859-1, so the HTML verifier interprets the same file differently than the duplicate-key verifier. This corrupts UTF-8 translations (e.g., the modified Chinese properties files) and can produce incorrect 'Illegal HTML' results or garbled error messages. Use Files.newBufferedReader(file.toPath(), StandardCharsets.UTF_8) for both bundle reads."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+    "descricao": "The Lithuanian TOTP setup step was replaced with Italian text in both the account and login bundles.",
+    "textoGolden": "The translation is in Italian instead of Lithuanian. This should be translated to Lithuanian to match the file's locale (messages_lt.properties).",
+    "comentarios": [
+     {
+      "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+      "lines": [
+       71,
+       71
+      ],
+      "texto": "The Lithuanian OTP setup instruction has been replaced with an Italian sentence. login-config-totp.ftl renders this message directly, so users selecting Lithuanian receive an instruction in the wrong language; the same copied sentence also appears in the Lithuanian account bundle at line 101. Replace both values with the Lithuanian translation of the new installation instruction."
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties",
+      "lines": [
+       101,
+       101
+      ],
+      "texto": "The replacement OTP setup instruction is Italian (\u201cInstalla una delle seguenti applicazioni sul tuo cellulare\u201d), but this is the Lithuanian locale and the surrounding setup steps are Lithuanian. Translate the new instruction into Lithuanian rather than copying the Italian translation. The same incorrect replacement appears in the login bundle at themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties:71 and should be corrected there too; otherwise Lithuanian users see an untranslated first step in both OTP setup flows."
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+      "lines": [
+       71,
+       71
+      ],
+      "texto": "The replacement OTP setup instruction is Italian, not Lithuanian (`Installa una delle seguenti applicazioni sul tuo cellulare`). The same replacement was made for `totpStep1` in the Lithuanian account bundle. Translate both replacements into Lithuanian so selecting Lithuanian does not display Italian instructions during authenticator setup."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+    "descricao": "The zh_CN totpStep1 translation is written in Traditional Chinese instead of Simplified Chinese.",
+    "textoGolden": "The totpStep1 value uses Traditional Chinese terms in the Simplified Chinese file (zh_CN), which is likely incorrect for this locale. Please verify the locale\u2011appropriate translation.",
+    "comentarios": [
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+      "lines": [
+       112,
+       112
+      ],
+      "texto": "The zh_CN (Simplified Chinese) file was given Traditional Chinese characters: totpStep1=\u5728\u60a8\u7684\u624b\u6a5f\u4e0a\u5b89\u88dd\u4ee5\u4e0b\u61c9\u7528\u7a0b\u5f0f\u4e4b\u4e00\uff1a. Compare the unchanged neighbouring lines (e.g. '\u6253\u5f00\u5e94\u7528\u626b\u63cf\u4e8c\u7ef4\u7801\u2026') which use Simplified forms; \u624b\u6a5f/\u61c9\u7528\u7a0b\u5f0f/\u5b89\u88dd are Traditional. zh_CN must be Simplified Chinese, so this string is in the wrong script/variant for the locale."
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+      "lines": [
+       112,
+       112
+      ],
+      "texto": "totpStep1 in messages_zh_CN uses Traditional Chinese (\u624b\u6a5f, \u5b89\u88dd, \u61c9\u7528\u7a0b\u5f0f), not Simplified Chinese as the rest of the file does. Replace it with the Simplified form: \u5728\u60a8\u7684\u624b\u673a\u4e0a\u5b89\u88c5\u4ee5\u4e0b\u5e94\u7528\u4e4b\u4e00\uff1a"
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+      "lines": [
+       112,
+       112
+      ],
+      "texto": "The Simplified Chinese (zh_CN) totpStep1 was replaced with Traditional Chinese (\"\u5728\u60a8\u7684\u624b\u6a5f\u4e0a\u5b89\u88dd\u4ee5\u4e0b\u61c9\u7528\u7a0b\u5f0f\u4e4b\u4e00\uff1a\"). Use the Simplified form, \"\u5728\u60a8\u7684\u624b\u673a\u4e0a\u5b89\u88c5\u4ee5\u4e0b\u5e94\u7528\u7a0b\u5e8f\u4e4b\u4e00\uff1a\"."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#04",
+    "descricao": "The method santizeAnchors is misspelled; it should be sanitizeAnchors.",
+    "textoGolden": "The method name 'santizeAnchors' should be 'sanitizeAnchors' (missing 'i').",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#05",
+    "descricao": "HTML_TAGS is a non-static, non-private field instead of a private static final constant.",
+    "textoGolden": "Field HTML_TAGS should be declared as 'private static final' following Java naming conventions for constants",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+    "descricao": "The diff-trimming code computes common prefix and suffix independently, so they can overlap and substring throws StringIndexOutOfBoundsException, crashing the verifier instead of reporting the illegal HTML.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       101,
+       111
+      ],
+      "texto": "The common prefix (start) and common suffix (end) are computed independently and can overlap, for example value \"aa\" vs sanitized \"a\". Then substring(start, length - end) gets begin > end and throws StringIndexOutOfBoundsException, so the verifier crashes instead of reporting the illegal HTML. Bound the suffix scan so that start + end <= min(value.length(), sanitized.length()), e.g. `while (end < min - start && ...)`."
+     },
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       102,
+       111
+      ],
+      "texto": "The common prefix and common suffix are computed independently and can overlap, so `sanitized.substring(start, sanitized.length() - end)` can have start > end and throw StringIndexOutOfBoundsException. This crashes the verifier instead of reporting 'Illegal HTML'. Cap the suffix scan with `end < Math.min(value.length(), sanitized.length()) - start`."
+     },
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       102,
+       111
+      ],
+      "texto": "WHAT: Common prefix/suffix stripping for the diff message can compute start+end larger than the string length and call substring(start, length-end) with start > end. WHY: Throws StringIndexOutOfBoundsException inside the key loop and crashes verification instead of reporting Illegal HTML. HOW: Clamp end so start+end <= min lengths, e.g. stop suffix scan when end >= length-start."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#07",
+    "descricao": "normalizeValue blanks the entire choice expression for some keys before HTML validation, so markup placed inside a choice branch of those keys bypasses the new verifier.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       124,
+       126
+      ],
+      "texto": "Choice normalization removes all branch content before HTML validation, allowing prohibited markup to bypass the new translation policy. A translated error-invalid-multivalued-size value such as `{2,choice,0#values|1#<a href=\"https://malicious.example\">value</a>|1<values}` becomes `...` and passes without checking the injected link, while consumers using MessageFormat expand that branch into the rendered message. Preserve and validate branch text, normalizing only the choice comparison syntax that conflicts with HTML parsing."
+     },
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       124,
+       127
+      ],
+      "texto": "WHAT: normalizeValue replaces the entire {n,choice,...} block with ... before sanitizing, so HTML inside choice options is never checked. WHY: A translation can smuggle tags (e.g. {2,choice,0#<script>...}) in error-invalid-multivalued-size/linkExpirationFormatter keys and pass the verifier, reaching UI rendering as XSS. HOW: Sanitize/validate the choice body instead of blanking it, or run the HTML policy on the inner choice text as well."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#10",
+    "descricao": "The account and admin UI bundles now use Java MessageFormat placeholders and choice syntax for error-invalid-multivalued-size, but i18next expects {{n}}, so the UI shows literal {0}/{1}/{2} and the raw choice text.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "js/apps/admin-ui/maven-resources/theme/keycloak.v2/admin/messages/messages_en.properties",
+      "lines": [
+       3138,
+       3138
+      ],
+      "texto": "The admin-ui bundle is consumed by react-i18next, which interpolates with double-brace `{{0}}` syntax (the previous value was `Attribute {{0}} ... {{2}}`). This line was rewritten to Java MessageFormat/ICU syntax (`{0}` ... `{2,choice,0#values|1#value|1<values}`), which i18next does not understand: the placeholders will not be substituted and the literal `{2,choice,...}` text will be shown to users. Keep the JS-side value in `{{0}}` form (and don't introduce ICU ChoiceFormat into the JS bundle); the ICU/choice spelling belongs only in the Java theme properties."
+     },
+     {
+      "file": "js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties",
+      "lines": [
+       188,
+       188
+      ],
+      "texto": "Same contract break in the account-ui bundle: the value was `Attribute {{0}} must have at least {{1}} and at most {{2}} value(s).` (i18next double-brace interpolation) and was changed to `{0}`/`{2,choice,...}` MessageFormat+ICU syntax. The account console's i18next based consumer was not updated to match, so interpolation will fail and the raw placeholder/choice syntax will be rendered. Restore `{{0}}`-style placeholders for the JS bundle."
+     },
+     {
+      "file": "js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties",
+      "lines": [
+       188,
+       188
+      ],
+      "texto": "The account-ui bundle is consumed by i18next, which interpolates with double braces (the original string was `Attribute {{0}} must have at least {{1}} and at most {{2}} value(s).`). This PR aligned the value to the Java theme convention, replacing `{{0}}/{{1}}/{{2}}` with `{0}/{1}/{2}` and adding ICU `{2,choice,...}`. i18next will no longer substitute the placeholders and cannot interpret the ICU choice, so the account UI shows the raw `{0}`, `{1}`, `{2}` and literal choice text. Keep the JS-side double-brace form for this bundle (adapt the choice accordingly) rather than the Java single-brace/ICU form used by the theme messages."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#opa-01",
+    "descricao": "If the English counterpart of a messages_*.properties file does not exist, verifySafeHtml throws an unchecked RuntimeException that escapes the mojo, crashing the build instead of reporting a validation message.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "fix-proper-handling-of-group-memberships-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "060cda77729cb1c4a827560e09e89a7b22078ba9",
+  "base": "4975fc28903a84418f546b2809370f19abf10e08",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+    "lines": [
+     11,
+     14
+    ],
+    "texto": "WHAT: The `totalPages` computed property uses `Math.floor(user_count / limit) + 1`, which overcounts by one when `user_count` is an exact multiple of `limit`. WHY: With 100 members and a page size of 50 it reports 3 total pages instead of 2, so `showingLast` stays false on the real last page and `next()` navigates to an empty page. HOW: Replace the formula with `Math.ceil(this.get('user_count') / this.get('limit'))`."
+   },
+   {
+    "id": "S2",
+    "file": "app/controllers/groups_controller.rb",
+    "lines": [
+     22,
+     26
+    ],
+    "texto": "WHAT: The `members` action now reads `limit = (params[:limit] || 50).to_i` without enforcing a maximum. WHY: The previous implementation capped automatic groups at 200 members per request; that cap is gone, so any user who can view a group can request an unbounded number of records (e.g. `?limit=9999999`), causing a large DB query and memory load. HOW: Cap the limit to a reasonable maximum such as `limit = [[params[:limit].to_i, 200].min, 1].max` or equivalent."
+   },
+   {
+    "id": "S3",
+    "file": "app/controllers/admin/groups_controller.rb",
+    "lines": [
+     65,
+     97
+    ],
+    "texto": "The add_members and remove_member actions read params.require(:group_id), but the routes declared in config/routes.rb are member routes under `resources :groups`, so Rails supplies the group id as `params[:id]`. This mismatch will cause ParameterMissing on every add/remove request. Change `params.require(:group_id)` to `params.require(:id)` (or declare the routes with `param: :group_id`)."
+   },
+   {
+    "id": "S4",
+    "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+    "lines": [
+     11,
+     14
+    ],
+    "texto": "totalPages uses Math.floor(user_count / limit) + 1, so when user_count is an exact multiple of limit (e.g. 50/50 or 100/50) it reports one page too many. That makes showingLast false on the last populated page and lets the Next action advance to offset == user_count, where findMembers returns no rows. Replace it with Math.ceil(user_count / limit) (and guard limit == 0)."
+   },
+   {
+    "id": "S5",
+    "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+    "lines": [
+     11,
+     14
+    ],
+    "texto": "totalPages should use Math.ceil(user_count / limit) instead of Math.floor(...)+1. With the current formula, a group with exactly 50 members and limit 50 reports 2 total pages, so the pager enables \"next\" and shows an empty page 2."
+   },
+   {
+    "id": "S6",
+    "file": "app/controllers/admin/groups_controller.rb",
+    "lines": [
+     37,
+     37
+    ],
+    "texto": "params[:alias_level].present? returns false for the integer 0, so selecting the \"nobody\" alias level (value 0) leaves the existing alias_level unchanged. Use an existence check that accepts 0 while still skipping absent/blank values."
+   },
+   {
+    "id": "S7",
+    "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+    "lines": [
+     11,
+     14
+    ],
+    "texto": "The totalPages formula uses Math.floor(user_count / limit) + 1, which is one larger than the actual page count whenever user_count is an exact multiple of limit. This makes showingLast false on the real last page and allows navigation to an empty final page. Replace the calculation with Math.ceil(this.get(\"user_count\") / this.get(\"limit\")) inside the existing zero guard."
+   },
+   {
+    "id": "S8",
+    "file": "spec/controllers/admin/groups_controller_spec.rb",
+    "lines": [
+     115,
+     115
+    ],
+    "texto": "The route config/routes.rb maps remove_member to `delete \"members\"`, but this test sends `xhr :put, :remove_member`. The HTTP method does not match the declared endpoint, so the test does not exercise the real route and documents the wrong API contract. Change `:put` to `:delete`."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+    "descricao": "The admin group pager computes total pages as floor(user_count / limit) + 1, so when the member count is an exact multiple of the limit it shows an extra page and Next navigates to an empty member list.",
+    "textoGolden": "The `totalPages` calculation using `Math.floor(user_count / limit) + 1` produces an extra page when `user_count` is an exact multiple of `limit`, leading to incorrect pagination. For example, with 100 users and a limit of 50, it reports 3 pages instead of 2, allowing navigation to an empty page.",
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+      "lines": [
+       11,
+       14
+      ],
+      "texto": "totalPages (and currentPage) use `Math.floor(user_count / limit) + 1`, which is an off-by-one when user_count is an exact multiple of limit (e.g. 50 members, limit 50 \u2192 reports 2 pages although only 1 exists). This leaves `showingLast` false on the real last page, so 'next' navigates to an empty page at offset=user_count. Use `Math.ceil(user_count / limit)` (and compute currentPage consistently) to get the correct page count."
+     },
+     {
+      "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+      "lines": [
+       11,
+       14
+      ],
+      "texto": "totalPages is off by one when user_count is an exact multiple of limit: `Math.floor(user_count / limit) + 1` gives 2 for user_count=50, limit=50, although 50 members occupy exactly one page. Correct it to `Math.ceil(this.get('user_count') / this.get('limit'))`. Effect: for a group whose member count is a multiple of the page size, totalPages is one too high, showingLast remains false so the 'next' link stays enabled, and clicking it navigates to a phantom empty page."
+     },
+     {
+      "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+      "lines": [
+       11,
+       14
+      ],
+      "texto": "`totalPages` uses `Math.floor(user_count / limit) + 1`, which over-counts by one whenever `user_count` is an exact multiple of `limit` (e.g. 50 members with limit 50 yields 2 pages instead of 1). Since `showingLast` is `propertyEqual(\"currentPage\", \"totalPages\")`, on a full last page `showingLast` is false, so the `next` action stays enabled and advances `offset` to `user_count`, rendering an empty page labeled as the last page. Use `Math.ceil(user_count / limit)` (with the zero-member guard) so the count matches the real number of pages."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#03",
+    "descricao": "Several Group model functions (findMembers, destroy, userCountDisplay) return a value on some paths and undefined on others, triggering consistent-return lint warnings.",
+    "textoGolden": "Expected to return a value at the end of function - code paths without explicit returns will return undefined",
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#04",
+    "descricao": "Paging actions fire overlapping member requests and each response unconditionally overwrites offset and members, so a stale response arriving last can revert the list to an earlier page.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/discourse/models/group.js",
+      "lines": [
+       30,
+       35
+      ],
+      "texto": "Guard against stale member-fetch responses before updating the model. `next` updates offset immediately and leaves navigation enabled, so with at least three pages two rapid clicks issue requests for offsets 50 and 100. If the offset-100 response arrives first and the offset-50 response arrives last, this unconditional `setProperties` resets both offset and members to the older page, undoing the latest navigation. Refreshes after membership changes can similarly be overwritten by an earlier fetch. Track a per-model request generation and apply only the latest response, or serialize navigation and refresh requests."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#06",
+    "descricao": "The public members endpoint now always caps results at 50 per page, but the public group members page has no pagination, so groups with more than 50 members are silently truncated for users.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/discourse/routes/group-members.js.es6",
+      "lines": [
+       10,
+       11
+      ],
+      "texto": "The public members route now loads only the model's default 50-member page without providing any way to request subsequent pages. The public group/members.hbs template only renders members and has no Next/Previous controls, so members after the first 50 become inaccessible (manual groups previously returned all members). Add public pagination controls and actions that update offset and reload members."
+     },
+     {
+      "file": "app/controllers/groups_controller.rb",
+      "lines": [
+       22,
+       26
+      ],
+      "texto": "The new default limit applies to nonautomatic groups as well, but the public group-members route still calls findMembers() only once and its template simply iterates members without pagination. Previously this endpoint returned every member of a nonautomatic group; now a group with more than 50 members exposes only the first 50 on its public members page, with no way to reach the rest. Update that consumer to fetch subsequent pages or provide pagination when introducing this endpoint contract."
+     },
+     {
+      "file": "app/assets/javascripts/discourse/routes/group-members.js.es6",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "Provide pagination or load subsequent pages for the public group-members view. findMembers now requests only 50 members, and this route calls it only once while its template simply iterates members without navigation. Custom groups previously returned all members, so groups larger than 50 now have members that cannot be viewed on this page."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#07",
+    "descricao": "Creating a group ignores the alias_level the admin selected, saving only name and visibility, so new groups keep the default alias level.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/admin/groups_controller.rb",
+      "lines": [
+       23,
+       27
+      ],
+      "texto": "Persist params[:alias_level] when creating a group, just as update does. The creation form exposes aliasLevelOptions and group.asJSON sends the selected alias_level, but create saves only name and visible. A newly created group therefore retains the default alias level instead of the administrator's selection."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#10",
+    "descricao": "Removing a member deletes the membership row directly and skips clearing the user's primary_group_id, so a removed user can keep this group as their primary group.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/admin/groups_controller.rb",
+      "lines": [
+       84,
+       91
+      ],
+      "texto": "WHAT: remove_member uses group.users.delete(user_id) instead of the Group#remove destroy path. WHY: bypasses GroupUser destroy callbacks and primary_group_id cleanup done in destroy_deletions, leaving stale membership side-effects (e.g. dangling primary_group_id). HOW: load the User and call group.remove(user)."
+     },
+     {
+      "file": "app/controllers/admin/groups_controller.rb",
+      "lines": [
+       90,
+       90
+      ],
+      "texto": "Removing a member with group.users.delete bypasses the primary_group_id cleanup previously performed by Group#destroy_deletions during usernames updates. A user whose primary group is this group remains associated with it as their primary group after membership removal, leaving stale primary-group state used by user administration and post serialization. Clear primary_group_id for the removed user when it equals this group's id as part of the removal operation."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#12",
+    "descricao": "The remove_member spec issues a PUT request although the route only maps DELETE to remove_member, so the test uses a verb never routed in production.",
+    "textoGolden": "The remove_member test uses xhr :put to call the remove_member action, but the route defines delete 'members' => 'groups#remove_member' requiring DELETE method.",
+    "comentarios": [
+     {
+      "file": "spec/controllers/admin/groups_controller_spec.rb",
+      "lines": [
+       114,
+       117
+      ],
+      "texto": "This example sends `xhr :put, :remove_member`, but the PR maps `remove_member` only to DELETE (`delete \"members\" => \"groups#remove_member\"`); PUT on that path routes to `groups#add_members`. Controller specs bypass the router, so the example still lands on `remove_member` and passes regardless \u2014 it would still pass if the DELETE route were missing or wired to the wrong action, leaving the newly introduced verb/action pairing untested. Use `xhr :delete, :remove_member`, as the sibling example at line 125 already does."
+     },
+     {
+      "file": "spec/controllers/admin/groups_controller_spec.rb",
+      "lines": [
+       114,
+       117
+      ],
+      "texto": "The test 'cannot remove members from automatic groups' sends `xhr :put, :remove_member`, but the route is `delete \"members\" => \"groups#remove_member\"`. It exercises the action with a verb that is never routed in production. Use `xhr :delete, :remove_member, group_id: 1, user_id: 42` so the test matches the real request."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-01",
+    "descricao": "Admin add_members pushes every username into group.users without skipping existing members, so adding someone already in the group hits the unique group_users index, returns a 500 and leaves earlier users partially added.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02",
+    "descricao": "The public group members endpoint takes `limit` from params with no upper bound or positivity check, letting a visitor request huge pages or trigger a 500 with a negative limit.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#snloop-01",
+    "descricao": "Admin remove_member calls group.users.delete with a raw integer id, which raises RecordNotFound (404/500) when the user is not or no longer a member, e.g. on concurrent removal.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#musep-01",
+    "descricao": "Admin remove_member deletes memberships with group.users.delete, which skips GroupUser callbacks, so the cached groups.user_count is never decremented and stays inflated.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#muse13-01",
+    "descricao": "Group member pagination is off by one when user_count is a multiple of limit: Next moves to offset == user_count and shows an empty page.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "database-performance-optimizations-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "04cfa3bfd469c035ff8b35f9a66867c4e8d5dcf4",
+  "base": "a886bd3c79a417a70b51509384d1f1ec3e87e96b",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/services/cleanup/cleanup.go",
+    "lines": [
+     77,
+     77
+    ],
+    "texto": "WHAT: The background cleanup ticker now fires every minute instead of every ten minutes. WHY: Each cleanup run uses a 9-minute timeout, so the shorter interval allows overlapping runs, increases database load, and can reintroduce the concurrency problems the PR is trying to solve. HOW: Restore the 10-minute interval unless the change is intentional and the timeout is adjusted accordingly."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "lines": [
+     534,
+     579
+    ],
+    "texto": "WHAT: The cleanup code logs every batch of annotation/tag IDs and counts at Error level during normal operation. WHY: This generates false error alerts and writes large ID slices to logs on each batch, increasing log volume and noise. HOW: Use Debug or Info level and log only the count (and optionally a sample of IDs) instead of the full slice."
+   },
+   {
+    "id": "S3",
+    "file": "xorm_store.go",
+    "lines": [
+     523,
+     538
+    ],
+    "texto": "In the MaxAge cleanup fetch-then-delete loop (lines 523-538), the log statements \"Annotations to clean by time\" and \"cleaned annotations by time\" are emitted at Error level even though they fire on every successful batch of normal operation. Error logs are meant to signal failures, so logging normal cleanup activity at Error level makes monitoring/alerting on errors incorrect. This is a measurement/naming issue \u2014 these messages should not be logged at Error level."
+   },
+   {
+    "id": "S4",
+    "file": "xorm_store.go",
+    "lines": [
+     547,
+     558
+    ],
+    "texto": "The same Error-level logging pattern repeats for the MaxCount cleanup loop (lines 547-558): normal successful operation is logged at Error level, which is incorrect for monitoring/alerting purposes and should be changed to a non-error level."
+   },
+   {
+    "id": "S5",
+    "file": "xorm_store.go",
+    "lines": [
+     569,
+     580
+    ],
+    "texto": "The same Error-level logging pattern also repeats for the orphaned-tags cleanup (lines 569-580): normal successful operation is logged at Error level, which is incorrect for monitoring/alerting purposes and should be changed to a non-error level."
+   },
+   {
+    "id": "S6",
+    "file": "cleanup.go",
+    "lines": [
+     77,
+     77
+    ],
+    "texto": "The ticker interval was changed from 10 minutes to 1 minute. This is a behavioral change (cleanup runs 10x more frequently) and is not a declare-vs-use defect."
+   },
+   {
+    "id": "S7",
+    "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "lines": [
+     605,
+     608
+    ],
+    "texto": "The comment says 'SQLite has a parameter limit of 999,' but SQLite 3.32.0+ defaults to 32766, and the new test explicitly exercises batch size 32767. The code is being conservative by always inlining IDs when batch size exceeds 999 on SQLite, but the comment presents 999 as the current SQLite limit. Update the comment to explain that 999 is a safe conservative threshold or note the version-dependent limits, so the documentation matches the change's intent and the new test case."
+   },
+   {
+    "id": "S8",
+    "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "The logging uses r.log.Error for routine messages, which is a log-level smell. It does not throw, corrupt state, or violate an invariant, so it is not a defect in the assigned class, but the log level should likely be lowered (e.g., Info/Debug) for non-error routine messages."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#04",
+    "descricao": "Leftover debug logs in the annotation cleanup emit Error-level entries with the full ID list on every batch, flooding error logs during normal operation.",
+    "textoGolden": "The code uses Error log level for what appears to be debugging information. This will pollute error logs in production. Consider using Debug or Info level instead.",
+    "comentarios": [
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       528,
+       538
+      ],
+      "texto": "WHAT: Leftover debug logging calls r.log.Error on every cleanup batch (also duplicated at lines 554-557 and 576-579) dumping full ids slice, cond, and nil err at Error level. WHY: Fires Error-level log per batch and serializes up to AnnotationCleanupJobBatchSize IDs (32767 in new test), spamming error logs/monitoring on every normal cleanup run. HOW: Downgrade to Debug or remove; do not log full ids at Error."
+     },
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       534,
+       537
+      ],
+      "texto": "WHAT: Leftover debug logging calls `r.log.Error(\"Annotations to clean by time\", \"count\", len(ids), \"ids\", ids, ...)` (and the identical Error-level logs for 'by count' and 'Tags to clean', lines 554/557/576/579) run on every batch in production. WHY: These log the full ID slice (up to AnnotationCleanupJobBatchSize, e.g. 32767 elements) at Error severity on every cleanup iteration, flooding logs with false error noise and large payloads for a normal successful operation, and can trigger error-based alerting. HOW: Remove these log lines, or downgrade to Debug and drop the full `ids` slice (log only the count)."
+     },
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       534,
+       579
+      ],
+      "texto": "Avoid using Error-level logging on the normal cleanup path. The new r.log.Error calls emit count, ids, cond, and err at lines 534/537, 554/557, and 576/579 during non-error execution, creating log noise; consider downgrading or removing these logs on the normal path."
+     }
+    ]
+   },
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#05",
+    "descricao": "The comment states SQLite's parameter limit is 999, which is only true for SQLite versions before 3.32.0.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       605,
+       607
+      ],
+      "texto": "The comment states that SQLite has a parameter limit of 999, but SQLite >= 3.32.0 defaults to 32766 (as the added integration test also recognizes). This branch is choosing a conservative compatibility threshold, not expressing the limit of every SQLite database. Document 999 as the older-version/compatibility threshold so maintainers do not mistake this constant for the actual limit on modern SQLite."
+     }
+    ]
+   },
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#06",
+    "descricao": "On MySQL and Postgres, deleteByIDs binds one placeholder per ID without limit, so a cleanup batch size above 65535 makes every DELETE fail.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       605,
+       618
+      ],
+      "texto": "The bind-parameter workaround only handles SQLite's limit; the placeholder branch is used for every other engine with len(ids) placeholders and no bound. The previous implementation had no bind parameters, so this path is new. Postgres (extended protocol) and MySQL both cap bind parameters at 65535, so a configured AnnotationCleanupJobBatchSize larger than that makes this DELETE fail at Exec with a parameter-limit error instead of cleaning anything. Clamp the number of ids per DELETE (e.g. chunk into <=1000/<=65535 id sub-batches) for all dialects, not just SQLite."
+     },
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       614,
+       618
+      ],
+      "texto": "On Postgres and MySQL, deleteByIDs binds one placeholder per ID with no cap. A configured AnnotationCleanupJobBatchSize above the driver's bind-parameter limit (65535) makes every cleanup batch fail, and the cleanup job then never finishes. Split the IDs into chunks below the limit, or inline the integer IDs as the SQLite branch does."
+     }
+    ]
+   },
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#07",
+    "descricao": "The SQLite inline ID list is built with repeated fmt.Sprintf concatenation, which is quadratic in batch size.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       608,
+       613
+      ],
+      "texto": "WHAT: SQLite large-batch IN-list built with repeated fmt.Sprintf(\"%s, %d\", values, v) in a loop over ids. WHY: Quadratic string copying on large batches (e.g. 32767 IDs in added test) during cleanup, a background job path. HOW: Build with strings.Builder or strings.Join."
+     },
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       609,
+       612
+      ],
+      "texto": "The SQLite literal-ID path rebuilds the entire accumulated string for every ID, making SQL construction quadratic in batch size. Large batches explicitly supported by this PR, including the 32,767 setting in the integration test, generate substantial repeated copying and allocation before each delete, consuming cleanup time and memory. Build the list with strings.Builder and append each formatted ID once."
+     }
+    ]
+   },
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#08",
+    "descricao": "The cleanup service ticker was changed from 10 minutes to 1 minute, running every cleanup job ten times as often and increasing database load.",
+    "textoGolden": "The cleanup job ticker was changed from 10 minutes to 1 minute, which can lead to increased database load and contention due to more frequent execution of cleanup tasks. This change should be reviewed to ensure it aligns with performance expectations.",
+    "comentarios": [
+     {
+      "file": "pkg/services/cleanup/cleanup.go",
+      "lines": [
+       74,
+       78
+      ],
+      "texto": "WHAT: Cleanup ticker changed from 10 minutes to 1 minute with no justification. WHY: Runs all 8 cleanup jobs including the new multi-query (SELECT+DELETE per batch) annotation cleanup 10x more often, multiplying DB load. HOW: Revert to 10 minutes or justify the frequency change separately."
+     },
+     {
+      "file": "pkg/services/cleanup/cleanup.go",
+      "lines": [
+       77,
+       77
+      ],
+      "texto": "WHAT: The cleanup job ticker interval was changed from `time.Minute * 10` to `time.Minute * 1`. WHY: This runs all cleanup jobs (annotations, expired snapshots/versions/images, short URLs, query history) 10\u00d7 more frequently, multiplying background DB load and lock contention \u2014 the opposite of the deadlock mitigation this PR targets \u2014 and appears to be a debug leftover unrelated to the described change. HOW: Restore the ticker to `time.Minute * 10`."
+     },
+     {
+      "file": "pkg/services/cleanup/cleanup.go",
+      "lines": [
+       76,
+       77
+      ],
+      "texto": "The cleanup ticker was changed from `time.Minute * 10` to `time.Minute * 1`, a 10x increase in how often the entire cleanup job runs. This job also drives the annotation/tag cleanup path changed in this PR, which now fetches ID batches into memory and emits Error-level logs per batch, so running it every minute substantially increases DB load and log volume with no functional benefit. Unless a 1-minute cadence is explicitly intended, this should stay at 10 minutes (it reads like a leftover from testing)."
+     }
+    ]
+   },
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#oph-01",
+    "descricao": "The 'running the max count delete again' test case no longer runs cleanup a second time after the PR's per-subtest seeding and cleanup, so it does not verify that a repeated max-count cleanup deletes nothing.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#musep-01",
+    "descricao": "The annotation cleanup loop stops on a batch whose IDs were already deleted by a concurrent cleaner, leaving the remaining work to the next cycle; checking the fetched count instead would avoid that.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#muse13-01",
+    "descricao": "MaxCount annotation cleanup reads victim IDs with LIMIT/OFFSET and deletes them in a separate non-atomic statement, so concurrent deletions can make it delete annotations that should be retained.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "4def149a50c4b9b2c24fbb753ac60fe4f4df0cac",
+  "base": "c834e7473c02f11451216b3fbf355f953cfd95e9",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+    "lines": [
+     137,
+     149
+    ],
+    "texto": "WHAT: The reader thread in the new test catches only Exception, so any Error (e.g., AssertionError, OutOfMemoryError) thrown during concurrent group reads is silently swallowed. WHY: The main thread then asserts caughtExceptions is empty and passes even though the reader thread failed, masking real failures and making the test give false confidence. HOW: Change the catch to Throwable, keep the exception list typed as Throwable, and use assertTrue(caughtThrowables.isEmpty(), ...) so any failure fails the test visibly."
+   },
+   {
+    "id": "S2",
+    "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+    "lines": [
+     151,
+     158
+    ],
+    "texto": "WHAT: The test starts a background reader thread but never joins it before returning. WHY: The reader can continue executing groups() calls after the test method ends, during test cleanup or while the next test is running, causing potential flakiness and cross-test interference. HOW: Join the reader thread after setting deletedAll=true, with a reasonable timeout, and fail the test if it does not terminate."
+   },
+   {
+    "id": "S3",
+    "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+    "lines": [
+     139,
+     157
+    ],
+    "texto": "The reader thread is not joined before asserting caughtExceptions is empty, so exceptions caught after the assertion runs are missed and the test can falsely pass. Store the Thread reference and call thread.join() after deletedAll.set(true) before the assertThat check."
+   },
+   {
+    "id": "S4",
+    "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+    "lines": [
+     136,
+     158
+    ],
+    "texto": "The test starts a reader thread but discards the Thread reference and never calls join(). After deletedAll.set(true) the main thread immediately asserts caughtExceptions is empty, so the assertion may run before the reader thread records its final exception. The thread can also continue executing after the test method returns, potentially interfering with subsequent tests or cleanup. Capture the Thread and call thread.join() (handling InterruptedException) after deletedAll.set(true) and before the assertion."
+   },
+   {
+    "id": "S5",
+    "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+    "lines": [
+     272,
+     276
+    ],
+    "texto": "getSubGroupsCount() changed from fail-fast to nullable when the underlying group is concurrently removed. Existing callers that unbox or dereference the result (e.g. long count = group.getSubGroupsCount()) will now throw NullPointerException instead of receiving a count. Either return a safe default such as 0L, or audit and update every consumer to handle null."
+   },
+   {
+    "id": "S6",
+    "file": "GroupAdapter.java",
+    "lines": [
+     262,
+     268
+    ],
+    "texto": "getSubGroupsStream (lines 262, 268) still calls modelSupplier.get().method() without null checks. This pre-existing null-safety gap is not modified by this PR and is out of scope for the cross-file analysis."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#01",
+    "descricao": "The cached GroupAdapter.getSubGroupsCount returns null when the group was deleted concurrently, violating the GroupModel contract that it never returns null and risking NPEs in callers that unbox it.",
+    "textoGolden": "Returning null from getSubGroupsCount() violates the GroupModel contract (Javadoc says it never returns null) and may lead to NPEs in callers that expect a non-null count.",
+    "comentarios": [
+     {
+      "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+      "lines": [
+       274,
+       275
+      ],
+      "texto": "WHAT: `getSubGroupsCount()` now returns `null` when the delegate model is gone, violating the `GroupModel.getSubGroupsCount()` contract whose javadoc (GroupModel.java:296) states 'Never returns null'. WHY: In-repo callers happen to tolerate a Long null, but any caller that unboxes the result (`long c = group.getSubGroupsCount()`) or does arithmetic on it will NPE, converting the old NPE into a different one. HOW: return a non-null sentinel such as `0L` (and assert the empty/absent case explicitly), or update the interface contract to document a nullable return."
+     },
+     {
+      "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+      "lines": [
+       274,
+       275
+      ],
+      "texto": "getSubGroupsCount() now returns null when the cached delegate is gone (modelSupplier.get() == null), whereas before this change the method delegate-called getGroupModel().getSubGroupsCount(), which could not yield null (a missing delegate surfaced as an exception instead). The declared type Long is now genuinely nullable in a path that previously always produced a value or threw, so any caller that relies on the old contract \u2014 unboxing the result (e.g. `group.getSubGroupsCount() > 0`, `long n = group.getSubGroupsCount()`, or passing it to a primitive-typed parameter) \u2014 will now throw a NullPointerException instead of getting a value or the previous exception. Since consumers were not updated for the new nullable contract, either keep the non-null behavior for callers that cannot handle null or audit/update every caller of GroupModel.getSubGroupsCount() to null-check before use."
+     },
+     {
+      "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+      "lines": [
+       274,
+       275
+      ],
+      "texto": "getSubGroupsCount() now returns null when modelSupplier.get() is null, but the count is consumed as a number by brief-representation building; the sibling cache entity changed in this PR (CachedGroup) handles the same 'model unavailable' case by returning a non-null default (getRoleMappings returns Collections.emptySet(), and the subGroups/attributes loaders are built with non-null empty defaults). Returning null here breaks that convention and can surface as an unboxing/NPE on the consumer side of the read path. Return a non-null value (e.g., 0) or only null if the GroupModel contract explicitly declares it nullable."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+    "descricao": "The concurrency regression test never waits for the reader thread before asserting no exceptions, so it can pass even when the concurrent-deletion NPE still occurs.",
+    "textoGolden": "The reader thread isn\u2019t waited for; flipping deletedAll to true and asserting immediately can race and miss exceptions added just after the flag change, making this test flaky.",
+    "comentarios": [
+     {
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+      "lines": [
+       136,
+       157
+      ],
+      "texto": "The reader thread is started but never synchronized with: the test does not wait for it to complete a read before deleting, and does not join it before asserting caughtExceptions is empty. The deletes can finish before the reader reads at all, or a failing read can land after the assertion, so the test passes even with the bug present. Use a CountDownLatch counted down after the reader's first successful read, start deleting only after it fires, and join the thread (after setting deletedAll) before asserting."
+     },
+     {
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+      "lines": [
+       149,
+       157
+      ],
+      "texto": "WHAT: The reader thread started at line 139-149 is never joined before `assertThat(caughtExceptions, Matchers.empty())` runs. WHY: The reader can be mid-request when `deletedAll.set(true)` executes; if that request throws (e.g., reading a group deleted concurrently), the exception is appended to `caughtExceptions` AFTER the assertion has already evaluated, so the test can pass even when the NPE regression it targets is present (and is flaky). HOW: after `deletedAll.set(true)`, `thread.join(<timeout>)` (storing the Thread reference) before the assertion."
+     },
+     {
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+      "lines": [
+       139,
+       157
+      ],
+      "texto": "The reader Thread is started but never joined, so the assertion at line 157 can execute before the reader has completed a single groups() read (or while a read that would throw the NPE is still in flight). If the GroupAdapter.getSubGroupsCount null-model NullPointerException were reintroduced, this test could still pass because caughtExceptions is asserted empty before the racing reader thread has recorded anything. Capture the Thread, then join it (e.g. Thread reader = new Thread(...); reader.start(); ... deletions ...; deletedAll.set(true); reader.join();) before asserting so the test actually waits on the condition it verifies."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#03",
+    "descricao": "The reader thread's stop flag is set only after all deletions succeed, so a failing delete leaves a non-daemon thread polling indefinitely.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+      "lines": [
+       139,
+       155
+      ],
+      "texto": "WHAT: The reader loop `while (!deletedAll.get())` has no termination guarantee and `deletedAll.set(true)` at line 155 only runs after the delete loop at 152-154 completes. WHY: If any `group(groupUuid).remove()` throws, `deletedAll` is never set, so the non-daemon thread loops forever and the test JVM hangs. HOW: set the thread as daemon and/or wrap deletion in try/finally so `deletedAll.set(true)` always executes."
+     },
+     {
+      "file": "GroupTest.java",
+      "lines": [
+       117,
+       158
+      ],
+      "texto": "The test has a mid-loop abort hazard."
+     },
+     {
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+      "lines": [
+       152,
+       155
+      ],
+      "texto": "The reader's stop flag is set only after every deletion succeeds, with no finally block. If any remove() throws, the test exits with a live non-daemon thread that keeps issuing requests and collecting exceptions indefinitely, interfering with teardown and potentially preventing JVM termination. Put stop signaling and reader termination in a finally block around deletion."
+     }
+    ]
+   }
+  ]
+ },
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "71826eb08fc7ea35a5925ad223296feadd5c5e29",
+  "base": "e805e472f4a80017957e2fbec975ea78c6ee45ed",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/api/helpers/error_upsampling.py",
+    "lines": [
+     95,
+     105
+    ],
+    "texto": "WHAT: `_is_error_focused_query` decides a query is error-focused by checking if the raw query string contains the substring `event.type:error`. WHY: A negated query such as `!event.type:error` or `NOT event.type:error` still contains that substring, so the function returns True and applies error upsampling to a non-error query, inflating counts. Mixed queries like `event.type:error OR event.type:transaction` are also treated as error-only. HOW: Parse the query conditions and return True only when an affirmative `event.type:error` filter is present, or use the existing query parser/AST instead of substring matching."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/testutils/factories.py",
+    "lines": [
+     344,
+     357
+    ],
+    "texto": "The truthiness check `if client_sample_rate:` treats a legitimate `0.0` sample rate as missing and silently skips setting `normalized_data[\"sample_rate\"]`. A client sample rate of `0.0` is a valid boundary value meaning \"sample nothing / record everything at the client\", so it should be propagated explicitly. Replace the truthiness check with an explicit `is not None` (and ideally also validate it is a number, not e.g. an empty string) before converting to float."
+   },
+   {
+    "id": "S3",
+    "file": "tests/snuba/api/endpoints/test_organization_events_stats.py",
+    "lines": [
+     3624,
+     3628
+    ],
+    "texto": "The comments on lines 3626-3627 say 'First bucket has 1 event' and 'Second bucket has 1 event', but the assertions on the same lines check that the count equals 10. The count is 10 because the single stored event has client_sample_rate=0.1 and upsampling multiplies by 1/0.1. The comments describe the raw stored events, while the assertions check the upsampled metric value, so the comments disagree with the code they annotate. Update the comments to explain that the bucket contains 1 event that is upsampled to a count of 10, or remove the stale comment."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/api/helpers/error_upsampling.py",
+    "lines": [
+     95,
+     105
+    ],
+    "texto": "The `_is_error_focused_query` check does `if \"event.type:error\" in query`, so any query containing that literal substring is treated as error-focused. This means negations like `!event.type:error`, wildcard terms like `event.type:error*`, or quoted strings like `title:\"event.type:error\"` can cause `count()` to be rewritten to `sum(sample_weight)` for non-error data. The condition should parse the `event.type` predicate or at least require a whole-token match so upsampling is only applied to genuine error queries."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/testutils/factories.py",
+    "lines": [
+     353,
+     357
+    ],
+    "texto": "`_set_sample_rate_from_error_sampling` converts `client_sample_rate` with `float(...)` inside a bare `except Exception`, so values like `\"nan\"` or `\"inf\"` become `float('nan')` / `float('inf')` without raising. These non-finite floats are then stored in `normalized_data[\"sample_rate\"]` and can break JSON/queue serialization or produce nonsensical weights. Validate that the converted value is finite and within a sensible range (e.g. 0 < rate <= 1) before storing it."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/api/helpers/error_upsampling.py",
+    "lines": [
+     76,
+     78
+    ],
+    "texto": "`_should_apply_sample_weight_transform` returns `True` for the `errors` dataset, so `count()` is rewritten to `upsampled_count()`. The visible diff only adds the `upsampled_count` SnQL function in `src/sentry/search/events/datasets/discover.py`; if the errors dataset config does not inherit it, an errors-dataset `count()` query on allowlisted projects will fail with an unknown function error. Either add the function to the errors dataset config or restrict the rewrite to datasets where the function is known to exist."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#03",
+    "descricao": "The upsampling decision is evaluated against the request's dataset instead of the scoped_dataset actually queried, so in the dashboard discover-split path (metrics dataset) error queries run against discover skip upsampling even when all projects are allowlisted.",
+    "textoGolden": "The upsampling eligibility check passes the outer dataset instead of the actual dataset used by scoped_dataset. In paths where the query ultimately runs against discover (e.g., dashboard split) while the original dataset is metrics, upsampling may be skipped even when all projects are allowlisted.",
+    "comentarios": [
+     {
+      "file": "src/sentry/api/endpoints/organization_events_stats.py",
+      "lines": [
+       218,
+       223
+      ],
+      "texto": "The upsampling decision uses the closure variable `dataset` while the transformed `final_columns` are executed against `scoped_dataset`. In the dashboard-split path `_get_event_stats` is deliberately invoked with a different dataset (e.g. `_get_event_stats(discover, ...)` at lines 351, 365, 406, 423) than the request's `dataset`, so the `_should_apply_sample_weight_transform` branch can be evaluated against the wrong dataset and apply/skip `sum(sample_weight)` for a dataset that was never queried. Base the decision on the dataset actually being queried (`scoped_dataset`) so the transform matches the target of the query."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04",
+    "descricao": "_is_error_focused_query uses a substring match for `event.type:error` on the request query, so negated or mixed (OR transaction) discover queries are treated as error-only and get the sample_weight sum instead of count().",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/helpers/error_upsampling.py",
+      "lines": [
+       100,
+       103
+      ],
+      "texto": "`_is_error_focused_query` decides whether to apply `upsampled_count()` by doing a naive substring search for `event.type:error` in the raw request query. A query that excludes errors (e.g. `!event.type:error`) or the discover-split query `({query}) AND event.type:transaction` still contains the literal `event.type:error`, so the transform is applied to a non-error / transactions query, summing `sample_weight` where it should be a plain `count()` and producing wrong bucket values. It also ignores the actual `query` passed to `_get_event_stats`, so the decision can differ from the query that is really executed. Match on a parsed/negation-aware condition (or pass the resolved query string) instead of a raw substring test."
+     },
+     {
+      "file": "src/sentry/api/helpers/error_upsampling.py",
+      "lines": [
+       100,
+       103
+      ],
+      "texto": "The substring check treats `!event.type:error` and `event.type:error OR event.type:transaction` as error-only queries. For allowlisted projects this rewrites count() to an aggregation over sample_weight even when the Discover query includes transactions, violating the error-only restriction and potentially failing against a transaction-backed query. Determine the event-type restriction from the parsed query rather than the presence of a substring."
+     },
+     {
+      "file": "src/sentry/api/helpers/error_upsampling.py",
+      "lines": [
+       100,
+       103
+      ],
+      "texto": "Substring matching does not establish that the Discover query selects only errors. For example, `!event.type:error` and `event.type:error OR event.type:transaction` both return True here, causing count() to be replaced with the sample-weight aggregation for non-error or mixed results in allowlisted projects. This contradicts the error-only guard and can produce incorrect counts. Parse the query and establish an error-only restriction (including negation and Boolean structure), or conservatively skip transformation when that restriction cannot be proven."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#05",
+    "descricao": "test_error_upsampling_with_transaction_events cannot detect upsampling being applied to transaction queries, because the transaction has no sample_weight and upsampled_count() equals count() for it.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/snuba/api/endpoints/test_organization_events_stats.py",
+      "lines": [
+       3654,
+       3697
+      ],
+      "texto": "test_error_upsampling_with_transaction_events would still pass if upsampling were wrongly applied to transaction queries. The transaction event has no sample_weight, and upsampled_count uses ifNull(sample_weight, 1), so the result is still 1 and 0. Give the transaction a non-default sample rate or weight so an upsampled count would differ from a plain count, or assert that the transform was not applied."
+     },
+     {
+      "file": "tests/snuba/api/endpoints/test_organization_events_stats.py",
+      "lines": [
+       3654,
+       3697
+      ],
+      "texto": "test_error_upsampling_with_transaction_events cannot falsify over-application of upsampling: the stored transaction has no sample_weight so upsampled_count() (sum(ifNull(sample_weight,1))) returns 1, same as count(). Give the transaction a sample_weight/client_sample_rate that would diverge (e.g. count 10 if upsampled vs 1 if not), or assert via mock that transform_query_columns_for_error_upsampling was not called / yAxes were not rewritten."
+     },
+     {
+      "file": "tests/snuba/api/endpoints/test_organization_events_stats.py",
+      "lines": [
+       3655,
+       3697
+      ],
+      "texto": "test_error_upsampling_with_transaction_events cannot detect upsampling being wrongly applied to transaction queries. The stored transaction event has no error_sampling context, so sample_weight is null, and upsampled_count = toInt64(sum(ifNull(sample_weight,1))) evaluates to 1 for it \u2014 identical to count(). If _should_apply_sample_weight_transform/_is_error_focused_query were broken so that a discover query with event.type:transaction gets upsampled, the assertion count==1 (and 0 in the empty bucket) would still pass. Add an event with a known non-1 sample_weight (or assert the emitted query uses count() and not upsampled_count) so the test actually fails when the transaction exclusion is bypassed."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#06",
+    "descricao": "The test factory helper's docstring promises a valid client sample rate but it copies any truthy float-convertible value (negative, >1, strings), unlike production validation.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/testutils/factories.py",
+      "lines": [
+       344,
+       357
+      ],
+      "texto": "WHAT: _set_sample_rate_from_error_sampling uses `if client_sample_rate: float(...)` with no type/range check, unlike production _derive_client_error_sampling_rate which requires isinstance(int,float) and 0<rate<=1. WHY: string '0.1', bool True, or out-of-range 5.0 get stored as sample_rate in fixtures while production drops them, making upsampling tests diverge from prod. HOW: mirror production validation before assigning sample_rate."
+     },
+     {
+      "file": "src/sentry/testutils/factories.py",
+      "lines": [
+       345,
+       345
+      ],
+      "texto": "The new docstring says the client sample rate must be 'present and valid', but the implementation only checks truthiness and float conversion. Negative rates, rates greater than 1, and float-convertible non-finite values are all accepted and written to sample_rate. This falsely tells test authors that this helper enforces sample-rate validity. Either document that it merely copies truthy float-convertible values, or validate the supported sample-rate range and finiteness before setting the field."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#08",
+    "descricao": "With upsampling active, top-events queries pick and order the top N groups by raw count() (selected_columns/orderby are not transformed) while the plotted series use upsampled_count(), so ranking can disagree with the displayed weighted counts.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/endpoints/organization_events_stats.py",
+      "lines": [
+       242,
+       248
+      ],
+      "texto": "Only timeseries_columns are upsampled while selected_columns and orderby used to select the Top N remain based on raw count(). discover.top_events_timeseries first queries those unchanged selected columns to choose groups, so a group with fewer retained events but a higher weighted count is omitted in favor of a lower-volume group. Apply the weighted-count transformation consistently to Top N selection and its ordering as well as the displayed timeseries."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#09",
+    "descricao": "_are_all_projects_error_upsampled and its caller take an organization argument that is never read.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/helpers/error_upsampling.py",
+      "lines": [
+       28,
+       44
+      ],
+      "texto": "`_are_all_projects_error_upsampled` takes an `organization` argument \u2014 also threaded in from the public `is_errors_query_for_error_upsampled_projects` \u2014 but never reads it: the body uses only `project_ids` and the global option `issues.client_error_sampling.project_allowlist`. The declared parameter is dead. Either the allowlist check is meant to be organization-scoped (the body must actually consult `organization`) or the parameter should be removed from both functions; as written the signature advertises an organization-scoped decision the implementation never makes."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#14",
+    "descricao": "Claims only bare count() is rewritten, so aliased count, eps(), epm(), count_unique() etc. stay un-upsampled.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/helpers/error_upsampling.py",
+      "lines": [
+       54,
+       64
+      ],
+      "texto": "WHAT: transform_query_columns_for_error_upsampling only rewrites exact bare `count()` and passes everything else through unchanged. WHY: yAxes like `count() as foo`, `eps()`, `epm()`, `count_unique()`, `count_if()` keep raw counts while should_upsample is true, returning under-counted timeseries. HOW: parse/normalize the function (strip alias, match function name with args) and rewrite all count-equivalent aggs or explicitly fall back to no-upsampling."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#15",
+    "descricao": "Rewriting count() to `upsampled_count() as count` breaks responses for transformAliasToInputFormat=1: the result column is translated to the rewritten field string while the serializer still reads `count()`.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/helpers/error_upsampling.py",
+      "lines": [
+       58,
+       60
+      ],
+      "texto": "Replacing count() with `upsampled_count() as count` breaks requests using transformAliasToInputFormat=1. QueryBuilder.process_results translates the count alias to the replacement field string, but the endpoint serializer still resolves the original axis as `count()`, so it cannot read the weighted count from the returned rows. Preserve the original public field name in the result mapping when rewriting the internal aggregation."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#16",
+    "descricao": "upsampled_count truncates the weighted sum with toInt64 instead of rounding, under-counting the estimate by up to one per bucket.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/search/events/datasets/discover.py",
+      "lines": [
+       1044,
+       1049
+      ],
+      "texto": "`upsampled_count` wraps the sum in `toInt64`, which truncates toward zero: `sum(ifNull(sample_weight, 1))` of e.g. 1.5 or 3.33 yields 1 or 3 instead of the nearest integer, systematically under-counting the upsampled estimate (worst when weights are just below an integer). Use a rounding aggregation (e.g. `toInt64(round(sum(...)))`) so the reconstructed count reflects the intended estimate rather than a floored value."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#18",
+    "descricao": "The 'no project IDs' test case runs with an empty allowlist mock, so it passes via the empty-allowlist branch and does not verify the empty project_ids guard.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/api/helpers/test_error_upsampling.py",
+      "lines": [
+       51,
+       52
+      ],
+      "texto": "The 'no project IDs provided' case does not exercise the `if not project_ids: return False` guard. mock_options.get.return_value was set to [] just above (line 48), so removing the project_ids guard still returns False via the `if not allowlist` branch, and this assertion passes either way. Re-mock options.get to return a non-empty allowlist (e.g. self.project_ids) before calling with project_ids=[], so the empty-project guard is actually falsifiable."
+     }
+    ]
+   }
+  ]
+ },
+ "frontend-asset-optimization-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "b1613e320acff00623e6efc59f00ee68c7684a97",
+  "base": "3ce1a5b0caab215346a51629b0344b90d67e9478",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/api/webassets/webassets.go",
+    "lines": [
+     48,
+     70
+    ],
+    "texto": "WHAT: The write lock is held while performing blocking file I/O or an HTTP request to the CDN. WHY: Every concurrent request that needs web assets is serialized behind that single I/O operation, causing a startup/request-time bottleneck. HOW: Perform the asset loading outside the lock and only acquire the lock to read or update the cache pointer; alternatively use sync.Once for initial population and an atomic pointer for reads."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/api/webassets/webassets.go",
+    "lines": [
+     48,
+     70
+    ],
+    "texto": "WHAT: After acquiring the write lock, the function does not re-check whether another goroutine already populated the cache, and it assigns `result` to the cache even when `result` is nil due to an error. WHY: A later goroutine that failed to load assets can overwrite a previously successful cache entry with nil, causing every subsequent non-Dev request to re-read the manifest and defeating the cache. HOW: Add a double-checked read after acquiring the write lock and only update the cache when the load succeeded."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/api/webassets/webassets.go",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "The double-check pattern is missing after taking the write lock. This is an internal concurrency/performance issue (not a contract change visible to callers): after acquiring the write lock, the cache should be re-checked before reading the manifest and populating it, to avoid redundant work under concurrent access."
+   },
+   {
+    "id": "S4",
+    "file": "pkg/api/webassets/webassets.go",
+    "lines": [
+     41,
+     70
+    ],
+    "texto": "After acquiring entryPointAssetsCacheMu.Lock(), GetWebAssets should re-check whether entryPointAssetsCache is already non-nil (and cfg.Env != setting.Dev) before reading the manifest again. Without that second check, multiple goroutines that both passed the initial read-locked nil check will perform the file/CDN read sequentially and overwrite the cache, causing duplicate work and possible inconsistent cached values. Add a guarded re-check immediately after the Lock()."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "frontend-asset-optimization-grafana-codex#01",
+    "descricao": "GetWebAssets does not re-check the cache after acquiring the write lock, so concurrent callers that missed the cache each reload the assets manifest.",
+    "textoGolden": "The GetWebAssets function implements an incomplete double-checked locking pattern for caching web assets. The function first checks if the cache is populated using a read lock (RLock), and if the cache is empty, it acquires a write lock to populate it. However, it fails to re-check whether the cache was populated by another goroutine while waiting to acquire the write lock.",
+    "comentarios": [
+     {
+      "file": "pkg/api/webassets/webassets.go",
+      "lines": [
+       48,
+       69
+      ],
+      "texto": "WHAT: The exclusive lock acquired at line 48 is held (via defer on line 49) across the blocking file read / synchronous CDN HTTP request (lines 56-67) and there is no re-check of entryPointAssetsCache after acquiring the lock. WHY: On a cold cache, all concurrent callers (api/index.go:82, api/frontendsettings.go:62, middleware/recovery.go:141) block on the write lock and then each sequentially re-executes the full load (file I/O or blocking http.DefaultClient.Do), producing a thundering-herd serialization and N redundant loads instead of one; in Dev mode this happens on every request since the fast path is skipped, serializing all concurrent page loads. HOW: after `entryPointAssetsCacheMu.Lock()` re-check the cache (`if cfg.Env != setting.Dev && entryPointAssetsCache != nil { return entryPointAssetsCache, nil }`) so only the first goroutine performs the load, and drop the defer in favor of releasing the lock immediately after assigning `entryPointAssetsCache = result` to avoid holding it during I/O."
+     },
+     {
+      "file": "pkg/api/webassets/webassets.go",
+      "lines": [
+       41,
+       48
+      ],
+      "texto": "cache is not re-checked under the lock after re-acquiring write Lock, so concurrent callers can each recompute web assets"
+     },
+     {
+      "file": "pkg/api/webassets/webassets.go",
+      "lines": [
+       48,
+       49
+      ],
+      "texto": "The cache is not rechecked after acquiring the write lock, so concurrent production requests that initially observe a nil cache each reload and decode the manifest even after another request has populated it. During a cold-start request burst, these redundant filesystem reads and JSON decodes execute serially under the global lock, delaying queued page and frontend-settings requests and blocking cache readers while each reload runs. After acquiring the write lock, return the populated cache when cfg.Env != setting.Dev before performing asset loading."
+     }
+    ]
+   },
+   {
+    "issueId": "frontend-asset-optimization-grafana-codex#sncc-02",
+    "descricao": "GetWebAssets holds a global exclusive mutex through the whole manifest load, so in Dev mode, where the cache is bypassed, every request serializes behind it.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "6048e2a86b50e81e1e3b1b467dfea5a895add3dc",
+  "base": "d1440bb5d2f2190ad7ae1d26c165f970055b5370",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+    "lines": [
+     213,
+     223
+    ],
+    "texto": "WHAT: deleteScheduledEmailReminder with immediateDelete=true cancels the SendGrid scheduled send but never deletes the WorkflowReminder row. WHY: When a booking is rescheduled via handleNewBooking.ts, the previous booking's email reminders are cancelled with immediateDelete=true and the booking is kept, so the stale rows remain in the database until their scheduledDate passes; the cron only cleans cancelled=true rows, causing a reminder row leak. HOW: Delete the row after the SendGrid cancel request in the immediateDelete branch."
+   },
+   {
+    "id": "S2",
+    "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+    "lines": [
+     56,
+     74
+    ],
+    "texto": "WHAT: The remindersToCancel loop awaits each SendGrid cancel request sequentially. WHY: Each cancelled reminder within the next hour triggers a separate blocking network round-trip, so cancellation latency grows linearly with the number of cancelled reminders and can delay the cron run. HOW: Collect the client.request promises and await Promise.all, or use a bounded concurrency helper like async.mapLimit."
+   },
+   {
+    "id": "S3",
+    "file": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+    "lines": [
+     197,
+     232
+    ],
+    "texto": "The function deleteScheduledEmailReminder now, by default, only sets `cancelled: true` on the row and does not delete it, while its name and the callers' expectations (e.g., 'deleteScheduledEmailReminder') say it deletes the reminder. Rename it to something like cancelScheduledEmailReminder or split the 'mark cancelled' and 'delete' paths so the name matches the behavior."
+   },
+   {
+    "id": "S4",
+    "file": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+    "lines": [
+     197,
+     232
+    ],
+    "texto": "When `referenceId` is present and `immediateDelete` is true, the function cancels the SendGrid batch but returns without deleting the `WorkflowReminder` row or setting `cancelled: true`. Because the cleanup cron only processes rows with `cancelled: true`, these reminders are never removed from the database. For callers that are not followed by a cascade delete (e.g. rescheduling in `handleNewBooking.ts`), this leaks stale rows. The `immediateDelete` branch should either delete the row directly (matching `deleteScheduledSMSReminder`) or mark it `cancelled: true` so the cron can remove it."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+    "descricao": "Reminder cancel helpers are called without await inside forEach when bookings are cancelled/rescheduled or workflows edited, so the handler can return before reminders are cancelled or deleted and failures are unobserved.",
+    "textoGolden": "Asynchronous functions deleteScheduledEmailReminder and deleteScheduledSMSReminder are called without await inside forEach loops. This occurs during booking rescheduling/cancellation, and workflow/workflow step deletion/updates. Consequently, scheduled workflow reminders may not be reliably cancelled, potentially leaving them active.",
+    "comentarios": [
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       484,
+       493
+      ],
+      "texto": "WHAT: async deleteScheduledEmailReminder/deleteScheduledSMSReminder called inside forEach without collecting/awaiting promises. WHY: handler returns before cancels complete and rejections are unobserved, so cancellations are lost and reminder emails/SMS are still sent (same fire-and-forget pattern repeated in handleNewBooking:966, bookings.tsx:488, workflows.tsx:212/376/519/574)."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       485,
+       495
+      ],
+      "texto": "Cancellation now delegates the database update/deletion to asynchronous reminder helpers without awaiting them, while removing reminder deletes from the awaited promise list. The handler can finish before cancelled flags or unscheduled-reminder deletions are persisted, allowing a subsequent scheduler run to schedule a cancelled booking's reminder and leaving cancellation work unfinished when a serverless invocation terminates. Collect and await the helper promises; apply the same correction to the modified rescheduling and workflow-update callers that discard these promises."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       485,
+       495
+      ],
+      "texto": "Await the reminder cancellation promises before completing the cancellation request. These helpers now own persistence of cancellation: email awaits a workflowReminder update and SMS awaits Twilio before deleting the row. The forEach discards their promises, and removing remindersToDelete from the awaited promise list removes the previous guarantee that reminder state is cleared before the handler returns. In a serverless request the outstanding operations can be interrupted after the response, leaving reminders active for a cancelled booking. Collect these helper promises and include them in the awaited Promise.all."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+    "descricao": "The cron cancels SendGrid sends for cancelled reminders in one try around the whole loop, so one failing cancel aborts all remaining cancellations and the row deletions, and the failing row blocks later runs.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "lines": [
+       43,
+       77
+      ],
+      "texto": "WHAT: remindersToCancel loop awaits SendGrid cancel per-reminder inside one try and only runs Prisma deletes after the loop, with no method filter. WHY: a single throw (e.g. null SMS referenceId sent as batch_id, or one SendGrid error) aborts the loop and skips Promise.all deletes, leaving all other cancelled emails still scheduled so they are still sent."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "lines": [
+       66,
+       74
+      ],
+      "texto": "Successful cancellation records are only deleted after every SendGrid request in the loop succeeds. If a later request fails, the catch skips all queued Prisma deletions; the next run retries an already-cancelled batch, which SendGrid rejects with 400, and aborts before processing the remaining reminders. Await each reminder's database deletion immediately after its successful cancellation and isolate errors per reminder so one failed batch does not block the others."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "lines": [
+       53,
+       76
+      ],
+      "texto": "Handle cancellation failures per reminder rather than around the entire batch. If one SendGrid request rejects (for example, for an expired or invalid batch ID), the loop exits before cancelling the remaining reminders, and Promise.all is never reached, so even earlier successfully cancelled reminders remain in the database. The failed record stays eligible for the next run and can repeatedly block other cancellations until their emails are sent. Execute each successful deletion and isolate failures so the worker continues processing the remaining reminders."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#05",
+    "descricao": "Email reminders for cancelled bookings are only flagged cancelled and cancelled in SendGrid by the cron later, so reminders close to their send time can still be delivered.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "lines": [
+       46,
+       48
+      ],
+      "texto": "Deferred cancellation includes reminders less than ten minutes from their scheduled send time, when SendGrid no longer permits cancellation. A booking cancelled in that interval is only marked cancelled locally by deleteScheduledEmailReminder, and the cron's POST is rejected, so its email is still delivered. Process cancellation before SendGrid's ten-minute cutoff and explicitly handle cancellations that arrive after that deadline rather than relying on this cron query to stop delivery."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#06",
+    "descricao": "The cron cancels SendGrid scheduled sends one at a time with sequential awaits, which is slower than batching.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "lines": [
+       53,
+       74
+      ],
+      "texto": "The new cancel loop performs a sequentially awaited SendGrid HTTP request (`await client.request(...)`) for each reminder returned by an unbounded `findMany` (no `take`), then deletes them. WHY: this is O(N) serial network round-trips per cron run; if many reminders are cancelled at once (e.g. a bulk event-type disable or booking cancellation wave) the cron handler can block for a long time on serial SendGrid latency. HOW: fan the independent SendGrid cancel requests out with `Promise.all`, and/or bound the query with `take` plus pagination, then batch the DB deletes."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "lines": [
+       56,
+       64
+      ],
+      "texto": "WHAT: SendGrid cancel issued with sequential await inside for loop over remindersToCancel. WHY: cron blocks O(N) sequential network round-trips instead of parallel batch, materially slowing the hourly schedule job as cancelled backlog grows."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#11",
+    "descricao": "deleteScheduledEmailReminder and its immediateDelete flag do not delete anything; the names no longer describe the behaviour.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+      "lines": [
+       197,
+       232
+      ],
+      "texto": "`deleteScheduledEmailReminder` and its `immediateDelete` flag no longer match what the code does. The default path only marks the reminder `cancelled: true`, and the `immediateDelete` path only sends a cancel request to the email provider. Neither path deletes the scheduled send or the row, unlike the SMS counterpart, which still deletes. Rename them (for example `cancelScheduledEmailReminder` and `immediateCancel`) or document the behaviour."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#13",
+    "descricao": "deleteScheduledSMSReminder deletes the DB row only after a successful Twilio cancel, so a cancel failure leaves the reminder row behind now that callers no longer delete it.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/lib/reminders/smsReminderManager.ts",
+      "lines": [
+       177,
+       186
+      ],
+      "texto": "twilio.cancelSMS and prisma.workflowReminder.delete share one try block. If the Twilio cancel throws, the DB row is never deleted. The reminder row then stays behind for a booking that was cancelled, rescheduled or deleted, because the callers no longer delete rows themselves. Delete the row in a finally block, or handle the cancel failure separately so the delete still runs."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#14",
+    "descricao": "Prisma is imported in workflows.tsx but no longer used.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/workflows.tsx",
+      "lines": [
+       1,
+       10
+      ],
+      "texto": "`Prisma` is imported as a value (line 9) but is no longer used anywhere in this file. This PR removed the only usages (`Prisma.BatchPayload` in the now-deleted `remindersToDelete` / `deleteReminderPromise` declarations), while the import was kept. WHY: the repo's ESLint `no-unused-vars` rule will fail CI/build for an unused import. HOW: remove `Prisma` from the import list (and keep `import type { PrismaPromise }` as a type-only import)."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#prod-01",
+    "descricao": "The cron route sets the API key only on @sendgrid/mail, so the new @sendgrid/client cancellation requests are unauthenticated and reminders for cancelled bookings stay scheduled.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "fixing-re-authentication-with-passkeys-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "25bf964a844ea0bc64dc838bff038345048cb1fa",
+  "base": "744e031019af8dbaacf407e792fbb3756364e2b4",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/AbstractUsernameFormAuthenticator.java",
+    "lines": [
+     57,
+     58
+    ],
+    "texto": "The Javadoc/comment for USER_SET_BEFORE_USERNAME_PASSWORD_AUTH still describes the previous behavior of preventing user clearing on failed password authentication. After the refactor the flag is consumed only by AuthenticatorUtils.setupReauthenticationInUsernamePasswordFormError to hide the username and disable registration during re-authentication. The comment should be updated to match the current observable effect, otherwise future maintainers will look for user-clearing logic that is no longer governed by this flag."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#03",
+    "descricao": "PasswordForm now accepts passkey-only users, but only the keycloak.v2 login-password.ftl renders the passkeys conditional UI; the base template (used by the legacy keycloak theme) does not, so a passkey-only user is shown a password-only form they cannot complete.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/PasswordForm.java",
+      "lines": [
+       63,
+       63
+      ],
+      "texto": "PasswordForm.configuredFor now accepts passkey-only users even when the active login theme renders the unchanged base login-password.ftl, which contains no passkeys UI. The legacy keycloak theme inherits that template, so a user without a password reaches a password-only challenge with no way to authenticate instead of being able to use the newly accepted passkey credential. Add the passkeys import and conditionalUIData invocation to the base login-password.ftl as well as the keycloak.v2 override."
+     }
+    ]
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#04",
+    "descricao": "The comment 'setup webauthn data when passkeys enabled' does not mention that the condition also requires a selected user to own a passkey credential.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernamePasswordForm.java",
+      "lines": [
+       114,
+       117
+      ],
+      "texto": "The new comment says webauthn data is set up \"when passkeys enabled\", but the guard `isConditionalPasskeysEnabled(context.getUser())` also requires that a known/already-selected user actually has a passkey credential. With realm passkeys enabled and a selected user without a passkey, `fillContextForm` is skipped (the test `passwordLogin_reauthenticationOfUserWithoutPasskey` relies on exactly this), so the comment misdescribes the condition it documents. Rephrase it to match the code, e.g. \"setup webauthn data when conditional passkeys can be used (user unknown or user has a passkey)\"."
+     }
+    ]
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#06",
+    "descricao": "The test comment says it sets the passwordless policy for discoverable keys, but the updater only disables passkeys for the realm.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernamePasswordFormTest.java",
+      "lines": [
+       281,
+       283
+      ],
+      "texto": "The comment 'set passwordless policy for discoverable keys' is stale. The updater now only calls setWebAuthnPolicyPasskeysEnabled(Boolean.FALSE), so it disables passkeys for the realm. Change the comment to say that passkeys are disabled for the realm."
+     }
+    ]
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#snapi-01",
+    "descricao": "reauthenticationOfUserWithoutPasskey disables passkeys for the realm, so the hidden webauthn form is guaranteed by isPasskeysEnabled() and the new per-user isConfiguredFor check for users without a passkey is never exercised in UsernamePasswordForm.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ }
+}

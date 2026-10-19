@@ -1,0 +1,12 @@
+{
+ "caseId": "advanced-sql-analytics-framework-grafana-codex",
+ "items": [
+  {
+   "issueId": "advanced-sql-analytics-framework-grafana-codex#kimi-01",
+   "class": "TP",
+   "subclass": "none",
+   "severity": "high",
+   "reply": "The unchanged warning becomes reachable for every nonempty SQL expression passed to NewSQLCommand because this PR changes TablesList to use a stub whose RunCommands always fails. Previously, valid queries referencing tables logged their SQL only at debug level; they now expose it at warning level. The path remains reachable through buildCMDNode \u2192 UnmarshalSQLCommand when expressionParser is disabled. Thus the PR introduces broader raw-SQL logging despite leaving the logging statement unchanged; sensitive literals create a conditional security weakness."
+  }
+ ]
+}

@@ -1,0 +1,17 @@
+{
+ "caseId": "async-import-of-the-appstore-packages-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Describes the same unawaited async forEach in handleCancelBooking, which populates apiDeletes after Promise.all consumes it and leaves calendar deletions unawaited."
+  },
+  {
+   "id": "S2",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Describes the same unawaited async forEach in the reschedule handlers, allowing execution to continue before deletions finish and causing rejections to escape the surrounding try/catch."
+  }
+ ]
+}

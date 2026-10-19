@@ -1,0 +1,47 @@
+{
+ "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reports an unavailable upsampled_count function in the errors dataset resolver. This differs from #03's use of the wrong dataset when evaluating eligibility."
+  },
+  {
+   "id": "S2",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#03",
+   "newGroup": null,
+   "reason": "Identifies the same eligibility check using the outer dataset instead of scoped_dataset in dashboard split queries."
+  },
+  {
+   "id": "S3",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04",
+   "newGroup": null,
+   "reason": "Identifies the same substring check that incorrectly treats negated event.type:error filters as error-only queries."
+  },
+  {
+   "id": "S4",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#14",
+   "newGroup": null,
+   "reason": "Reports the same exact-string transformation leaving aliased count(), eps(), and epm() un-upsampled."
+  },
+  {
+   "id": "S5",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#06",
+   "newGroup": null,
+   "reason": "Reports the same missing validation allowing invalid truthy, float-convertible sample rates into test fixtures."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Requests accepting zero, whereas #06 concerns accepting invalid rates. Production explicitly requires 0 < rate <= 1, so the claim that zero is legitimate is unsupported."
+  },
+  {
+   "id": "S7",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#05",
+   "newGroup": null,
+   "reason": "Identifies the same transaction fixture whose default weight makes count() and upsampled_count() indistinguishable, preventing the test from detecting wrongful upsampling."
+  }
+ ]
+}

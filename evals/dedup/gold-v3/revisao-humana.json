@@ -15,11 +15,22 @@
   "opus-5.5@prod",
   "sonnet-5.5@prod",
   "sonnet-5.5@sdkapi",
-  "sonnet-5.5@loop"
+  "sonnet-5.5@loop",
+  "muse-spark-1.3@prod",
+  "muse-spark-1.3@novo",
+  "kimi-k2.7-code@novo",
+  "kimi-k2.7-code@prod",
+  "deepseek-v4.1-flash@prod-finder",
+  "gpt-6.1-sol@prod-finder",
+  "opus-5.5@prod-finder",
+  "sonnet-5.5@prod-finder",
+  "muse-spark-1.3@prod-finder",
+  "kimi-k2.7-code@prod-finder"
  ],
  "classificadores": [
   "claude-opus-5.5",
   "gpt-6-astra"
  ],
- "regua": "TP = o problema existe no codigo do head e o PR o introduz ou mexe no codigo envolvido; FP = nao ha problema a reportar no PR"
+ "regua": "TP = o problema existe no codigo do head e o PR o introduz ou mexe no codigo envolvido; FP = nao ha problema a reportar no PR",
+ "regua_class_reviewed": "Medir pelo class_reviewed. TP = TP confirmado ou descontinuado no repositorio original; FP nit = TP pendente ou que nao entrou no original, TP nit e FP; FP hallucination = o fato alegado e falso. Cada TP conta uma vez: a segunda sugestao sobre o mesmo TP conta como FP nit."
 }

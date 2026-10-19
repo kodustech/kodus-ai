@@ -1,0 +1,507 @@
+{
+ "dual-storage-architecture-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "dual-storage-architecture-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Mode 3 legacy writes now run in background goroutines derived from the request context, which is cancelled when the request completes, so legacy writes can be cancelled and legacy storage falls out of sync."
+  },
+  {
+   "id": "S2",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: On storage Create/Update failure the duration is recorded with recordLegacyDuration, attributing unified-store errors to the legacy metric."
+  },
+  {
+   "id": "S3",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The legacy DeleteCollection goroutine records its duration with recordStorageDuration instead of recordLegacyDuration, misattributing legacy latency and errors to the storage metric."
+  },
+  {
+   "id": "S4",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Delete's success path records the storage metric with the object name in the kind label instead of options.Kind, creating per-object series and inconsistent labels."
+  },
+  {
+   "id": "S5",
+   "match": "dual-storage-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Delete puts the base d.Log instead of the enriched per-call logger into the context, so downstream logs lose name/kind/method fields."
+  },
+  {
+   "id": "S6",
+   "match": "dual-storage-architecture-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Legacy.Update now receives the original objInfo instead of a wrapper carrying the object stored in unified storage, so legacy recomputes the update and can diverge."
+  },
+  {
+   "id": "S7",
+   "match": "dual-storage-architecture-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Mode 3 legacy writes now run in background goroutines derived from the request context, which is cancelled when the request completes, so legacy writes can be cancelled and legacy storage falls out of sync."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Shared obj/objInfo pointer handed to the background goroutine (data race); no golden issue covers it."
+  },
+  {
+   "id": "S9",
+   "match": "dual-storage-architecture-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The Mode 3 tests never wait for or assert the asynchronous legacy writes, and legacy and storage share one mock, so removing the legacy calls would not fail them."
+  },
+  {
+   "id": "S10",
+   "match": "dual-storage-architecture-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The Mode 3 tests never wait for or assert the asynchronous legacy writes, and legacy and storage share one mock, so removing the legacy calls would not fail them."
+  },
+  {
+   "id": "S11",
+   "match": "dual-storage-architecture-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The Mode 3 tests never wait for or assert the asynchronous legacy writes, and legacy and storage share one mock, so removing the legacy calls would not fail them."
+  },
+  {
+   "id": "S12",
+   "match": "dual-storage-architecture-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The Mode 3 tests never wait for or assert the asynchronous legacy writes, and legacy and storage share one mock, so removing the legacy calls would not fail them."
+  },
+  {
+   "id": "S13",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Delete's success path records the storage metric with the object name in the kind label instead of options.Kind, creating per-object series and inconsistent labels."
+  },
+  {
+   "id": "S14",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The legacy DeleteCollection goroutine records its duration with recordStorageDuration instead of recordLegacyDuration, misattributing legacy latency and errors to the storage metric."
+  },
+  {
+   "id": "S15",
+   "match": "dual-storage-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Delete puts the base d.Log instead of the enriched per-call logger into the context, so downstream logs lose name/kind/method fields."
+  },
+  {
+   "id": "S16",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: On storage Create/Update failure the duration is recorded with recordLegacyDuration, attributing unified-store errors to the legacy metric."
+  }
+ ],
+ "add-guest-management-functionality-to-existing-bookings-cal-com": [
+  {
+   "id": "S1",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: isTeamAdminOrOwner combines isTeamAdmin and isTeamOwner with &&, so only team owners pass; team admins who are not organizer or attendee are wrongly rejected with FORBIDDEN."
+  },
+  {
+   "id": "S2",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The handler passes the unfiltered guests list to sendAddGuestsEmails, which uses it to pick who gets AttendeeScheduledEmail, so existing attendees included in the request receive a new-booking confirmation instead of the add-guests email."
+  },
+  {
+   "id": "S3",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The guest blacklist is lowercased but incoming guest emails are compared without normalization, so a blacklisted address submitted with different casing bypasses BLACKLISTED_GUEST_EMAILS and is added and emailed."
+  },
+  {
+   "id": "S4",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#11",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The guests array has no server-side size limit, so any authorized caller, including an attendee, can add thousands of guests and trigger an unbounded batch of inserts and emails."
+  },
+  {
+   "id": "S5",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#14",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: After a validation failure followed by a successful add, isInvalidEmail stays true, so the stale emails_must_be_unique_valid error shows the next time the dialog is opened."
+  },
+  {
+   "id": "S6",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: isTeamAdminOrOwner combines isTeamAdmin and isTeamOwner with &&, so only team owners pass; team admins who are not organizer or attendee are wrongly rejected with FORBIDDEN."
+  },
+  {
+   "id": "S7",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The handler passes the unfiltered guests list to sendAddGuestsEmails, which uses it to pick who gets AttendeeScheduledEmail, so existing attendees included in the request receive a new-booking confirmation instead of the add-guests email."
+  },
+  {
+   "id": "S8",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#12",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The Remove email tooltip in MultiEmail is a hard-coded English string instead of a translation key."
+  },
+  {
+   "id": "S9",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The guest blacklist is lowercased but incoming guest emails are compared without normalization, so a blacklisted address submitted with different casing bypasses BLACKLISTED_GUEST_EMAILS and is added and emailed."
+  },
+  {
+   "id": "S10",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#05",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Attendee authorization and existing-attendee dedup compare emails case-sensitively, so an attendee with differently-cased stored email is FORBIDDEN and a case-variant of an existing attendee is added again."
+  },
+  {
+   "id": "S11",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#03",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The server never deduplicates the guests array, so a request with the same email twice inserts duplicate attendee rows for the booking."
+  },
+  {
+   "id": "S12",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#04",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Check-then-insert without a transaction or unique constraint lets two concurrent addGuests calls for the same email both pass the existing-attendee check and create duplicate attendees."
+  },
+  {
+   "id": "S13",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The handler passes the unfiltered guests list to sendAddGuestsEmails, which uses it to pick who gets AttendeeScheduledEmail, so existing attendees included in the request receive a new-booking confirmation instead of the add-guests email."
+  }
+ ],
+ "feat-2fa-backup-codes-cal-com": [
+  {
+   "id": "S1",
+   "match": "feat-2fa-backup-codes-cal-com#01",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The credentials authorize() skips the password check when any totpCode is present, and the new backup-code branch never validates that totpCode, so a backup code plus a dummy totpCode logs in without the account password."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Toggle button inside the disable form lacks type=\"button\" and submits the form; not in golden set."
+  },
+  {
+   "id": "S3",
+   "match": "feat-2fa-backup-codes-cal-com#16",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The disable endpoint calls replaceAll on req.body.backupCode without checking it is a string, so non-string input throws a 500."
+  },
+  {
+   "id": "S4",
+   "match": "feat-2fa-backup-codes-cal-com#04",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The default export in BackupCode.tsx is named TwoFactor, a copy-paste leftover from the TOTP component."
+  },
+  {
+   "id": "S5",
+   "match": "feat-2fa-backup-codes-cal-com#13",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The download e2e test checks only the filename, not that the file contains the displayed backup codes."
+  },
+  {
+   "id": "S6",
+   "match": "feat-2fa-backup-codes-cal-com#05",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The backup-code copy e2e test only waits for the success toast, which is shown unconditionally, so it never verifies the clipboard content."
+  },
+  {
+   "id": "S7",
+   "match": "feat-2fa-backup-codes-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The backup code is compared with the stored codes through Array.indexOf, which is not constant-time and leaks timing information about the secret backup codes."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Timing-unsafe indexOf comparison in disable.ts, a different place from the login-path timing issue."
+  },
+  {
+   "id": "S9",
+   "match": "feat-2fa-backup-codes-cal-com#16",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The disable endpoint calls replaceAll on req.body.backupCode without checking it is a string, so non-string input throws a 500."
+  },
+  {
+   "id": "S10",
+   "match": "feat-2fa-backup-codes-cal-com#07",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Backup-code consumption is a non-atomic read-modify-write, so concurrent logins can accept the same backup code more than once or overwrite each other's removal."
+  }
+ ],
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#04",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: order() is added to CryptoProvider as an abstract method, breaking source and binary compatibility for existing third-party CryptoProvider implementations."
+  },
+  {
+   "id": "S2",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#07",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Claims a wrong-length JOSE signature causes an unchecked exception in concatenatedRSToASN1DER; verifiers catch it and report verification failure, as with the existing providers."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "ASN1Decoder.readSequence accepts negative remainder/trailing bytes; no golden issue covers DER strictness."
+  },
+  {
+   "id": "S4",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#05",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: detectProvider no longer fails when several crypto providers are present; with Default, FIPS and Elytron all at order 200, ties are resolved by classpath order and a FIPS deployment can silently run with the non-FIPS provider."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "AuthzClient.create pins the global CryptoIntegration singleton; not in golden set."
+  },
+  {
+   "id": "S6",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#11",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The test only checks a round trip between the two new converters and never verifies the re-encoded DER against the original signature or with Signature.verify, so mutually consistent bugs go undetected."
+  },
+  {
+   "id": "S7",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: concatenatedRSToASN1DER encodes r and s into two throwaway ASN1Encoder instances before re-encoding them in the return statement."
+  },
+  {
+   "id": "S8",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#07",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Claims a wrong-length JOSE signature causes an unchecked exception in concatenatedRSToASN1DER; verifiers catch it and report verification failure, as with the existing providers."
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "integerToBytes does not reject negative/oversized integers; not in golden set."
+  },
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "ASN1Decoder.readSequence accepts negative remainder/trailing bytes; no golden issue covers DER strictness."
+  }
+ ],
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+  {
+   "id": "S1",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: fetchAvailabilityAndSetCache calls SelectedCalendarRepository.updateManyByCredentialId with an empty data object, so Prisma does not refresh the @updatedAt timestamp and SelectedCalendar.updatedAt never reflects the cache refresh."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "connectedCalendars handler bypasses the cache repository factory; not in golden set."
+  },
+  {
+   "id": "S3",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#03",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: After deleting the calendar cache, CredentialActionsDropdown does not invalidate the connectedCalendars query, so where no parent refetch callback is passed the stale cache status and delete action remain visible."
+  },
+  {
+   "id": "S4",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#07",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The webhook test script updates .env with the macOS-only `sed -i ''` syntax, which fails on Linux GNU sed and leaves GOOGLE_WEBHOOK_URL unchanged."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Predictable /tmp/tmole.log symlink attack in the script; not in golden set."
+  },
+  {
+   "id": "S6",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: fetchAvailabilityAndSetCache calls SelectedCalendarRepository.updateManyByCredentialId with an empty data object, so Prisma does not refresh the @updatedAt timestamp and SelectedCalendar.updatedAt never reflects the cache refresh."
+  },
+  {
+   "id": "S7",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: fetchAvailabilityAndSetCache calls SelectedCalendarRepository.updateManyByCredentialId with an empty data object, so Prisma does not refresh the @updatedAt timestamp and SelectedCalendar.updatedAt never reflects the cache refresh."
+  },
+  {
+   "id": "S8",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: fetchAvailabilityAndSetCache calls SelectedCalendarRepository.updateManyByCredentialId with an empty data object, so Prisma does not refresh the @updatedAt timestamp and SelectedCalendar.updatedAt never reflects the cache refresh."
+  },
+  {
+   "id": "S9",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#04",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The cache 'last updated' timestamp is formatted with a hard-coded en-US locale instead of the user's locale, so non-US users see US-style dates in an otherwise translated label."
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Removal listener calls V2 setPermissionsEnabled which throws; differs from #01 (V1 flag guard orphaning permissions)."
+  },
+  {
+   "id": "S2",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#04",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Claims getResourceTypeResource can return null in ClientPermissionsV2.hasPermission, causing a NullPointerException in findByResource."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "canMapRoles variants skip MANAGE_CLIENTS role check; not in golden set."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Per-resource policy evaluation cost in getClientsWithPermission; #03 is about returning the type resource name, a different problem."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Removal listener calls V2 setPermissionsEnabled which throws; differs from #01 (V1 flag guard orphaning permissions)."
+  },
+  {
+   "id": "S6",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#08",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The Javadoc of the void requireView() and requireViewClientScopes() methods says they return true instead of documenting that they throw ForbiddenException."
+  },
+  {
+   "id": "S7",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#08",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The Javadoc of the void requireView() and requireViewClientScopes() methods says they return true instead of documenting that they throw ForbiddenException."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Removal listener calls V2 setPermissionsEnabled which throws; differs from #01 (V1 flag guard orphaning permissions)."
+  }
+ ],
+ "database-performance-optimizations-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Leftover debug logs in the annotation cleanup emit Error-level entries with the full ID list on every batch, flooding error logs during normal operation."
+  },
+  {
+   "id": "S2",
+   "match": "database-performance-optimizations-grafana-codex#08",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The cleanup service ticker was changed from 10 minutes to 1 minute, running every cleanup job ten times as often and increasing database load."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "MaxCount fetch-then-delete race shifting the OFFSET window; not in golden set."
+  },
+  {
+   "id": "S4",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Leftover debug logs in the annotation cleanup emit Error-level entries with the full ID list on every batch, flooding error logs during normal operation."
+  },
+  {
+   "id": "S5",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Leftover debug logs in the annotation cleanup emit Error-level entries with the full ID list on every batch, flooding error logs during normal operation."
+  },
+  {
+   "id": "S6",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: Leftover debug logs in the annotation cleanup emit Error-level entries with the full ID list on every batch, flooding error logs during normal operation."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Loop terminates on deleted count 0 instead of fetched count; not in golden set."
+  }
+ ],
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "NPE on null config in getLoginPredicate; not in golden set."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Unbounded growth of per-organization search keys in the cached query; not in golden set."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Cache-hit path returns non-organization-aware models; not in golden set (#14 is only about test coverage)."
+  },
+  {
+   "id": "S4",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#13",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The login-cache test creates only public org-linked IDPs, so the new BROKER_PUBLIC check in getLoginPredicate is not covered."
+  }
+ ],
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Exit code renumbering of RECREATE_UPGRADE breaks automation; not in golden set."
+  },
+  {
+   "id": "S2",
+   "match": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#03",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: testFeatureNotEnabled only covers the metadata subcommand, so the feature guard in the check subcommand is untested."
+  },
+  {
+   "id": "S3",
+   "match": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#04",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: The disabled-feature test checks only the error message, not that the command exits with FEATURE_DISABLED (4)."
+  },
+  {
+   "id": "S4",
+   "match": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#03",
+   "newGroup": null,
+   "reason": "Same problem as the golden issue: testFeatureNotEnabled only covers the metadata subcommand, so the feature guard in the check subcommand is untested."
+  }
+ ],
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": []
+}

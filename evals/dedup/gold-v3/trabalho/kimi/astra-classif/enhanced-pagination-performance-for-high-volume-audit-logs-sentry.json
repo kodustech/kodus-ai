@@ -1,0 +1,19 @@
+{
+ "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
+ "items": [
+  {
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#kimi-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "src/sentry/api/paginator.py:133-134 shows BasePaginator.value_from_cursor raises NotImplementedError; it does not increment previous cursors, and the existing Paginator returns cursor.value unchanged at lines 226-227. The optimized paginator explicitly removes the matching boundary row at lines 888-890, so the claimed missing increment is based on nonexistent behavior.",
+   "severity": "high"
+  },
+  {
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#kimi-02",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "src/sentry/api/paginator.py:130-131 shows BasePaginator.get_item_key raises NotImplementedError and contains no callable-key branch. The existing Paginator uses the same getattr implementation at lines 222-224, while the inherited constructor requires string ordering via startswith at lines 63-67; the claimed callable-key compatibility does not exist.",
+   "severity": "high"
+  }
+ ]
+}

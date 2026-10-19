@@ -1,0 +1,12 @@
+{
+ "caseId": "authzservice-improve-authz-caching-grafana-codex",
+ "items": [
+  {
+   "issueId": "authzservice-improve-authz-caching-grafana-codex#kimi-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "pkg/services/authz/rbac/service.go:361-362 returns cached permissions without error on a successful lookup. In the newly added Check logic, a cached result that denies access bypasses the true increment at service.go:131-134 and reaches the false increment at service.go:137. Because metrics.go:36 explicitly names this label cache_hit, this misreports successful lookups as misses and distorts cache-hit monitoring.",
+   "severity": "medium"
+  }
+ ]
+}

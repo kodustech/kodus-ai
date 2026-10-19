@@ -1,0 +1,12 @@
+{
+ "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
+ "items": [
+  {
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#kimip-01",
+   "class": "TP",
+   "subclass": "nit",
+   "reason": "The new helper performs repeated sequence membership checks at src/sentry/api/helpers/error_upsampling.py:38-43, giving O(N\u00d7M) worst-case work; the option is registered as a Sequence at src/sentry/options/defaults.py:3477-3479. It runs from the stats callback at src/sentry/api/endpoints/organization_events_stats.py:218, but short-circuits on the first missing project and skips empty allowlists. Without evidence of substantial allowlist sizes or latency impact, converting it to a set is a minor optimization.",
+   "severity": "low"
+  }
+ ]
+}

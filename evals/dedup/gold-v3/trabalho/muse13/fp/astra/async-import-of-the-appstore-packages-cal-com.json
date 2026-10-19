@@ -1,0 +1,17 @@
+{
+ "caseId": "async-import-of-the-appstore-packages-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "async-import-of-the-appstore-packages-cal-com#03",
+   "newGroup": null,
+   "reason": "Repeats the rejected claim that getCalendarCredentials exposes an unawaited calendar Promise that callers use as a Calendar. The alleged alternative callers are the same consumer-handling concern covered by #03."
+  },
+  {
+   "id": "S9",
+   "match": "async-import-of-the-appstore-packages-cal-com#03",
+   "newGroup": null,
+   "reason": "Identifies the same unawaited getCalendar call in getCalendarCredentials and proposes the same async propagation. This matches #03, which establishes that consumers go through getConnectedCalendars and await the calendar."
+  }
+ ]
+}

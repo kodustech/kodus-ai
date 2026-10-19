@@ -1,0 +1,11 @@
+{
+ "caseId": "dual-storage-architecture-grafana-codex",
+ "items": [
+  {
+   "id": "S8",
+   "match": "dual-storage-architecture-grafana-codex#12",
+   "newGroup": null,
+   "reason": "It asserts the same shared-object aliasing race between the legacy-create goroutine and the caller. The Update analogy and deep-copy suggestion add detail without changing that claim."
+  }
+ ]
+}

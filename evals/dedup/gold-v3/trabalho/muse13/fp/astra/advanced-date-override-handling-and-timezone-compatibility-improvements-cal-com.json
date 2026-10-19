@@ -1,0 +1,23 @@
+{
+ "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+ "items": [
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims unvalidated timezone values cause exceptions in getSlots. Rejected issue #snapi-01 instead claims a missing override timezone silently produces an incorrect offset using the server timezone."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Claims an invalid organizerTimeZone causes an exception in checkIfIsAvailable. This is distinct from the rejected timezone-selection claim and from S7\u2019s separate conversion site in getSlots."
+  },
+  {
+   "id": "S10",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#08",
+   "newGroup": null,
+   "reason": "Makes the same claim that checkIfIsAvailable interprets overrides using organizerTimeZone instead of each override owner\u2019s timezone."
+  }
+ ]
+}

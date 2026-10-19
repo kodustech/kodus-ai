@@ -1,0 +1,790 @@
+{
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": [
+  {
+   "id": "S4",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#06",
+   "newGroup": null,
+   "reason": "Same claim: unguarded JSON.parse on OAuth state crashes callbacks."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Shared-secret webhook can overwrite any user credentials; no rejected issue covers this."
+  },
+  {
+   "id": "S9",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#snloop-01",
+   "newGroup": null,
+   "reason": "Same claim: empty-string fallback for encryption key instead of failing fast."
+  },
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Docs generation command yields 24 bytes vs 32 required; not among rejected issues."
+  },
+  {
+   "id": "S11",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#04",
+   "newGroup": null,
+   "reason": "Same claim: JSDoc describes type as the app slug."
+  },
+  {
+   "id": "S22",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#06",
+   "newGroup": null,
+   "reason": "Same claim: malformed state makes JSON.parse throw in OAuth callback."
+  }
+ ],
+ "feat-2fa-backup-codes-cal-com": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Toggle button lacks type=button and submits the form; not covered."
+  },
+  {
+   "id": "S8",
+   "match": "feat-2fa-backup-codes-cal-com#08",
+   "newGroup": null,
+   "reason": "Same claim: backup codes compared without constant-time comparison."
+  }
+ ],
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "S2",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#25",
+   "newGroup": null,
+   "reason": "Primary claim is unescaped referer in inline JS enabling XSS (also mentions targetOrigin)."
+  },
+  {
+   "id": "S10",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#25",
+   "newGroup": null,
+   "reason": "Same claim: referer interpolated into JS string without JS escaping."
+  },
+  {
+   "id": "S12",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#26",
+   "newGroup": null,
+   "reason": "Same claim: full referer as postMessage targetOrigin drops resize messages."
+  },
+  {
+   "id": "S14",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Same claim: spec mocks TopicRetriever but controller only enqueues a job."
+  }
+ ],
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "record_for_host returning false breaks try(:category_id); not covered."
+  },
+  {
+   "id": "S7",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#opa-01",
+   "newGroup": null,
+   "reason": "Same claim: _hydrateEmbedded maps *_ids without null/array check."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Per-request DB lookup for embeddable hosts; not covered."
+  }
+ ],
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Same claim: box-ordinal-group off by one vs order."
+  },
+  {
+   "id": "S2",
+   "match": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Same claim: box-ordinal-group off by one."
+  },
+  {
+   "id": "S3",
+   "match": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Same claim: box-ordinal-group off by one."
+  }
+ ],
+ "feature-automatically-downsize-large-images-discourse-cursor": [
+  {
+   "id": "S3",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Same claim: hardcoded 10MB replaces max_image_size_kb."
+  }
+ ],
+ "fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "S2",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "Same claim: usernames not stripped after comma split."
+  },
+  {
+   "id": "S5",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Same claim: require(:group_id) while route supplies :id."
+  },
+  {
+   "id": "S6",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Same claim: require(:group_id) vs :id in remove_member."
+  },
+  {
+   "id": "S7",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Same claim: group_id vs id param mismatch."
+  },
+  {
+   "id": "S8",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Same claim: group_id vs id param mismatch."
+  },
+  {
+   "id": "S11",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Next-page clamp to user_count yields empty page; not covered."
+  },
+  {
+   "id": "S12",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Same claim: group_id vs id param mismatch."
+  },
+  {
+   "id": "S13",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Same claim: group_id vs id param mismatch."
+  }
+ ],
+ "feature-localization-fallbacks-server-side-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Same claim: nil default_locale raises NoMethodError in fallback list."
+  },
+  {
+   "id": "S2",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Same claim: user-controlled locale with regex metachars reaches load_locale Regexp."
+  },
+  {
+   "id": "S3",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Same claim: fallback lookups hit SiteSetting.default_locale on every request, amplifying load."
+  },
+  {
+   "id": "S4",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Same claim: nil default_locale raises before compact."
+  }
+ ],
+ "anonymous-add-configurable-device-limit-grafana-codex": [
+  {
+   "id": "S2",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Same claim: zero-row update conflated with limit reached (stale device)."
+  },
+  {
+   "id": "S4",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#opa-01",
+   "newGroup": null,
+   "reason": "Same claim: int64 param breaks wire provider."
+  }
+ ],
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Same claim: factory mutates shared instance next field."
+  },
+  {
+   "id": "S2",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Same claim: ContextualLoggerMiddleware lacks nil-request guard."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Nil-request guard missing in MetricsMiddleware, a different place than the rejected ContextualLogger claim."
+  },
+  {
+   "id": "S4",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#14",
+   "newGroup": null,
+   "reason": "Same claim: metrics middleware fails request when plugin not registered."
+  },
+  {
+   "id": "S5",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Same claim: traceID dropped from Plugin Request Completed logs."
+  },
+  {
+   "id": "S7",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Same claim: HELP text says returned for request size."
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Nil-request guard missing in MetricsMiddleware; same new problem as S3."
+  },
+  {
+   "id": "S10",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Same claim: ContextualLoggerMiddleware dereferences req without nil guard."
+  },
+  {
+   "id": "S12",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Same claim: traceID lost from logs."
+  },
+  {
+   "id": "S13",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#09",
+   "newGroup": null,
+   "reason": "Same claim: integer division truncates ms durations."
+  },
+  {
+   "id": "S14",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#08",
+   "newGroup": null,
+   "reason": "Same claim: foundLabels carried across metrics and premature error."
+  },
+  {
+   "id": "S15",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: no assertion request size not recorded for CheckHealth/CollectMetrics."
+  }
+ ],
+ "dual-storage-architecture-grafana-codex": [
+  {
+   "id": "S8",
+   "match": "dual-storage-architecture-grafana-codex#12",
+   "newGroup": null,
+   "reason": "Same claim: background legacy goroutine races on shared obj."
+  }
+ ],
+ "unified-storage-performance-optimizations-grafana-codex": [
+  {
+   "id": "S2",
+   "match": "unified-storage-performance-optimizations-grafana-codex#prod-01",
+   "newGroup": null,
+   "reason": "Same claim: watcher started after search init leaves writes in that window unseen by Watch subscribers."
+  }
+ ],
+ "notification-rule-processing-engine-grafana-codex": [
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Dropped creating/deleting rule handling in loader; not covered."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "groups.at(0)?.rules undefined map throws; not covered."
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "showLocation not passed despite comment; not covered."
+  }
+ ],
+ "implement-access-token-context-encoding-framework-keycloak": [
+  {
+   "id": "S4",
+   "match": "implement-access-token-context-encoding-framework-keycloak#07",
+   "newGroup": null,
+   "reason": "Same claim: setFormParams leaves cached grantType stale."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "encodeTokenId throws for grant types without registered shortcut; different from missing default getShortcut."
+  }
+ ],
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Unthrottled busy loop in test reader thread; not covered."
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02",
+   "newGroup": null,
+   "reason": "Same claim: ClientRemovedEvent listener calls V2 setPermissionsEnabled which throws, breaking deletion."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "canMap* do not check MANAGE_CLIENTS role; not covered."
+  },
+  {
+   "id": "S4",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: per-resource policy evaluation in getClientsWithPermission."
+  },
+  {
+   "id": "S5",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02",
+   "newGroup": null,
+   "reason": "Same claim: listener calls throwing V2 setPermissionsEnabled on client removal."
+  },
+  {
+   "id": "S8",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02",
+   "newGroup": null,
+   "reason": "Same claim: listener calls throwing V2 setPermissionsEnabled on client removal."
+  }
+ ],
+ "fixing-re-authentication-with-passkeys-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Attributes set on a discarded LoginFormsProvider instance; not among rejected claims."
+  }
+ ],
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#10",
+   "newGroup": null,
+   "reason": "Same claim: getLoginPredicate NPE on null config."
+  },
+  {
+   "id": "S2",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#opa-02",
+   "newGroup": null,
+   "reason": "Same claim: one per-realm entry accumulates all organizations."
+  },
+  {
+   "id": "S3",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#03",
+   "newGroup": null,
+   "reason": "Same claim: cache-hit path returns non-organization-aware models."
+  }
+ ],
+ "replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "S3",
+   "match": "replays-self-serve-bulk-delete-system-sentry#08",
+   "newGroup": null,
+   "reason": "Same claim: update reads detector_type instead of type."
+  },
+  {
+   "id": "S5",
+   "match": "replays-self-serve-bulk-delete-system-sentry#14",
+   "newGroup": null,
+   "reason": "Same claim: meta missing crashes column fallback."
+  },
+  {
+   "id": "S6",
+   "match": "replays-self-serve-bulk-delete-system-sentry#05",
+   "newGroup": null,
+   "reason": "Same claim: analytics recorded before feature check."
+  },
+  {
+   "id": "S7",
+   "match": "replays-self-serve-bulk-delete-system-sentry#18",
+   "newGroup": null,
+   "reason": "Same claim: attribute key not URI-encoded in path."
+  },
+  {
+   "id": "S8",
+   "match": "replays-self-serve-bulk-delete-system-sentry#03",
+   "newGroup": null,
+   "reason": "Same claim: unbounded report array DoS."
+  }
+ ],
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
+  {
+   "id": "S2",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#04",
+   "newGroup": null,
+   "reason": "Same claim: raw datetime in to_dict fails Celery serialization."
+  },
+  {
+   "id": "S3",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#07",
+   "newGroup": null,
+   "reason": "Same claim: malformed dict makes from_dict return None and should_sync fails open."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Override of sync_status_outbound lacks the new param; not covered."
+  },
+  {
+   "id": "S5",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#04",
+   "newGroup": null,
+   "reason": "Same claim: raw datetime not JSON-serializable."
+  },
+  {
+   "id": "S7",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#04",
+   "newGroup": null,
+   "reason": "Same claim: raw datetime not JSON-serializable."
+  }
+ ],
+ "github-oauth-security-enhancement-sentry": [
+  {
+   "id": "S3",
+   "match": "github-oauth-security-enhancement-sentry#prod-02",
+   "newGroup": null,
+   "reason": "Same defect: is None check lets an invalid installation_id through (empty vs null string)."
+  },
+  {
+   "id": "S7",
+   "match": "github-oauth-security-enhancement-sentry#sncc-02",
+   "newGroup": null,
+   "reason": "Same claim: user-mismatch test passes via a different generic error path."
+  }
+ ],
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": [
+  {
+   "id": "S7",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#snapi-01",
+   "newGroup": null,
+   "reason": "Same place/cause: optional override.timeZone passed to dayjs.tz."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Invalid organizerTimeZone string throws in checkIfIsAvailable; not covered."
+  },
+  {
+   "id": "S10",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#08",
+   "newGroup": null,
+   "reason": "Same claim: overrides interpreted in organizerTimeZone instead of per-override timezone."
+  }
+ ],
+ "async-import-of-the-appstore-packages-cal-com": [
+  {
+   "id": "S1",
+   "match": "async-import-of-the-appstore-packages-cal-com#03",
+   "newGroup": null,
+   "reason": "Same claim: calendar field holds an un-awaited Promise."
+  },
+  {
+   "id": "S9",
+   "match": "async-import-of-the-appstore-packages-cal-com#03",
+   "newGroup": null,
+   "reason": "Same claim: getCalendar not awaited."
+  }
+ ],
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+  {
+   "id": "S1",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: immediateDelete path leaves WorkflowReminder row orphaned."
+  },
+  {
+   "id": "S4",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#09",
+   "newGroup": null,
+   "reason": "Same claim: hard-coded verification placeholder (and Verify label) bypass i18n."
+  },
+  {
+   "id": "S5",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: immediateDelete leaves reminder row orphaned."
+  }
+ ],
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Handler bypasses cache repository factory; not covered."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Predictable /tmp log path symlink attack in script; not covered."
+  }
+ ],
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "S3",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Same claim: @each on primitive strings does not invalidate."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Spec comment about last_match_at is inaccurate; not covered."
+  }
+ ],
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": [
+  {
+   "id": "S3",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#oph-02",
+   "newGroup": null,
+   "reason": "Same claim: unsubscribe_url interpolation missing raises."
+  },
+  {
+   "id": "S7",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: relative unsubscribe URL in emails."
+  },
+  {
+   "id": "S8",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Same claim: triple braces render topic title unescaped."
+  },
+  {
+   "id": "S10",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#oph-02",
+   "newGroup": null,
+   "reason": "Same claim: missing unsubscribe_url raises MissingInterpolation."
+  }
+ ],
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Behavioral claim that scheme-less website hides the name; rejected issue only concerned missing tests."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Query/fragment dropped from display; not covered."
+  }
+ ],
+ "advanced-query-processing-architecture-grafana-codex": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Dropped datasource ref on split queries; not covered."
+  }
+ ],
+ "advanced-sql-analytics-framework-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "advanced-sql-analytics-framework-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Same claim: stub DB always returns not implemented so SQL fails."
+  },
+  {
+   "id": "S3",
+   "match": "advanced-sql-analytics-framework-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Same claim: stub DB breaks execution."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Naming/documentation of the stub is misleading; a different claim than the functional failure."
+  },
+  {
+   "id": "S6",
+   "match": "advanced-sql-analytics-framework-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Same claim: QueryFramesInto stub fails every Execute."
+  }
+ ],
+ "authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "authzservice-improve-authz-caching-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "Same claim: denial cache short-circuits and is never invalidated."
+  },
+  {
+   "id": "S3",
+   "match": "authzservice-improve-authz-caching-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Same claim: per-resource denial entries grow cache memory."
+  }
+ ],
+ "database-performance-optimizations-grafana-codex": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "OFFSET-based fetch/delete race deletes rows that should be kept; not covered."
+  },
+  {
+   "id": "S7",
+   "match": "database-performance-optimizations-grafana-codex#musep-01",
+   "newGroup": null,
+   "reason": "cruzamento com a rodada de producao do Muse: Same problem: untilDoneOrCancelled terminates on affected==0 under concurrent deletes; fix is to check fetched count."
+  }
+ ],
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "S3",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#06",
+   "newGroup": null,
+   "reason": "Same claim: lenient sequence parser accepts malformed/trailing DER."
+  },
+  {
+   "id": "S5",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#musep-01",
+   "newGroup": null,
+   "reason": "cruzamento com a rodada de producao do Muse: Same problem: AuthzClient.create's one-shot global CryptoIntegration.init pins the weak Authz provider for the server."
+  },
+  {
+   "id": "S9",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-03",
+   "newGroup": null,
+   "reason": "Same claim: integerToBytes truncates oversized values."
+  },
+  {
+   "id": "S10",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#06",
+   "newGroup": null,
+   "reason": "Same claim: readSequence accepts malformed/trailing DER."
+  }
+ ],
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "ADMIN role dropped from UserPermissionsV2 checks; not covered."
+  }
+ ],
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Same claim: recreate exit code renumbered and 4 reused."
+  }
+ ],
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "S3",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#07",
+   "newGroup": null,
+   "reason": "Same claim: Optional.get() on getCredential result without presence check."
+  }
+ ],
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": [
+  {
+   "id": "S9",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-03",
+   "newGroup": null,
+   "reason": "Same claim: prev-trim uses raw offset instead of start_offset."
+  },
+  {
+   "id": "S10",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-03",
+   "newGroup": null,
+   "reason": "Same claim: prev-trim uses raw offset."
+  }
+ ],
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": [
+  {
+   "id": "S1",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: upsampled_count only registered in Discover config."
+  },
+  {
+   "id": "S6",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#01",
+   "newGroup": null,
+   "reason": "Same claim: truthiness check drops 0.0 sample rate."
+  }
+ ],
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Unsynchronized partition lock creation; not covered."
+  },
+  {
+   "id": "S5",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#prod-01",
+   "newGroup": null,
+   "reason": "Same claim: committable loop iterates full numeric range."
+  },
+  {
+   "id": "S11",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "FilteredPayload hits assertion in decoder; not covered."
+  }
+ ],
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "id": "S2",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-02",
+   "newGroup": null,
+   "reason": "Same claim: missing end_timestamp_precise raises KeyError for whole batch."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Client-controlled timestamp drives eviction; not covered."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Quadratic ZUNIONSTORE copies per insert; not covered."
+  }
+ ]
+}

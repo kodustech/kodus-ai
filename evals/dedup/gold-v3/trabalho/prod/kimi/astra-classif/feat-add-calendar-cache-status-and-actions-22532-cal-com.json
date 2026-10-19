@@ -1,0 +1,12 @@
+{
+ "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+ "items": [
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#kimip-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "The calendar list already restricts database credentials to userId: user.id (packages/lib/getConnectedDestinationCalendars.ts:282-290), so team-owned credentials are not exposed through this flow. Persisted delegation credentials also carry the user's ID (packages/lib/server/repository/credential.ts:226), satisfying the new check. In-memory delegation credentials use id: -1 and teamId: null (packages/lib/delegationCredential/server.ts:86-97), so adding team membership authorization would not address those either.",
+   "severity": "medium"
+  }
+ ]
+}

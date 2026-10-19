@@ -1,0 +1,1058 @@
+{
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "L1",
+   "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+   "lines": [
+    58,
+    60
+   ],
+   "publicado": "S1"
+  }
+ ],
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "L1",
+   "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+   "lines": [
+    229,
+    229
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+   "lines": [
+    381,
+    381
+   ],
+   "cortado": "C1"
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "L1",
+   "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+   "lines": [
+    78,
+    80
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+   "lines": [
+    138,
+    142
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L3",
+   "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+   "lines": [
+    87,
+    87
+   ],
+   "publicado": "S3"
+  }
+ ],
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "L1",
+   "file": "app/models/blocked_email.rb",
+   "lines": [
+    12,
+    12
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "app/models/blocked_email.rb",
+   "lines": [
+    14,
+    16
+   ],
+   "cortado": "C1"
+  },
+  {
+   "id": "L3",
+   "file": "app/models/blocked_email.rb",
+   "lines": [
+    14,
+    16
+   ],
+   "cortado": "C2"
+  }
+ ],
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "L1",
+   "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+   "lines": [
+    70,
+    70
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+   "lines": [
+    122,
+    123
+   ],
+   "publicado": "S2"
+  }
+ ],
+ "add-guest-management-functionality-to-existing-bookings-cal-com": [
+  {
+   "id": "L1",
+   "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+   "lines": [
+    46,
+    48
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+   "lines": [
+    158,
+    163
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L3",
+   "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+   "lines": [
+    77,
+    77
+   ],
+   "publicado": "S3"
+  },
+  {
+   "id": "L4",
+   "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+   "lines": [
+    74,
+    78
+   ],
+   "publicado": "S4"
+  }
+ ],
+ "add-html-sanitizer-for-translated-message-resources-keycloak": [
+  {
+   "id": "L1",
+   "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+   "lines": [
+    107,
+    111
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L2",
+   "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+   "lines": [
+    124,
+    126
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L3",
+   "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+   "lines": [
+    71,
+    71
+   ],
+   "publicado": "S3"
+  }
+ ],
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": [],
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": [
+  {
+   "id": "L1",
+   "file": "packages/trpc/server/routers/viewer/slots.ts",
+   "lines": [
+    133,
+    135
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "packages/trpc/server/routers/viewer/slots.ts",
+   "lines": [
+    117,
+    125
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L3",
+   "file": "packages/trpc/server/routers/viewer/slots.ts",
+   "lines": [
+    139,
+    147
+   ],
+   "publicado": "S3"
+  },
+  {
+   "id": "L4",
+   "file": "packages/trpc/server/routers/viewer/slots.ts",
+   "lines": [
+    142,
+    143
+   ],
+   "publicado": "S4"
+  },
+  {
+   "id": "L5",
+   "file": "packages/lib/slots.ts",
+   "lines": [
+    218,
+    223
+   ],
+   "publicado": "S5"
+  }
+ ],
+ "advanced-query-processing-architecture-grafana-codex": [
+  {
+   "id": "L1",
+   "file": "public/app/plugins/datasource/loki/querySplitting.ts",
+   "lines": [
+    299,
+    299
+   ],
+   "publicado": "S1"
+  }
+ ],
+ "advanced-sql-analytics-framework-grafana-codex": [],
+ "anonymous-add-configurable-device-limit-grafana-codex": [
+  {
+   "id": "L1",
+   "file": "pkg/services/anonymous/anonimpl/client.go",
+   "lines": [
+    44,
+    46
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+   "lines": [
+    110,
+    116
+   ],
+   "publicado": "S2"
+  }
+ ],
+ "async-import-of-the-appstore-packages-cal-com": [
+  {
+   "id": "L1",
+   "file": "packages/app-store/vital/lib/reschedule.ts",
+   "lines": [
+    125,
+    128
+   ],
+   "publicado": "S1"
+  }
+ ],
+ "authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "L1",
+   "file": "pkg/services/authz/rbac/cache.go",
+   "lines": [
+    31,
+    31
+   ],
+   "publicado": "S1"
+  }
+ ],
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+  {
+   "id": "L1",
+   "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+   "lines": [
+    57,
+    59
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+   "lines": [
+    72,
+    75
+   ],
+   "publicado": "S2"
+  }
+ ],
+ "database-performance-optimizations-grafana-codex": [
+  {
+   "id": "L1",
+   "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+   "lines": [
+    609,
+    612
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L2",
+   "file": "pkg/services/cleanup/cleanup.go",
+   "lines": [
+    77,
+    77
+   ],
+   "publicado": "S1"
+  }
+ ],
+ "dual-storage-architecture-grafana-codex": [
+  {
+   "id": "L1",
+   "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+   "lines": [
+    50,
+    51
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+   "lines": [
+    139,
+    139
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L3",
+   "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+   "lines": [
+    106,
+    106
+   ],
+   "publicado": "S3"
+  },
+  {
+   "id": "L4",
+   "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+   "lines": [
+    166,
+    166
+   ],
+   "cortado": "C1"
+  }
+ ],
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "L1",
+   "file": "app/views/embed/best.html.erb",
+   "lines": [
+    6,
+    6
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L2",
+   "file": "app/jobs/scheduled/poll_feed.rb",
+   "lines": [
+    35,
+    35
+   ],
+   "publicado": "S3"
+  },
+  {
+   "id": "L3",
+   "file": "app/models/topic_embed.rb",
+   "lines": [
+    22,
+    22
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L4",
+   "file": "app/models/topic_embed.rb",
+   "lines": [
+    64,
+    65
+   ],
+   "publicado": "S4"
+  },
+  {
+   "id": "L5",
+   "file": "lib/topic_retriever.rb",
+   "lines": [
+    41,
+    41
+   ],
+   "publicado": "S5"
+  },
+  {
+   "id": "L6",
+   "file": "lib/tasks/disqus.thor",
+   "lines": [
+    148,
+    148
+   ],
+   "publicado": "S6"
+  }
+ ],
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": [
+  {
+   "id": "L1",
+   "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+   "lines": [
+    71,
+    71
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "src/sentry/api/paginator.py",
+   "lines": [
+    838,
+    843
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L3",
+   "file": "src/sentry/api/paginator.py",
+   "lines": [
+    877,
+    882
+   ],
+   "cortado": "C1"
+  }
+ ],
+ "feat-2fa-backup-codes-cal-com": [
+  {
+   "id": "L1",
+   "file": "packages/features/auth/lib/next-auth-options.ts",
+   "lines": [
+    131,
+    131
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "packages/features/auth/lib/next-auth-options.ts",
+   "lines": [
+    149,
+    156
+   ],
+   "publicado": "S2"
+  }
+ ],
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+  {
+   "id": "L1",
+   "file": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+   "lines": [
+    43,
+    46
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "scripts/test-gcal-webhooks.sh",
+   "lines": [
+    68,
+    68
+   ],
+   "publicado": "S2"
+  }
+ ],
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": [],
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
+  {
+   "id": "L1",
+   "file": "src/sentry/integrations/services/assignment_source.py",
+   "lines": [
+    18,
+    18
+   ],
+   "cortado": "C1"
+  }
+ ],
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": [
+  {
+   "id": "L1",
+   "file": "src/sentry/api/endpoints/organization_events_stats.py",
+   "lines": [
+    243,
+    244
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "src/sentry/api/helpers/error_upsampling.py",
+   "lines": [
+    102,
+    103
+   ],
+   "publicado": "S2"
+  }
+ ],
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+  {
+   "id": "L1",
+   "file": "src/sentry/remote_subscriptions/consumers/result_consumer.py",
+   "lines": [
+    254,
+    255
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+   "lines": [
+    233,
+    238
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L3",
+   "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+   "lines": [
+    185,
+    185
+   ],
+   "publicado": "S3"
+  }
+ ],
+ "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": [
+  {
+   "id": "L1",
+   "file": "src/sentry/incidents/grouptype.py",
+   "lines": [
+    11,
+    12
+   ],
+   "publicado": "S1"
+  }
+ ],
+ "feature-automatically-downsize-large-images-discourse-cursor": [
+  {
+   "id": "L1",
+   "file": "app/models/optimized_image.rb",
+   "lines": [
+    149,
+    151
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "app/assets/javascripts/discourse/lib/utilities.js",
+   "lines": [
+    182,
+    182
+   ],
+   "publicado": "S2"
+  }
+ ],
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "L1",
+   "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+   "lines": [
+    9,
+    11
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+   "lines": [
+    24,
+    25
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L3",
+   "file": "app/models/embeddable_host.rb",
+   "lines": [
+    2,
+    2
+   ],
+   "publicado": "S3"
+  },
+  {
+   "id": "L4",
+   "file": "app/assets/javascripts/admin/components/embeddable-host.js.es6",
+   "lines": [
+    38,
+    38
+   ],
+   "cortado": "C1"
+  }
+ ],
+ "feature-localization-fallbacks-server-side-discourse-cursor": [
+  {
+   "id": "L1",
+   "file": "config/initializers/i18n.rb",
+   "lines": [
+    17,
+    17
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "config/initializers/i18n.rb",
+   "lines": [
+    20,
+    22
+   ],
+   "publicado": "S2"
+  }
+ ],
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": [
+  {
+   "id": "L1",
+   "file": "app/controllers/topics_controller.rb",
+   "lines": [
+    105,
+    107
+   ],
+   "publicado": "S3"
+  },
+  {
+   "id": "L2",
+   "file": "config/routes.rb",
+   "lines": [
+    440,
+    441
+   ],
+   "publicado": "S4"
+  },
+  {
+   "id": "L3",
+   "file": "app/controllers/topics_controller.rb",
+   "lines": [
+    113,
+    113
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L4",
+   "file": "app/assets/javascripts/discourse/views/topic-unsubscribe.js.es6",
+   "lines": [
+    2,
+    2
+   ],
+   "publicado": "S2"
+  }
+ ],
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": [
+  {
+   "id": "L1",
+   "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+   "lines": [
+    155,
+    157
+   ],
+   "publicado": "S1"
+  }
+ ],
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "id": "L1",
+   "file": "packages/core/EventManager.ts",
+   "lines": [
+    119,
+    119
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "packages/core/EventManager.ts",
+   "lines": [
+    370,
+    370
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L3",
+   "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+   "lines": [
+    254,
+    256
+   ],
+   "publicado": "S3"
+  },
+  {
+   "id": "L4",
+   "file": "packages/core/EventManager.ts",
+   "lines": [
+    208,
+    209
+   ],
+   "publicado": "S4"
+  },
+  {
+   "id": "L5",
+   "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+   "lines": [
+    449,
+    457
+   ],
+   "publicado": "S5"
+  },
+  {
+   "id": "L6",
+   "file": "packages/features/bookings/lib/handleNewBooking.ts",
+   "lines": [
+    1078,
+    1078
+   ],
+   "publicado": "S6"
+  },
+  {
+   "id": "L7",
+   "file": "packages/core/EventManager.ts",
+   "lines": [
+    170,
+    170
+   ],
+   "publicado": "S7"
+  }
+ ],
+ "fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "L1",
+   "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+   "lines": [
+    13,
+    13
+   ],
+   "cortado": "C1"
+  },
+  {
+   "id": "L2",
+   "file": "app/controllers/groups_controller.rb",
+   "lines": [
+    22,
+    26
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L3",
+   "file": "app/controllers/admin/groups_controller.rb",
+   "lines": [
+    90,
+    90
+   ],
+   "publicado": "S2"
+  }
+ ],
+ "fixing-re-authentication-with-passkeys-keycloak": [
+  {
+   "id": "L1",
+   "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/PasswordForm.java",
+   "lines": [
+    63,
+    63
+   ],
+   "publicado": "S1"
+  }
+ ],
+ "frontend-asset-optimization-grafana-codex": [],
+ "github-oauth-security-enhancement-sentry": [
+  {
+   "id": "L1",
+   "file": "src/sentry/integrations/github/integration.py",
+   "lines": [
+    401,
+    402
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "src/sentry/integrations/github/integration.py",
+   "lines": [
+    503,
+    503
+   ],
+   "publicado": "S2"
+  }
+ ],
+ "implement-access-token-context-encoding-framework-keycloak": [
+  {
+   "id": "L1",
+   "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+   "lines": [
+    483,
+    483
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L2",
+   "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java",
+   "lines": [
+    30,
+    33
+   ],
+   "publicado": "S1"
+  }
+ ],
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "L1",
+   "file": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+   "lines": [
+    125,
+    129
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+   "lines": [
+    340,
+    340
+   ],
+   "cortado": "C1"
+  }
+ ],
+ "notification-rule-processing-engine-grafana-codex": [
+  {
+   "id": "L1",
+   "file": "public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx",
+   "lines": [
+    47,
+    47
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx",
+   "lines": [
+    47,
+    47
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L3",
+   "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+   "lines": [
+    228,
+    228
+   ],
+   "publicado": "S3"
+  }
+ ],
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": [
+  {
+   "id": "L1",
+   "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+   "lines": [
+    15,
+    15
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+   "lines": [
+    8,
+    10
+   ],
+   "publicado": "S4"
+  },
+  {
+   "id": "L3",
+   "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+   "lines": [
+    97,
+    97
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L4",
+   "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+   "lines": [
+    93,
+    93
+   ],
+   "publicado": "S3"
+  },
+  {
+   "id": "L5",
+   "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+   "lines": [
+    96,
+    96
+   ],
+   "publicado": "S5"
+  },
+  {
+   "id": "L6",
+   "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+   "lines": [
+    75,
+    84
+   ],
+   "publicado": "S6"
+  }
+ ],
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
+  {
+   "id": "L1",
+   "file": "app/assets/stylesheets/common/base/topic-post.scss",
+   "lines": [
+    279,
+    280
+   ],
+   "cortado": "C1"
+  }
+ ],
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "id": "L1",
+   "file": "src/sentry/spans/buffer.py",
+   "lines": [
+    197,
+    199
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "src/sentry/scripts/spans/add-buffer.lua",
+   "lines": [
+    47,
+    47
+   ],
+   "publicado": "S2"
+  }
+ ],
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [],
+ "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": [],
+ "replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "L1",
+   "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+   "lines": [
+    166,
+    173
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+   "lines": [
+    39,
+    42
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L3",
+   "file": "static/app/views/performance/newTraceDetails/traceDrawer/details/span/eapSections/attributes.tsx",
+   "lines": [
+    65,
+    68
+   ],
+   "cortado": "C1"
+  }
+ ],
+ "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": [],
+ "sms-workflow-reminder-retry-count-tracking-cal-com": [
+  {
+   "id": "L1",
+   "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+   "lines": [
+    190,
+    197
+   ],
+   "publicado": "S1"
+  }
+ ],
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
+  {
+   "id": "L1",
+   "file": "src/sentry/spans/consumers/process/flusher.py",
+   "lines": [
+    254,
+    255
+   ],
+   "publicado": "S1"
+  },
+  {
+   "id": "L2",
+   "file": "src/sentry/spans/consumers/process/flusher.py",
+   "lines": [
+    338,
+    341
+   ],
+   "publicado": "S2"
+  },
+  {
+   "id": "L3",
+   "file": "src/sentry/spans/consumers/process/flusher.py",
+   "lines": [
+    300,
+    301
+   ],
+   "publicado": "S3"
+  }
+ ],
+ "unified-storage-performance-optimizations-grafana-codex": [
+  {
+   "id": "L1",
+   "file": "pkg/storage/unified/resource/search.go",
+   "lines": [
+    216,
+    216
+   ],
+   "publicado": "S1"
+  }
+ ],
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": [
+  {
+   "id": "L1",
+   "file": "app/serializers/user_serializer.rb",
+   "lines": [
+    153,
+    155
+   ],
+   "publicado": "S1"
+  }
+ ]
+}

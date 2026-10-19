@@ -1,0 +1,24 @@
+{
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "prTitle": "Add guest management functionality to existing bookings",
+ "upstream": "calcom/cal.com",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/cal.com",
+ "base": "b004587262e8221083bafbe9a0c515e7becaa7b3",
+ "head": "92f44dcea7ff19e9123a30c63c167a2938df5a55",
+ "prOriginalConhecido": {
+  "numero": 14740,
+  "url": "https://github.com/calcom/cal.diy/pull/14740",
+  "mergedAt": "2024-08-20",
+  "nota": "Found via the commit history of addGuests.handler.ts (first commit baa9045af7, 'feat: ability to add guests via app.cal.com/bookings (#14740)'). PR headRefOid equals the benchmark head and the merged handler is byte-identical to the benchmark head. The repo calcom/cal.com now redirects to calcom/cal.diy."
+ },
+ "tps": [
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#kimi-01",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "Guest email uniqueness is checked case-sensitively, so case variants of the same address are accepted as distinct guests (and slip past the lowercased blacklist).",
+   "evidenciaOpus": "apps/web/components/dialog/AddGuestsDialog.tsx:26-29 (new) checks uniqueness with new Set(emails), case-sensitively; addGuests.handler.ts:71-77 lowercases the blacklist but compares guest and attendee emails without normalizing, so case variants of the same address pass as distinct guests.",
+   "evidenciaAstra": "The newly added apps/web/components/dialog/AddGuestsDialog.tsx:26-29 compares raw strings with Set, and line 54 submits them unchanged, allowing case-variant duplicates. packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:70-78 also compares guests case-sensitively against attendees and lowercased blacklist entries. Lines 83-103 persist those unnormalized guests, making both duplicate attendees and case-based blacklist bypass possible."
+  }
+ ]
+}

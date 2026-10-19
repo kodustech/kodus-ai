@@ -1,0 +1,30 @@
+{
+ "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+ "prOriginal": {
+  "numero": null,
+  "url": "https://github.com/discourse/discourse/commit/ffbaf8c54269df2ce510de91245760fddce09896",
+  "mergedAt": "2015-08-12",
+  "nota": "From prOriginalConhecido, reconfirmed: compare ffbaf8c...main = ahead, direct commit by Régis Hanol 2015-08-12, no PR."
+ },
+ "tps": {
+  "feature-automatically-downsize-large-images-discourse-cursor#musep-01": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2016-06-20",
+    "pr": null,
+    "commit": "5e2545a578eabc8a52b9df3a64558f6d2bf2dfa2",
+    "url": "https://github.com/discourse/discourse/commit/5e2545a578eabc8a52b9df3a64558f6d2bf2dfa2"
+   },
+   "removidoEm": null,
+   "diasNoAr": 313,
+   "reason": "The controller downsize loop was gated by Upload.should_optimize?(tempfile.path) since 2016-02-22 (4d981cec), which still let SVG through. Commit 5e2545a5 'FEATURE: improve support for (whitelisted) SVGs as images' changed it to `return false if path =~ /\\.(gif|svg)$/i` (comment: don't optimize GIFs or SVGs); Rack 1.6.4 multipart tempfiles keep the extension, so oversized SVGs stop being downsized. Today UploadCreator routes :svg to clean_svg! and never to downsize!.",
+   "astra": [
+    {
+     "pergunta": "Is 5e2545a5 (should_optimize? excludes .svg by tempfile path) the fix, given Rack 1.6.4 tempfile naming, or the 2017 UploadCreator refactor?",
+     "resposta": "Rack 1.6.4 keeps the original extension in the multipart tempfile, so the new guard excludes SVGs; the 2017 refactor only made it explicit by type.",
+     "veredito": "confirmado / 5e2545a5"
+    }
+   ]
+  }
+ }
+}

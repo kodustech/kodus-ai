@@ -1,0 +1,12 @@
+{
+ "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+ "items": [
+  {
+   "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#kimi-01",
+   "class": "FP",
+   "subclass": "none",
+   "severity": "low",
+   "reply": "Changed to FP: the base-to-head diff confirms that both registry lookups and the calls to both instrumentation helpers already existed. QueryData and CallResource only change receiver names, leaving the duplicate-lookup logic unchanged. Under the pre-existing-code ruling, this is not reportable in this PR."
+  }
+ ]
+}

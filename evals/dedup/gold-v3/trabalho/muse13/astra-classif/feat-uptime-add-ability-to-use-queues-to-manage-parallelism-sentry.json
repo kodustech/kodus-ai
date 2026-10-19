@@ -1,0 +1,19 @@
+{
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "items": [
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#muse13-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:54 returns dict.setdefault's result, so competing callers receive the same stored lock even if they construct separate candidate locks. Additionally, submit registers the offset before enqueueing work at lines 211\u2013212, establishing the partition lock before worker completion.",
+   "severity": "critical"
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#muse13-02",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "src/sentry/remote_subscriptions/consumers/result_consumer.py:256 wires decode_payload directly, whose assertion at line 188 rejects FilteredPayload. queue_consumer.py:295 invokes that decoder before the None check, causing filtered messages to produce the erroneous exception log at line 318; lines 319\u2013325 still complete their offsets through the fallback.",
+   "severity": "medium"
+  }
+ ]
+}

@@ -1,0 +1,412 @@
+{
+ "sonnet|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": [
+  {
+   "id": "C1",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Same problem: topic-meta-data h5 a light value changed from 30% to 70%."
+  },
+  {
+   "id": "C2",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Same problem: desktop user.scss .name light value changed from 30% to 50%."
+  },
+  {
+   "id": "C3",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Same problem: mobile .custom-message-length light value inverted from 70% to 30%."
+  },
+  {
+   "id": "C4",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Same problem: mobile topic-map h3 light value changed from 20% to 50%."
+  },
+  {
+   "id": "C5",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Same problem: mobile user.scss .name light value changed from 30% to 50%."
+  }
+ ],
+ "muse|dual-storage-architecture-grafana-codex": [
+  {
+   "id": "C1",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage Create failure recorded with recordLegacyDuration, as the issue describes."
+  },
+  {
+   "id": "C2",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage Update failure recorded with recordLegacyDuration, covered by the same issue."
+  },
+  {
+   "id": "C3",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Delete success passes name instead of options.Kind as the kind label."
+  },
+  {
+   "id": "C4",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Legacy DeleteCollection goroutine records via recordStorageDuration."
+  },
+  {
+   "id": "C5",
+   "match": "dual-storage-architecture-grafana-codex#snapi-01",
+   "newGroup": null,
+   "reason": "Async legacy write errors are no longer logged, only a metric is recorded."
+  }
+ ],
+ "kimi|add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "C1",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Throwaway ASN1Encoder instances in concatenatedRSToASN1DER."
+  },
+  {
+   "id": "C2",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Same dead ASN1Encoder computation before the return."
+  },
+  {
+   "id": "C3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "readLength returning -1 for indefinite length is not covered by any golden issue (kimi-01 is about constructed INTEGER tags)."
+  },
+  {
+   "id": "C4",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "readSequence not checking element length against remaining sequence length is a different decoder problem."
+  }
+ ],
+ "opus|feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "C1",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "before_validation calls host.sub! on nil host, raising NoMethodError."
+  },
+  {
+   "id": "C2",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "update/destroy use where(id:).first without nil check, 500 instead of 404."
+  },
+  {
+   "id": "C3",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#11",
+   "newGroup": null,
+   "reason": "Component sets category from findById(null) after save when no category chosen."
+  }
+ ],
+ "kimi|add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "C1",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+   "newGroup": null,
+   "reason": "getClientsWithPermission returns the type-level 'Clients' resource name instead of client ids."
+  },
+  {
+   "id": "C2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "V1 callers hitting UnsupportedOperationException from setPermissionsEnabled/resource/getPermissions in V2 is not a golden issue; #01 is about the listener's V1 flag guard."
+  },
+  {
+   "id": "C3",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-02",
+   "newGroup": null,
+   "reason": "canExchangeTo throws UnsupportedOperationException while token exchange still calls it."
+  }
+ ],
+ "kimi|comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+  {
+   "id": "C1",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+   "newGroup": null,
+   "reason": "Reminder cancel helpers not awaited inside forEach in handleCancelBooking."
+  },
+  {
+   "id": "C2",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+   "newGroup": null,
+   "reason": "Same unawaited cancel helpers on reschedule in bookings router."
+  },
+  {
+   "id": "C3",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+   "newGroup": null,
+   "reason": "Same unawaited cancel helpers when workflows are edited."
+  }
+ ],
+ "ds|advanced-sql-analytics-framework-grafana-codex": [
+  {
+   "id": "C1",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "enableSqlExpressions returns false on both branches."
+  },
+  {
+   "id": "C2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "SQL gate bypassed via buildCMDNode/UnmarshalSQLCommand path is not among the golden issues."
+  }
+ ],
+ "gpt|add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "C1",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "match_count side effect in validation inflated by double validation."
+  },
+  {
+   "id": "C2",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Concurrent non-atomic match_count updates lose increments, part of the same issue."
+  }
+ ],
+ "sonnet|notification-rule-processing-engine-grafana-codex": [
+  {
+   "id": "C1",
+   "match": "notification-rule-processing-engine-grafana-codex#07",
+   "newGroup": null,
+   "reason": "GrafanaRuleListItem rendered without key prop."
+  },
+  {
+   "id": "C2",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "Silence item shown but drawer gated on ruler rule never opens; the comment also covers Delete/Pause (#01/#02) but its primary problem is the silence drawer."
+  }
+ ],
+ "muse|feat-2fa-backup-codes-cal-com": [
+  {
+   "id": "C1",
+   "match": "feat-2fa-backup-codes-cal-com#15",
+   "newGroup": null,
+   "reason": "resetState does not revoke the backup-codes object URL."
+  },
+  {
+   "id": "C2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Disable endpoint throwing on missing encryption key instead of returning JSON is not a golden issue."
+  }
+ ],
+ "muse|implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "C1",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#02",
+   "newGroup": null,
+   "reason": "getCredentials does not copy the stored credential id, so id-based removal fails."
+  },
+  {
+   "id": "C2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Missing null guard on myUser in getCredentials is not a golden issue."
+  }
+ ],
+ "kimi|fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "id": "C1",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Lookup for destination calendar with absent externalCalendarId never matches."
+  },
+  {
+   "id": "C2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Per-reference credential findUnique in handleCancelBooking; #10 is about the loops in createAllCalendarEvents/updateAllCalendarEvents, different code."
+  }
+ ],
+ "ds|add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "C1",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Throwaway ASN1Encoder instances in concatenatedRSToASN1DER."
+  }
+ ],
+ "ds|advanced-query-processing-architecture-grafana-codex": [
+  {
+   "id": "C1",
+   "match": "advanced-query-processing-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Interpolation applied twice to shard-split queries, re-applying ad hoc filters."
+  }
+ ],
+ "ds|feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": [
+  {
+   "id": "C1",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "MetricAlertDetectorHandler lacks abstract methods, instantiation raises TypeError."
+  }
+ ],
+ "ds|optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "id": "C1",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+   "newGroup": null,
+   "reason": "max_segment_spans is no longer enforced; cap hardcoded to 1000 in Lua."
+  }
+ ],
+ "gpt|add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "C1",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Cleanup registered for literal 'alias' instead of created IDP aliases."
+  }
+ ],
+ "gpt|feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "C1",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#11",
+   "newGroup": null,
+   "reason": "Component overwrites category with findById(null) after save."
+  }
+ ],
+ "gpt|replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "C1",
+   "match": "replays-self-serve-bulk-delete-system-sentry#opa-02",
+   "newGroup": null,
+   "reason": "HIDDEN_ATTRIBUTES not applied on the empty-search early return."
+  }
+ ],
+ "opus|async-import-of-the-appstore-packages-cal-com": [
+  {
+   "id": "C1",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "forEach async callbacks never awaited after getCalendar became async, errors escape as unhandled rejections."
+  }
+ ],
+ "opus|github-oauth-security-enhancement-sentry": [
+  {
+   "id": "C1",
+   "match": "github-oauth-security-enhancement-sentry#10",
+   "newGroup": null,
+   "reason": "test_installation_not_found uses a wrong state and never reaches the not-found path."
+  }
+ ],
+ "opus|replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "C1",
+   "match": "replays-self-serve-bulk-delete-system-sentry#opa-02",
+   "newGroup": null,
+   "reason": "HIDDEN_ATTRIBUTES not applied on the empty-search early return."
+  }
+ ],
+ "sonnet|advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": [
+  {
+   "id": "C1",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#04",
+   "newGroup": null,
+   "reason": "Working-hours check rejects slots in split schedules because any interval excludes them."
+  }
+ ],
+ "sonnet|feature-automatically-downsize-large-images-discourse-cursor": [
+  {
+   "id": "C1",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Client-side upload size check hardcodes 10MB instead of per-type setting."
+  }
+ ],
+ "sonnet|optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
+  {
+   "id": "C1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Mobile .custom-message margin-left -40px no longer matching the new small-action-desc padding is not a golden issue."
+  }
+ ],
+ "sonnet|span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
+  {
+   "id": "C1",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#02",
+   "newGroup": null,
+   "reason": "time.sleep(0.1) in test_basic is a no-op because sleep is monkeypatched."
+  }
+ ],
+ "muse|comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+  {
+   "id": "C1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "immediateDelete branch leaving the reminder row behind is a functional leak; #11 is only about the misleading names, and #13 is the SMS path."
+  }
+ ],
+ "muse|fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": [
+  {
+   "id": "C1",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "Reader thread not joined before asserting on caught exceptions."
+  }
+ ],
+ "muse|span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
+  {
+   "id": "C1",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08",
+   "newGroup": null,
+   "reason": "Cluster-wide Redis INFO queried once per shard buffer on every submit."
+  }
+ ],
+ "kimi|add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "C1",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+   "newGroup": null,
+   "reason": "requireManageMembers Javadoc references canManageMembership instead of canManageMembers."
+  }
+ ],
+ "kimi|enhanced-pagination-performance-for-high-volume-audit-logs-sentry": [
+  {
+   "id": "C1",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Negative cursor offsets passed into Django queryset slicing in OptimizedCursorPaginator."
+  }
+ ],
+ "kimi|feature-automatically-downsize-large-images-discourse-cursor": [
+  {
+   "id": "C1",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#sncc-01",
+   "newGroup": null,
+   "reason": "413 error message hardcodes a 10MB maximum."
+  }
+ ],
+ "kimi|optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
+  {
+   "id": "C1",
+   "match": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "align-items mixin emits nonexistent -ms-align-items."
+  }
+ ],
+ "kimi|unified-storage-performance-optimizations-grafana-codex": [
+  {
+   "id": "C1",
+   "match": "unified-storage-performance-optimizations-grafana-codex#01",
+   "newGroup": null,
+   "reason": "BuildIndex no longer locks around building, so concurrent callers build the same index."
+  }
+ ]
+}

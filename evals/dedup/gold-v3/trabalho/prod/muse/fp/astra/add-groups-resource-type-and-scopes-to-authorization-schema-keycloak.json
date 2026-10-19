@@ -1,0 +1,11 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This claims repeated authorization evaluations in GroupResource\u2019s subgroup listing. The similar rejected claim #prod-02 concerns the separate GroupsResource.getGroups listing; the removed short-circuits are at distinct code locations."
+  }
+ ]
+}

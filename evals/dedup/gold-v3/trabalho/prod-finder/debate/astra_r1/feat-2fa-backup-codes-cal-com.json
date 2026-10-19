@@ -1,0 +1,12 @@
+{
+ "caseId": "feat-2fa-backup-codes-cal-com",
+ "items": [
+  {
+   "issueId": "feat-2fa-backup-codes-cal-com#pf-muse-C2",
+   "class": "FP",
+   "subclass": "none",
+   "severity": "medium",
+   "reply": "I change my classification to FP. The new branch does throw, but DisableTwoFactorModal.tsx:80-84 catches the parsing failure, displays the same message as a JSON InternalServerError response, and resets the loading state. The existing TOTP branch also throws for this server misconfiguration, and neither approach can proceed without the encryption key. The cited code therefore establishes no broken caller or user-visible error-handling defect."
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+{
+ "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims the helper sets re-authentication UI flags on a discarded form provider, so they are absent from the rendered error page. None of the rejected issues asserts this form-instance mismatch or resulting loss of UI state."
+  }
+ ]
+}

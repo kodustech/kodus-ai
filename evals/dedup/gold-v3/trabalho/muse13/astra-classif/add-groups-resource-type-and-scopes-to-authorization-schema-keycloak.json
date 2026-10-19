@@ -1,0 +1,12 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#muse13-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "The removal is real, but hasOneAdminRole checks client roles, not the realm-level ADMIN role (services/src/main/java/org/keycloak/services/resources/admin/permissions/MgmtPermissions.java:163-173). ADMIN already inherits the management client roles through composites (services/src/main/java/org/keycloak/services/managers/RealmManager.java:346-365), so administrators retain access. The remaining checks also match V1\u2019s manage/view checks (services/src/main/java/org/keycloak/services/resources/admin/permissions/UserPermissions.java:234,298).",
+   "severity": "high"
+  }
+ ]
+}

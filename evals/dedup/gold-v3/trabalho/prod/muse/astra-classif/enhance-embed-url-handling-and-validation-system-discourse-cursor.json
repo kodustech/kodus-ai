@@ -1,0 +1,19 @@
+{
+ "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+ "items": [
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#musep-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The new app/models/topic_embed.rb:48 calls open(url).read without explicit timeouts or a response-size limit. It runs through app/jobs/regular/retrieve_topic.rb:17 and lib/topic_retriever.rb:52, while app/jobs/base.rb:136 joins without a deadline, so a continuously streaming or huge response can occupy worker capacity indefinitely or exhaust resources.",
+   "severity": "high"
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#musep-02",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The new lib/topic_retriever.rb:27-28 creates the Redis key with SETNX and applies its expiration in a separate command, leaving a persistent key if execution stops between them. Subsequent throttled attempts return true at line 32 and skip retrieval at line 9 indefinitely; the staff bypass at line 23 does not repair the key.",
+   "severity": "high"
+  }
+ ]
+}

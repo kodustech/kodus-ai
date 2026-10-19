@@ -1,0 +1,35 @@
+{
+ "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes a route/controller parameter-name mismatch, distinct from the golden issue about the removal spec using the wrong HTTP verb."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Describes an incorrect template binding that leaves the member list empty, distinct from missing pagination beyond the first 50 members."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Describes stale membership counter-cache values. Fixing the counter does not clear primary_group_id, which requires separate cleanup in golden issue #10."
+  },
+  {
+   "id": "S4",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02",
+   "newGroup": null,
+   "reason": "Describes the same unbounded limit parameter allowing excessively large membership queries and responses."
+  },
+  {
+   "id": "S5",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-01",
+   "newGroup": null,
+   "reason": "Describes the same duplicate-member insertion hitting the unique group_users index; the whitespace suggestion is additional detail."
+  }
+ ]
+}

@@ -1,0 +1,19 @@
+{
+ "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+ "prOriginal": {
+  "numero": 37429,
+  "url": "https://github.com/keycloak/keycloak/pull/37429",
+  "mergedAt": "2025-02-20",
+  "nota": "Found via gh pr list search on the title (branch is-37428-add-html-sanitizer-for-messages). The PR's single commit is the benchmark head 02f48f77; merged as 5d77e7ea on main, same content. Re-confirmed: gh pr view 37429 shows MERGED 2025-02-20T11:18:45Z, merge commit 5d77e7ea, touching VerifyMessageProperties.java."
+ },
+ "tps": {
+  "add-html-sanitizer-for-translated-message-resources-keycloak#kimi-01": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 604,
+   "reason": "On keycloak/keycloak main today, misc/theme-verifier/.../VerifyMessageProperties.java still declares ANCHOR_PATTERN = Pattern.compile(\"</?a[^>]*>\") (and HTML_TAGS \"<[a-z]+[^>]*>\") with no CASE_INSENSITIVE flag, and santizeAnchors still only strips anchors matched by it. POLICY_SOME_HTML still allows only br/p/strong/b/formattedLink (no anchors), so an uppercase <A ...> identical in English and translation survives santizeAnchors, gets stripped by the sanitizer and reported as 'Illegal HTML'. The 10 later commits to the file (2025-02-23 to 2026-01-20) add other validations (blanks, quotes, placeholders, curly braces, discouraged words) and do not touch the anchor/HTML patterns.",
+   "astra": []
+  }
+ }
+}

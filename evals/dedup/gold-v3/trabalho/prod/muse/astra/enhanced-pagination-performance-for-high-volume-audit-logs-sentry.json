@@ -1,0 +1,23 @@
+{
+ "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#07",
+   "newGroup": null,
+   "reason": "Reports the same unguarded member.has_global_access access that crashes authorized requests when member is None."
+  },
+  {
+   "id": "S2",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+   "newGroup": null,
+   "reason": "Reports the same numeric cursor-key conversion applied to datetime values, causing TypeError when building audit-log cursors."
+  },
+  {
+   "id": "S3",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#09",
+   "newGroup": null,
+   "reason": "Reports the same exposure of the negative-offset paginator through a user-controlled flag to members with global access rather than an explicit administrator check, widening the abuse surface."
+  }
+ ]
+}

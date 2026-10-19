@@ -1,0 +1,11 @@
+{
+ "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+ "items": [
+  {
+   "id": "S2",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#04",
+   "newGroup": null,
+   "reason": "The comment repeats the claim that the raw queued datetime in to_dict() is incompatible with JSON serialization for Celery task kwargs. The additional rehydration concern and suggested fixes elaborate on the same cause."
+  }
+ ]
+}

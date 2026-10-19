@@ -1,0 +1,12 @@
+{
+ "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+ "items": [
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#kimi-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "At app/controllers/admin/groups_controller.rb:37, Rails `present?` returns true for both integer `0` and string `\"0\"`, so either value assigns alias_level to zero. app/models/group.rb:30 defines zero as `nobody`, and line 37 permits it through validation; the claimed rejection of zero is false.",
+   "severity": "high"
+  }
+ ]
+}

@@ -1,0 +1,17 @@
+{
+ "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "It asserts the same errors-dataset resolution failure caused by registering upsampled_count only in DiscoverDatasetConfig."
+  },
+  {
+   "id": "S6",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#01",
+   "newGroup": null,
+   "reason": "It asserts the same factory truthiness check drops client_sample_rate values of 0 or 0.0 instead of copying them to sample_rate."
+  }
+ ]
+}

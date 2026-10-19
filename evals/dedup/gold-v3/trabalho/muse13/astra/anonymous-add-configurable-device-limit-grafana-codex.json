@@ -1,0 +1,41 @@
+{
+ "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Describes the same non-atomic count-and-insert race that allows concurrent requests to exceed the device limit."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes rejection of returning devices whose stored timestamps fall outside the 30-day window. No golden issue describes this behavior."
+  },
+  {
+   "id": "S3",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Describes the same premature cache insertion that lets a rejected device bypass the limit on subsequent requests."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Claims the new int64 provider parameter cannot be resolved by Wire. No golden issue concerns dependency injection or provider bindings."
+  },
+  {
+   "id": "S5",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#09",
+   "newGroup": null,
+   "reason": "Describes the same synchronous device tagging that adds database round-trips to anonymous authentication on cache misses."
+  },
+  {
+   "id": "S6",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Describes the same separate count and insert operations that permit concurrent new devices to exceed the configured limit."
+  }
+ ]
+}

@@ -1,0 +1,29 @@
+{
+ "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+ "items": [
+  {
+   "id": "S3",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#06",
+   "newGroup": null,
+   "reason": "It asserts the same sequence-parser leniency: accepting children beyond the declared length and trailing DER bytes."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "It alleges global provider pinning caused by initialization order and classloader visibility. The rejected initialization claim instead concerns construction failure when ServiceLoader metadata is missing."
+  },
+  {
+   "id": "S9",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#08",
+   "newGroup": null,
+   "reason": "It repeats the claim that integerToBytes silently truncates oversized INTEGER values at the same conversion step, adding sign-validation detail."
+  },
+  {
+   "id": "S10",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#06",
+   "newGroup": null,
+   "reason": "It repeats the claim that missing sequence-boundary and trailing-byte checks allow malformed DER signatures to be accepted."
+  }
+ ]
+}

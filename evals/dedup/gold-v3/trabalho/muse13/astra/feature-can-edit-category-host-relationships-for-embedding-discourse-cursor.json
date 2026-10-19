@@ -1,0 +1,95 @@
+{
+ "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "The unchecked lookup returns nil for unknown IDs, causing update and destroy to raise instead of returning not-found."
+  },
+  {
+   "id": "S2",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "The normalization callback calls sub! on a nil host, raising before validation can report an error."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The alleged failure from returning false and then calling try(:category_id) is distinct from every golden-set issue."
+  },
+  {
+   "id": "S4",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "The lookup lowercases only the database column, causing mixed-case URI hosts to fail matching."
+  },
+  {
+   "id": "S5",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "The migration interpolates unescaped host values into SQL, allowing quotes to break the INSERT."
+  },
+  {
+   "id": "S6",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "The migration dereferences the first query result without checking for an empty result, aborting before a fallback can work."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Unconditional map calls on null *_ids payloads describe a hydration failure absent from the golden set; this differs from the incorrect fruit fixture test."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "The concern is database overhead from uncached host authorization queries, which no golden-set issue describes."
+  },
+  {
+   "id": "S9",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Unknown IDs produce nil records that update and destroy dereference without a not-found check."
+  },
+  {
+   "id": "S10",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "A nil host reaches the normalization callback and causes sub! to raise instead of producing a validation error."
+  },
+  {
+   "id": "S11",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "The comment includes the unchecked empty category-query result that crashes the migration, matching #07. It additionally reports the SQL interpolation problem covered by #06."
+  },
+  {
+   "id": "S12",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "The migration preserves schemes and paths in stored hosts, which cannot match the new bare-host lookup."
+  },
+  {
+   "id": "S13",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "The blank-host test passes because other prerequisites are false, so it does not test the condition named in its description."
+  },
+  {
+   "id": "S14",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Legacy host values are inserted without scheme/path normalization, breaking matching against URI.host after migration."
+  },
+  {
+   "id": "S15",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "The query compares a lowercased column against an unchanged URI hostname, rejecting mixed-case URLs."
+  }
+ ]
+}

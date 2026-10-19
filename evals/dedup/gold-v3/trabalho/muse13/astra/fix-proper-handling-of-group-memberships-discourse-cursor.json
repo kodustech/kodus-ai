@@ -1,0 +1,89 @@
+{
+ "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Identifies the same floor-plus-one page-count error that permits an extra empty page."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes missing whitespace normalization during username lookup, distinct from the known duplicate-membership insertion problem."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Claims skipped callbacks and counter maintenance, rather than missing primary_group_id cleanup. Group#remove destroys membership rows but does not perform the primary-group cleanup described by #10."
+  },
+  {
+   "id": "S4",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02",
+   "newGroup": null,
+   "reason": "Identifies the same unbounded endpoint limit allowing excessively large member responses; the offset observation is additional detail."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Alleges an add_members route-parameter mismatch, which no golden issue describes. The route declared directly inside resources supplies :group_id, so the claim is false."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "Alleges a remove_member route-parameter mismatch, distinct from the known removal bugs. The route declared directly inside resources supplies :group_id, so the claim is false."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Repeats S5's alleged add_members parameter mismatch; the route actually supplies :group_id."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "Repeats S6's alleged remove_member parameter mismatch; the route actually supplies :group_id."
+  },
+  {
+   "id": "S9",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes the same incorrect totalPages calculation and resulting navigation to an empty page."
+  },
+  {
+   "id": "S10",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes the same extra page caused by using floor(count/limit)+1 for exact multiples."
+  },
+  {
+   "id": "S11",
+   "match": "new",
+   "newGroup": "N5",
+   "reason": "Targets the next action's offset clamp rather than the erroneous totalPages calculation. Changing that clamp leaves #01's page-count error intact, and the proposed expression still permits offset 100 with the existing totalPages value."
+  },
+  {
+   "id": "S12",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Repeats the alleged add_members parameter mismatch from S5 and S7; no golden issue matches it."
+  },
+  {
+   "id": "S13",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "Repeats the alleged remove_member parameter mismatch from S6 and S8; no golden issue matches it."
+  },
+  {
+   "id": "S14",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#12",
+   "newGroup": null,
+   "reason": "Identifies the same remove_member controller spec using PUT although the production route uses DELETE."
+  }
+ ]
+}

@@ -1,0 +1,12 @@
+{
+ "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+ "items": [
+  {
+   "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#kimi-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "RecoveryAuthnCodesUtils.java:40\u201342 does compare hashed strings using String.equals(), but that method is identical in the base commit. This PR only adds imports and getCredential() at lines 56\u201361 in that file, so the reported comparison weakness predates this change.",
+   "severity": "high"
+  }
+ ]
+}

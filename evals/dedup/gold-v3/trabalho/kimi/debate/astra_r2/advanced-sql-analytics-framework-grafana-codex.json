@@ -1,0 +1,12 @@
+{
+ "caseId": "advanced-sql-analytics-framework-grafana-codex",
+ "items": [
+  {
+   "issueId": "advanced-sql-analytics-framework-grafana-codex#kimi-01",
+   "class": "TP",
+   "subclass": "none",
+   "severity": "high",
+   "reply": "The changed TablesList implementation invokes the new stub, whose RunCommands always fails, causing every nonempty SQL expression reaching NewSQLCommand to log rawSQL at warning level. With the default info logging threshold in conf/defaults.ini, valid table-referencing queries now enter logs where their previous debug messages were suppressed. Referencing dashboard query IDs does not prevent SQL from containing sensitive literals, and the code applies no redaction. The unchanged warning statement therefore gains new exposure through this PR\u2019s changed execution path; high matches the rubric\u2019s conditional security weakness."
+  }
+ ]
+}

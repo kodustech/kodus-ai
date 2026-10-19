@@ -1,0 +1,234 @@
+{
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com#muse13-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "apps/web/pages/api/webhook/app-credential.ts:23-29 gates on a shared secret header and the keys must also be encrypted with CALCOM_APP_CREDENTIAL_ENCRYPTION_KEY (line 57-59); APP_CREDENTIAL_SHARING_ENABLED (packages/lib/constants.ts) requires both secrets. A holder of the shared secrets is the trusted parent application by design; the comment asks for hardening (HMAC, replay protection), not a defect.",
+    "category": null,
+    "comment": "The app-credential webhook authenticates only by a static shared-secret header, so whoever holds the secret can overwrite any user's app credentials without per-user auth, HMAC or replay protection.",
+    "severity": "high"
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com#muse13-02": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "packages/lib/crypto.ts:33 uses Buffer.from(key, \"latin1\"), so the key is the base64 text itself; `openssl rand -base64 24` yields a 32-character string, exactly the 32 bytes AES256 needs. The suggested `-base64 32` would produce 44 characters and an invalid key length.",
+    "category": null,
+    "comment": "The .env.example tells users to generate CALCOM_APP_CREDENTIAL_ENCRYPTION_KEY with `openssl rand -base64 24`, which is claimed to give only 24 bytes instead of the 32 required by AES256.",
+    "severity": "low"
+  },
+  "feat-2fa-backup-codes-cal-com#muse13-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "packages/ui/components/button/Button.tsx:125 defaults `type = \"button\"`, so the lost_access/go_back toggle in DisableTwoFactorModal.tsx:113-121 is not a submit button and does not trigger handleDisable.",
+    "category": null,
+    "comment": "The lost-access/go-back toggle button inside the disable-2FA form lacks type=\"button\", so clicking it is claimed to submit the form and fire handleDisable with empty codes.",
+    "severity": "medium"
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#muse13-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "record_for_host returns false (app/models/embeddable_host.rb:12,15) and topic_embed.rb:42 calls eh.try(:category_id); on Rails 4.1.10 (Gemfile.lock) Object#try returns nil when the receiver does not respond to the method, so false.try(:category_id) is nil and nothing raises.",
+    "category": null,
+    "comment": "EmbeddableHost.record_for_host returns false on bad input and TopicEmbed.import calls eh.try(:category_id), which is claimed to raise on FalseClass and crash the import for malformed URLs.",
+    "severity": "medium"
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#muse13-02": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "embed_controller.rb:61 and lib/topic_retriever.rb:16 now call EmbeddableHost.host_allowed?, which runs a SELECT (embeddable_host.rb:17) instead of reading the in-memory SiteSetting. Real, but a single small query per embed request is a micro-optimisation with no meaningful user impact.",
+    "category": "perf",
+    "comment": "Embed host checks now issue a database query via EmbeddableHost.record_for_host on every embed request instead of the previous in-memory site-setting check.",
+    "severity": "medium"
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor#muse13-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "admin-group.js.es6:13 computes totalPages as floor(user_count/limit)+1, so with 100 members and limit 50 it is 3; at offset 50 showingLast is false and next (line 33) sets offset min(100,100)=100, loading an empty page. The pagination added by this PR lets the admin step onto a page with no members.",
+    "category": "bug",
+    "comment": "Group member pagination is off by one when user_count is a multiple of limit: Next moves to offset == user_count and shows an empty page.",
+    "severity": "medium"
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#muse13-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "metrics_middleware.go QueryData/CallResource/CheckHealth/CollectMetrics are byte-for-byte the old instrumentation_middleware.go bodies, only renamed; the missing nil-request guard predates this PR, which merely moves the code.",
+    "category": null,
+    "comment": "MetricsMiddleware dereferences req (req.Queries, req.Body, req.PluginContext) without a nil-request guard, unlike LoggerMiddleware, so a nil request would panic.",
+    "severity": "medium"
+  },
+  "notification-rule-processing-engine-grafana-codex#muse13-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "GrafanaGroupLoader.tsx:68-79 now renders only Prometheus rules; the PR deliberately removes the ruler query and matchRules, whose own removed comment stated Grafana Prometheus rules are strongly consistent with the ruler. The dropped Creating/Deleting states are an intended simplification, not a defect.",
+    "category": null,
+    "comment": "GrafanaGroupLoader now renders only Prometheus rules and drops the ruler matching, so rules being created disappear and rules being deleted show as normal rows with full actions.",
+    "severity": "medium"
+  },
+  "notification-rule-processing-engine-grafana-codex#muse13-02": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "GrafanaGroupLoader.tsx:68 is `promResponse.data.groups.at(0)?.rules.map(...)`; optional chaining short-circuits the whole member chain when at(0) is undefined, so it evaluates to undefined and React renders nothing, no throw.",
+    "category": null,
+    "comment": "The optional chain stops at .rules, so an empty groups array is claimed to call undefined.map() and throw.",
+    "severity": "high"
+  },
+  "notification-rule-processing-engine-grafana-codex#muse13-03": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "GrafanaGroupLoader.tsx:76 passes showLocation={false} right after the comment on line 75, so grouped rules do not show the location.",
+    "category": null,
+    "comment": "The comment says location is redundant, but showLocation={false} is claimed not to be passed, so grouped rules would show the location.",
+    "severity": "low"
+  },
+  "implement-access-token-context-encoding-framework-keycloak#muse13-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "DefaultTokenContextEncoderProvider.java:57-60 maps a missing grant type to UNKNOWN, which postInit registers (DefaultTokenContextEncoderProviderFactory.java:78-79), and every grant string set on the client session (OAuth2GrantTypeBase.java:109, TokenManager.java:248, token exchange) is a registered OAuth2GrantType id whose factory must implement getShortcut(), with a lazy lookup for later deployments (factory:106-118). The IllegalStateException at provider:111 is not reachable from any flow.",
+    "category": null,
+    "comment": "initToken always encodes the token id and encodeTokenId throws IllegalStateException for a grant type without a registered shortcut, so custom or unmapped grants would fail token issuance with a 500.",
+    "severity": "high"
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#muse13-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "GroupTest.java:137-148 runs a single reader thread issuing one synchronous groups() request at a time over at most 100 groups, intentionally racing the deleter to reproduce the NPE; there is no fan-out and the busy loop is the point of the regression test.",
+    "category": null,
+    "comment": "The concurrency test's reader thread busy-loops full group listings with maxResults=Integer.MAX_VALUE and no throttle, claimed to overload the server and destabilise the suite.",
+    "severity": "low"
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#muse13-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "ClientPermissionsV2.canMapRoles/canMapCompositeRoles/canMapClientScopeRoles (lines 90-103) are only reached from RolePermissions.java:302/392/432 after the admin-role checks (users().canManageDefault, canManageDefault(role), clients().canManageClientsDefault) already returned; V1 ClientPermissions.canMapRoles (line 536) never checked MANAGE_CLIENTS either. Role-holding admins are not denied.",
+    "category": null,
+    "comment": "ClientPermissionsV2 canMapRoles/canMapCompositeRoles/canMapClientScopeRoles check only fine-grained permissions and not the manage-clients role, claimed to deny role mapping to realm admins unlike V1.",
+    "severity": "high"
+  },
+  "fixing-re-authentication-with-passkeys-keycloak#muse13-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "AuthenticationProcessor.java:592 obtains the form via session.getProvider(LoginFormsProvider.class), which KeycloakSession caches per session, so every context.form() call returns the same provider instance and the USERNAME_HIDDEN/REGISTRATION_DISABLED attributes set in AuthenticatorUtils.java:128-131 persist to the rendered page.",
+    "category": null,
+    "comment": "setupReauthenticationInUsernamePasswordFormError sets attributes on a fresh context.form() instance that is claimed to be discarded, so the re-authentication error page loses the hidden-username state.",
+    "severity": "medium"
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#muse13-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "The only caller, tasks/sync_status_outbound.py:44-46, calls installation.sync_status_outbound(external_issue, is_resolved, project_id) without assignment_source, and no code in src passes assignment_source to sync_status_outbound, so ExampleIntegration's signature (example/integration.py:161) never receives it.",
+    "category": null,
+    "comment": "The base sync_status_outbound gains an assignment_source parameter but ExampleIntegration's override takes no **kwargs, so callers passing assignment_source would raise TypeError.",
+    "severity": "medium"
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#muse13-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "organizerTimeZone (slots.ts ~439) comes from stored eventType.timeZone, schedule.timeZone or user availability timeZone, which are the same zones already used with dayjs.tz throughout availability computation; an invalid stored zone is not a state this new code introduces or that a normal path produces.",
+    "category": null,
+    "comment": "checkIfIsAvailable calls dayjs.tz(date.start, organizerTimeZone) guarded only by truthiness, so an invalid time-zone string would throw and abort getSchedule.",
+    "severity": "medium"
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com#muse13-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "connectedCalendars.handler.ts:28 does `new CalendarCacheRepository()` instead of going through CalendarCache.init (calendar-cache.ts:22-29), bypassing the feature-flag check and leaving the PR's own CalendarCacheRepositoryMock.getCacheStatusByCredentialIds dead. Effect is an extra groupBy and possibly showing stale cache timestamps while the cache is disabled.",
+    "category": "bug",
+    "comment": "connectedCalendarsHandler instantiates CalendarCacheRepository directly instead of the feature-flag-aware factory, so cache status is queried and shown even when calendar-cache is disabled.",
+    "severity": "low"
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com#muse13-02": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "scripts/test-gcal-webhooks.sh:4,35-36 does `rm -f /tmp/tmole.log` before redirecting, which removes a pre-planted symlink; exploiting it needs a local attacker winning a race on a developer machine for a local dev helper script, so there is no practical problem to report.",
+    "category": null,
+    "comment": "The dev script writes tunnelmole output to a fixed /tmp/tmole.log, so a local attacker's symlink at that path could make it overwrite an arbitrary file.",
+    "severity": "medium"
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#muse13-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "app/models/blocked_email.rb:11-17 increments match_count and sets last_match_at for any matching record, including action_type :do_nothing, so the spec comment at spec/models/blocked_email_spec.rb:13-14 saying last_match_at shows whether emails 'have ever been blocked' is inaccurate; it only affects a test comment.",
+    "category": "doc_defect",
+    "comment": "A spec comment says last_match_at shows whether an email has ever been blocked, but should_block? updates it on every match, including do_nothing records.",
+    "severity": "low"
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#muse13-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "UserUpdater#format_url (app/services/user_updater.rb:105-106) always prefixes http:// to saved websites, so a scheme-less value is not normally stored; and the removed websiteName (website.split('/')[2]) also returned nothing for such values, so behaviour is unchanged.",
+    "category": null,
+    "comment": "website_name parses the website with URI and returns nil when there is no scheme, so a website like example.com/user disappears from the profile.",
+    "severity": "medium"
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#muse13-02": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "user_serializer.rb:137-150 builds a display label from host + path on purpose (the old label was host only); the href still uses the full model.website, so omitting query/fragment from the short label is intended.",
+    "category": null,
+    "comment": "The same-domain website label concatenates only host and path, dropping the query string and fragment so the label differs from the link.",
+    "severity": "low"
+  },
+  "advanced-query-processing-architecture-grafana-codex#muse13-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "shardQuerySplitting.ts:49-52 now uses applyTemplateVariables (datasource.ts:1110-1140), which indeed does not stamp datasource: getRef(); but DataSourceWithBackend.query (packages/grafana-runtime/src/utils/DataSourceWithBackend.ts:149-172) defaults to this.getRef() and resolves q.datasource with scopedVars, so routing is unaffected.",
+    "category": null,
+    "comment": "Switching shard splitting from interpolateVariablesInQueries to applyTemplateVariables drops the datasource ref on each split query, claimed to leave stale or missing datasource for routing.",
+    "severity": "medium"
+  },
+  "advanced-sql-analytics-framework-grafana-codex#muse13-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "pkg/expr/sql/db.go:9-26 defines DB with every method returning 'not implemented', yet the constructor is named NewInMemoryDB and replaces duck.NewInMemoryDB in parser.go:23 and sql_command.go:96. The naming complaint is accurate but cosmetic.",
+    "category": "style",
+    "comment": "NewInMemoryDB returns a stateless stub whose methods all return 'not implemented', so its name misleads callers expecting a working in-memory database.",
+    "severity": "low"
+  },
+  "database-performance-optimizations-grafana-codex#muse13-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "xorm_store.go:547-560 now fetches IDs with ORDER BY id DESC LIMIT/OFFSET MaxCount and deletes them in a separate statement; the old code did both in one DELETE ... IN (subquery). If newer annotations are deleted between fetch and delete, fetched IDs that now belong to the newest MaxCount are still deleted, over-deleting beyond the retention limit.",
+    "category": "concurrency",
+    "comment": "MaxCount annotation cleanup reads victim IDs with LIMIT/OFFSET and deletes them in a separate non-atomic statement, so concurrent deletions can make it delete annotations that should be retained.",
+    "severity": "medium"
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#muse13-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "MgmtPermissions.hasOneAdminRole (MgmtPermissions.java:163-173) checks client roles of the realm-management/master admin client, where 'admin' is not a client role; admins get manage-users through realm-admin/admin composites. V1 UserPermissions (lines 234, 298) never included AdminRoles.ADMIN, so nothing diverges.",
+    "category": null,
+    "comment": "UserPermissionsV2 canView/canManage dropped AdminRoles.ADMIN from the role check, claimed to deny admins view/manage access unlike V1.",
+    "severity": "high"
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#muse13-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "queue_consumer.py:49-54 creates the lock with dict.setdefault, which is atomic under the GIL and returns the already-stored lock to any concurrent caller, so two threads cannot end up holding different Lock objects for the same partition.",
+    "category": null,
+    "comment": "_get_partition_lock reads and writes partition_locks without a global lock, claimed to let two threads create different locks for one partition and break offset tracking.",
+    "severity": "high"
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#muse13-02": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "result_consumer.py:188 asserts the payload is not FilteredPayload, but SimpleQueueProcessingStrategy is the first step returned by create_thread_queue_parallel_worker (lines 245-259) with no upstream filter, so Kafka never delivers FilteredPayload to it; even if it did, the except at queue_consumer.py:317-325 still completes the offset.",
+    "category": null,
+    "comment": "SimpleQueueProcessingStrategy passes FilteredPayload to decode_payload, whose assert raises instead of returning None, so filtered messages go through the error path.",
+    "severity": "low"
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#muse13-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "buffer.py:197-199 scores each span by its end_timestamp_precise, but the ZSET key is per project and trace (span-buf:s:{project:trace}:...), so a sender can only reorder eviction within its own trace; there is no cross-tenant or meaningful security impact.",
+    "category": null,
+    "comment": "SDK-supplied end_timestamp_precise is used as the ZSET eviction score, so an attacker sending far-future timestamps could keep their spans and force eviction of legitimate ones.",
+    "severity": "medium"
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#muse13-02": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "add-buffer.lua:46-55 still merges at most two sets per insert as before; the PR only swaps sunionstore for zunionstore, which the base already ran on every insert, so the O(N) copy per insert is pre-existing and not introduced here.",
+    "category": null,
+    "comment": "Each span insert runs up to two ZUNIONSTORE copies of the segment set plus ZCARD/ZPOPMIN, making segment building O(N^2) on the ingest hot path.",
+    "severity": "medium"
+  }
+}

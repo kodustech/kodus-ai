@@ -1,0 +1,11 @@
+{
+ "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+ "items": [
+  {
+   "id": "S5",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#musep-01",
+   "newGroup": null,
+   "reason": "Both describe AuthzClient.create initializing the one-shot global CryptoIntegration singleton first, pinning it to the minimal AuthzClientCryptoProvider and preventing later server initialization from replacing it."
+  }
+ ]
+}

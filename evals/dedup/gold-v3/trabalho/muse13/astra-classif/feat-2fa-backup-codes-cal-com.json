@@ -1,0 +1,12 @@
+{
+ "caseId": "feat-2fa-backup-codes-cal-com",
+ "items": [
+  {
+   "issueId": "feat-2fa-backup-codes-cal-com#muse13-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "The shared Button defaults to type=\"button\" in packages/ui/components/button/Button.tsx:125 and applies that type to the rendered element at line 142. Consequently, the toggle and cancel buttons in apps/web/components/settings/DisableTwoFactorModal.tsx:113-124 do not submit the form; the claimed spurious disable attempts cannot result from omitting their type props.",
+   "severity": "medium"
+  }
+ ]
+}

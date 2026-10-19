@@ -1,0 +1,29 @@
+{
+ "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "The multiprocessing.Process check fails to recognize spawn-context workers, so hung workers survive replacement and can flush the same shards concurrently."
+  },
+  {
+   "id": "S2",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#07",
+   "newGroup": null,
+   "reason": "It describes the same unvalidated negative process limit and resulting invalid worker allocation. The actual consequence is a construction-time KeyError rather than silent non-flushing, but fixing the described input handling fixes the golden issue."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "It identifies flush-quota multiplication caused by constructing per-process buffers with fewer assigned shards. No golden issue covers this; the repeated Redis INFO queries in #08 are a separate problem."
+  },
+  {
+   "id": "S4",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "newGroup": null,
+   "reason": "The shutdown loop breaks when its shared deadline expires, skipping cleanup of remaining flusher processes and leaving them alive."
+  }
+ ]
+}

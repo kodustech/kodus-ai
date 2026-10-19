@@ -1,0 +1,17 @@
+{
+ "caseId": "feat-2fa-backup-codes-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-2fa-backup-codes-cal-com#01",
+   "newGroup": null,
+   "reason": "Describes the same password bypass: a dummy totpCode skips password verification while a valid backup code authenticates the user."
+  },
+  {
+   "id": "S2",
+   "match": "feat-2fa-backup-codes-cal-com#17",
+   "newGroup": null,
+   "reason": "Includes the same case-sensitive backup-code validation problem: uppercase codes are rejected. The additional whitespace normalization request does not change the match."
+  }
+ ]
+}

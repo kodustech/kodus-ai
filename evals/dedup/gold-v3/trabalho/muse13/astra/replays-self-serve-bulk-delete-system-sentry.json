@@ -1,0 +1,71 @@
+{
+ "caseId": "replays-self-serve-bulk-delete-system-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "Describes the same positional pairing of error_ids with get_multi values, which can attach event details to the wrong error ID."
+  },
+  {
+   "id": "S2",
+   "match": "replays-self-serve-bulk-delete-system-sentry#01",
+   "newGroup": null,
+   "reason": "Describes the same truthiness checks that treat zero-valued age or timestamp fields as absent and bypass mutual exclusion."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes a detector update reading detector_type instead of type. No golden issue covers this field-name mismatch."
+  },
+  {
+   "id": "S4",
+   "match": "replays-self-serve-bulk-delete-system-sentry#12",
+   "newGroup": null,
+   "reason": "Describes the same feature-flagged table visualization receiving hardcoded empty props instead of query results."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Describes a potential crash from accessing missing meta in the visualization. This differs from the golden issue about passing empty columns and data; fixing the metadata guard would not fix that issue."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Describes analytics being recorded before the preprod feature gate. No golden issue covers this ordering."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "Describes unencoded attribute keys interpolated into a request path. This is separate from the golden issue about missing organization identity in the attribute-keys cache key."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N5",
+   "reason": "Describes unbounded browser-report batch processing and metrics amplification. This differs from the golden issues about field validation and logging sensitive raw reports."
+  },
+  {
+   "id": "S9",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "Describes the same incorrect positional pairing of error IDs with nodestore results when ordering differs or nodes are missing."
+  },
+  {
+   "id": "S10",
+   "match": "replays-self-serve-bulk-delete-system-sentry#01",
+   "newGroup": null,
+   "reason": "Describes the same zero-value bypass of age/timestamp mutual exclusion caused by truthiness checks."
+  },
+  {
+   "id": "S11",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "Describes the same reliance on get_multi value order and positional alignment when associating event details with error IDs."
+  }
+ ]
+}

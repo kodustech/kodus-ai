@@ -1,0 +1,17 @@
+{
+ "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
+ "items": [
+  {
+   "id": "S3",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "It makes the same claim that rejectedEmails.@each does not observe pushes of primitive strings, delaying the validation error until the email changes."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "It identifies misleading test commentary about last_match_at implying blocking when do_nothing matches also update it. None of the rejected issues describes this documentation problem."
+  }
+ ]
+}

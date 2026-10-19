@@ -1,0 +1,11 @@
+{
+ "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This describes missing MANAGE_CLIENTS role checks in the role-mapping permission methods. The golden issue concerns global grants being ignored when a per-client resource exists in hasPermission; fixing either problem would not fix the other."
+  }
+ ]
+}

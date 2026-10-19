@@ -1,0 +1,672 @@
+{
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "bc89fe00ea84d20bedcec782f0701b9711dc8201",
+  "head": "9fde0e906897cc0f4f71793f647dd629faba3317",
+  "prTitle": "OAuth credential sync and app integration enhancements",
+  "issues": [
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#muse13-01",
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S6",
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       24,
+       29
+      ],
+      "texto": "WHAT: Single static header comparison gates overwrite of any userId/appSlug credential keys with decrypted attacker-influenced JSON. WHY: Anyone holding the shared secret can overwrite any user's third-party OAuth keys, hijacking calendar/video access with no per-user auth, HMAC, replay protection, or rate limit. HOW: See improvedCode; at minimum require HMAC-signed body with timestamp."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#muse13-02",
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S10",
+      "file": ".env.example",
+      "lines": [
+       241,
+       244
+      ],
+      "texto": "The comment requires 32 bytes for AES256 but the generation command `openssl rand -base64 24` produces only 24 bytes, so a user following the docs creates a key that disagrees with the documented requirement and will fail/shorten encryption. Change the command to `openssl rand -base64 32`."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feat-2fa-backup-codes-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "efa6d464a38e60ceeeb88f40668c1c4ac4bfaf54",
+  "head": "54486a059cd2032042189bb565646ba4e0f6bd61",
+  "prTitle": "feat: 2fa backup codes",
+  "issues": [
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#muse13-01",
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S2",
+      "file": "apps/web/components/settings/DisableTwoFactorModal.tsx",
+      "lines": [
+       113,
+       119
+      ],
+      "texto": "WHAT: The \"lost_access\"/\"go_back\" toggle Button inside the disable <Form> has no type=\"button\" so it acts as a submit. WHY: Clicking it toggles the view and simultaneously fires handleDisable with stale/empty codes, causing spurious disable attempts and confusing error states. HOW: Add type=\"button\" to the toggle (and cancel) buttons inside the Form."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "913c3d6f636d02b3dd6c2c022ca1af2bec95d752",
+  "head": "d1c69189f3c90ecf56013a8da904da9bff9a8e19",
+  "prTitle": "FEATURE: Can edit category/host relationships for embedding",
+  "issues": [
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#muse13-01",
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S3",
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       10,
+       18
+      ],
+      "texto": "WHAT: record_for_host returns false on failure but callers use eh.try(:category_id), and try only guards nil so false.try(:category_id) dispatches to FalseClass and raises. WHY: TopicEmbed.import (app/models/topic_embed.rb:36-43) crashes on malformed/unknown embed URLs instead of handling nil category. HOW: return nil instead of false consistently."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#muse13-02",
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S8",
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       20,
+       22
+      ],
+      "texto": "WHAT: every embed comment/retriever check now does a SELECT via record_for_host instead of the previous in-memory SiteSetting string check. WHY: adds a DB round-trip to the hot unauthenticated embed path on every request, increasing latency and DB load. HOW: cache the host list with expiry and invalidate on EmbeddableHost save/destroy."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "fix-proper-handling-of-group-memberships-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "4975fc28903a84418f546b2809370f19abf10e08",
+  "head": "060cda77729cb1c4a827560e09e89a7b22078ba9",
+  "prTitle": "FIX: proper handling of group memberships",
+  "issues": [
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#muse13-01",
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S11",
+      "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+      "lines": [
+       29,
+       33
+      ],
+      "texto": "Next clamps to user_count, which is past the last page when count is a multiple of limit (e.g. count 100, limit 50, offset 50 -> 100 empty). Clamp to (totalPages-1)*limit instead."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "58ba11ecbd60863e2bfc6e32f0399ed4feb3927a",
+  "head": "303cdc2caf256aa5df660611120c2e3f7392365d",
+  "prTitle": "Plugins: Chore: Renamed instrumentation middleware to metrics middleware",
+  "issues": [
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#muse13-01",
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S3",
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+      "lines": [
+       144,
+       151
+      ],
+      "texto": "WHAT: QueryData ranges over req.Queries and CallResource reads len(req.Body) without nil-req guards. WHY: A nil request panics where LoggerMiddleware explicitly delegates nil requests to next. HOW: Add if req == nil { return m.next.X(...) } guards matching LoggerMiddleware."
+     },
+     {
+      "gid": "muse-muse13:S9",
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+      "lines": [
+       144,
+       158
+      ],
+      "texto": "Missing nil-request guard causes panic: QueryData dereferences req.Queries, CallResource dereferences req.Body, CheckHealth/CollectMetrics dereference req.PluginContext. LoggerMiddleware in the same chain guards req==nil, proving nil is reachable. Add if req==nil passthrough before instrumenting, matching LoggerMiddleware."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "notification-rule-processing-engine-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "47e5bd23163e6037fc0741068ac78930bba2769f",
+  "head": "8df850371034b73dc4dd9908cc30fa09f12a1f97",
+  "prTitle": "Notification Rule Processing Engine",
+  "issues": [
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#muse13-01",
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S4",
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx",
+      "lines": [
+       68,
+       79
+      ],
+      "texto": "WHAT: Loader now maps only promResponse rules and dropped matchRules Creating/Deleting handling. WHY: Transient deleting rules (prom-only) render as normal rows with full Edit/More actions instead of Deleting state without actions, and creating rules vanish. HOW: Restore operation-aware rendering for prom-only rows or filter/suppress actions while ruler/prom diverge."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#muse13-02",
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S6",
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx",
+      "lines": [
+       66,
+       68
+      ],
+      "texto": "Optional chain stops at .rules, so empty groups yields undefined.map() throw. Default to empty array: (groups.at(0)?.rules ?? []).map(...)."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#muse13-03",
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S9",
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx",
+      "lines": [
+       66,
+       76
+      ],
+      "texto": "Comment states location is redundant in folder>group hierarchy but no showLocation={false} is passed and GrafanaRuleListItem defaults to true, so grouped rules show location contrary to declared intent."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "implement-access-token-context-encoding-framework-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "c22f76867f595f0f7c327376a66a08dca01949e8",
+  "head": "daffb05b5ad091d3ec09933c3c99c2b54f448696",
+  "prTitle": "Implement access token context encoding framework",
+  "issues": [
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#muse13-01",
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S5",
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/TokenManager.java",
+      "lines": [
+       1052,
+       1054
+      ],
+      "texto": "WHAT: initToken unconditionally encodes the ID and encodeTokenId throws IllegalStateException for any grantType with no registered shortcut. WHY: Custom/extension grants or any flow setting an unmapped grant string turn previously-successful token issuance into a 500 error. HOW: Fall back to rawTokenId (or UNKNOWN shortcut) when no shortcut is mapped instead of throwing."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "c834e7473c02f11451216b3fbf355f953cfd95e9",
+  "head": "4def149a50c4b9b2c24fbb753ac60fe4f4df0cac",
+  "prTitle": "Fix concurrent group access to prevent NullPointerException",
+  "issues": [
+   {
+    "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#muse13-01",
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S3",
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+      "lines": [
+       139,
+       148
+      ],
+      "texto": "WHAT: Reader thread busy-spins full listings with maxResults=Integer.MAX_VALUE and no throttle. WHY: Each iteration loads all groups with no pagination/backoff, creating unbounded request fanout and server load that can starve the deleter and destabilize the suite. HOW: Bound the page size and add backoff/yield between iterations."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "b8c1cd410f4499c77a8b372decfe1718b80ccfd2",
+  "head": "1950a511026d520a7329c7b6b9ee60a4af8f8b55",
+  "prTitle": "Add Client resource type and scopes to authorization schema",
+  "issues": [
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#muse13-01",
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S3",
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+      "lines": [
+       90,
+       103
+      ],
+      "texto": "WHAT: canMapRoles/canMapCompositeRoles/canMapClientScopeRoles only check fine-grained permission and never check MANAGE_CLIENTS role, unlike canManage/canManageClientScopes siblings. WHY: A realm admin with manage-clients (or existing V1 behavior) is incorrectly denied role-mapping on clients, breaking the implied-admin contract."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "fixing-re-authentication-with-passkeys-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "744e031019af8dbaacf407e792fbb3756364e2b4",
+  "head": "25bf964a844ea0bc64dc838bff038345048cb1fa",
+  "prTitle": "Fixing Re-authentication with passkeys",
+  "issues": [
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#muse13-01",
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S1",
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/util/AuthenticatorUtils.java",
+      "lines": [
+       125,
+       132
+      ],
+      "texto": "WHAT: setupReauthenticationInUsernamePasswordFormError sets USERNAME_HIDDEN/REGISTRATION_DISABLED on a fresh context.form() instance that is then discarded before rendering. WHY: callers (AbstractUsernameFormAuthenticator.badPasswordHandler before challenge(), WebAuthnConditionalUIAuthenticator.createErrorResponse before fillContextForm()+errorChallenge) each obtain new LoginFormsProvider instances to render, so the re-auth error page loses hidden-username state and falls back to regular login form. HOW: thread the same LoginFormsProvider instance through \u2014 set the attributes on the form used by challenge/fill/errorChallenge instead of calling context.form() inside the helper."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "bb5a6837cb5b3d8d3b174e17d42ec14486ef8738",
+  "head": "9501091c52ae94e8d916f79b35d21975b3f9cadb",
+  "prTitle": "feat(ecosystem): Implement cross-system issue synchronization",
+  "issues": [
+   {
+    "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#muse13-01",
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S4",
+      "file": "src/sentry/integrations/mixins/issues.py",
+      "lines": [
+       411,
+       418
+      ],
+      "texto": "WHAT: base `sync_status_outbound` adds explicit `assignment_source` param but `ExampleIntegration.sync_status_outbound(self, external_issue, is_resolved, project_id)` accepts no **kwargs. WHY: any caller passing `assignment_source=` to that installation raises TypeError, breaking the override contract. HOW: keep the new param absorbed via **kwargs on the base or update all overrides to accept it."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "93cb21f55a2a40d9116c014741f5679fbeff5fd9",
+  "head": "ee38fd295fd294b9fc787eba482bde24bbfea69b",
+  "prTitle": "Advanced date override handling and timezone compatibility improvements",
+  "issues": [
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#muse13-01",
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S8",
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       105,
+       108
+      ],
+      "texto": "Execution break: truthy check guards undefined but not an invalid/unknown organizerTimeZone string; dayjs.tz() throws on invalid zone inside dateOverrides.find(), aborting checkIfIsAvailable/getSchedule. Validate against known zones or try/catch with fallback to 0."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "30a92a4d66b417f7c19dee2b343099adc6e88aa6",
+  "head": "5fd11f9faa79c4aefd39975d1b0e963e5034f793",
+  "prTitle": "feat: add calendar cache status and actions (#22532)",
+  "issues": [
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#muse13-01",
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S2",
+      "file": "packages/trpc/server/routers/viewer/calendars/connectedCalendars.handler.ts",
+      "lines": [
+       27,
+       29
+      ],
+      "texto": "WHAT: handler directly instantiates CalendarCacheRepository instead of the calendar-cache.ts factory that returns CalendarCacheRepositoryMock when disabled. WHY: when calendar-cache is disabled it still issues prisma.calendarCache.groupBy and can expose status inconsistent with the rest of the app. HOW: resolve the repository through the existing factory that respects isCalendarCacheEnabledGlobally."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#muse13-02",
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S5",
+      "file": "scripts/test-gcal-webhooks.sh",
+      "lines": [
+       4,
+       35
+      ],
+      "texto": "WHAT: fixed /tmp/tmole.log combined with rm -f and shell redirect follows symlinks. WHY: a local attacker pre-creating /tmp/tmole.log as a symlink causes truncation/overwrite of an arbitrary victim-owned file when the script runs. HOW: create the log with mktemp and avoid predictable paths."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "e25638dab0d4b98f99c8fe8976ccaae8f4fb9db3",
+  "head": "5f8a130277dbddc95d133cd2832be639baf89213",
+  "prTitle": "Add comprehensive email validation for blocked users",
+  "issues": [
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#muse13-01",
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S7",
+      "file": "spec/models/blocked_email_spec.rb",
+      "lines": [
+       12,
+       15
+      ],
+      "texto": "Comment claims last_match_at indicates 'have ever been blocked', but BlockedEmail.should_block? updates match_count/last_match_at for every match including action_type :do_nothing (proven by shared examples for both :block and :do_nothing). A do_nothing hit sets last_match_at without blocking, so the prose is untrue. Fix the comment to say matched/seen, not blocked."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "7a5fbae060bd0d3e29f3a4b5c6f2bfd8b2914dc7",
+  "head": "267d8be1f556ed59639ced396c885bb44586da19",
+  "prTitle": "UX: show complete URL path if website domain is same as instance domain",
+  "issues": [
+   {
+    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#muse13-01",
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S2",
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       137,
+       140
+      ],
+      "texto": "WHAT: URI without a scheme has nil host, so website_name returns nil even when website is present. WHY: The template gates on {{#if model.website_name}}, so a stored value like example.com/user disappears instead of showing fallback host text. HOW: Normalize by prepending a scheme before parsing when host is nil, or fall back to the raw website value."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#muse13-02",
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S3",
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       141,
+       149
+      ],
+      "texto": "WHAT: Same-domain display concatenates only host + path, discarding query and fragment. WHY: A website like http://example.com/user?ref=x displays as example.com/user, losing distinguishing information and mismatching the href. HOW: Append query/fragment (e.g. use request_uri) when present."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "advanced-query-processing-architecture-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "d9a8253640464014aa3662c91131278990cfb828",
+  "head": "1cab4143d443c33079566f6ca36931eb8468159f",
+  "prTitle": "Advanced Query Processing Architecture",
+  "issues": [
+   {
+    "issueId": "advanced-query-processing-architecture-grafana-codex#muse13-01",
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S2",
+      "file": "public/app/plugins/datasource/loki/shardQuerySplitting.ts",
+      "lines": [
+       48,
+       52
+      ],
+      "texto": "WHAT: Switching from interpolateVariablesInQueries to applyTemplateVariables drops the datasource:getRef() assignment. WHY: Old method (datasource.ts:436-438) stamped each query with datasource ref; new method (datasource.ts:1135-1140) returns only expr/step/legendFormat, leaving stale/missing datasource on split targets for downstream routing. HOW: Preserve the datasource ref when mapping, as the old path did."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "advanced-sql-analytics-framework-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "cbe1e7d63f098e306058c0fbcab2f5c30602fa7d",
+  "head": "f3317b329b4eb8fd96f99dd86525bc4a22d20248",
+  "prTitle": "Advanced SQL Analytics Framework",
+  "issues": [
+   {
+    "issueId": "advanced-sql-analytics-framework-grafana-codex#muse13-01",
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S5",
+      "file": "pkg/expr/sql/db.go",
+      "lines": [
+       24,
+       26
+      ],
+      "texto": "Name NewInMemoryDB promises the working in-memory DB callers in parser.go and sql_command.go expect from duck.NewInMemoryDB, but the new type holds no state and every method returns 'not implemented'. Rename to reflect stub status (e.g. NewStubDB/NewDisabledDB) or document that it is intentionally unimplemented so callers are not misled."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "database-performance-optimizations-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "a886bd3c79a417a70b51509384d1f1ec3e87e96b",
+  "head": "04cfa3bfd469c035ff8b35f9a66867c4e8d5dcf4",
+  "prTitle": "Database Performance Optimizations",
+  "issues": [
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#muse13-01",
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S3",
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       548,
+       558
+      ],
+      "texto": "WHAT: MaxCount cleanup fetches victim IDs with LIMIT/OFFSET then deletes them in a separate statement with no transaction. WHY: Concurrent deletion of newer rows between fetch and delete shifts the OFFSET window, so a fetched ID can slide back into the top-MaxCount set that must be kept yet still gets deleted. HOW: Re-check membership or perform the delete atomically if exact MaxCount retention is required."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "7ea067aae9be56cb2622bce6563864817c3dfeaf",
+  "head": "7355f05e6aafe2a7acc6434fb40c686665416606",
+  "prTitle": "Add Groups resource type and scopes to authorization schema",
+  "issues": [
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#muse13-01",
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S3",
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/UserPermissionsV2.java",
+      "lines": [
+       46,
+       62
+      ],
+      "texto": "WHAT: canView(user)/canManage(user) dropped ADMIN role from hasOneAdminRole check. WHY: Admins relying on ADMIN role lose view/manage access (denial) diverging from prior contract and V1 behavior. HOW: Restore AdminRoles.ADMIN in the role checks or prove ADMIN is handled elsewhere."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "fd358e8a388939959369f08f616e29552cdaf96e",
+  "head": "9966ec5a13e331659c3ea00981f9b11b0faf821f",
+  "prTitle": "feat(uptime): Add ability to use queues to manage parallelism",
+  "issues": [
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#muse13-01",
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S2",
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       49,
+       54
+      ],
+      "texto": "WHAT: _get_partition_lock reads/writes partition_locks dict without any global lock, so two threads adding a new partition can create two different Lock objects. WHY: Threads then guard add_offset/complete_offset/get_committable with different locks, breaking mutual exclusion and corrupting all_offsets/outstanding commit decisions. HOW: Guard lock creation with a global lock for partition_locks."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#muse13-02",
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S11",
+      "file": "src/sentry/remote_subscriptions/consumers/result_consumer.py",
+      "lines": [
+       254,
+       259
+      ],
+      "texto": "SimpleQueueProcessingStrategy.submit passes FilteredPayload to decoder and expects None to skip+commit. The wired decoder partial(self.decode_payload,...) asserts not isinstance(payload, FilteredPayload), so filtered messages raise AssertionError into the generic except instead of the intended None fast-path (error log + reliance on exception fallback). Guard FilteredPayload before delegating to decode_payload."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "28e3db2520d4ea28c57b08da57b83917ba7b2e15",
+  "head": "eb9623b4e787303a3bd15e10bbbdb78d59875ac6",
+  "prTitle": "Optimize spans buffer insertion with eviction during insert",
+  "issues": [
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#muse13-01",
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S5",
+      "file": "src/sentry/spans/buffer.py",
+      "lines": [
+       197,
+       199
+      ],
+      "texto": "WHAT: Untrusted SDK-controlled end_timestamp_precise is used verbatim as the ZSET score driving ZPOPMIN eviction. WHY: An attacker can send far-future timestamps to pin their spans and force eviction of legitimate spans in the same segment, biasing sampling/storage. HOW: Validate/clamp the score server-side instead of trusting client time."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#muse13-02",
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S6",
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       46,
+       55
+      ],
+      "texto": "WHAT: Every span insert runs up to two ZUNIONSTORE full copies of the up-to-1000-member set plus ZCARD/ZPOPMIN. WHY: Building a segment span-by-span copies O(N) per insert, i.e. O(N^2) total per segment and O(B*N) per batch in the ingest hot path. HOW: Merge once per batch or skip union when keys are already joined."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ }
+}

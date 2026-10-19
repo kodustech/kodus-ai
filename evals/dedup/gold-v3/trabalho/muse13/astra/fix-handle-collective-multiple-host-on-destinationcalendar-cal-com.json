@@ -1,0 +1,71 @@
+{
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Describes the same updateEvent fallback that compares destination externalId against a falsy externalCalendarId, losing the configured calendar."
+  },
+  {
+   "id": "S2",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Describes the same faulty deleteEvent fallback predicate, which fails to select the configured destination when externalCalendarId is absent."
+  },
+  {
+   "id": "S3",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Describes the unguarded integration access on an undefined mainHostDestinationCalendar, crashing the Google Meet fallback."
+  },
+  {
+   "id": "S4",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "newGroup": null,
+   "reason": "Describes null initialization causing the optional push to discard secondary hosts' destination calendars."
+  },
+  {
+   "id": "S5",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Describes the same missing optional chaining on mainHostDestinationCalendar.integration when no destination calendar exists."
+  },
+  {
+   "id": "S6",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Describes the same falsy externalCalendarId comparison that breaks destination fallback in updateEvent and deleteEvent."
+  },
+  {
+   "id": "S7",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Describes the same undefined destination dereference that crashes Google Meet bookings instead of falling back to Cal Video."
+  },
+  {
+   "id": "S8",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Describes the same TypeError from accessing mainHostDestinationCalendar.integration without optional chaining."
+  },
+  {
+   "id": "S9",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Describes the same unguarded integration access after destructuring a null or empty destination calendar array."
+  },
+  {
+   "id": "S10",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Describes the same nullable destination calendar reaching an unguarded integration access and breaking the Cal Video fallback."
+  },
+  {
+   "id": "S11",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05",
+   "newGroup": null,
+   "reason": "Describes Office365 createEvent ignoring the supplied credentialId and selecting the first host's destination for every collective host."
+  }
+ ]
+}

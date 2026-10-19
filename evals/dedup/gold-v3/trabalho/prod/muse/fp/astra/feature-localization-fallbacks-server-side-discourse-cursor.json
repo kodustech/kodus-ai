@@ -1,0 +1,29 @@
+{
+ "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "It repeats the claim that a nil default_locale crashes fallback lookup when converted to a symbol. Adding an empty-value case and a normalization fix does not change the underlying claim."
+  },
+  {
+   "id": "S2",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "It attributes repeated lookups or loading to mixed String and Symbol locales and proposes symbolizing the locale, matching the rejected normalization claim."
+  },
+  {
+   "id": "S3",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#sncc-01",
+   "newGroup": null,
+   "reason": "It identifies the same unsynchronized initialization and membership check of @loaded_locales inside ensure_loaded! and proposes protecting them with LOAD_MUTEX."
+  },
+  {
+   "id": "S6",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "It repeats the claim that regex metacharacters in a user-controlled locale reach load_locale's Regexp and cause unintended locale files to load."
+  }
+ ]
+}

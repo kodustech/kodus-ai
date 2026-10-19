@@ -1,0 +1,12 @@
+{
+ "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+ "items": [
+  {
+   "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#kimi-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "config/initializers/i18n.rb:12-17 does leave inherited Hash storage empty, but no caller in the repository relies on enumerating that storage. The actual caller at app/controllers/application_controller.rb:159 invokes ensure_loaded!, which iterates the computed fallback array via self[I18n.locale] at config/initializers/i18n.rb:20-21; the proposed future caller is speculative, not an existing defect.",
+   "severity": "low"
+  }
+ ]
+}

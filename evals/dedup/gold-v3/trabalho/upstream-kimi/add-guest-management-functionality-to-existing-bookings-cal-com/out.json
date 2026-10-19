@@ -1,0 +1,24 @@
+{
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "prOriginal": {
+  "numero": 14740,
+  "url": "https://github.com/calcom/cal.diy/pull/14740",
+  "mergedAt": "2024-08-20",
+  "nota": "Taken from prOriginalConhecido; confirmed with gh pr view: merged 2024-08-20, headRefOid equals benchmark head 92f44dcea7. calcom/cal.com redirects to calcom/cal.diy (default branch main)."
+ },
+ "tps": {
+  "add-guest-management-functionality-to-existing-bookings-cal-com#kimi-01": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-10-15",
+    "pr": 24298,
+    "commit": "64297f027c124be2d0a51c397901064c65a74df4",
+    "url": "https://github.com/calcom/cal.diy/pull/24298"
+   },
+   "removidoEm": null,
+   "diasNoAr": 421,
+   "reason": "At the merge, addGuests.handler.ts filtered guests with `guest === attendee.email` and `blacklistedGuestEmails.includes(guest)` on raw strings, so case variants passed. PR #24298 (2025-10-15, email verification setting) rewrote the filter: guests are deduplicated by extractBaseEmail(guest).toLowerCase(), and the attendee and blacklist comparisons use the lowercased base email; today's main (sanitizeAndFilterGuests/deduplicateGuestEmails) still does this. The dialog's client-side `new Set(emails)` is still case-sensitive, but the server now drops case-variant duplicates and blocks case-variant blacklist bypass, so the buggy behaviour is gone.",
+   "astra": []
+  }
+ }
+}

@@ -1,0 +1,114 @@
+{
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#pf-muse-C3": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "The claim rests on .extra-info-wrapper's parent staying float-based so order() is a no-op, but .extra-info-wrapper is rendered only by header-extra-info inside the header .contents (header.hbs:94), which this PR turns into a flex container (common/base/header.scss:16-18). The removed 5px bullet offset is replaced by flex align-items:center plus line-height:1.5 (topic.scss:30-32).",
+    "category": null,
+    "comment": "Claims that removing the 5px bullet margin in .extra-info-wrapper misaligns category bullets because the wrapper's parent is still float-based and order() has no effect.",
+    "severity": null
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#pf-gpt-C1": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "small-action.hbs places the floated-right delete/edit buttons inside .small-action-desc, and .small-action is now display:flex (topic-post.scss:264-265) while .small-action-desc gets no flex-grow (topic-post.scss:279-280). As a content-sized flex item it shrinks to its text, so the right-floated buttons end up next to short descriptions instead of at the row's right edge.",
+    "category": "bug",
+    "comment": "Making .small-action a flex container leaves .small-action-desc content-sized (no flex:1), so the right-floated edit/delete buttons inside it sit right after short action descriptions instead of at the right edge of the row.",
+    "severity": "medium"
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#pf-sonnet-C1": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "The PR replaces .small-action-desc's 4em left padding with 0 1.5% and puts it beside the avatar via flex (topic-post.scss:264,280), but mobile/topic-post.scss:520-522 still sets .custom-message { margin-left: -40px }, which only made sense when the description overlapped the floated avatar with a 4em gutter. Now the custom message is pulled ~40px left into the avatar column on mobile.",
+    "category": "bug",
+    "comment": "On mobile the .small-action custom message keeps margin-left:-40px, tuned for the old 4em left padding; with the new flex layout and 1.5% padding it is pulled into the avatar column and overlaps the icon.",
+    "severity": "medium"
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#pf-kimi-C1": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "website_name (user_serializer.rb:137-150) calls URI(website.to_s) once for the host and again for the path in whichever branch returns host+path, so a single call parses at most twice (four textual occurrences). Redundant parsing of a short string, no behavioural effect.",
+    "category": "perf",
+    "comment": "UserSerializer#website_name re-parses URI(website.to_s) for the path after already parsing it for the host instead of reusing one parsed URI.",
+    "severity": "low"
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak#pf-kimi-C1": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "ANCHOR_PATTERN = Pattern.compile(\"</?a[^>]*>\") (VerifyMessageProperties.java:145) does match <abbr>, <address>, <area> etc. as anchors. No message properties at head contain such tags (git grep finds none), so this is a theoretical imprecision in a build-time verifier.",
+    "category": "bug",
+    "comment": "The anchor regex </?a[^>]*> in the theme verifier treats any tag starting with 'a' (<abbr>, <area>, ...) as an anchor tag, which can produce misleading anchor errors or strip such tags before HTML sanitizing.",
+    "severity": "low"
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak#pf-muse-C2": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "santizeAnchors receives key but the error at VerifyMessageProperties.java:157 is only \"Didn't find anchor tag \" + matcher.group() + \" in original string\", without key or file, unlike the Illegal HTML message at line 111. Purely a diagnostic-message detail.",
+    "category": "style",
+    "comment": "The anchor-mismatch error in VerifyMessageProperties omits the message key and file, so the failing translation is hard to locate, unlike the 'Illegal HTML' message.",
+    "severity": "low"
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com#pf-opus-C2": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "scripts/test-gcal-webhooks.sh:5 sets ENV_FILE=\"../.env\", resolved against the caller's working directory; lines 61-70 then create/edit that file. Run from the repo root (./scripts/test-gcal-webhooks.sh) it writes GOOGLE_WEBHOOK_URL to a .env outside the repo, so the app never picks it up.",
+    "category": "bug",
+    "comment": "The new test-gcal-webhooks.sh writes GOOGLE_WEBHOOK_URL to '../.env' relative to the current directory, so running it from the repo root creates/edits a .env above the repo and the app never sees the URL.",
+    "severity": "low"
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com#pf-muse-C1": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "getCacheStatusByCredentialIds (calendar-cache.repository.ts:173-188) does group by max(updatedAt) without an expiresAt filter, but the UI only labels it 'cache last updated' (CredentialActionsDropdown) and the delete action removes rows that do exist. Reporting the last update of existing cache rows, expired or not, is accurate and intended, not a defect.",
+    "category": null,
+    "comment": "Claims getCacheStatusByCredentialIds should ignore expired cache rows, otherwise the UI shows a cache timestamp and delete action when no usable cache remains.",
+    "severity": null
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak#pf-ds-C1": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "In the test-only BackwardsCompatibilityUserStorage, getCredentials (lines 230-252) rebuilds the model with RecoveryAuthnCodesCredentialModel.createFromValues from the raw stored list each time, and isValid (lines 326-341) accepts any code via anyMatch without consuming it, so consumed-code state is never persisted. This is a simplification of a testsuite fixture provider, not production code.",
+    "category": "test_gap",
+    "comment": "The test federation provider BackwardsCompatibilityUserStorage regenerates the recovery-codes model from the raw list on every getCredentials and never records consumed codes, so the next-code number and allCodesUsed() never reflect usage for its users.",
+    "severity": "low"
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com#pf-muse-C1": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "organizer-add-guests-email.ts:28 uses attendees[0].name and addGuests.handler.ts:85 creates guests with name \"\", but attendees[0] is the original booker: the new guests are appended by createMany after the existing attendees (addGuests.handler.ts:92-106), the same attendees[0] convention as OrganizerScheduledEmail. The empty name only appears if a new guest were first, which this code does not do.",
+    "category": null,
+    "comment": "Claims the organizer add-guests email subject uses attendees[0].name, which becomes empty because newly added guests are stored with an empty name.",
+    "severity": null
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#pf-kimi-C1": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "The claim that the attributes added by ContextualLoggerMiddleware are only consumed by LoggerMiddleware is false: log.WithContextualAttributes (contextual_logger_middleware.go:36) feeds every downstream logger.FromContext(ctx), e.g. pkg/plugins/log/logger.go:49 and datasources such as pkg/tsdb/cloudwatch/cloudwatch.go:162. It must run regardless of cfg.PluginLogBackendRequests.",
+    "category": null,
+    "comment": "Claims ContextualLoggerMiddleware is wasted work when backend request logging is disabled because only LoggerMiddleware consumes its context attributes.",
+    "severity": null
+  },
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#pf-ds-C2": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "The remindersToCancel query (scheduleEmailReminders.ts:44-51) has no referenceId filter, but the only writer of cancelled: true is deleteScheduledEmailReminder (emailReminderManager.ts:197-235), which deletes the row outright when referenceId is null and sets cancelled only when a batch id exists. A cancelled row with null referenceId is not produced by any code path.",
+    "category": null,
+    "comment": "Claims the cron's cancelled-reminders query can pick rows with a null referenceId and send batch_id:null to SendGrid, aborting cancellation of the remaining reminders.",
+    "severity": null
+  },
+  "feat-2fa-backup-codes-cal-com#pf-muse-C2": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "The new backup-code branch throws when CALENDSO_ENCRYPTION_KEY is missing (disable.ts:49-52), exactly as the existing TOTP branch does (disable.ts:75-83, which also throw). It only fires on a server misconfiguration and follows the file's established convention, so there is no defect introduced.",
+    "category": null,
+    "comment": "Claims the backup-code branch of the 2FA disable route throws on a missing encryption key instead of returning a JSON 500, breaking the client's response.json().",
+    "severity": null
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#pf-kimi-C2": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "handleCancelBooking.ts:422-441 loops over calendar references and calls prisma.credential.findUnique per reference whose credential is not among the organizer's. For a collective booking that is one query per extra host, a handful of queries on a cancellation path, so it is a micro-optimisation.",
+    "category": "perf",
+    "comment": "handleCancelBooking queries prisma.credential.findUnique once per calendar reference inside the loop instead of batching the missing credential ids into one findMany.",
+    "severity": "low"
+  }
+}

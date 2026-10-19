@@ -1,0 +1,24 @@
+{
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "prTitle": "feat(uptime): Add ability to use queues to manage parallelism",
+ "upstream": "getsentry/sentry",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/sentry",
+ "base": "fd358e8a388939959369f08f616e29552cdaf96e",
+ "head": "9966ec5a13e331659c3ea00981f9b11b0faf821f",
+ "prOriginalConhecido": {
+  "numero": 95633,
+  "url": "https://github.com/getsentry/sentry/pull/95633",
+  "mergedAt": "2025-07-16",
+  "nota": "Found by title search (branch danf/uptime-queue-consumer). Benchmark head 9966ec5a is the PR's last commit; same 7 files. Squash-merged as 33f4fddf."
+ },
+ "tps": [
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#musep-01",
+   "severity": "medium",
+   "category": null,
+   "bug": "SimpleQueueProcessingStrategy.terminate signals the commit thread without joining it, so the background thread is claimed to keep committing offsets for revoked partitions after terminate.",
+   "evidenciaOpus": "terminate() sets shutdown_event (queue_consumer.py:340-342), so _commit_loop exits after at most the iteration in progress; it does not keep committing. Any exception there is caught and logged. Not joining is consistent with terminate being the immediate, non-blocking shutdown, whereas close() is the graceful path that joins.",
+   "evidenciaAstra": "The newly added terminate() signals shutdown but never joins the commit thread (src/sentry/remote_subscriptions/consumers/queue_consumer.py:340-342). The loop does not recheck shutdown after wait(), so an in-flight iteration can retrieve offsets and call commit_function after terminate() returns and partitions are revoked (queue_consumer.py:274-287). It eventually exits, but the missing synchronization creates a real late-commit race."
+  }
+ ]
+}

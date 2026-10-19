@@ -1,0 +1,30 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#kimi-01": {
+  "class": "TP",
+  "subclass": "nit",
+  "severity": "low",
+  "concede": false,
+  "text": "Partly agree: the PR does edit the assigned literal (CalendarManager.ts:230, '-...organiser' -> '+...organizer'), so the moved/re-indented exemption does not strictly apply and I drop FP. But the missing localization is not introduced or worsened by this PR: the English literal and its '// TODO: i18n this string?' are identical at base apart from one letter, and the PR's subject (collective hosts' destinationCalendar) is unrelated. Asking a spelling fix to add i18n is a comment a developer would not want on this PR; the message is only shown when hideCalendarNotes is on and is still readable. TP nit, low."
+ },
+ "add-html-sanitizer-for-translated-message-resources-keycloak#kimi-01": {
+  "class": "TP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": true,
+  "text": "Concede. Re-checked VerifyMessageProperties.java: ANCHOR_PATTERN `</?a[^>]*>` (:145) misses an identical uppercase `<A href=...>` in both English and translation, santizeAnchors() (:150-160) leaves it in, and POLICY_SOME_HTML (:58-61) allows only br/p/strong/b, so the sanitizer strips it and :111 reports 'Illegal HTML', failing the build. My 'deliberately lowercase' reading does not hold: the uppercase cases at :120/:123 are key-specific placeholder removals, not an HTML contract. A verifier this PR adds giving a false failure on valid input is wrong behaviour for uncommon input: TP (none), medium."
+ },
+ "replays-self-serve-bulk-delete-system-sentry#kimi-03": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "low",
+  "concede": true,
+  "text": "Concede. The docstring at commit_context.py:579 says 'Truncate title if it's too long and add ellipsis', and :580-582 do exactly that: keep max_length characters, then append '...'. The only consumer is get_merged_pr_single_issue_template, which drops it into a Markdown PR comment with no length limit. The GitLab/VSTS truncations I cited serve issue-creation API limits, a different contract. Without a 50-character requirement on the output, this is intended behaviour, so FP (none), low."
+ },
+ "advanced-sql-analytics-framework-grafana-codex#kimi-01": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": false,
+  "text": "I correct one fact: the PR also changes parser.go:23 (`-duckDB := duck.NewInMemoryDB()` / `+duckDB := NewInMemoryDB()`), and the new stub's RunCommands always returns 'not implemented' (sql/db.go:16-17), so every SQL expression now reaches the warning at sql_command.go:32. But the expression text was already logged at base for valid queries too (`logger.Debug(\"REF tables\", \"tables\", tables, \"sql\", rawSQL)` :41, plus the warning at :38 for queries with no tables). The text is a Grafana SQL expression over other queries' refIDs in a dashboard definition, not credentials or tenant data, and server logs are read by operators. Moving it from debug to warn level is not a security defect. The real problem the stub causes is that SQL expressions stop working, which is a different issue. FP (none). Rated as stated (a conditional exposure to privileged log readers), medium."
+ }
+}

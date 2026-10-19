@@ -1,0 +1,419 @@
+{
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "10aca5552314d6e5c9226f3c6d0107861c38c693",
+  "head": "79d11c4890cc4792e3dc3535af59e4e5f7a2739d",
+  "prTitle": "Add AuthzClientCryptoProvider for authorization client cryptographic operations",
+  "issues": [
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#musep-01",
+    "comentarios": [
+     {
+      "gid": "muse-musep:S2",
+      "file": "authz/client/src/main/java/org/keycloak/authorization/client/AuthzClient.java",
+      "lines": [
+       94,
+       96
+      ],
+      "texto": "Because `CryptoIntegration.init` is one-shot, calling `AuthzClient.create` first cements the global singleton with its own classloader and the minimal `AuthzClientCryptoProvider`, so later server init is ignored and unsupported operations break. Guard the init in `AuthzClient.create` or avoid global init from the lightweight client."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "272cfc68dcc88615396ae62ed1571918e9c58ad3",
+  "head": "e944e2acf1e64421860a8e827f93ad06c169621b",
+  "prTitle": "Add caching support for IdentityProviderStorageProvider.getForLogin operations",
+  "issues": [
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#musep-01",
+    "comentarios": [
+     {
+      "gid": "muse-musep:S2",
+      "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+      "lines": [
+       244,
+       252
+      ],
+      "texto": "Disabling an organization flips the wrapper `isEnabled` to false without invalidating login caches, so stale IDPs reach callers that skip the bean re-filter. Filter on effective `isEnabled` when rebuilding from cached IDs in `getForLogin` or invalidate login caches on org enable/disable."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "b8c1cd410f4499c77a8b372decfe1718b80ccfd2",
+  "head": "1950a511026d520a7329c7b6b9ee60a4af8f8b55",
+  "prTitle": "Add Client resource type and scopes to authorization schema",
+  "issues": [
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01",
+    "comentarios": [
+     {
+      "gid": "muse-musep:S4",
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+      "lines": [
+       214,
+       222
+      ],
+      "texto": "A global grant is silently ignored once any per-client resource exists, denying legitimate admins in `hasPermission(ClientModel, String)`. Check the per-client resource from `findByName` and then the all-clients type resource from `getResourceTypeResource` so either grant succeeds."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "7ea067aae9be56cb2622bce6563864817c3dfeaf",
+  "head": "7355f05e6aafe2a7acc6434fb40c686665416606",
+  "prTitle": "Add Groups resource type and scopes to authorization schema",
+  "issues": [
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01",
+    "comentarios": [
+     {
+      "gid": "muse-musep:S3",
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/GroupResource.java",
+      "lines": [
+       177,
+       179
+      ],
+      "texto": "With V2 all-groups `VIEW`/`MANAGE` granted, every listing costs O(N) authz evaluations instead of one. Restore the cached `canViewGlobal` check from `auth.groups().canView()` and short-circuit the per-subgroup `canView(g)` filter when it passes."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "add-guest-management-functionality-to-existing-bookings-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "b004587262e8221083bafbe9a0c515e7becaa7b3",
+  "head": "92f44dcea7ff19e9123a30c63c167a2938df5a55",
+  "prTitle": "Add guest management functionality to existing bookings",
+  "issues": [
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#musep-01",
+    "comentarios": [
+     {
+      "gid": "muse-musep:S6",
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       26,
+       30
+      ],
+      "texto": "Dead bookings get written back to calendars and guest emails are sent for events that no longer exist. Filter by `status` to exclude `CANCELLED` and `REJECTED` like `requestReschedule` does or reject them with `BAD_REQUEST`."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "add-html-sanitizer-for-translated-message-resources-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "f3c8e8f3487112f2c99aa78400430cce2d30be39",
+  "head": "02f48f776f43734d1ac8914d3ad6a7115acdcb33",
+  "prTitle": "Add HTML sanitizer for translated message resources",
+  "issues": [
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#musep-01",
+    "comentarios": [
+     {
+      "gid": "muse-musep:S1",
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       73,
+       88
+      ],
+      "texto": "Comparing an `_en` file against itself lets any anchor pass, so an unsafe anchor such as `javascript:` href is stripped before the sanitizer check and never reported. Skip anchor stripping when `file` is the English source or validate English anchors against the sanitizer policy."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "database-performance-optimizations-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "a886bd3c79a417a70b51509384d1f1ec3e87e96b",
+  "head": "04cfa3bfd469c035ff8b35f9a66867c4e8d5dcf4",
+  "prTitle": "Database Performance Optimizations",
+  "issues": [
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#musep-01",
+    "comentarios": [
+     {
+      "gid": "muse-musep:S3",
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       650,
+       654
+      ],
+      "texto": "A concurrent deleter racing between `SELECT` and `DELETE` leaves work remaining until the next cycle. Check `fetched` from `batchWork` instead of `affected` to decide when `untilDoneOrCancelled` is done."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "62db063e1e1abe691313ab42682a68f796d63769",
+  "head": "4f8aed295a29954023b2849c060ef4fb299d1b5d",
+  "prTitle": "Enhance embed URL handling and validation system",
+  "issues": [
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#musep-01",
+    "comentarios": [
+     {
+      "gid": "muse-musep:S4",
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       48,
+       48
+      ],
+      "texto": "A slow or huge embed URL hangs the job worker and starves the queue. Read `url` via `URI.open` with `open_timeout`, `read_timeout`, and a `read` size limit instead of unbounded `open`."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#musep-02",
+    "comentarios": [
+     {
+      "gid": "muse-musep:S5",
+      "file": "lib/topic_retriever.rb",
+      "lines": [
+       27,
+       28
+      ],
+      "texto": "A crash between the commands leaves a key with no TTL that suppresses future retrieves forever. Set `retrieved_key` atomically with `set` using `nx` and `ex` instead of separate `setnx` and `expire`."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "fd358e8a388939959369f08f616e29552cdaf96e",
+  "head": "9966ec5a13e331659c3ea00981f9b11b0faf821f",
+  "prTitle": "feat(uptime): Add ability to use queues to manage parallelism",
+  "issues": [
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#musep-01",
+    "comentarios": [
+     {
+      "gid": "muse-musep:S2",
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       340,
+       342
+      ],
+      "texto": "The background thread keeps calling `get_committable_offsets` and `commit_function` after rebalance/terminate with revoked partitions. After signaling `shutdown_event`, join `commit_thread` in `terminate` as `close` does."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feature-automatically-downsize-large-images-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "3f71fa15c93bb0b751bb92abae1b5dc9a21bd4ca",
+  "head": "ffbaf8c54269df2ce510de91245760fddce09896",
+  "prTitle": "FEATURE: automatically downsize large images",
+  "issues": [
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#musep-01",
+    "comentarios": [
+     {
+      "gid": "muse-musep:S1",
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       63,
+       67
+      ],
+      "texto": "`Upload.create_for` handles SVG via `Nokogiri` without rasterizing, so rewriting it with `convert -resize 80%>` corrupts the vector. Exclude `/\\.svg$/i` from the auto-downsize branch guarded by `FileHelper.is_image?`."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "913c3d6f636d02b3dd6c2c022ca1af2bec95d752",
+  "head": "d1c69189f3c90ecf56013a8da904da9bff9a8e19",
+  "prTitle": "FEATURE: Can edit category/host relationships for embedding",
+  "issues": [
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#musep-01",
+    "comentarios": [
+     {
+      "gid": "muse-musep:S6",
+      "file": "app/assets/javascripts/discourse/adapters/rest.js.es6",
+      "lines": [
+       21,
+       23
+      ],
+      "texto": "Model types with multiple underscores never match `ADMIN_MODELS` and get the wrong base path. Change `type.replace('_', '-')` to use `/_/g` so all underscores are replaced."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "a308075bc39b77ed7059b0cae9d443d669a7bf98",
+  "head": "de628295646d0848226618108a52f2f1e5d04ac0",
+  "prTitle": "fix: handle collective multiple host on destinationCalendar",
+  "issues": [
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#musep-01",
+    "comentarios": [
+     {
+      "gid": "muse-musep:S4",
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       597,
+       608
+      ],
+      "texto": "A failed reschedule or location update in `updateAllCalendarEvents` looks like success because callers awaiting `Promise.all(result)` see zero results when `calendarReference` is still `undefined`. Return a single `success: false` result when the reference list is unavailable."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "fix-proper-handling-of-group-memberships-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "4975fc28903a84418f546b2809370f19abf10e08",
+  "head": "060cda77729cb1c4a827560e09e89a7b22078ba9",
+  "prTitle": "FIX: proper handling of group memberships",
+  "issues": [
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#musep-01",
+    "comentarios": [
+     {
+      "gid": "muse-musep:S3",
+      "file": "app/controllers/admin/groups_controller.rb",
+      "lines": [
+       90,
+       90
+      ],
+      "texto": "The cached `groups.user_count` stays inflated, so admin pagination and counts disagree with actual membership. In `remove_member`, destroy the `GroupUser` records instead of calling `users.delete` so `counter_cache` decrements."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "frontend-asset-optimization-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "3ce1a5b0caab215346a51629b0344b90d67e9478",
+  "head": "b1613e320acff00623e6efc59f00ee68c7684a97",
+  "prTitle": "Frontend Asset Optimization",
+  "issues": [
+   {
+    "issueId": "frontend-asset-optimization-grafana-codex#musep-01",
+    "comentarios": [
+     {
+      "gid": "muse-musep:S2",
+      "file": "pkg/api/webassets/webassets.go",
+      "lines": [
+       41,
+       47
+      ],
+      "texto": "Per-request consumers alias the shared `*EntryPointAssets` via `IndexViewData.Assets` at index.go:137 into extensible `RunIndexDataHooks`, so any mutation corrupts the global cache and races with concurrent readers. Return a deep copy with `cloneEntryPointAssets` or document and enforce read-only use."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "bc89fe00ea84d20bedcec782f0701b9711dc8201",
+  "head": "9fde0e906897cc0f4f71793f647dd629faba3317",
+  "prTitle": "OAuth credential sync and app integration enhancements",
+  "issues": [
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#musep-01",
+    "comentarios": [
+     {
+      "gid": "muse-musep:S7",
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       17,
+       21
+      ],
+      "texto": "A loggable, prefetchable, CSRF-able `GET` carrying the shared secret can overwrite any user's stored OAuth keys. Reject non-`POST` requests with a 405 before any secret, user, or app lookup."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "98fa098e6fade3097a11fe7f99a98a4e6ffb4728",
+  "head": "5b229316ee4c661836ed1161139692a3e8527444",
+  "prTitle": "Optimize header layout performance with flexbox mixins",
+  "issues": [
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#musep-01",
+    "comentarios": [
+     {
+      "gid": "muse-musep:S1",
+      "file": "app/assets/stylesheets/common/base/topic-post.scss",
+      "lines": [
+       263,
+       265
+      ],
+      "texto": "Float is ignored on flex items, so the `button` with `float:right` collapses next to the description instead of docking right and `clear:both` becomes dead. Add `margin-left: auto` to `button` inside `.small-action` for far-right placement."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ }
+}

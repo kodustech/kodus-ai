@@ -1,0 +1,138 @@
+{
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#musep-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "CryptoIntegration.init being one-shot is pre-existing; this PR makes detectProvider sort providers by order() (CryptoIntegration.java:56-57), with AuthzClientCryptoProvider at 100 and DefaultCryptoProvider at 200, so whenever the server providers are visible to the classloader they win. The 'minimal provider cemented' scenario needs a classloader split that no code here shows.",
+    "category": null,
+    "comment": "Calling CryptoIntegration.init from AuthzClient.create is claimed to lock the global crypto provider to the minimal AuthzClientCryptoProvider so a later server init is ignored and unsupported operations fail.",
+    "severity": "high"
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#musep-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "The cached getForLogin path can return IDPs of a disabled organization, but every ORG_ONLY/ALL caller re-filters with idp.isEnabled() in OrganizationAwareIdentityProviderBean.java:75,80 (added by this PR), and REALM_ONLY callers only get IDPs without an organization. No caller skips the re-filter, so stale IDPs do not reach login.",
+    "category": null,
+    "comment": "Disabling an organization does not invalidate the cached login IDP lists in InfinispanIdentityProviderStorageProvider.getForLogin, so callers that do not re-check isEnabled could get IDPs of a disabled organization.",
+    "severity": "medium"
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "ClientPermissionsV2.hasPermission (ClientPermissionsV2.java:214-222) only falls back to the all-clients type resource when no per-client resource exists. Per-client resources are created without a type (AdminPermissionsSchema.java:104), so DefaultPolicyEvaluator.java:71-80 evaluates only that resource's policies and the all-clients grant is never consulted once a per-client permission exists.",
+    "category": "bug",
+    "comment": "In ClientPermissionsV2.hasPermission, an admin granted a permission on all clients is denied on any client that also has its own per-client permission resource, because only the per-client resource is evaluated.",
+    "severity": "high"
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "GroupResource.getSubGroups now filters with auth.groups()::canView on every subgroup (GroupResource.java:177-179) after the cached canViewGlobal short-circuit was removed. In GroupPermissionsV2.canView(GroupModel), an admin without a VIEW_USERS/MANAGE_USERS role runs hasPermission per group: findByName, findByResource and a full policy evaluation. The filter also runs before pagination over all subgroups (getSubGroupsStream(-1,-1)).",
+    "category": "perf",
+    "comment": "Removing the canViewGlobal short-circuit from the subgroup and group listings makes an admin with an all-groups V2 grant run one full authorization evaluation per group in the listing instead of a single check.",
+    "severity": "medium"
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com#musep-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "addGuestsHandler loads the booking by id alone (addGuests.handler.ts:26-41) and checks only who the caller is, never booking.status. The handler then adds attendees, updates the calendar event and sends guest emails, so this also runs for CANCELLED or REJECTED bookings when the endpoint is called directly.",
+    "category": "bug",
+    "comment": "addGuests does not check the booking status, so guests can be added to cancelled or rejected bookings, which updates calendars and emails invitations for events that no longer exist.",
+    "severity": "medium"
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak#musep-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "For an _en file, englishFile resolves to the same file (VerifyMessageProperties.java:77-78), so santizeAnchors strips every anchor before the sanitizer check. That is the intended model: the javadoc at line 147 says only anchors from the English source may appear in the translation, which makes the English source the trusted reference. Translations are still checked against it.",
+    "category": null,
+    "comment": "The message verifier compares English files against themselves, so any anchor tag in an English source, including an unsafe href, is stripped before the HTML sanitizer check and never reported.",
+    "severity": "medium"
+  },
+  "database-performance-optimizations-grafana-codex#musep-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "untilDoneOrCancelled stops when a batch reports 0 affected rows (xorm_store.go:650-654), and the batch returns deleteByIDs' RowsAffected. If another deleter removes the fetched IDs between fetchIDs and deleteByIDs, the loop ends early. The only effect is that the remaining rows are cleaned on the next cycle, which the PR's own comment already accepts for concurrent inserts.",
+    "category": "concurrency",
+    "comment": "The annotation cleanup loop stops on a batch whose IDs were already deleted by a concurrent cleaner, leaving the remaining work to the next cycle; checking the fetched count instead would avoid that.",
+    "severity": "low"
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#musep-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "TopicEmbed.import_remote (topic_embed.rb:48) reads the remote page with Kernel open(url).read. The PR sets no open/read timeout and no size cap, so a slow or very large page ties up the job worker or memory.",
+    "category": "bug",
+    "comment": "TopicEmbed.import_remote fetches the embed URL with open(url).read and no timeout or size limit, so a slow or huge remote page can block the background job and exhaust memory.",
+    "severity": "medium"
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#musep-02": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "TopicRetriever.retrieved_recently? calls $redis.setnx and then $redis.expire as two separate commands (topic_retriever.rb:27-28). If the process dies between them, the key stays forever without a TTL, and every later retrieve of that URL is treated as recent and skipped.",
+    "category": "concurrency",
+    "comment": "The retrieve throttle sets the Redis key with setnx and sets its TTL in a separate expire call, so a crash between the two leaves a key without expiry that blocks retrieval of that URL forever.",
+    "severity": "medium"
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#musep-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "terminate() sets shutdown_event (queue_consumer.py:340-342), so _commit_loop exits after at most the iteration in progress; it does not keep committing. Any exception there is caught and logged. Not joining is consistent with terminate being the immediate, non-blocking shutdown, whereas close() is the graceful path that joins.",
+    "category": null,
+    "comment": "SimpleQueueProcessingStrategy.terminate signals the commit thread without joining it, so the background thread is claimed to keep committing offsets for revoked partitions after terminate.",
+    "severity": "medium"
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor#musep-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "The new auto-downsize block (uploads_controller.rb:63-70) runs whenever FileHelper.is_image?(filename) matches, and FileHelper.images includes svg (file_helper.rb:31). An oversized SVG is therefore passed to ImageMagick convert -resize 80%> and overwritten in place, even though Upload.create_for handles SVGs separately via Nokogiri (upload.rb:63-66).",
+    "category": "bug",
+    "comment": "Oversized SVG uploads go through the new ImageMagick downsize loop because SVG counts as an image, so the vector file is rasterized or corrupted in place before Upload.create_for parses it as SVG.",
+    "severity": "medium"
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#musep-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "basePath uses type.replace('_', '-') (rest.js.es6:22), which replaces only the first underscore. All current ADMIN_MODELS entries have at most one separator, including the new 'embeddable-host', so nothing misroutes today. It only matters for a future multi-underscore admin type.",
+    "category": "speculative",
+    "comment": "RestAdapter.basePath replaces only the first underscore of the model type, so an admin model type with several underscores would not match ADMIN_MODELS and would use the wrong base path.",
+    "severity": "low"
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#musep-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "The catch block of updateAllCalendarEvents now returns calendarReference?.map(...) ?? [] (EventManager.ts:597-608). If the error is thrown before calendarReference is assigned (e.g. the newBooking lookup fails), the function returns an empty array, whereas before it returned a single success:false result. Callers that inspect the results therefore see no failure.",
+    "category": "bug",
+    "comment": "When updateAllCalendarEvents fails before the calendar references are loaded, its catch now returns an empty array instead of a failed result, so a failed reschedule or location update looks successful to callers.",
+    "severity": "medium"
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor#musep-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "The new remove_member calls group.users.delete(user_id) (groups_controller.rb:90). On a has_many :through in Rails 4.1 this delete_all's the GroupUser rows without callbacks, so GroupUser's counter_cache 'user_count' (group_user.rb:2) is not decremented. The old code used Group#remove, which destroyed the records (group.rb:276-278).",
+    "category": "data",
+    "comment": "Admin remove_member deletes memberships with group.users.delete, which skips GroupUser callbacks, so the cached groups.user_count is never decremented and stays inflated.",
+    "severity": "medium"
+  },
+  "frontend-asset-optimization-grafana-codex#musep-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "GetWebAssets returning the shared cached *EntryPointAssets pointer predates this PR (base webassets.go:37-39 already returned entryPointAssetsCache); the PR only adds an RWMutex around the read and fill. Nothing shown mutates the returned struct, so the aliasing concern is about existing code and is hypothetical.",
+    "category": null,
+    "comment": "GetWebAssets hands every request the same cached EntryPointAssets pointer, so any per-request mutation (e.g. in index data hooks) is claimed to corrupt the global cache and race with concurrent readers.",
+    "severity": "medium"
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com#musep-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "The handler has no method check, but it requires the shared secret in a custom request header (app-credential.ts:24-29) and takes userId and keys from the parsed body. A browser prefetch or cross-site GET cannot set that header, and the secret is not in the URL to be logged, so the claimed CSRF/prefetch overwrite of a user's OAuth keys cannot happen.",
+    "category": null,
+    "comment": "The app-credential webhook is claimed to accept GET, so a loggable, prefetchable, CSRF-able request carrying the shared secret could overwrite any user's stored OAuth keys.",
+    "severity": "high"
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#musep-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "The buttons are not flex items: small-action.hbs places them inside div.small-action-desc, and only .topic-avatar and .small-action-desc are children of the flex container .small-action (topic-post.scss:263-265). Float on the buttons still applies inside the desc block, so the premise that float is ignored on flex items does not hold, and margin-left:auto on the button would have no effect.",
+    "category": null,
+    "comment": "Making .small-action a flex container is claimed to make the floated buttons ignore float:right, because they would be flex items, so they collapse next to the description.",
+    "severity": "low"
+  }
+}

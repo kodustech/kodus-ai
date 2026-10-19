@@ -1,0 +1,12 @@
+{
+ "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+ "items": [
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#muse13-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "The invalid-zone failure already exists upstream: packages/core/getUserAvailability.ts:210 passes the same timezone to getWorkingHours, whose unchanged conversion at packages/lib/availability.ts:74 throws before checkIfIsAvailable runs. Nonempty dateOverrides require nonempty availability (packages/core/getUserAvailability.ts:215), so the earlier conversion cannot be skipped in the reported scenario; this PR introduces no new failure for invalid zones.",
+   "severity": "medium"
+  }
+ ]
+}

@@ -1,0 +1,24 @@
+{
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "prTitle": "feat(uptime): Add ability to use queues to manage parallelism",
+ "upstream": "getsentry/sentry",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/sentry",
+ "base": "fd358e8a388939959369f08f616e29552cdaf96e",
+ "head": "9966ec5a13e331659c3ea00981f9b11b0faf821f",
+ "prOriginalConhecido": {
+  "numero": 95633,
+  "url": "https://github.com/getsentry/sentry/pull/95633",
+  "mergedAt": "2025-07-16",
+  "nota": "Found by title search (branch danf/uptime-queue-consumer). Benchmark head 9966ec5a is the PR's last commit; same 7 files. Squash-merged as 33f4fddf."
+ },
+ "tps": [
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#muse13-02",
+   "severity": "low",
+   "category": null,
+   "bug": "SimpleQueueProcessingStrategy passes FilteredPayload to decode_payload, whose assert raises instead of returning None, so filtered messages go through the error path.",
+   "evidenciaOpus": "result_consumer.py:188 asserts the payload is not FilteredPayload, but SimpleQueueProcessingStrategy is the first step returned by create_thread_queue_parallel_worker (lines 245-259) with no upstream filter, so Kafka never delivers FilteredPayload to it; even if it did, the except at queue_consumer.py:317-325 still completes the offset.",
+   "evidenciaAstra": "src/sentry/remote_subscriptions/consumers/result_consumer.py:256 wires decode_payload directly, whose assertion at line 188 rejects FilteredPayload. queue_consumer.py:295 invokes that decoder before the None check, causing filtered messages to produce the erroneous exception log at line 318; lines 319–325 still complete their offsets through the fallback."
+  }
+ ]
+}

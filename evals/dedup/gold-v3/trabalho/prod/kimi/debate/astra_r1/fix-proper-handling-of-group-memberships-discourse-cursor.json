@@ -1,0 +1,12 @@
+{
+ "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+ "items": [
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#kimip-01",
+   "class": "FP",
+   "subclass": "none",
+   "severity": "low",
+   "reply": "The per-username query exists, but base update_patch already performed the same User.find_by_username and group.add loop. The new add_members action retains that lookup logic while changing the request format to comma-separated usernames, so the reported performance issue is pre-existing under the relocation ruling. I change my classification to FP; the minor admin-path optimization warrants low severity."
+  }
+ ]
+}

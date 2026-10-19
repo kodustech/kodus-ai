@@ -1,0 +1,11 @@
+{
+ "caseId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The comment claims that float-based button alignment fails inside the flex-based .small-action layout. The rejected issue concerns off-by-one box-ordinal-group values in the order mixin, a different cause and code location."
+  }
+ ]
+}

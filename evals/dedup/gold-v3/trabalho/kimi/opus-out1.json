@@ -1,0 +1,483 @@
+{
+ "dual-storage-architecture-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage.Create failure recorded with recordLegacyDuration."
+  },
+  {
+   "id": "S2",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage.Update failure recorded with recordLegacyDuration."
+  },
+  {
+   "id": "S3",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Legacy DeleteCollection goroutine records recordStorageDuration."
+  },
+  {
+   "id": "S4",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Delete success metric uses name instead of options.Kind."
+  },
+  {
+   "id": "S5",
+   "match": "dual-storage-architecture-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Async legacy goroutines derive context from request ctx and get cancelled."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Unbounded goroutine fan-out per write; no golden issue about concurrency limits."
+  },
+  {
+   "id": "S7",
+   "match": "dual-storage-architecture-grafana-codex#13",
+   "newGroup": null,
+   "reason": "Tests share one mock between legacy and storage, so they only work through that coupling (storage-failure test registers via setupLegacyFn)."
+  },
+  {
+   "id": "S8",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Broad metric-inconsistency comment that names the Delete success path using name instead of options.Kind."
+  },
+  {
+   "id": "S9",
+   "match": "dual-storage-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Delete puts d.Log instead of enriched log into context."
+  },
+  {
+   "id": "S10",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage.Create failure recorded with legacy metric."
+  },
+  {
+   "id": "S11",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage.Update failure recorded with legacy metric."
+  },
+  {
+   "id": "S12",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Delete success metric uses name instead of options.Kind."
+  },
+  {
+   "id": "S13",
+   "match": "dual-storage-architecture-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Delete test never waits for/asserts the async legacy write."
+  },
+  {
+   "id": "S14",
+   "match": "dual-storage-architecture-grafana-codex#07",
+   "newGroup": null,
+   "reason": "DeleteCollection test never asserts the async legacy write."
+  },
+  {
+   "id": "S15",
+   "match": "dual-storage-architecture-grafana-codex#10",
+   "newGroup": null,
+   "reason": "Create test named 'only in the unified store' although Mode 3 also writes legacy."
+  },
+  {
+   "id": "S16",
+   "match": "dual-storage-architecture-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Legacy.Update gets the original objInfo instead of the object stored in unified storage, so they can diverge."
+  },
+  {
+   "id": "S17",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage.Create failure recorded with legacy metric."
+  },
+  {
+   "id": "S18",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage.Update failure recorded with legacy metric."
+  },
+  {
+   "id": "S19",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Legacy DeleteCollection recorded with storage metric."
+  },
+  {
+   "id": "S20",
+   "match": "dual-storage-architecture-grafana-codex#13",
+   "newGroup": null,
+   "reason": "Storage-failure Create test registers its expectation via the legacy setup, which only works through the shared mock."
+  }
+ ],
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+  {
+   "id": "S1",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+   "newGroup": null,
+   "reason": "updateManyByCredentialId called with empty data so updatedAt is not refreshed."
+  },
+  {
+   "id": "S2",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#muse13-01",
+   "newGroup": null,
+   "reason": "connectedCalendarsHandler bypasses the feature-flag-aware CalendarCache factory."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Non-finding (no data-exposure issue)."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Non-finding (no data-exposure issue)."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Non-finding (no data-exposure issue)."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "Non-finding (no data-exposure issue)."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N5",
+   "reason": "Non-finding (no data-exposure issue)."
+  },
+  {
+   "id": "S8",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+   "newGroup": null,
+   "reason": "Empty data object to updateMany means updatedAt is not bumped; fix is passing updatedAt."
+  },
+  {
+   "id": "S9",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+   "newGroup": null,
+   "reason": "Empty data object does not refresh updatedAt."
+  },
+  {
+   "id": "S10",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+   "newGroup": null,
+   "reason": "Empty data object does not refresh updatedAt."
+  }
+ ],
+ "notification-rule-processing-engine-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "Silence drawer gated on ruler rule never renders for prom-only list items."
+  },
+  {
+   "id": "S2",
+   "match": "notification-rule-processing-engine-grafana-codex#07",
+   "newGroup": null,
+   "reason": "GrafanaRuleListItem missing key prop."
+  },
+  {
+   "id": "S3",
+   "match": "notification-rule-processing-engine-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Grafana prom abilities gate Export on alertingRule, so recording rules lose it."
+  },
+  {
+   "id": "S4",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "Silence drawer gated on ruler rule while menu uses promRule abilities."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Speculative concern about uid uniqueness as key; no golden issue."
+  },
+  {
+   "id": "S6",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "Silence drawer gated on rulerRuleType so it never opens from list view."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Stray comment remark; no golden issue."
+  },
+  {
+   "id": "S8",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "Silence drawer never mounts for prom-only rules."
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Missing ?? [] fallback on groups.at(0)?.rules; no golden issue."
+  }
+ ],
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "ASN1Decoder accepts constructed INTEGER tags; not in golden set."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "debugf used with non-format string; not in golden set."
+  },
+  {
+   "id": "S3",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-02",
+   "newGroup": null,
+   "reason": "getBouncyCastleProvider returns the default KeyStore provider, not BouncyCastle."
+  },
+  {
+   "id": "S4",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Two discarded ASN1Encoder writes are dead code."
+  },
+  {
+   "id": "S5",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#11",
+   "newGroup": null,
+   "reason": "Round-trip test never verifies against original signature / Signature.verify."
+  },
+  {
+   "id": "S6",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-02",
+   "newGroup": null,
+   "reason": "getBouncyCastleProvider returns platform default keystore provider."
+  },
+  {
+   "id": "S7",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#07",
+   "newGroup": null,
+   "reason": "Claims a wrong-length signature causes unchecked exception in concatenatedRSToASN1DER."
+  },
+  {
+   "id": "S8",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#07",
+   "newGroup": null,
+   "reason": "Claims missing signature length check causes out-of-bounds read."
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "asn1derToConcatenatedRS silently truncates oversize integers; not in golden set."
+  }
+ ],
+ "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": ".topic-meta-data h5 a light value changed 30% to 70%."
+  },
+  {
+   "id": "S2",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "desktop user.scss .name light value 30% to 50%."
+  },
+  {
+   "id": "S3",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "mobile user.scss .name light value 30% to 50%."
+  },
+  {
+   "id": "S4",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "mobile topic-post h3 light value 20% to 50%."
+  },
+  {
+   "id": "S5",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "mobile .custom-message-length light value 70% to 30%."
+  },
+  {
+   "id": "S6",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": ".topic-meta-data h5 a arguments inverted (70%/30%)."
+  },
+  {
+   "id": "S7",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "mobile .custom-message-length inverted vs desktop."
+  },
+  {
+   "id": "S8",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "mobile topic-post h3 (line 182) changed from 20% to 50%/50%."
+  }
+ ],
+ "implement-access-token-context-encoding-framework-keycloak": [
+  {
+   "id": "S1",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "isAccessTokenId wrong offset and inverted comparison."
+  },
+  {
+   "id": "S2",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Constructor checks grantType twice instead of rawTokenId."
+  },
+  {
+   "id": "S3",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "isAccessTokenId inverted equality (and offset)."
+  },
+  {
+   "id": "S4",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "isAccessTokenId reads the grant shortcut at the wrong offset."
+  },
+  {
+   "id": "S5",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "isAccessTokenId reads the grant shortcut at the wrong offset."
+  },
+  {
+   "id": "S6",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "isAccessTokenId wrong substring and inverted check."
+  }
+ ],
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
+  {
+   "id": "S1",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "queued default timezone.now() evaluated at class definition."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims datetime in to_dict breaks Celery JSON serialization; not in golden set."
+  },
+  {
+   "id": "S3",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#03",
+   "newGroup": null,
+   "reason": "test_from_dict_empty_array passes an empty dict."
+  },
+  {
+   "id": "S4",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#03",
+   "newGroup": null,
+   "reason": "test_from_dict_empty_array passes an empty dict."
+  },
+  {
+   "id": "S5",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#02",
+   "newGroup": null,
+   "reason": "Typo in test_from_dict_inalid_data."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Claims sync_assignee_outbound signatures not updated for assignment_source; not in golden set."
+  }
+ ],
+ "anonymous-add-configurable-device-limit-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#07",
+   "newGroup": null,
+   "reason": "tagDeviceUI caches device before CreateOrUpdateDevice, bypassing limit after rejection."
+  },
+  {
+   "id": "S2",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Non-atomic count then insert lets concurrent requests exceed limit."
+  },
+  {
+   "id": "S3",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Non-atomic count then insert lets concurrent requests exceed limit."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Existing device older than 30 days fails updateDevice window and is rejected; not in golden set."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Hard-coded English error string not translated; not in golden set."
+  }
+ ],
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "include_website_name missing '?' so the guard never runs."
+  },
+  {
+   "id": "S2",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "include_website_name missing '?' so the guard never runs."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "rescue nil swallows URI parse errors without logging; not in golden set."
+  },
+  {
+   "id": "S4",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Hostname comparison is case-sensitive."
+  }
+ ],
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": []
+}

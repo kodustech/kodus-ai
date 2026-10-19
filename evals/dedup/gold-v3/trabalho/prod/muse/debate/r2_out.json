@@ -1,0 +1,16 @@
+{
+  "add-html-sanitizer-for-translated-message-resources-keycloak#musep-01": {
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "concede": false,
+    "text": "Facts agreed: for an _en file englishFile resolves to itself (VerifyMessageProperties.java:74-75) and santizeAnchors strips matching anchors before the sanitizer (:88). But that is the designed trust model, not a defect: `Allow only those anchor tags from the source key to also appear in the target key.` (:147). The English source is the reviewed reference; the verifier's job is policing translations against it, and translations still get every anchor matched (:153-158) and all other HTML sanitized for English too (:91-92 applies to _en files as well, only anchors are exempt). Not policing anchors in the reference file is a feature request, not a regression. Severity as stated: a build-time lint gap in a source file maintained by the project itself, not a runtime hole, so medium."
+  },
+  "database-performance-optimizations-grafana-codex#musep-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "concede": false,
+    "text": "Race agreed (`if affected == 0 { return totalAffected, nil }`, xorm_store.go:656-657; batch returns deleteByIDs' count, :536-538). It needs a concurrent deleter to remove every fetched ID between fetchIDs (:530) and deleteByIDs (:536), and the only effect is that remaining rows wait for the next cleanup cycle, an outcome the PR explicitly accepts: `This may under-delete ... any such annotations will simply be cleaned on the next cycle.` (:525). No data loss, no wrong result, no user effect: nit / low."
+  }
+}

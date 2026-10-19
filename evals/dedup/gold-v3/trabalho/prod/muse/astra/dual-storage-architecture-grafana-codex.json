@@ -1,0 +1,17 @@
+{
+ "caseId": "dual-storage-architecture-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "dual-storage-architecture-grafana-codex#05",
+   "newGroup": null,
+   "reason": "The comment describes asynchronous legacy writes being cancelled through the request context before their timeout expires. Detaching that context fixes issue #05; the additional deep-copy recommendation does not change the match."
+  },
+  {
+   "id": "S2",
+   "match": "dual-storage-architecture-grafana-codex#06",
+   "newGroup": null,
+   "reason": "The comment describes legacy recomputing the update from raw objInfo and potentially diverging from unified storage. Reusing the committed Storage result through updateWrapper fixes issue #06."
+  }
+ ]
+}

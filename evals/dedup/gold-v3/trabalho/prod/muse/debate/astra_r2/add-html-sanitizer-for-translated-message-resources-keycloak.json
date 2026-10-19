@@ -1,0 +1,12 @@
+{
+ "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+ "items": [
+  {
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#musep-01",
+   "class": "FP",
+   "subclass": "none",
+   "severity": "high",
+   "reply": "I change my classification to FP: the English resource is deliberately the anchor allowlist. VerifyMessageProperties.java:153\u2013158 removes exact source-anchor matches and reports mismatches, so translations cannot introduce the claimed javascript: anchor unless it already exists in the trusted source. Self-comparison follows that policy; requiring independent validation of source anchors extends the verifier\u2019s intended contract. Severity remains high assuming the alleged security weakness is true, as the rubric specifies."
+  }
+ ]
+}

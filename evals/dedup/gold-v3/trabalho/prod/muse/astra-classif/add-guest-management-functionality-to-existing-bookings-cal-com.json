@@ -1,0 +1,12 @@
+{
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "items": [
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#musep-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The new handler fetches bookings solely by ID without checking status (packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:26), then persists guests and invokes calendar updates and emails (:92, :165, :168). Even when cancellation leaves no calendar references, the calendar method simply returns (packages/core/EventManager.ts:597), allowing scheduled-event invitations to be sent for the cancelled booking (packages/emails/email-manager.ts:542).",
+   "severity": "medium"
+  }
+ ]
+}

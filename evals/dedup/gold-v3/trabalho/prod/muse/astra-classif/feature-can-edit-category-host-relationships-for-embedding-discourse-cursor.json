@@ -1,0 +1,12 @@
+{
+ "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+ "items": [
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#musep-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "app/assets/javascripts/discourse/adapters/rest.js.es6:1 lists only 'plugin', 'site-customization', and 'embeddable-host', so every supported admin model requires at most one underscore replacement. The single replacement at :22 therefore handles all entries correctly; using /_/g would not change routing for any configured admin model.",
+   "severity": "medium"
+  }
+ ]
+}

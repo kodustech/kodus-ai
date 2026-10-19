@@ -1,0 +1,292 @@
+{
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "913c3d6f636d02b3dd6c2c022ca1af2bec95d752",
+  "head": "d1c69189f3c90ecf56013a8da904da9bff9a8e19",
+  "issues": {
+   "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#muse13-02": {
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S8",
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       20,
+       22
+      ],
+      "texto": "WHAT: every embed comment/retriever check now does a SELECT via record_for_host instead of the previous in-memory SiteSetting string check. WHY: adds a DB round-trip to the hot unauthenticated embed path on every request, increasing latency and DB load. HOW: cache the host list with expiry and invalidate on EmbeddableHost save/destroy."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "text": "embed_controller.rb:61 and lib/topic_retriever.rb:16 now call EmbeddableHost.host_allowed?, which runs a SELECT (embeddable_host.rb:17) instead of reading the in-memory SiteSetting. Real, but a single small query per embed request is a micro-optimisation with no meaningful user impact."
+     },
+     {
+      "who": "astra",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "app/models/embeddable_host.rb:17 adds a single lookup for the newly database-backed host configuration, but this does not establish a meaningful performance defect. Successful comments responses enable caching at app/controllers/embed_controller.rb:35, and lib/middleware/anonymous_cache.rb:121-122 serves cache hits without invoking the controller, so the lookup does not run on every anonymous request."
+     }
+    ]
+   }
+  }
+ },
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "30a92a4d66b417f7c19dee2b343099adc6e88aa6",
+  "head": "5fd11f9faa79c4aefd39975d1b0e963e5034f793",
+  "issues": {
+   "feat-add-calendar-cache-status-and-actions-22532-cal-com#muse13-01": {
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S2",
+      "file": "packages/trpc/server/routers/viewer/calendars/connectedCalendars.handler.ts",
+      "lines": [
+       27,
+       29
+      ],
+      "texto": "WHAT: handler directly instantiates CalendarCacheRepository instead of the calendar-cache.ts factory that returns CalendarCacheRepositoryMock when disabled. WHY: when calendar-cache is disabled it still issues prisma.calendarCache.groupBy and can expose status inconsistent with the rest of the app. HOW: resolve the repository through the existing factory that respects isCalendarCacheEnabledGlobally."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "low",
+      "text": "connectedCalendars.handler.ts:28 does `new CalendarCacheRepository()` instead of going through CalendarCache.init (calendar-cache.ts:22-29), bypassing the feature-flag check and leaving the PR's own CalendarCacheRepositoryMock.getCacheStatusByCredentialIds dead. Effect is an extra groupBy and possibly showing stale cache timestamps while the cache is disabled."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "connectedCalendars.handler.ts:28-29 directly constructs the repository, whose calendar-cache.repository.ts:173-182 unconditionally queries Prisma. This bypasses calendar-cache.ts:24-28 and the disabled implementation returning [] in calendar-cache.repository.mock.ts:27-29, allowing cache status and actions to remain visible while caching is disabled (CredentialActionsDropdown.tsx:69-107)."
+     }
+    ]
+   },
+   "feat-add-calendar-cache-status-and-actions-22532-cal-com#muse13-02": {
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S5",
+      "file": "scripts/test-gcal-webhooks.sh",
+      "lines": [
+       4,
+       35
+      ],
+      "texto": "WHAT: fixed /tmp/tmole.log combined with rm -f and shell redirect follows symlinks. WHY: a local attacker pre-creating /tmp/tmole.log as a symlink causes truncation/overwrite of an arbitrary victim-owned file when the script runs. HOW: create the log with mktemp and avoid predictable paths."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "scripts/test-gcal-webhooks.sh:4,35-36 does `rm -f /tmp/tmole.log` before redirecting, which removes a pre-planted symlink; exploiting it needs a local attacker winning a race on a developer machine for a local dev helper script, so there is no practical problem to report."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "high",
+      "text": "scripts/test-gcal-webhooks.sh:4 uses a predictable shared temporary path, and lines 34-35 perform an unchecked removal followed by a symlink-following truncating redirect. Although successful removal unlinks an existing symlink, an attacker-owned link can survive a denied removal in sticky /tmp, or be inserted between removal and opening; on systems permitting symlink following, the victim's writable target is truncated."
+     }
+    ]
+   }
+  }
+ },
+ "advanced-query-processing-architecture-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "d9a8253640464014aa3662c91131278990cfb828",
+  "head": "1cab4143d443c33079566f6ca36931eb8468159f",
+  "issues": {
+   "advanced-query-processing-architecture-grafana-codex#muse13-01": {
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S2",
+      "file": "public/app/plugins/datasource/loki/shardQuerySplitting.ts",
+      "lines": [
+       48,
+       52
+      ],
+      "texto": "WHAT: Switching from interpolateVariablesInQueries to applyTemplateVariables drops the datasource:getRef() assignment. WHY: Old method (datasource.ts:436-438) stamped each query with datasource ref; new method (datasource.ts:1135-1140) returns only expr/step/legendFormat, leaving stale/missing datasource on split targets for downstream routing. HOW: Preserve the datasource ref when mapping, as the old path did."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "shardQuerySplitting.ts:49-52 now uses applyTemplateVariables (datasource.ts:1110-1140), which indeed does not stamp datasource: getRef(); but DataSourceWithBackend.query (packages/grafana-runtime/src/utils/DataSourceWithBackend.ts:149-172) defaults to this.getRef() and resolves q.datasource with scopedVars, so routing is unaffected."
+     },
+     {
+      "who": "astra",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "high",
+      "text": "public/app/plugins/datasource/loki/datasource.ts:1135-1139 spreads ...target, preserving its datasource rather than returning only expr/step/legendFormat. Split requests call datasource.runQuery (querySplitting.ts:180), which delegates to super.query (datasource.ts:350-352); packages/grafana-runtime/src/utils/DataSourceWithBackend.ts:149-186 defaults missing datasource references to this.getRef(), resolves supplied references, and explicitly assigns the outgoing datasource, so the claimed routing failure is unsupported."
+     }
+    ]
+   }
+  }
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "7ea067aae9be56cb2622bce6563864817c3dfeaf",
+  "head": "7355f05e6aafe2a7acc6434fb40c686665416606",
+  "issues": {
+   "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#muse13-01": {
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S3",
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/UserPermissionsV2.java",
+      "lines": [
+       46,
+       62
+      ],
+      "texto": "WHAT: canView(user)/canManage(user) dropped ADMIN role from hasOneAdminRole check. WHY: Admins relying on ADMIN role lose view/manage access (denial) diverging from prior contract and V1 behavior. HOW: Restore AdminRoles.ADMIN in the role checks or prove ADMIN is handled elsewhere."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "high",
+      "text": "MgmtPermissions.hasOneAdminRole (MgmtPermissions.java:163-173) checks client roles of the realm-management/master admin client, where 'admin' is not a client role; admins get manage-users through realm-admin/admin composites. V1 UserPermissions (lines 234, 298) never included AdminRoles.ADMIN, so nothing diverges."
+     },
+     {
+      "who": "astra",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "high",
+      "text": "The removal is real, but hasOneAdminRole checks client roles, not the realm-level ADMIN role (services/src/main/java/org/keycloak/services/resources/admin/permissions/MgmtPermissions.java:163-173). ADMIN already inherits the management client roles through composites (services/src/main/java/org/keycloak/services/managers/RealmManager.java:346-365), so administrators retain access. The remaining checks also match V1\u2019s manage/view checks (services/src/main/java/org/keycloak/services/resources/admin/permissions/UserPermissions.java:234,298)."
+     }
+    ]
+   }
+  }
+ },
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "fd358e8a388939959369f08f616e29552cdaf96e",
+  "head": "9966ec5a13e331659c3ea00981f9b11b0faf821f",
+  "issues": {
+   "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#muse13-02": {
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S11",
+      "file": "src/sentry/remote_subscriptions/consumers/result_consumer.py",
+      "lines": [
+       254,
+       259
+      ],
+      "texto": "SimpleQueueProcessingStrategy.submit passes FilteredPayload to decoder and expects None to skip+commit. The wired decoder partial(self.decode_payload,...) asserts not isinstance(payload, FilteredPayload), so filtered messages raise AssertionError into the generic except instead of the intended None fast-path (error log + reliance on exception fallback). Guard FilteredPayload before delegating to decode_payload."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "low",
+      "text": "result_consumer.py:188 asserts the payload is not FilteredPayload, but SimpleQueueProcessingStrategy is the first step returned by create_thread_queue_parallel_worker (lines 245-259) with no upstream filter, so Kafka never delivers FilteredPayload to it; even if it did, the except at queue_consumer.py:317-325 still completes the offset."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "src/sentry/remote_subscriptions/consumers/result_consumer.py:256 wires decode_payload directly, whose assertion at line 188 rejects FilteredPayload. queue_consumer.py:295 invokes that decoder before the None check, causing filtered messages to produce the erroneous exception log at line 318; lines 319\u2013325 still complete their offsets through the fallback."
+     }
+    ]
+   }
+  }
+ },
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "28e3db2520d4ea28c57b08da57b83917ba7b2e15",
+  "head": "eb9623b4e787303a3bd15e10bbbdb78d59875ac6",
+  "issues": {
+   "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#muse13-01": {
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S5",
+      "file": "src/sentry/spans/buffer.py",
+      "lines": [
+       197,
+       199
+      ],
+      "texto": "WHAT: Untrusted SDK-controlled end_timestamp_precise is used verbatim as the ZSET score driving ZPOPMIN eviction. WHY: An attacker can send far-future timestamps to pin their spans and force eviction of legitimate spans in the same segment, biasing sampling/storage. HOW: Validate/clamp the score server-side instead of trusting client time."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "buffer.py:197-199 scores each span by its end_timestamp_precise, but the ZSET key is per project and trace (span-buf:s:{project:trace}:...), so a sender can only reorder eviction within its own trace; there is no cross-tenant or meaningful security impact."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "high",
+      "text": "src/sentry/spans/consumers/process/factory.py:134-141 copies end_timestamp_precise from the incoming payload without validation, and src/sentry/spans/buffer.py:197-199 uses it directly as the score. The newly added ZPOPMIN at src/sentry/scripts/spans/add-buffer.lua:62-63 therefore preferentially retains future-dated injected spans and evicts legitimate lower-scored spans when the same segment exceeds 1,000 members."
+     }
+    ]
+   },
+   "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#muse13-02": {
+    "comentarios": [
+     {
+      "gid": "muse-muse13:S6",
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       46,
+       55
+      ],
+      "texto": "WHAT: Every span insert runs up to two ZUNIONSTORE full copies of the up-to-1000-member set plus ZCARD/ZPOPMIN. WHY: Building a segment span-by-span copies O(N) per insert, i.e. O(N^2) total per segment and O(B*N) per batch in the ingest hot path. HOW: Merge once per batch or skip union when keys are already joined."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "add-buffer.lua:46-55 still merges at most two sets per insert as before; the PR only swaps sunionstore for zunionstore, which the base already ran on every insert, so the O(N) copy per insert is pre-existing and not introduced here."
+     },
+     {
+      "who": "astra",
+      "class": "FP",
+      "subclass": "hallucination",
+      "severity": "medium",
+      "text": "src/sentry/spans/buffer.py:192-199 groups spans and inserts each subsegment together before executing the per-span scripts. Both unions are conditional on nonempty source sets and immediately unlink those sources (src/sentry/scripts/spans/add-buffer.lua:46-54), so subsequent spans already joined do not repeatedly copy the set as claimed; the base also used full-set unions under the same conditions."
+     }
+    ]
+   }
+  }
+ }
+}

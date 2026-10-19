@@ -1,0 +1,274 @@
+{
+  "muse|optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
+    {
+      "id": "C1",
+      "match": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#04",
+      "newGroup": null,
+      "reason": "Same claim: order() copies the value into the 1-indexed box-ordinal-group, so legacy engines get an off-by-one order."
+    },
+    {
+      "id": "C3",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Removed bullet margin-top in topic.scss is a different place and cause from the order off-by-one and the small-action float claim."
+    }
+  ],
+  "muse|enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+    {
+      "id": "C2",
+      "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#02",
+      "newGroup": null,
+      "reason": "Same claim: comments is null when #discourse-comments is absent and appendChild throws a TypeError."
+    }
+  ],
+  "kimi|ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": [
+    {
+      "id": "C1",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Performance claim about repeated URI parsing in website_name; no rejected issue covers parse cost."
+    }
+  ],
+  "kimi|add-html-sanitizer-for-translated-message-resources-keycloak": [
+    {
+      "id": "C1",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Claims the anchor regex also matches <abbr>/<address>/<area>; no rejected issue is about the regex lacking a word boundary."
+    }
+  ],
+  "muse|async-import-of-the-appstore-packages-cal-com": [
+    {
+      "id": "C3",
+      "match": "async-import-of-the-appstore-packages-cal-com#06",
+      "newGroup": null,
+      "reason": "Same claim: getVideoAdapters awaits app imports sequentially in the loop, adding per-credential latency."
+    }
+  ],
+  "opus|feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+    {
+      "id": "C2",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Relative ../.env path resolved against the cwd in the webhook script; kimi-05 only states no data exposure there, no matching claim."
+    }
+  ],
+  "muse|add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+    {
+      "id": "C2",
+      "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#03",
+      "newGroup": null,
+      "reason": "Same claim: rejectedEmails.@each does not fire on pushObject of strings, so the rejection is not shown until the email changes."
+    }
+  ],
+  "muse|feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+    {
+      "id": "C1",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Claims the cache status groupBy ignores expiresAt; different from #02 (which updatedAt is written) and the other rejected claims."
+    }
+  ],
+  "muse|plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+    {
+      "id": "C2",
+      "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#13",
+      "newGroup": null,
+      "reason": "Same claim: LoggerMiddleware dropped explicit fields and depends on ContextualLoggerMiddleware ordering, logging without plugin identity if reordered."
+    }
+  ],
+  "ds|add-guest-management-functionality-to-existing-bookings-cal-com": [
+    {
+      "id": "C1",
+      "match": "add-guest-management-functionality-to-existing-bookings-cal-com#prod-01",
+      "newGroup": null,
+      "reason": "Same claim: the formatted event lacks the new guests, so the newGuests branch is unreachable and new guests get no email."
+    }
+  ],
+  "ds|implement-recovery-key-support-for-user-storage-providers-keycloak": [
+    {
+      "id": "C1",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Claims getCredentials rebuilds the model from raw codes so consumed-code state is lost; not the plaintext, timing, Optional or NPE claims."
+    }
+  ],
+  "opus|enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+    {
+      "id": "C1",
+      "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-02",
+      "newGroup": null,
+      "reason": "Same defect: `<%- end if %>` turns the if/else into a modifier whose condition is the next output statement."
+    }
+  ],
+  "opus|optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
+    {
+      "id": "C1",
+      "match": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#musep-01",
+      "newGroup": null,
+      "reason": "Same claim: making .small-action a flex container makes the floated button ignore float:right and sit next to the description."
+    }
+  ],
+  "sonnet|replays-self-serve-bulk-delete-system-sentry": [
+    {
+      "id": "C1",
+      "match": "replays-self-serve-bulk-delete-system-sentry#21",
+      "newGroup": null,
+      "reason": "Same claim: get_environment_info fetches the recommended event per issue, an N+1 on the PR-comment path."
+    }
+  ],
+  "muse|add-guest-management-functionality-to-existing-bookings-cal-com": [
+    {
+      "id": "C1",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Claims the subject uses a nameless guest's name via attendees[0]; prod-02 is a different cause (throw on empty list)."
+    }
+  ],
+  "kimi|authzservice-improve-authz-caching-grafana-codex": [
+    {
+      "id": "C1",
+      "match": "authzservice-improve-authz-caching-grafana-codex#02",
+      "newGroup": null,
+      "reason": "Same claim: a cached denial checked first blocks access granted within the short TTL."
+    }
+  ],
+  "kimi|plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+    {
+      "id": "C1",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Claims ContextualLoggerMiddleware runs and allocates even when request logging is disabled; no rejected issue covers this cost."
+    }
+  ],
+  "ds|comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+    {
+      "id": "C1",
+      "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#12",
+      "newGroup": null,
+      "reason": "Same claim: with immediateDelete=true the SendGrid send is cancelled but the WorkflowReminder row is neither deleted nor marked, leaving it orphaned."
+    },
+    {
+      "id": "C2",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Claims remindersToCancel does not exclude null referenceId, sending batch_id null and aborting the loop; no rejected issue covers it."
+    }
+  ],
+  "muse|add-html-sanitizer-for-translated-message-resources-keycloak": [
+    {
+      "id": "C2",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Claims the anchor-mismatch error omits key and file; kimi-02 is about absolute paths with no defect, a different point."
+    }
+  ],
+  "kimi|add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": [
+    {
+      "id": "C1",
+      "match": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#01",
+      "newGroup": null,
+      "reason": "Same claim: the null-strategy early return skips enabling the rolling-updates feature in UpgradeTest."
+    },
+    {
+      "id": "C2",
+      "match": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#01",
+      "newGroup": null,
+      "reason": "Same claim: the feature enabling is unreachable for the null update strategy because of the early return."
+    }
+  ],
+  "gpt|optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
+    {
+      "id": "C1",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Cause is that .small-action-desc becomes content-sized so its internal floated buttons sit beside short text; musep-01 blames the buttons being flex items, which they are not (they are inside the desc)."
+    }
+  ],
+  "muse|add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": [
+    {
+      "id": "C1",
+      "match": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#01",
+      "newGroup": null,
+      "reason": "Same claim: the null-strategy early return skips enabling the rolling-updates feature."
+    }
+  ],
+  "muse|feature-localization-fallbacks-server-side-discourse-cursor": [
+    {
+      "id": "C1",
+      "match": "feature-localization-fallbacks-server-side-discourse-cursor#05",
+      "newGroup": null,
+      "reason": "Same claim: every fallback lookup reads SiteSetting.default_locale, adding per-request load."
+    }
+  ],
+  "kimi|add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+    {
+      "id": "C3",
+      "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#03",
+      "newGroup": null,
+      "reason": "Same claim: readLength returns -1 for indefinite length, breaking array allocation or sequence arithmetic."
+    },
+    {
+      "id": "C4",
+      "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#06",
+      "newGroup": null,
+      "reason": "Same claim: the lenient sequence parser does not validate element lengths, so malformed DER is accepted silently."
+    }
+  ],
+  "kimi|add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+    {
+      "id": "C2",
+      "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+      "newGroup": null,
+      "reason": "Same claim: V1 paths such as client-removal call the throwing ClientPermissionsV2 overrides, so client deletion fails (also covers the endpoint claim of #12)."
+    }
+  ],
+  "ds|advanced-sql-analytics-framework-grafana-codex": [
+    {
+      "id": "C2",
+      "match": "advanced-sql-analytics-framework-grafana-codex#prod-01",
+      "newGroup": null,
+      "reason": "Same claim: the nodes.go TypeSQL path reaches UnmarshalSQLCommand/NewSQLCommand without the SQL expression gate."
+    }
+  ],
+  "muse|feat-2fa-backup-codes-cal-com": [
+    {
+      "id": "C2",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Claims the missing-encryption-key branch in disable.ts throws instead of returning JSON; no rejected issue covers it."
+    }
+  ],
+  "muse|implement-recovery-key-support-for-user-storage-providers-keycloak": [
+    {
+      "id": "C2",
+      "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#prod-01",
+      "newGroup": null,
+      "reason": "Same claim: getCredentials dereferences the user from the map without a null check and throws NPE."
+    }
+  ],
+  "kimi|fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+    {
+      "id": "C2",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "N+1 credential findUnique per calendar reference in handleCancelBooking; snapi-01 is about duplicate/wrong delete calls, a different problem."
+    }
+  ],
+  "sonnet|optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
+    {
+      "id": "C1",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Mobile custom-message margin-left -40px tuned for the old padding; not the order or small-action float claims."
+    }
+  ],
+  "muse|comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+    {
+      "id": "C1",
+      "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#12",
+      "newGroup": null,
+      "reason": "Same claim: the immediateDelete branch cancels SendGrid and returns without deleting or marking the row, orphaning it."
+    }
+  ]
+}

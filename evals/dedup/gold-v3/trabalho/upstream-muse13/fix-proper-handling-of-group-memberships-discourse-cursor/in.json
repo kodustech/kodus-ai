@@ -1,0 +1,24 @@
+{
+ "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+ "prTitle": "FIX: proper handling of group memberships",
+ "upstream": "discourse/discourse",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/discourse",
+ "base": "4975fc28903a84418f546b2809370f19abf10e08",
+ "head": "060cda77729cb1c4a827560e09e89a7b22078ba9",
+ "prOriginalConhecido": {
+  "numero": null,
+  "url": "https://github.com/discourse/discourse/commit/060cda77729cb1c4a827560e09e89a7b22078ba9",
+  "mergedAt": "2015-01-05",
+  "nota": "No upstream PR: the benchmark head 060cda77 (Régis Hanol, 'FIX: proper handling of group memberships') was committed directly to master on 2015-01-05 and is an ancestor of main (compare = ahead); /commits/<sha>/pulls is empty. The merged code is the benchmark head itself."
+ },
+ "tps": [
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#muse13-01",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "Group member pagination is off by one when user_count is a multiple of limit: Next moves to offset == user_count and shows an empty page.",
+   "evidenciaOpus": "admin-group.js.es6:13 computes totalPages as floor(user_count/limit)+1, so with 100 members and limit 50 it is 3; at offset 50 showingLast is false and next (line 33) sets offset min(100,100)=100, loading an empty page. The pagination added by this PR lets the admin step onto a page with no members.",
+   "evidenciaAstra": "The newly added pagination in app/assets/javascripts/admin/controllers/admin-group.js.es6:13 calculates three pages for 100 members at limit 50, so showingLast remains false at offset 50 and next advances to offset 100 at line 33. app/controllers/groups_controller.rb:26 applies that offset directly, returning an empty page; the proposed clamp also requires correcting totalPages."
+  }
+ ]
+}

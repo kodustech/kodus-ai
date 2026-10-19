@@ -1,0 +1,12 @@
+{
+ "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+ "items": [
+  {
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#kimi-01",
+   "class": "TP",
+   "subclass": "nit",
+   "severity": "medium",
+   "reply": "I change my classification to TP/nit. The new decoder does accept 0x22 because readTagNumber masks off the constructed bit. However, ECDSASignatureSignerContext supplies the output of local Signature.sign(), while verification uses concatenatedRSToASN1DER and never invokes this decoder. The strictness gap is real, but the code shows no practical input-validation failure worth reporting; medium rates the malformed-input behavior as alleged."
+  }
+ ]
+}

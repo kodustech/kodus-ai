@@ -1,0 +1,12 @@
+{
+ "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+ "items": [
+  {
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#musep-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "In misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:74-86, an English resource loads itself as the reference, producing identical normalized values. Lines 150-155 therefore strip matching anchors, including javascript: hrefs, before the sanitizer runs at lines 88-92, so unsafe English anchors escape the newly added validation. This is a security weakness requiring an unsafe anchor in an English resource.",
+   "severity": "high"
+  }
+ ]
+}

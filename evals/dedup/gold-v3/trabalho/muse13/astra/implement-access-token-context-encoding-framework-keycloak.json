@@ -1,0 +1,101 @@
+{
+ "caseId": "implement-access-token-context-encoding-framework-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Identifies the duplicated grantType null check that leaves rawTokenId unvalidated."
+  },
+  {
+   "id": "S2",
+   "match": "implement-access-token-context-encoding-framework-keycloak#opa-01",
+   "newGroup": null,
+   "reason": "Identifies the abstract getShortcut() addition that breaks existing custom grant factories."
+  },
+  {
+   "id": "S3",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Identifies both the incorrect grant substring offset and inverted equality check in isAccessTokenId."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes stale grantType after setFormParams() and an unguarded null formParams lookup in the context constructor. These are separate from the missing grant attributes in the issuance paths covered by issue #05."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Describes token issuance throwing for an unmapped grant instead of using a fallback. This differs from the abstract-method compatibility break, missing grant attributes, and shortcut collisions in the golden set."
+  },
+  {
+   "id": "S6",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Identifies the duplicated grantType check and missing rawTokenId validation."
+  },
+  {
+   "id": "S7",
+   "match": "implement-access-token-context-encoding-framework-keycloak#03",
+   "newGroup": null,
+   "reason": "Identifies the Javadoc advertising three-letter shortcuts despite the two-character format."
+  },
+  {
+   "id": "S8",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Identifies the inverted grant comparison in isAccessTokenId, one of the defects covered by this issue."
+  },
+  {
+   "id": "S9",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Identifies the incorrect substring(3,5) offset used to extract the grant shortcut in the matcher."
+  },
+  {
+   "id": "S10",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Identifies the duplicated grantType null check that allows null rawTokenId."
+  },
+  {
+   "id": "S11",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Identifies the same incorrect grant offset and inverted comparison in the matcher."
+  },
+  {
+   "id": "S12",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Identifies the inverted equality check that rejects a matching extracted grant shortcut."
+  },
+  {
+   "id": "S13",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Identifies the matcher extracting the token/grant boundary instead of the grant shortcut at substring(4,6)."
+  },
+  {
+   "id": "S14",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Identifies both matcher defects that prevent event assertions from verifying grant type."
+  },
+  {
+   "id": "S15",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Identifies the missing rawTokenId null validation caused by checking grantType twice."
+  },
+  {
+   "id": "S16",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Identifies the same incorrect grant offset and inverted comparison. The additional length-guard concern does not change the match."
+  }
+ ]
+}

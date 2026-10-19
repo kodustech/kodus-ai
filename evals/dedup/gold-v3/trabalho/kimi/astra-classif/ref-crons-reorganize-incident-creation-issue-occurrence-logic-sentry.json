@@ -1,0 +1,12 @@
+{
+ "caseId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry",
+ "items": [
+  {
+   "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#kimi-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "The English literals exist at src/sentry/monitors/logic/incident_occurrence.py:45 and :57\u201372, but they were moved unchanged from the base commit\u2019s src/sentry/monitors/logic/mark_failed.py:213 and :225\u2013240. This refactor preserves the existing translation behavior, so the reported localization omission is not introduced or behaviorally changed by this PR.",
+   "severity": "medium"
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+{
+ "caseId": "unified-storage-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "unified-storage-performance-optimizations-grafana-codex#prod-01",
+   "newGroup": null,
+   "reason": "Both claim that delaying initWatcher until after search initialization loses write events for the server broadcaster and Watch subscribers. S1 describes the same startup gap with less detail about the search reader consuming events."
+  }
+ ]
+}

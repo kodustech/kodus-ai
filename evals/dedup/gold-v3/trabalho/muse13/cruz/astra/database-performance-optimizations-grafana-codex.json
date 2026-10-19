@@ -1,0 +1,17 @@
+{
+ "caseId": "database-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes deleting fetched IDs that enter the protected top-MaxCount set after concurrent deletions shift the retention boundary. This differs from terminating cleanup early based on affected rows."
+  },
+  {
+   "id": "S7",
+   "match": "database-performance-optimizations-grafana-codex#musep-01",
+   "newGroup": null,
+   "reason": "Describes the same premature termination when concurrent deletion makes affected rows zero despite remaining work. Both require checking fetched count instead of affected count."
+  }
+ ]
+}

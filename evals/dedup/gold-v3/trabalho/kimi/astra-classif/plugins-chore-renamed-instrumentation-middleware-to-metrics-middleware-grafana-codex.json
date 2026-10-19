@@ -1,0 +1,12 @@
+{
+ "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+ "items": [
+  {
+   "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#kimi-01",
+   "class": "TP",
+   "subclass": "nit",
+   "reason": "The renamed middleware calls both helpers for QueryData and CallResource at metrics_middleware.go:149,153,161,164; each resolves pluginTarget at lines 95 and 105. The lookup is only a read-locked in-memory map access (pkg/plugins/manager/registry/in_memory.go:77\u201389), so removing the duplicate is a micro-optimization without demonstrated user impact. This duplication already existed before the PR, which renames the involved methods.",
+   "severity": "low"
+  }
+ ]
+}

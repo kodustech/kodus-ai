@@ -1,0 +1,41 @@
+{
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "newGroup": null,
+   "reason": "Identifies the same incorrect && permission check and proposes ||. Its claim that owners also fail is inaccurate, but fixing the described condition fixes the golden issue."
+  },
+  {
+   "id": "S2",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "newGroup": null,
+   "reason": "Explicitly describes the same case-variation bypass of BLACKLISTED_GUEST_EMAILS. The broader comment also includes the intra-request duplication problem in #03."
+  },
+  {
+   "id": "S3",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#11",
+   "newGroup": null,
+   "reason": "Describes the same unbounded guest array causing unlimited inserts and email fanout; rate limiting is an additional suggested mitigation."
+  },
+  {
+   "id": "S4",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#08",
+   "newGroup": null,
+   "reason": "Describes using the caller's calendar credentials instead of the booking organizer's when constructing EventManager."
+  },
+  {
+   "id": "S5",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "newGroup": null,
+   "reason": "Identifies the same raw guests argument that misclassifies existing attendees as new and selects the wrong email template."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes missing booking-status validation, allowing guest additions and notifications for cancelled or rejected bookings. No golden issue covers this problem."
+  }
+ ]
+}

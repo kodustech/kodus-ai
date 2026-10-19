@@ -1,0 +1,11 @@
+{
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "items": [
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This claims updateAllCalendarEvents returns no failure result when calendarReference is undefined, making a failed update appear successful. None of the rejected issues describes this failure-reporting problem."
+  }
+ ]
+}

@@ -1,0 +1,490 @@
+{
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": [
+  {
+   "id": "S1",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "newGroup": null,
+   "reason": "credentialId passed instead of userId to refreshOAuthTokens in Zoho Bigin."
+  },
+  {
+   "id": "S2",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+   "newGroup": null,
+   "reason": "Computed keys from z.string().toString() are literal keys, not wildcards."
+  },
+  {
+   "id": "S3",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "newGroup": null,
+   "reason": "Google Calendar stores the safeParse wrapper as credential key."
+  },
+  {
+   "id": "S4",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "Sync mode returns raw fetch Response; Google caller reads res.data."
+  },
+  {
+   "id": "S5",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#17",
+   "newGroup": null,
+   "reason": "jsforce.Connection built with stale access token after refresh."
+  },
+  {
+   "id": "S6",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01",
+   "newGroup": null,
+   "reason": "Webhook secret compared with !== (timing attack)."
+  },
+  {
+   "id": "S7",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#03",
+   "newGroup": null,
+   "reason": "Non-atomic findFirst-then-create allows duplicate credentials."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Missing timeout on the credential sync fetch; no golden issue."
+  },
+  {
+   "id": "S9",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01",
+   "newGroup": null,
+   "reason": "Webhook secret compared with !== (timing attack)."
+  },
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Empty-string fallback for the encryption key; no golden issue."
+  },
+  {
+   "id": "S11",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#02",
+   "newGroup": null,
+   "reason": "Zod parse unhandled yields 500 instead of 400."
+  },
+  {
+   "id": "S12",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#02",
+   "newGroup": null,
+   "reason": "Decrypt/JSON.parse of keys unhandled, same missing error handling in the webhook."
+  },
+  {
+   "id": "S13",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "decodeOAuthState bare JSON.parse; no golden issue."
+  },
+  {
+   "id": "S14",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+   "newGroup": null,
+   "reason": "Computed keys from z.string().toString() are literal keys."
+  },
+  {
+   "id": "S15",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "userId truthiness treats 0 as absent; no golden issue."
+  },
+  {
+   "id": "S16",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+   "newGroup": null,
+   "reason": "Computed keys evaluate to a literal key, schema rejects valid responses."
+  },
+  {
+   "id": "S17",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "newGroup": null,
+   "reason": "safeParse wrapper persisted as credential key."
+  },
+  {
+   "id": "S18",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "newGroup": null,
+   "reason": "credentialId passed as userId in Zoho Bigin."
+  },
+  {
+   "id": "S19",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "Sync mode raw Response breaks callers expecting provider shapes."
+  },
+  {
+   "id": "S20",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "newGroup": null,
+   "reason": "credentialId passed as userId in Zoho Bigin."
+  },
+  {
+   "id": "S21",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "newGroup": null,
+   "reason": "safeParse wrapper persisted as credential key."
+  },
+  {
+   "id": "S22",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "Sync mode raw Response; Google caller reads res.data."
+  }
+ ],
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Case-sensitive blocked-email lookup allows bypass."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Nil email in validator raises NoMethodError; no golden issue."
+  },
+  {
+   "id": "S3",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Read-modify-write counter update in should_block? loses increments concurrently."
+  },
+  {
+   "id": "S4",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Case-sensitive blocked-email lookup allows bypass."
+  },
+  {
+   "id": "S5",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Unanchored domain regex allows whitelist bypass."
+  },
+  {
+   "id": "S6",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Case-sensitive blocked-email lookup allows bypass."
+  },
+  {
+   "id": "S7",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Client shows generic invalid message instead of server rejection reason."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Validator spec stubs too loosely to catch regressions; no golden issue."
+  },
+  {
+   "id": "S9",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Non-atomic counter update in should_block? loses increments."
+  },
+  {
+   "id": "S10",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Every server email rejection collapsed into the generic invalid message instead of the real reason."
+  }
+ ],
+ "add-html-sanitizer-for-translated-message-resources-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Case-sensitive HTML tag regexes cause false positives; no golden issue."
+  },
+  {
+   "id": "S2",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#opa-01",
+   "newGroup": null,
+   "reason": "Missing English base file throws RuntimeException and crashes the build."
+  },
+  {
+   "id": "S3",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+   "newGroup": null,
+   "reason": "Overlapping prefix/suffix makes substring throw StringIndexOutOfBounds."
+  },
+  {
+   "id": "S4",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#04",
+   "newGroup": null,
+   "reason": "santizeAnchors misspelling."
+  },
+  {
+   "id": "S5",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Lithuanian TOTP step replaced with Italian text (login bundle)."
+  },
+  {
+   "id": "S6",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Lithuanian TOTP step replaced with Italian text (account bundle)."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Absolute paths in log messages; not a real defect, no golden issue."
+  },
+  {
+   "id": "S8",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#opa-01",
+   "newGroup": null,
+   "reason": "RuntimeException from reading the English file escapes the mojo and crashes the build."
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "ISO-8859-1 decoding of properties in PropertyResourceBundle; no golden issue."
+  }
+ ],
+ "fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "totalPages floor+1 off by one on exact multiples."
+  },
+  {
+   "id": "S2",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02",
+   "newGroup": null,
+   "reason": "Public members limit param has no upper bound."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims params.require(:group_id) mismatches route param; no golden issue."
+  },
+  {
+   "id": "S4",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "totalPages floor+1 off by one on exact multiples."
+  },
+  {
+   "id": "S5",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "totalPages floor+1 off by one on exact multiples."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "alias_level 0 ignored by present? on update; no golden issue."
+  },
+  {
+   "id": "S7",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "totalPages floor+1 off by one on exact multiples."
+  },
+  {
+   "id": "S8",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#12",
+   "newGroup": null,
+   "reason": "remove_member spec uses PUT while route is DELETE."
+  }
+ ],
+ "database-performance-optimizations-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "database-performance-optimizations-grafana-codex#08",
+   "newGroup": null,
+   "reason": "Cleanup ticker changed from 10 to 1 minute."
+  },
+  {
+   "id": "S2",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Error-level debug logs with full ID lists on every batch."
+  },
+  {
+   "id": "S3",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Error-level logs on normal MaxAge cleanup batches."
+  },
+  {
+   "id": "S4",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Error-level logs on MaxCount cleanup batches."
+  },
+  {
+   "id": "S5",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Error-level logs on orphaned-tags cleanup."
+  },
+  {
+   "id": "S6",
+   "match": "database-performance-optimizations-grafana-codex#08",
+   "newGroup": null,
+   "reason": "Ticker interval changed 10 to 1 minute, cleanup runs 10x more often."
+  },
+  {
+   "id": "S7",
+   "match": "database-performance-optimizations-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Comment states SQLite limit 999, outdated since 3.32.0."
+  },
+  {
+   "id": "S8",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Routine messages logged at Error level."
+  }
+ ],
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reader catches only Exception so Errors are swallowed; no golden issue."
+  },
+  {
+   "id": "S2",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "Reader thread never joined before the assertion."
+  },
+  {
+   "id": "S3",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "Reader thread not joined before asserting no exceptions."
+  },
+  {
+   "id": "S4",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "Reader thread not joined before asserting no exceptions."
+  },
+  {
+   "id": "S5",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#01",
+   "newGroup": null,
+   "reason": "getSubGroupsCount returns null on concurrent deletion, NPE on unboxing."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Pre-existing null-safety in getSubGroupsStream, out of scope; no golden issue."
+  }
+ ],
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": [
+  {
+   "id": "S1",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04",
+   "newGroup": null,
+   "reason": "Substring match for event.type:error treats negated/mixed queries as error-only."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Truthiness check drops a 0.0 sample rate; different from the missing validation issue."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Test comments say 1 event while assertions check 10; no golden issue."
+  },
+  {
+   "id": "S4",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04",
+   "newGroup": null,
+   "reason": "Substring match for event.type:error misclassifies queries."
+  },
+  {
+   "id": "S5",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#06",
+   "newGroup": null,
+   "reason": "Factory helper copies any float-convertible value without range validation."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Speculates upsampled_count missing from errors dataset config; no golden issue."
+  }
+ ],
+ "frontend-asset-optimization-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "frontend-asset-optimization-grafana-codex#sncc-02",
+   "newGroup": null,
+   "reason": "Exclusive lock held through the whole manifest load serializes every request."
+  },
+  {
+   "id": "S2",
+   "match": "frontend-asset-optimization-grafana-codex#01",
+   "newGroup": null,
+   "reason": "No re-check of the cache after acquiring the write lock."
+  },
+  {
+   "id": "S3",
+   "match": "frontend-asset-optimization-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Missing double-check after taking the write lock."
+  },
+  {
+   "id": "S4",
+   "match": "frontend-asset-optimization-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Missing re-check after Lock() causes redundant manifest loads."
+  }
+ ],
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "immediateDelete branch never deletes the WorkflowReminder row; no golden issue."
+  },
+  {
+   "id": "S2",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#06",
+   "newGroup": null,
+   "reason": "Sequential awaited SendGrid cancels in the cron."
+  },
+  {
+   "id": "S3",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#11",
+   "newGroup": null,
+   "reason": "deleteScheduledEmailReminder name no longer matches behaviour."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "immediateDelete branch leaves the reminder row, leaking stale rows."
+  }
+ ],
+ "fixing-re-authentication-with-passkeys-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Stale comment on USER_SET_BEFORE_USERNAME_PASSWORD_AUTH; no golden issue."
+  }
+ ]
+}

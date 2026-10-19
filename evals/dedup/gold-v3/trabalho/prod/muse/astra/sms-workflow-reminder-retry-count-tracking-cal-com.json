@@ -1,0 +1,23 @@
+{
+ "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "Both describe the retryCount > 1 deletion branch lacking an SMS method filter, allowing non-SMS reminders to be deleted."
+  },
+  {
+   "id": "S2",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#01",
+   "newGroup": null,
+   "reason": "Both describe lost retry increments when overlapping runs update retryCount from a stale snapshot instead of using an atomic increment."
+  },
+  {
+   "id": "S3",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
+   "newGroup": null,
+   "reason": "Both describe an unguarded retry-count update inside the catch block whose failure aborts the cron run and skips remaining reminders."
+  }
+ ]
+}

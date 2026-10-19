@@ -5,7 +5,7 @@ Cada TP conta uma vez; todo o resto que o review publicou e FP.
   python3 placar.py <saida.json>"""
 import json, os, sys
 AQUI = os.path.dirname(os.path.abspath(__file__)); V3 = os.path.join(AQUI, '..', '..')
-CH = {'ds': 'deepseek-v4.1-flash@prod', 'gpt': 'gpt-6.1-sol@prod', 'opus': 'opus-5.5@prod', 'sonnet': 'sonnet-5.5@prod'}
+CH = {'ds': 'deepseek-v4.1-flash@prod', 'gpt': 'gpt-6.1-sol@prod', 'opus': 'opus-5.5@prod', 'sonnet': 'sonnet-5.5@prod', 'muse': 'muse-spark-1.3@prod', 'kimi': 'kimi-k2.7-code@prod'}
 FPST = {'pendente', 'nao_entrou_no_original'}
 g = json.load(open(f'{V3}/golden.json'))['prs']
 st = {k: t['status'] for p in json.load(open(f'{V3}/verificacao-upstream.json'))['prs'].values() for k, t in p['tps'].items()}

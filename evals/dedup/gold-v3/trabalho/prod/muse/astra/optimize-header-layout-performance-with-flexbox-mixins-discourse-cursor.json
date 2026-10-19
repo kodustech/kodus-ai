@@ -1,0 +1,17 @@
+{
+ "caseId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes the small-action button losing right alignment because float is ignored on flex items. This is separate from the golden issues, including the server-rendered header panel alignment problem."
+  },
+  {
+   "id": "S2",
+   "match": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Describes the same server-rendered header login panel losing right alignment because it is nested inside .row and cannot use the replacement flex-item rules."
+  }
+ ]
+}

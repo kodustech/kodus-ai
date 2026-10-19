@@ -1,0 +1,26 @@
+{
+ "caseId": "replays-self-serve-bulk-delete-system-sentry",
+ "items": [
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#kimi-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "The in-place sort exists at src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:138, but the caller at :177 never subsequently uses the list. The endpoint creates it specifically for this analysis at :91-100, so no existing downstream logic depends on preserving its original order.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#kimi-02",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "src/sentry/integrations/source_code_management/commit_context.py:591-597 deliberately falls back without optional environment information and logs the exception and issue ID. INFO logging is enabled at src/sentry/conf/server.py:1787, so failures are observable; the comment establishes neither a broken caller nor data corruption from this fallback.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#kimi-03",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "src/sentry/integrations/source_code_management/commit_context.py:578-582 retains up to 50 title characters and then appends an ellipsis, as its docstring describes. The result is inserted into Markdown comment text at :600-605; no final-string limit or downstream contract requiring at most 50 characters is established.",
+   "severity": "low"
+  }
+ ]
+}

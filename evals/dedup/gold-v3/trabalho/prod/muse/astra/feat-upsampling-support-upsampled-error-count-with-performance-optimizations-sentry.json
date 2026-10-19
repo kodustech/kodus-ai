@@ -1,0 +1,23 @@
+{
+ "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#14",
+   "newGroup": null,
+   "reason": "Describes the same limitation: only bare count() is rewritten, leaving aliased count and other count-like aggregates un-upsampled."
+  },
+  {
+   "id": "S2",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04",
+   "newGroup": null,
+   "reason": "Describes the same substring-based classification that incorrectly treats negated or incidental event.type:error text as an error-only restriction."
+  },
+  {
+   "id": "S3",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#03",
+   "newGroup": null,
+   "reason": "Explicitly identifies the outer dataset being used instead of scoped_dataset in _get_event_stats. Its broader request to also use the effective query includes fixing this same dataset-selection problem."
+  }
+ ]
+}

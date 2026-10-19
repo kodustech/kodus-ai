@@ -1,0 +1,214 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "a308075bc39b77ed7059b0cae9d443d669a7bf98",
+  "head": "de628295646d0848226618108a52f2f1e5d04ac0",
+  "issues": {
+   "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#kimi-01": {
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S8",
+      "file": "packages/core/CalendarManager.ts",
+      "lines": [
+       228,
+       231
+      ],
+      "texto": "The string \"Notes have been hidden by the organizer\" is written directly into calEvent.additionalNotes and shown to users in calendar events, but it is not routed through the project's i18n system. The existing TODO even notes this. The PR changed the spelling of this line without resolving the localization gap, so attendees/organizers whose locale is not English still see an untranslated message. Replace the hard-coded string with a translated key (e.g., t(\"notes_hidden_by_organizer\")) and add it to the locale files."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "low",
+      "text": "packages/core/CalendarManager.ts:230 the PR edits the hard-coded 'Notes have been hidden by the organizer' string (spelling only) and keeps the existing '// TODO: i18n this string?'. The untranslated text is real but pre-dates the PR and has no behavioural impact beyond localization."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "packages/core/CalendarManager.ts:229-230 assigns a hard-coded English message when hideCalendarNotes is enabled, and this PR edits that exact assignment. packages/lib/CalEventParser.ts:67-73 translates the notes heading but interpolates additionalNotes verbatim, so the message remains English regardless of locale."
+     },
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "low",
+      "text": "I am changing my label to FP (none), not adopting TP. The PR's only change to this line is a spelling fix, and the English literal and its TODO were already there at base. diff: `-    calEvent.additionalNotes = \"Notes have been hidden by the organiser\"; // TODO: i18n this string?` / `+    ... \"Notes have been hidden by the organizer\"; // TODO: i18n this string?` (CalendarManager.ts:230). The ruling says code the PR only moves or re-indents without changing its logic counts as pre-existing. A one-letter spelling edit is the same kind of change: no logic changes. So the missing localization is a pre-existing gap in code this PR does not change in substance, and that makes it FP (none). Rated as stated, an untranslated note does not change what the program does, so severity is low.",
+      "concede": false
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "I retain TP: the PR changes the user-visible string assigned in CalendarManager.ts:230, so the exemption for code merely moved or re-indented does not apply. CalEventParser.ts interpolates additionalNotes verbatim while translating its heading, confirming that the edited message remains English for non-English locales. This affects rendered calendar content, making it a localization defect rather than a wording nit; medium reflects the incorrect localized output when hideCalendarNotes is enabled."
+     }
+    ]
+   }
+  }
+ },
+ "add-html-sanitizer-for-translated-message-resources-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "f3c8e8f3487112f2c99aa78400430cce2d30be39",
+  "head": "02f48f776f43734d1ac8914d3ad6a7115acdcb33",
+  "issues": {
+   "add-html-sanitizer-for-translated-message-resources-keycloak#kimi-01": {
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S1",
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       139,
+       145
+      ],
+      "texto": "WHAT: The HTML tag detector and anchor matcher use case-sensitive regular expressions (`<[a-z]+[^>]*>` and `</?a[^>]*>`) even though HTML element names are case-insensitive. WHY: The OWASP sanitizer canonicalizes tag names to lowercase, so a translation with `<B>text</B>` or `<A href=\"...\">` is not matched by the anchor pre-check and is then normalized by the sanitizer to lowercase, making `sanitized != value` and causing a false-positive \"Illegal HTML\" build failure. HOW: Compile `HTML_TAGS` and `ANCHOR_PATTERN` with `Pattern.CASE_INSENSITIVE` (or add `A-Z` to the character classes for tags and `A` for anchors) so the verifier treats HTML case-insensitively."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "text": "VerifyMessageProperties.java:139 and :145 compile HTML_TAGS `<[a-z]+[^>]*>` and ANCHOR_PATTERN `</?a[^>]*>` case-sensitively, so an uppercase <B>/<A> is not treated as HTML/anchor and the lowercasing sanitizer output differs, reporting 'Illegal HTML'. No message bundle at head uses uppercase tags, and the effect is a stricter build-time check, so it is a minor robustness point."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "VerifyMessageProperties.java:139-145 uses case-sensitive patterns, so uppercase anchors identical in English and translation bypass the preservation logic at lines 150-155. The sanitizer policy excludes anchors (lines 58-61), causing these valid anchors to be removed and reported as illegal HTML at line 111; ThemeVerifierMojo.java:54-55 then fails the build."
+     },
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "text": "The behaviour is real, but it is a robustness point in a build-time verifier. The lowercase-only pattern is deliberate: the same file distinguishes uppercase pseudo-tags from HTML (`value.replaceAll(\"CLAIM\\\\.<[A-Z]*>\", \"\")` :120, `value.replaceAll(\"<Extensions>\", \"\")` :123), and `Pattern HTML_TAGS = Pattern.compile(\"<[a-z]+[^>]*>\");` (:139) relies on lowercase to tell markup apart from placeholders. No message bundle at head uses uppercase HTML tags, so nothing fails today. A hypothetical uppercase tag would be reported as 'Illegal HTML', which is the conservative direction for a sanitizer check, and the translator just lowercases the tag. That makes it a nit and not a defect that affects users.",
+      "concede": false
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "I retain TP: identical uppercase anchors in English and translation bypass santizeAnchors(), then are removed by the sanitizer because neither policy allows anchors. The resulting mismatch causes ThemeVerifierMojo to fail the build, so this affects behavior rather than style. The placeholder exceptions are key-specific preprocessing and do not establish an intentional lowercase-only HTML contract. Absence of uppercase tags in current bundles makes this an uncommon-input defect, not a nit."
+     }
+    ]
+   }
+  }
+ },
+ "replays-self-serve-bulk-delete-system-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "49a275847631e231672d01b5dcd66558c069d25b",
+  "head": "ea188e2d736fd6ed27c1dba8aae63b7268e2a7a9",
+  "issues": {
+   "replays-self-serve-bulk-delete-system-sentry#kimi-03": {
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S8",
+      "file": "src/sentry/integrations/source_code_management/commit_context.py",
+      "lines": [
+       577,
+       583
+      ],
+      "texto": "`_truncate_title` returns `title[:max_length].rstrip() + \"...\"` when the title exceeds `max_length`. For a 51-character title this yields 50 characters plus 3 ellipsis characters (53 total), exceeding the intended `ISSUE_TITLE_MAX_LENGTH` of 50. Either reserve room for the ellipsis before slicing (e.g., slice to `max_length - 3`) or ensure the final string is clamped to `max_length`."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "low",
+      "text": "commit_context.py _truncate_title returns title[:max_length].rstrip() + '...', so a long title becomes up to 53 characters. Other truncations in the repo (gitlab/issues.py:99, vsts/issues.py:226) reserve 3 chars; here it is only a display length in a PR comment with no real effect."
+     },
+     {
+      "who": "astra",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "low",
+      "text": "src/sentry/integrations/source_code_management/commit_context.py:578-582 retains up to 50 title characters and then appends an ellipsis, as its docstring describes. The result is inserted into Markdown comment text at :600-605; no final-string limit or downstream contract requiring at most 50 characters is established."
+     },
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "low",
+      "text": "The constant is a maximum: `ISSUE_TITLE_MAX_LENGTH = 50` (commit_context.py:142), and `_truncate_title(title, max_length=ISSUE_TITLE_MAX_LENGTH)` returns `title[:max_length].rstrip() + \"...\"` (:582). The output therefore exceeds max_length by 3. The repo's other truncators reserve room for the ellipsis: `title = title[: GITLAB_ISSUE_TITLE_MAX_LENGTH - 3] + \"...\"` (gitlab/issues.py:99, same in vsts/issues.py:226). The docstring only says 'add ellipsis' and gives no intended over-length, so the off-by-3 is real and new in this PR. It is only a display length in a PR comment with no functional effect, so it is a nit and not FP.",
+      "concede": false
+     },
+     {
+      "who": "astra",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "low",
+      "text": "I retain FP: the helper keeps 50 title characters and appends an ellipsis for display in a Markdown PR comment; no caller requires the resulting text to fit within 50 characters. The GitLab and VSTS examples truncate titles submitted to issue-creation APIs, which is a different contract. The constant\u2019s name alone does not establish that this display truncation violates a requirement."
+     }
+    ]
+   }
+  }
+ },
+ "advanced-sql-analytics-framework-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "cbe1e7d63f098e306058c0fbcab2f5c30602fa7d",
+  "head": "f3317b329b4eb8fd96f99dd86525bc4a22d20248",
+  "issues": {
+   "advanced-sql-analytics-framework-grafana-codex#kimi-01": {
+    "comentarios": [
+     {
+      "gid": "kimi-kimi:S3",
+      "file": "pkg/expr/sql_command.go",
+      "lines": [
+       30,
+       36
+      ],
+      "texto": "Replacing the real in-memory DB with a stub means `sql.TablesList(rawSQL)` always fails, so the existing `logger.Warn(\"invalid sql query\", \"sql\", rawSQL, \"error\", err)` at lines 32-35 now logs the full raw SQL for every SQL expression. User-supplied SQL can contain sensitive values or schema information and should not be logged verbatim. Avoid logging `rawSQL` or redact it before logging."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The logger.Warn(\"invalid sql query\", \"sql\", rawSQL, ...) in sql_command.go NewSQLCommand is unchanged by this PR; logging the expression query on parse failure is pre-existing, intended diagnostic behaviour. The PR only swaps duck.NewInMemoryDB for a stub (pkg/expr/sql/db.go)."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "high",
+      "text": "The PR switches TablesList to the stub database in pkg/expr/sql/parser.go:23, whose RunCommands always returns an error at pkg/expr/sql/db.go:16-17. Consequently, every nonempty SQL expression reaches pkg/expr/sql_command.go:32 and logs the complete raw SQL at warning level, potentially exposing sensitive literals to log readers."
+     },
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The log line is not touched by the PR. The diff of sql_command.go only swaps `duck.NewInMemoryDB()` for `sql.NewInMemoryDB()` in Execute. `logger.Warn(\"invalid sql query\", \"sql\", rawSQL, \"error\", err)` in NewSQLCommand and `logger.Warn(\"no tables found in SQL query\", \"sql\", rawSQL)` already logged the expression text at base. Logging the user's SQL expression (a dashboard/query definition, not data or credentials) on a parse failure is the intended diagnostic behaviour that predates the PR. The real consequence of the stub is that SQL expressions stop working, but that is a different issue. On the claim made here (sensitive data in logs), no new defect exists.",
+      "concede": false
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "high",
+      "text": "The unchanged warning becomes reachable for every nonempty SQL expression passed to NewSQLCommand because this PR changes TablesList to use a stub whose RunCommands always fails. Previously, valid queries referencing tables logged their SQL only at debug level; they now expose it at warning level. The path remains reachable through buildCMDNode \u2192 UnmarshalSQLCommand when expressionParser is disabled. Thus the PR introduces broader raw-SQL logging despite leaving the logging statement unchanged; sensitive literals create a conditional security weakness."
+     }
+    ]
+   }
+  }
+ }
+}

@@ -1,0 +1,11 @@
+{
+ "caseId": "advanced-query-processing-architecture-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "advanced-query-processing-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Both describe repeated applyTemplateVariables calls in Loki splitting and backend execution reapplying ad hoc filters to already-interpolated queries."
+  }
+ ]
+}

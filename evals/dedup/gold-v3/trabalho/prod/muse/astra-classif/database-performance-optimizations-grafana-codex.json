@@ -1,0 +1,12 @@
+{
+ "caseId": "database-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "issueId": "database-performance-optimizations-grafana-codex#musep-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The PR separates the limited SELECT from DELETE at pkg/services/annotations/annotationsimpl/xorm_store.go:529-538, returning RowsAffected from line 626; the loop exits when that count is zero at lines 656-657. A concurrent deletion through lines 423-430 can remove every selected row while other eligible rows remain outside the batch, causing cleanup to finish prematurely until the next cycle.",
+   "severity": "medium"
+  }
+ ]
+}

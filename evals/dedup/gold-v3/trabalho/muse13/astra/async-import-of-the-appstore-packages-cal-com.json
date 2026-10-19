@@ -1,0 +1,59 @@
+{
+ "caseId": "async-import-of-the-appstore-packages-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes getCalendarCredentials returning Promise-valued calendar fields without awaiting getCalendar. This differs from both unawaited cancellation callbacks and eager integration imports."
+  },
+  {
+   "id": "S2",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Describes the unawaited async forEach cancellation callbacks, allowing rescheduling to continue before deletions finish and leaving rejections unhandled."
+  },
+  {
+   "id": "S3",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Describes the same discarded async callback promises in vital rescheduling, preventing cleanup from being awaited and errors from reaching the surrounding catch."
+  },
+  {
+   "id": "S4",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Describes the equivalent unawaited async forEach cancellation loop in wipemycalother, explicitly covered by the issue."
+  },
+  {
+   "id": "S5",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Describes the same recurring-cancellation race where async forEach callbacks populate apiDeletes after the outer flow consumes it."
+  },
+  {
+   "id": "S6",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Describes the same unawaited cancellation callbacks and escaped errors in vital rescheduling."
+  },
+  {
+   "id": "S7",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Describes the same unawaited cancellation callbacks and escaped errors in wipemycalother rescheduling."
+  },
+  {
+   "id": "S8",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Describes the same fire-and-forget calendar/video cancellation loop as S2, covered by the issue's unawaited async forEach problem."
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes the same Promise-valued calendar fields in getCalendarCredentials as S1. Neither golden issue concerns this helper's return contract."
+  }
+ ]
+}

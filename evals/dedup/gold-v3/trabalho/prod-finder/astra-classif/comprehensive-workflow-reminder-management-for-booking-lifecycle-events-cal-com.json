@@ -1,0 +1,12 @@
+{
+ "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+ "items": [
+  {
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#pf-ds-C2",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "The query omits a null-reference filter at packages/features/ee/workflows/api/scheduleEmailReminders.ts:44\u201351, but the alleged state is unreachable through the cancellation code. In packages/features/ee/workflows/lib/reminders/emailReminderManager.ts:203\u2013210, reminders without referenceId are deleted and the function returns; only reminders with a reference ID reach the sole cancelled:true assignment at lines 225\u2013230.",
+   "severity": "high"
+  }
+ ]
+}

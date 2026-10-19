@@ -1,0 +1,24 @@
+{
+ "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+ "prTitle": "Add HTML sanitizer for translated message resources",
+ "upstream": "keycloak/keycloak",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/keycloak",
+ "base": "f3c8e8f3487112f2c99aa78400430cce2d30be39",
+ "head": "02f48f776f43734d1ac8914d3ad6a7115acdcb33",
+ "prOriginalConhecido": {
+  "numero": 37429,
+  "url": "https://github.com/keycloak/keycloak/pull/37429",
+  "mergedAt": "2025-02-20",
+  "nota": "Found via gh pr list search on the title (branch is-37428-add-html-sanitizer-for-messages). The PR's single commit is the benchmark head 02f48f77; merged as 5d77e7ea on main, same content."
+ },
+ "tps": [
+  {
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#pf-kimi-C1",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "The anchor regex </?a[^>]*> in the theme verifier treats any tag starting with 'a' (<abbr>, <area>, ...) as an anchor tag, which can produce misleading anchor errors or strip such tags before HTML sanitizing.",
+   "evidenciaOpus": "ANCHOR_PATTERN \"</?a[^>]*>\" (VerifyMessageProperties.java:145) matches <abbr>, <area>, <audio> etc., and santizeAnchors (:150-162) removes such a tag before the policy runs (:88-92). Astra's point holds: the English file maps to itself (:74-75 replaceAll to _en.properties), so an English value with <abbr> strips against itself and passes even though only br/p/strong/b are allowed (:58-61). That makes the new verifier silently miss disallowed HTML for uncommon input, a real wrong result rather than a nit; no current bundle triggers it, which keeps it at medium.",
+   "evidenciaAstra": "I retain TP: the newly introduced regex strips non-anchor tags before policy validation, producing incorrect validation results. English bundles are also verified against themselves, so an English value containing `<abbr>text</abbr>` passes despite `abbr` being excluded from the allowed elements. Matching the English source therefore does not eliminate the defect. The absence of affected tags in current bundles limits its incidence, but this is incorrect behavior for uncommon input, not a cosmetic nit."
+  }
+ ]
+}

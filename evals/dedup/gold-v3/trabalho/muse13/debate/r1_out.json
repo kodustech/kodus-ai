@@ -1,0 +1,58 @@
+{
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#muse13-02": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": true,
+  "text": "Concede. The lookup is the intended consequence of moving hosts to a DB table (embeddable_host.rb:17 `where(\"lower(host) = ?\", host).first`), one indexed query, and anonymous GETs are served from Redis by lib/middleware/anonymous_cache.rb:121 `helper.cached or helper.cache(@app.call(env))` once embed_controller sets the cache duration, so the claimed per-request DB round-trip on the hot path does not hold. Nothing worth reporting."
+ },
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com#muse13-01": {
+  "class": "TP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": true,
+  "text": "Concede. connectedCalendars.handler.ts:28 `new CalendarCacheRepository()` bypasses calendar-cache.ts:27-28 (`if (isCalendarCacheEnabledGlobally) ... return new CalendarCacheRepositoryMock()`), and the PR itself added the mock's getCacheStatusByCredentialIds returning [] (calendar-cache.repository.mock.ts:27-29) for the disabled case. With the flag off, leftover rows still yield cacheUpdatedAt and CredentialActionsDropdown.tsx:69 `hasCache = isGoogleCalendar && cacheUpdatedAt` shows cache status/actions: user-visible wrong behaviour, not just an extra query."
+ },
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com#muse13-02": {
+  "class": "TP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": true,
+  "text": "Concede the class: my premise that `rm -f \"$LOG_FILE\"` (test-gcal-webhooks.sh:34) always removes a planted symlink is wrong, since in sticky /tmp a link owned by another user cannot be unlinked and rm -f fails silently, then line 35 `tmole $TM_PORT > \"$LOG_FILE\"` follows it (no fs.protected_symlinks on macOS, the script's target given `sed -i ''` at line 68). Severity medium rather than high: a local-dev helper script, only on shared multi-user hosts."
+ },
+ "advanced-query-processing-architecture-grafana-codex#muse13-01": {
+  "class": "FP",
+  "subclass": "hallucination",
+  "severity": "high",
+  "concede": true,
+  "text": "Concede. The comment's WHY rests on applyTemplateVariables returning only expr/step/legendFormat, but datasource.ts:1135-1140 returns `{ ...target, expr: exprWithAdHoc, step, legendFormat }`, keeping the target's datasource; DataSourceWithBackend.query also defaults missing refs to this.getRef(). The fact the problem relies on is false, so hallucination; severity as stated (routing of split queries broken) is high."
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#muse13-01": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "high",
+  "concede": true,
+  "text": "Concede the subclass. The removal is real (UserPermissionsV2.java:48 now `root.hasOneAdminRole(AdminRoles.MANAGE_USERS, AdminRoles.VIEW_USERS)`), and the comment itself allows that ADMIN may be handled elsewhere; only the inferred impact is wrong, because hasOneAdminRole checks management client roles (MgmtPermissions.java:163-173) that the ADMIN composite already includes (RealmManager.java:346-365). True facts, no problem: FP none."
+ },
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#muse13-02": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": false,
+  "text": "Keep FP none (raising severity to medium as stated: misleading error log). The assertion mismatch exists, but no FilteredPayload can reach it: create_thread_queue_parallel_worker (result_consumer.py:245-259) returns `SimpleQueueProcessingStrategy(... decoder=partial(self.decode_payload, ...))` as the FIRST strategy, with no FilterStep upstream; the Kafka processor only submits KafkaPayload messages to the first step, and FilteredPayload is only emitted by filter steps. The path the comment describes is unreachable, and even then queue_consumer.py:317-325 completes the offset. A guard for an unreachable state is FP none."
+ },
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#muse13-01": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": false,
+  "text": "Keep FP none. Eviction by end timestamp is the PR's intended policy (add-buffer.lua:62-63 `if span_count > 1000 then redis.call(\"zpopmin\", set_key, span_count - 1000)`), and the set is scoped per project and trace (buffer.py:196 `set_key = f\"span-buf:s:{{{project_and_trace}}}:{parent_span_id}\"`). Exploiting it needs injecting >1000 spans into a specific trace of the same project, which already lets the sender pollute that trace regardless of scores; no cross-tenant effect and no new security boundary crossed. Severity medium: telemetry of one segment only."
+ },
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#muse13-02": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": false,
+  "text": "Keep FP none, not hallucination. The description is accurate: 'up to two ZUNIONSTORE' per insert (add-buffer.lua:46-55) and, when a segment's spans arrive in separate batches, each insert merges the 1-span parent_key into the N-member set_key, an O(N) copy, so O(N^2) per segment is real. What makes it FP is that the base did the same: the diff only swaps `sunionstore set_key, set_key, span_key` for `zunionstore set_key, 2, set_key, span_key` under the same conditions. Correct facts about pre-existing complexity -> FP none, as your own last sentence also notes."
+ }
+}

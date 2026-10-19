@@ -1,0 +1,29 @@
+{
+ "caseId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "Describes MetricAlertDetectorHandler missing the required abstract methods, causing TypeError when instantiated through Detector.detector_handler."
+  },
+  {
+   "id": "S2",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#03",
+   "newGroup": null,
+   "reason": "Describes the stale evaluate() docstring claiming a list return while the method now returns a dictionary keyed by DetectorGroupKey."
+  },
+  {
+   "id": "S3",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "Describes the same unimplemented abstract members in MetricAlertDetectorHandler that prevent its instantiation."
+  },
+  {
+   "id": "S4",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "Describes the same abstract-class instantiation failure caused by switching MetricAlertDetectorHandler to StatefulDetectorHandler without implementing its required methods."
+  }
+ ]
+}

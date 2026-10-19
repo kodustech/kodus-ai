@@ -1,0 +1,11 @@
+{
+ "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The comment describes missing nil-request guards in contextual logger middleware. None of the golden issues concerns nil-request handling; they concern fake logger state, a stale test name, and incorrect documentation."
+  }
+ ]
+}

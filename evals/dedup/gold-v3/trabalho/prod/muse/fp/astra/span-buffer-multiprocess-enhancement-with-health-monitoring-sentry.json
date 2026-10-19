@@ -1,0 +1,11 @@
+{
+ "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+ "items": [
+  {
+   "id": "S3",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#09",
+   "newGroup": null,
+   "reason": "Both assert that splitting the buffer per process multiplies the total segments fetched and flushed per cycle by the process count relative to spans.buffer.max-flush-segments. The overload consequences and suggested fixes do not change the underlying claim."
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+{
+ "caseId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "S1 identifies website_name exposing a TL0 user's restricted website host/path to anonymous viewers and proposes the same trust filtering as issue #06. It additionally mentions the missing '?' guard suffix."
+  }
+ ]
+}

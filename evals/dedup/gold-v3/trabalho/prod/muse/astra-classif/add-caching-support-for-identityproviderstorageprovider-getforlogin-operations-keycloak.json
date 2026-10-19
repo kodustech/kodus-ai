@@ -1,0 +1,12 @@
+{
+ "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+ "items": [
+  {
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#musep-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "Returning organization-disabled wrappers already occurred before this PR: the default getForLogin uses getAllStream (server-spi/src/main/java/org/keycloak/models/IdentityProviderStorageProvider.java:165\u2013183), whose base implementation wrapped results without filtering (model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java:207\u2013208 at base). At head, every production caller requesting organization providers filters effective isEnabled (services/src/main/java/org/keycloak/organization/forms/login/freemarker/model/OrganizationAwareIdentityProviderBean.java:74\u201380); callers without that filter request REALM_ONLY, excluding organization providers.",
+   "severity": "medium"
+  }
+ ]
+}

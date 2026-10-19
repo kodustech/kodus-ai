@@ -1,0 +1,12 @@
+{
+ "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+ "items": [
+  {
+   "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#muse13-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "ExampleIntegration lacks **kwargs at src/sentry/integrations/example/integration.py:161, but the production caller passes only three positional arguments at src/sentry/integrations/tasks/sync_status_outbound.py:44-46. The base method already accepted arbitrary keywords before this PR (src/sentry/integrations/mixins/issues.py:411-418); naming an optional parameter introduces no failing call path, and the override's keyword incompatibility is pre-existing.",
+   "severity": "high"
+  }
+ ]
+}

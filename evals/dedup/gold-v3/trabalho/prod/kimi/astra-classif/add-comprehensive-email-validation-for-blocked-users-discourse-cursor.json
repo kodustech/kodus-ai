@@ -1,0 +1,12 @@
+{
+ "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
+ "items": [
+  {
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#kimip-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "The prototype array exists, but emailValidation rejects only the exact previously rejected address (app/assets/javascripts/discourse/controllers/create_account_controller.js:69), populated from server email errors at lines 274\u2013275; unrelated addresses are unaffected. Modal reopening reuses controllerFor(name) (app/assets/javascripts/discourse/routes/discourse_route.js:56), so moving initialization into init would not reset this state between openings, and remembering a blocked address does not establish incorrect behavior.",
+   "severity": "medium"
+  }
+ ]
+}

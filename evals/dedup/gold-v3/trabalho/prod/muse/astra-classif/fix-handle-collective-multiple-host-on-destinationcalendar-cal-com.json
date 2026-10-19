@@ -1,0 +1,12 @@
+{
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "items": [
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#musep-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "In packages/core/EventManager.ts:485, the awaited booking lookup can throw before calendarReference is assigned at line 495; the changed catch now returns [] at lines 597\u2013607 instead of the previous failure result. A reschedule caller passes newBooking.id at packages/features/bookings/lib/handleNewBooking.ts:1342 and treats empty results as the nonfailure branch at lines 1355\u20131361, hiding the failed calendar update.",
+   "severity": "medium"
+  }
+ ]
+}

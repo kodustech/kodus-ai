@@ -1,0 +1,47 @@
+{
+ "caseId": "database-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Reports routine cleanup batches logging full ID lists at Error level, flooding logs and triggering false alarms."
+  },
+  {
+   "id": "S2",
+   "match": "database-performance-optimizations-grafana-codex#08",
+   "newGroup": null,
+   "reason": "Reports the global cleanup interval changing from ten minutes to one minute, multiplying database load."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reports a concurrency race between selecting max-count victims and deleting them that can delete rows now within the retained set. No golden issue describes this retention race."
+  },
+  {
+   "id": "S4",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Reports Error-level logging on the normal cleanup path, producing misleading failure signals and log spam."
+  },
+  {
+   "id": "S5",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Reports routine count-cleanup batches logging IDs and conditions at Error level, the same debug-log pollution."
+  },
+  {
+   "id": "S6",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Reports the orphaned-tag cleanup variant of the same routine progress logging at Error level."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Reports premature cleanup termination when concurrent deletions cause a fetched batch to delete zero rows despite remaining candidates. This differs from S3's deletion of rows that should be retained and matches no golden issue."
+  }
+ ]
+}

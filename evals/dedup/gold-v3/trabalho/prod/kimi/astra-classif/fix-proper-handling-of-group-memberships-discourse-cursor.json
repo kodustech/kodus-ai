@@ -1,0 +1,12 @@
+{
+ "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+ "items": [
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#kimip-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The added add_members action loops over every supplied username and calls User.find_by_username separately (app/controllers/admin/groups_controller.rb:71-74); that method executes find_by(username_lower: ...) (app/models/user.rb:175-176). Consequently, large bulk additions incur one database lookup per username, creating avoidable database round trips and latency. Batching should preserve the existing case-insensitive lookup semantics.",
+   "severity": "medium"
+  }
+ ]
+}

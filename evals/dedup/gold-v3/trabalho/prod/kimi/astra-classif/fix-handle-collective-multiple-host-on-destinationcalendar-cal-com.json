@@ -1,0 +1,12 @@
+{
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "items": [
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#kimip-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The PR creates events for multiple destination calendars in packages/core/EventManager.ts:338-377, but merge cleanup still selects just one old reference and deletes only its event at lines 553-563. Collective booking merges reach this branch through packages/features/bookings/lib/handleNewBooking.ts:1483-1486, leaving the other hosts\u2019 old events behind. This affects rescheduling into an existing booking; ordinary rescheduling updates all references.",
+   "severity": "high"
+  }
+ ]
+}

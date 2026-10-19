@@ -1,0 +1,23 @@
+{
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#kimip-01": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": true,
+  "text": "Concede. The prototype array is real (create_account_controller.js:17) but Ember controllers are singletons resolved via controllerFor, so there is only one instance per browser session; emailValidation (line 69) only fails the exact address the server already rejected (pushed at 274-275), so unrelated addresses are never affected. Remembering a server-rejected address across modal reopenings is consistent with the feature's intent, not a defect."
+ },
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com#kimip-01": {
+  "class": "FP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": false,
+  "text": "Keep FP/none. The central fact is true: deleteCache.handler.ts:17-22 filters findFirst by userId: user.id, which does reject credentials without the user's id. What is wrong is the conclusion that this is a defect. As astra shows, the calendar list feeding this action is itself restricted to userId: user.id (getConnectedDestinationCalendars.ts:282-290), so no team-owned credential reaches this endpoint. The secondary 'boundary used elsewhere' remark is inaccurate, but the core factual claim about the filter holds, so this is a no-defect request, not a hallucination."
+ },
+ "fix-proper-handling-of-group-memberships-discourse-cursor#kimip-01": {
+  "class": "TP",
+  "subclass": "nit",
+  "severity": "low",
+  "concede": false,
+  "text": "Keep TP/nit, low. The N+1 is real in the new add_members (groups_controller.rb:71-75), but it is an admin-only action fed by a hand-typed comma-separated list, and the removed update_patch at base did the same per-username User.find_by_username loop, so the PR does not regress anything. group.add(user) still issues one write per user, so batching the lookup saves little. Minor performance with no user-visible effect = nit/low per the severity rubric."
+ }
+}

@@ -1,0 +1,11 @@
+{
+ "caseId": "database-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims cleanup can stop prematurely when a concurrent deletion reduces the affected-row count between SELECT and DELETE. None of the rejected issues describes this race or termination condition."
+  }
+ ]
+}

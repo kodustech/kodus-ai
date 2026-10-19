@@ -1,0 +1,19 @@
+{
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "prOriginal": {
+  "numero": 10967,
+  "url": "https://github.com/calcom/cal.diy/pull/10967",
+  "mergedAt": "2023-08-31",
+  "nota": "Confirmed via gh pr view: merged 2023-08-31, headRefOid equals benchmark head de62829. Repo calcom/cal.com redirects to calcom/cal.diy; EventManager moved to packages/features/bookings/lib/EventManager.ts."
+ },
+ "tps": {
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#kimip-01": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 1143,
+   "reason": "In today's packages/features/bookings/lib/EventManager.ts (main), updateAllCalendarEvents still has the 'If we are merging two calendar events we should delete the old calendar event' block under `if (newBookingId)`, using booking.references.find((reference) => reference.type.includes(\"_calendar\")) and deleting only that one event. Only the credential lookup changed (CredentialRepository.findCredentialForCalendarServiceById, getCalendar(..., \"booking\")); the single-reference cleanup is unchanged, and rescheduleEvent still passes newBookingId into updateAllCalendarEvents.",
+   "astra": []
+  }
+ }
+}

@@ -1,0 +1,41 @@
+{
+ "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Both identify unescaped interpolation of legacy host values into the migration INSERT, causing quotes to break SQL and permitting injection."
+  },
+  {
+   "id": "S2",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Both identify unchecked empty migration query results that cause nil dereferences when embed_category is missing, preventing fallback."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This describes hydration calling map on null or non-array relationship IDs. No golden issue describes this problem."
+  },
+  {
+   "id": "S4",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#14",
+   "newGroup": null,
+   "reason": "Both identify saved port-qualified hosts failing lookup because URI.host excludes the port."
+  },
+  {
+   "id": "S5",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Both identify the normalization callback calling sub! on a missing host and raising NoMethodError before validation."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "This describes incomplete underscore replacement causing incorrect admin model routing. No golden issue describes this problem."
+  }
+ ]
+}

@@ -1,0 +1,24 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "prTitle": "Add Groups resource type and scopes to authorization schema",
+ "upstream": "keycloak/keycloak",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/keycloak",
+ "base": "7ea067aae9be56cb2622bce6563864817c3dfeaf",
+ "head": "7355f05e6aafe2a7acc6434fb40c686665416606",
+ "prOriginalConhecido": {
+  "numero": 37038,
+  "url": "https://github.com/keycloak/keycloak/pull/37038",
+  "mergedAt": "2025-02-12",
+  "nota": "Found with gh search prs by title. The PR has a single commit equal to the benchmark head (7355f05e6a); it was merged into main as 679f44692d with the same commit message, so the merged code matches the benchmark head."
+ },
+ "tps": [
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01",
+   "severity": "medium",
+   "category": "perf",
+   "bug": "Removing the canViewGlobal short-circuit from the subgroup and group listings makes an admin with an all-groups V2 grant run one full authorization evaluation per group in the listing instead of a single check.",
+   "evidenciaOpus": "GroupResource.getSubGroups now filters with auth.groups()::canView on every subgroup (GroupResource.java:177-179) after the cached canViewGlobal short-circuit was removed. In GroupPermissionsV2.canView(GroupModel), an admin without a VIEW_USERS/MANAGE_USERS role runs hasPermission per group: findByName, findByResource and a full policy evaluation. The filter also runs before pagination over all subgroups (getSubGroupsStream(-1,-1)).",
+   "evidenciaAstra": "GroupResource.java:176-180 removes the cached global-view shortcut and calls canView(g) for each subgroup traversed before pagination. GroupPermissionsV2.java:56-61,141-152 evaluates permissions each time, including repeatedly evaluating the same all-groups resource; MgmtPermissions.java:347-351 starts a fresh evaluation without caching the result. This introduces meaningful authorization overhead proportional to the subgroups traversed, especially for large pagination offsets."
+  }
+ ]
+}

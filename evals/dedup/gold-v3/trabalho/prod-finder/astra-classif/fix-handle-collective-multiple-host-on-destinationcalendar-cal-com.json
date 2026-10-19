@@ -1,0 +1,12 @@
+{
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "items": [
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#pf-kimi-C2",
+   "class": "TP",
+   "subclass": "nit",
+   "reason": "The PR introduces a loop over calendar references in packages/features/bookings/lib/handleCancelBooking.ts:423 and an awaited credential lookup at :433 for each credential absent from the owner's loaded credentials (:428\u2013431). Batching would reduce database round trips, but the issue establishes only a minor optimisation for a single booking's host calendars, without demonstrating meaningful performance degradation.",
+   "severity": "low"
+  }
+ ]
+}

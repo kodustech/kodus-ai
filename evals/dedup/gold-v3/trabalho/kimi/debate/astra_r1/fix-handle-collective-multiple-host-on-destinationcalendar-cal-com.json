@@ -1,0 +1,12 @@
+{
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "items": [
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#kimi-01",
+   "class": "TP",
+   "subclass": "none",
+   "severity": "medium",
+   "reply": "I retain TP: the PR changes the user-visible string assigned in CalendarManager.ts:230, so the exemption for code merely moved or re-indented does not apply. CalEventParser.ts interpolates additionalNotes verbatim while translating its heading, confirming that the edited message remains English for non-English locales. This affects rendered calendar content, making it a localization defect rather than a wording nit; medium reflects the incorrect localized output when hideCalendarNotes is enabled."
+  }
+ ]
+}

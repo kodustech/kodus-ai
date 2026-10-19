@@ -1,0 +1,29 @@
+{
+ "caseId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Reports the missing '?' suffix on include_website_name, which prevents the serializer from invoking the conditional guard."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reports schemeless website values producing a nil host and disappearing from the template. None of the golden issues describes this parsing problem."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Reports query strings and fragments being omitted from the displayed website label. None of the golden issues describes this truncation problem."
+  },
+  {
+   "id": "S4",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Reports the same missing '?' suffix on the inclusion guard, causing website_name to be serialized even when the website is blank."
+  }
+ ]
+}

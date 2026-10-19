@@ -1,0 +1,11 @@
+{
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "items": [
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This claims addGuests allows cancelled or rejected bookings to trigger calendar updates and guest emails because it lacks a status check. None of the rejected issues concerns booking-status validation."
+  }
+ ]
+}

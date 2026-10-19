@@ -1,0 +1,12 @@
+{
+ "caseId": "advanced-sql-analytics-framework-grafana-codex",
+ "items": [
+  {
+   "issueId": "advanced-sql-analytics-framework-grafana-codex#kimi-01",
+   "class": "TP",
+   "subclass": "none",
+   "severity": "high",
+   "reply": "The PR changes parser.go to use the new stub, whose RunCommands always fails, making every nonempty query reaching NewSQLCommand emit rawSQL at warning level. Previously, valid table-referencing queries logged their SQL at debug level, suppressed by the default info threshold. The unchanged warning therefore gains exposure through changed execution logic; this is not merely a pre-existing logging defect. Dashboard expressions can contain sensitive literals, and dashboard visibility does not establish equivalent access to server logs. High follows the rubric for a security weakness requiring specific conditions."
+  }
+ ]
+}

@@ -1,0 +1,19 @@
+{
+ "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#kimi-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "AdminPermissionManagement.VIEW_SCOPE and AdminPermissionsSchema.VIEW both equal \"view\" (services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissionManagement.java:29; server-spi-private/src/main/java/org/keycloak/authorization/AdminPermissionsSchema.java:59). ClientPermissionsV2.java:82 explicitly checks that scope for the client, and :214 resolves the client-specific resource, contradicting the claimed absence of a per-client check.",
+   "severity": "low"
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#kimi-02",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "The test uses a controlled realm fixture that creates myclient without overriding default scopes (tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/RealmAdminPermissionsConfig.java:35), while services/src/main/java/org/keycloak/protocol/oidc/OIDCLoginProtocolFactory.java:292 registers multiple default scopes. The insufficient-scopes scenario is unsupported by this fixture; moreover, the initial unauthorized getDefaultClientScopes() fails at services/src/main/java/org/keycloak/services/resources/admin/ClientResource.java:382 before indexing occurs.",
+   "severity": "medium"
+  }
+ ]
+}

@@ -1,0 +1,95 @@
+{
+ "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reports reuse and mutation of a shared MetricsMiddleware instance, causing delegation errors and races. No golden issue describes this problem."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Reports missing nil-request guards in ContextualLoggerMiddleware. No golden issue covers these dereferences."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Reports missing nil-request guards in MetricsMiddleware, also covered by S9. These require fixes in different code from the contextual logger guards."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "Reports metrics registry lookup failures preventing functional requests from reaching next. No golden issue describes this behavior."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N5",
+   "reason": "Reports lost traceID correlation after logging switched to contextual attributes. S12 describes the same omission and fix."
+  },
+  {
+   "id": "S6",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Reports TestLogger.FromContext returning a fresh fake, making contextual log calls invisible to assertions on the original logger."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N6",
+   "reason": "Reports request-size metric HELP text incorrectly describing inbound bytes as returned bytes. This differs from the golden FromContext documentation issue."
+  },
+  {
+   "id": "S8",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Reports the stale TestInstrumentationMiddleware name after the middleware and file were renamed to MetricsMiddleware."
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Reports the same missing nil-request guards in MetricsMiddleware as S3, extending the report to additional methods."
+  },
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Reports the same unguarded req.PluginContext dereferences in ContextualLoggerMiddleware as S2."
+  },
+  {
+   "id": "S11",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Reports the same fresh-instance behavior in TestLogger.FromContext that loses log observations on the injected fake."
+  },
+  {
+   "id": "S12",
+   "match": "new",
+   "newGroup": "N5",
+   "reason": "Reports the same missing traceID contextual attribute and resulting loss of log correlation as S5."
+  },
+  {
+   "id": "S13",
+   "match": "new",
+   "newGroup": "N7",
+   "reason": "Reports integer division truncating elapsed milliseconds before histogram observation. No golden issue covers measurement precision."
+  },
+  {
+   "id": "S14",
+   "match": "new",
+   "newGroup": "N8",
+   "reason": "Reports incorrect multi-series matching in the test helper due to accumulated label counts and premature mismatch failure. No golden issue covers this helper logic."
+  },
+  {
+   "id": "S15",
+   "match": "new",
+   "newGroup": "N9",
+   "reason": "Reports missing assertions that CheckHealth and CollectMetrics emit no request-size metrics. This is separate from the stale test name and label-matching helper problem."
+  }
+ ]
+}

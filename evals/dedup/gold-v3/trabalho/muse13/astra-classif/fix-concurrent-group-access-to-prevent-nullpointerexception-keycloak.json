@@ -1,0 +1,12 @@
+{
+ "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+ "items": [
+  {
+   "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#muse13-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "GroupTest.java:122 creates 100 groups, and lines 139\u2013143 use one reader thread making synchronous listing requests, so concurrent request fanout does not grow unboundedly. Lines 152\u2013155 delete those groups and signal the reader to stop; repeatedly listing during deletion exercises the intended concurrency regression, with no demonstrated starvation or meaningful performance defect requiring throttling.",
+   "severity": "medium"
+  }
+ ]
+}

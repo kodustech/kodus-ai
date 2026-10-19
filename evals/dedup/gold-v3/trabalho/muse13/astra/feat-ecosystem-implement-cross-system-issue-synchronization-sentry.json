@@ -1,0 +1,59 @@
+{
+ "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "Reports the same import-time evaluation of timezone.now(), causing instances to share a stale queued timestamp."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims raw datetime serialization prevents Celery enqueueing. This is separate from the golden issue about when the timestamp default is evaluated."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Reports missing coercion and validation in from_dict and an alleged cycle-guard bypass when deserialization returns None. No golden issue describes this deserialization problem."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Reports an incompatible sync_status_outbound override signature when assignment_source is supplied. No golden issue covers this contract mismatch."
+  },
+  {
+   "id": "S5",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "Although primarily about serialization, this broader comment also calls for default_factory for queued, covering the known timestamp-default problem."
+  },
+  {
+   "id": "S6",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "Reports the same frozen import-time queued default and proposes the same per-instance factory fix."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reports the same raw-datetime serialization problem as S2, including ISO serialization and parsing as the proposed repair."
+  },
+  {
+   "id": "S8",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#03",
+   "newGroup": null,
+   "reason": "Reports the same mismatch between the empty_array test name and its actual empty-dict input."
+  },
+  {
+   "id": "S9",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#02",
+   "newGroup": null,
+   "reason": "Reports the same 'inalid' typo in the invalid-data test name."
+  }
+ ]
+}

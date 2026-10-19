@@ -1,0 +1,12 @@
+{
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "items": [
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#kimi-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The newly added apps/web/components/dialog/AddGuestsDialog.tsx:26-29 compares raw strings with Set, and line 54 submits them unchanged, allowing case-variant duplicates. packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:70-78 also compares guests case-sensitively against attendees and lowercased blacklist entries. Lines 83-103 persist those unnormalized guests, making both duplicate attendees and case-based blacklist bypass possible.",
+   "severity": "high"
+  }
+ ]
+}

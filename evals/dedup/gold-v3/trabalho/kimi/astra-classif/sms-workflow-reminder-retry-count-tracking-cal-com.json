@@ -1,0 +1,19 @@
+{
+ "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+ "items": [
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#kimi-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "In packages/features/ee/workflows/api/scheduleSMSReminders.ts:111-121, profile and URL lookups execute inside the same try block as scheduling, and the new catch increments retryCount at lines 189-195 even when those lookups fail before Twilio runs. Two such failures make the reminder eligible for deletion at lines 29-40, permanently dropping an unsent reminder.",
+   "severity": "high"
+  },
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#kimi-02",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "The error logging at packages/features/ee/workflows/api/scheduleSMSReminders.ts:198 is identical to the base commit; this PR adds only the retry-count update before it. Any sensitive information exposed through that existing log is therefore not introduced or changed by this PR.",
+   "severity": "high"
+  }
+ ]
+}

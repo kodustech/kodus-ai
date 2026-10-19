@@ -1,0 +1,12 @@
+{
+ "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+ "items": [
+  {
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#musep-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "Creating AuthzClient first does not force its minimal provider: common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java:56-57 selects by descending priority, and DefaultCryptoProvider.java:83-84 assigns 200 versus AuthzClientCryptoProvider.java:70-71's 100. Furthermore, quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/KeycloakRecorder.java:210-215 explicitly sets the server provider through CryptoIntegration.setProvider, which unconditionally replaces the singleton at common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java:96-98, contradicting the claimed permanent lock-in.",
+   "severity": "high"
+  }
+ ]
+}

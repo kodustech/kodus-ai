@@ -1,0 +1,19 @@
+{
+ "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+ "items": [
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#muse13-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "connectedCalendars.handler.ts:28-29 directly constructs the repository, whose calendar-cache.repository.ts:173-182 unconditionally queries Prisma. This bypasses calendar-cache.ts:24-28 and the disabled implementation returning [] in calendar-cache.repository.mock.ts:27-29, allowing cache status and actions to remain visible while caching is disabled (CredentialActionsDropdown.tsx:69-107).",
+   "severity": "medium"
+  },
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#muse13-02",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "scripts/test-gcal-webhooks.sh:4 uses a predictable shared temporary path, and lines 34-35 perform an unchecked removal followed by a symlink-following truncating redirect. Although successful removal unlinks an existing symlink, an attacker-owned link can survive a denied removal in sticky /tmp, or be inserted between removal and opening; on systems permitting symlink following, the victim's writable target is truncated.",
+   "severity": "high"
+  }
+ ]
+}

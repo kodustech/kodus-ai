@@ -1,0 +1,12 @@
+{
+ "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+ "items": [
+  {
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#muse13-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "AuthenticationProcessor.java:592 obtains the form through session.getProvider(LoginFormsProvider.class), and DefaultKeycloakSession.java:170-187 caches and returns the same provider instance. Consequently, the attributes set in AuthenticatorUtils.java:129-131 remain on the provider used by subsequent context.form() calls; the claimed fresh, discarded instances do not exist.",
+   "severity": "medium"
+  }
+ ]
+}

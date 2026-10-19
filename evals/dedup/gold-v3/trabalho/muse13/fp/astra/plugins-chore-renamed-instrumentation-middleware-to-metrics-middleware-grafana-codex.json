@@ -1,0 +1,77 @@
+{
+ "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Same claim that the metrics factory reuses an instance and overwrites its next field, causing incorrect delegation and a race."
+  },
+  {
+   "id": "S2",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Same nil-request dereference claim in ContextualLoggerMiddleware."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims missing nil-request guards in MetricsMiddleware, a different location and cause from the rejected ContextualLoggerMiddleware claim."
+  },
+  {
+   "id": "S4",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#14",
+   "newGroup": null,
+   "reason": "Same claim that a missing plugin registry entry makes metrics instrumentation fail the functional request before delegation."
+  },
+  {
+   "id": "S5",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Primarily repeats the claim that completion logs lost traceID after the refactor. Its additional middleware-order concern also repeats rejected issue #13."
+  },
+  {
+   "id": "S7",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Same claim that the request-size histogram HELP incorrectly describes bytes as returned."
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Same MetricsMiddleware nil-request dereference problem as S3, expanded to include CheckHealth and CollectMetrics."
+  },
+  {
+   "id": "S10",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Same claim that ContextualLoggerMiddleware dereferences req.PluginContext without checking for a nil request."
+  },
+  {
+   "id": "S12",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Same claimed loss of traceID in completion logs because contextual attributes do not supply the removed field."
+  },
+  {
+   "id": "S13",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#09",
+   "newGroup": null,
+   "reason": "Same claim that integer duration division truncates millisecond precision before conversion to float."
+  },
+  {
+   "id": "S14",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#08",
+   "newGroup": null,
+   "reason": "Same checkHistogram problems: foundLabels accumulates across series and label mismatches return errors prematurely."
+  },
+  {
+   "id": "S15",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Same missing assertion that CheckHealth and CollectMetrics do not emit request-size metrics; rejected issue #sncc-01 duplicates this claim."
+  }
+ ]
+}

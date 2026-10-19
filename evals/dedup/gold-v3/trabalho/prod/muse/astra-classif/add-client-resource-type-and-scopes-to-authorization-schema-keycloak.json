@@ -1,0 +1,12 @@
+{
+ "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The newly added ClientPermissionsV2.java:214-224 selects the all-clients resource only when the target client's resource is absent; otherwise it evaluates only that client's resource and returns false without a global fallback (line 234). AdminPermissionsSchema.java:103-110 creates individual resources without a type, so DefaultPolicyEvaluator.java:70-87 does not automatically include the all-clients resource's policies. Consequently, a legitimate global manage/configure grant can stop working when a separate permission creates a resource for that client.",
+   "severity": "high"
+  }
+ ]
+}

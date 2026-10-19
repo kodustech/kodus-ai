@@ -1,0 +1,29 @@
+{
+ "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
+ "items": [
+  {
+   "id": "S3",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Same claim that add_unsubscribe_link callers lacking unsubscribe_url trigger I18n::MissingInterpolationArgument."
+  },
+  {
+   "id": "S7",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Same claim that the per-topic unsubscribe URL is relative and therefore unusable from email clients."
+  },
+  {
+   "id": "S8",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Same claim that triple-brace rendering of the interpolated topic title permits HTML injection on the unsubscribe page."
+  },
+  {
+   "id": "S10",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Same missing-interpolation claim for add_unsubscribe_link callers that omit unsubscribe_url; the fallback suggestion and spec reference do not change the alleged defect."
+  }
+ ]
+}

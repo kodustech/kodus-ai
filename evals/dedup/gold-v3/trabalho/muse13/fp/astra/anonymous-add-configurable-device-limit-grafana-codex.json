@@ -1,0 +1,17 @@
+{
+ "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+ "items": [
+  {
+   "id": "S2",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#04",
+   "newGroup": null,
+   "reason": "It asserts the same zero-row update conflation: stale devices outside the time window receive ErrDeviceLimitReached. The returning-device scenario adds detail to the rejected claim."
+  },
+  {
+   "id": "S4",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#03",
+   "newGroup": null,
+   "reason": "It asserts the same unresolved int64 dependency caused by keeping ProvideAnonDBStore registered in wire.go after adding deviceLimit. The additional construction details do not change that claim."
+  }
+ ]
+}

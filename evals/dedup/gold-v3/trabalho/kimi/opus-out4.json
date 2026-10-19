@@ -1,0 +1,484 @@
+{
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": [
+  {
+   "id": "S1",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+   "newGroup": null,
+   "reason": "math.floor/ceil on datetime key with order_by=-datetime raises TypeError."
+  },
+  {
+   "id": "S2",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#oph-01",
+   "newGroup": null,
+   "reason": "value_from_cursor returns raw numeric value compared against the datetime column."
+  },
+  {
+   "id": "S3",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Negative offset passed straight into Django queryset slicing, which Django rejects."
+  },
+  {
+   "id": "S4",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#07",
+   "newGroup": null,
+   "reason": "organization_context.member dereferenced without None check at line 71."
+  },
+  {
+   "id": "S5",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+   "newGroup": null,
+   "reason": "get_item_key floor/ceil on datetime key from the audit log endpoint ordering."
+  },
+  {
+   "id": "S6",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+   "newGroup": null,
+   "reason": "get_item_key floor/ceil on datetime key raises TypeError."
+  },
+  {
+   "id": "S7",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+   "newGroup": null,
+   "reason": "get_item_key floor/ceil on datetime key raises TypeError."
+  },
+  {
+   "id": "S8",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Negative offset sliced directly on the queryset in the advanced branch; same fix (translate/clamp the offset)."
+  },
+  {
+   "id": "S9",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "BasePaginator leaves prev-cursor negative offsets unclamped before slicing."
+  },
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Missing +1 prev-cursor boundary in value_from_cursor; not the datetime conversion issue or any other golden issue."
+  },
+  {
+   "id": "S11",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Missing callable-key branch in get_item_key; no golden issue covers it."
+  },
+  {
+   "id": "S12",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Negative offset slicing of a Django QuerySet crashes."
+  },
+  {
+   "id": "S13",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#snapi-01",
+   "newGroup": null,
+   "reason": "Comment falsely claims Django ORM handles negative slicing."
+  },
+  {
+   "id": "S14",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#02",
+   "newGroup": null,
+   "reason": "BasePaginator comment claims negative offsets allowed while code clamps them."
+  },
+  {
+   "id": "S15",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#04",
+   "newGroup": null,
+   "reason": "Docstring claims optimized query path/streamlined boundary/backward compatibility not provided."
+  },
+  {
+   "id": "S16",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#08",
+   "newGroup": null,
+   "reason": "Endpoint comments describe the path as a performance optimization, misdescribing it."
+  }
+ ],
+ "add-guest-management-functionality-to-existing-bookings-cal-com": [
+  {
+   "id": "S1",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#10",
+   "newGroup": null,
+   "reason": "Any attendee may add guests (deliberate permission model)."
+  },
+  {
+   "id": "S2",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "newGroup": null,
+   "reason": "isTeamAdminOrOwner uses && instead of ||."
+  },
+  {
+   "id": "S3",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "newGroup": null,
+   "reason": "sendAddGuestsEmails receives raw guests instead of uniqueGuests."
+  },
+  {
+   "id": "S4",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "newGroup": null,
+   "reason": "Blacklist comparison case-sensitive on guest input."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Possible leakage of raw server error text in the toast; no golden issue."
+  },
+  {
+   "id": "S6",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "newGroup": null,
+   "reason": "Unfiltered guests passed to sendAddGuestsEmails."
+  },
+  {
+   "id": "S7",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "newGroup": null,
+   "reason": "&& instead of || in team admin/owner check."
+  },
+  {
+   "id": "S8",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "newGroup": null,
+   "reason": "Unfiltered guests list used for email template selection."
+  },
+  {
+   "id": "S9",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#13",
+   "newGroup": null,
+   "reason": "Template-string message always truthy so unable_to_add_guests fallback unreachable."
+  },
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Client-side uniqueness refine in the dialog is case-sensitive; golden #05 concerns server-side checks."
+  },
+  {
+   "id": "S11",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "newGroup": null,
+   "reason": "&& instead of || in isTeamAdminOrOwner."
+  },
+  {
+   "id": "S12",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#12",
+   "newGroup": null,
+   "reason": "Hard-coded 'Remove email' tooltip bypasses i18n."
+  },
+  {
+   "id": "S13",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#13",
+   "newGroup": null,
+   "reason": "Message always truthy so fallback never used."
+  }
+ ],
+ "feat-2fa-backup-codes-cal-com": [
+  {
+   "id": "S1",
+   "match": "feat-2fa-backup-codes-cal-com#17",
+   "newGroup": null,
+   "reason": "Backup code matching is case-sensitive."
+  },
+  {
+   "id": "S2",
+   "match": "feat-2fa-backup-codes-cal-com#01",
+   "newGroup": null,
+   "reason": "Backup-code branch bypasses the password check when totpCode is present."
+  },
+  {
+   "id": "S3",
+   "match": "feat-2fa-backup-codes-cal-com#12",
+   "newGroup": null,
+   "reason": "Clipboard writeText not awaited; success toast shown regardless."
+  },
+  {
+   "id": "S4",
+   "match": "feat-2fa-backup-codes-cal-com#04",
+   "newGroup": null,
+   "reason": "BackupCode.tsx export named TwoFactor."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "isChecked() promise always truthy in e2e assertion; no golden issue."
+  },
+  {
+   "id": "S6",
+   "match": "feat-2fa-backup-codes-cal-com#05",
+   "newGroup": null,
+   "reason": "Copy e2e test only waits for the unconditional toast and never checks the clipboard."
+  },
+  {
+   "id": "S7",
+   "match": "feat-2fa-backup-codes-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "Backup codes compared via non-constant-time indexOf at login."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Non-constant-time indexOf in the disable endpoint, a different place than the login comparison."
+  },
+  {
+   "id": "S9",
+   "match": "feat-2fa-backup-codes-cal-com#04",
+   "newGroup": null,
+   "reason": "TwoFactor name in BackupCode.tsx."
+  }
+ ],
+ "advanced-sql-analytics-framework-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "enableSqlExpressions always returns false."
+  },
+  {
+   "id": "S2",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "enableSqlExpressions always returns false."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Raw SQL logged verbatim on parse failure; no golden issue."
+  },
+  {
+   "id": "S4",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "enableSqlExpressions always returns false."
+  },
+  {
+   "id": "S5",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "Always-false enableSqlExpressions logic."
+  },
+  {
+   "id": "S6",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "enableSqlExpressions always returns false ignoring the flag."
+  },
+  {
+   "id": "S7",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "ReadQuery rejects every SQL expression even with the flag enabled."
+  },
+  {
+   "id": "S8",
+   "match": "advanced-sql-analytics-framework-grafana-codex#muse13-01",
+   "newGroup": null,
+   "reason": "NewInMemoryDB returns a not-implemented stub that callers expect to work."
+  },
+  {
+   "id": "S9",
+   "match": "advanced-sql-analytics-framework-grafana-codex#muse13-01",
+   "newGroup": null,
+   "reason": "NewInMemoryDB stub methods always return not implemented."
+  }
+ ],
+ "async-import-of-the-appstore-packages-cal-com": [
+  {
+   "id": "S1",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "async forEach callbacks not awaited in vital reschedule."
+  },
+  {
+   "id": "S2",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "async forEach callbacks not awaited (wipemycalother reschedule)."
+  },
+  {
+   "id": "S3",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "async forEach callbacks not awaited in bookings router cancellation."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "getCalendarCredentials sync while getCalendar became async, returning a Promise field; not covered."
+  },
+  {
+   "id": "S5",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "async forEach fire-and-forget in vital reschedule."
+  },
+  {
+   "id": "S6",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "async forEach fire-and-forget in wipemycalother reschedule."
+  },
+  {
+   "id": "S7",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "async forEach not awaited in handleCancelBooking."
+  },
+  {
+   "id": "S8",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "async forEach not awaited in bookings router."
+  }
+ ],
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+  {
+   "id": "S1",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "Strategy close() shuts down the factory-owned shared pool."
+  },
+  {
+   "id": "S2",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03",
+   "newGroup": null,
+   "reason": "Offset completed in finally even when processing fails."
+  },
+  {
+   "id": "S3",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#04",
+   "newGroup": null,
+   "reason": "Error-handling test asserts no commit, contradicting its intended semantics; align assertion."
+  },
+  {
+   "id": "S4",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "newGroup": null,
+   "reason": "Unbounded queues with no backpressure."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "O(gap) range scan performance in get_committable_offsets; golden #01 is about gaps blocking commits."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Not a finding: review incomplete note."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Not a finding: review incomplete note."
+  }
+ ],
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Optional.get() without isPresent in the login bean; no golden issue."
+  },
+  {
+   "id": "S2",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#06",
+   "newGroup": null,
+   "reason": "removeStoredCredentialById cannot remove federated recovery-codes credential."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Raw recovery codes passed to user storage (plaintext storage)."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Non-constant-time String.equals on hashed codes in RecoveryAuthnCodesUtils."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "Non-constant-time comparison in the test user storage; golden #01 is about replay, not timing."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Raw recovery codes passed to user storage vs hashed locally."
+  }
+ ],
+ "authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "authzservice-improve-authz-caching-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Denial cache key underscore collisions."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Stale denial cache entry persists after permissions are granted."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Cache-usage metric mislabels cache hits that deny; golden #05 is about DB reload cost."
+  },
+  {
+   "id": "S4",
+   "match": "authzservice-improve-authz-caching-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Denial cache key underscore collisions."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Stale denial cache entry persists after permissions change to allow."
+  }
+ ],
+ "unified-storage-performance-optimizations-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "unified-storage-performance-optimizations-grafana-codex#01",
+   "newGroup": null,
+   "reason": "BuildIndex lock narrowed so concurrent callers build the same index."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Init during construction as contract change; golden #03 is about uncancelled context."
+  }
+ ],
+ "github-oauth-security-enhancement-sentry": [
+  {
+   "id": "S1",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "metadata['sender']['login'] KeyError without sender."
+  },
+  {
+   "id": "S2",
+   "match": "github-oauth-security-enhancement-sentry#01",
+   "newGroup": null,
+   "reason": "_(error_short) on variable makes strings non-extractable."
+  }
+ ]
+}

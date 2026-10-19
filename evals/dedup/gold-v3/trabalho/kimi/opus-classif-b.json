@@ -1,0 +1,250 @@
+{
+  "add-html-sanitizer-for-translated-message-resources-keycloak#kimi-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "VerifyMessageProperties.java:139 and :145 compile HTML_TAGS `<[a-z]+[^>]*>` and ANCHOR_PATTERN `</?a[^>]*>` case-sensitively, so an uppercase <B>/<A> is not treated as HTML/anchor and the lowercasing sanitizer output differs, reporting 'Illegal HTML'. No message bundle at head uses uppercase tags, and the effect is a stricter build-time check, so it is a minor robustness point.",
+    "category": "bug",
+    "comment": "The theme verifier's HTML and anchor regexes are case-sensitive, so uppercase tags in translations are flagged as illegal HTML by the build.",
+    "severity": "medium"
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak#kimi-02": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "The comment itself concludes no defect: File paths in RuntimeException/messages (VerifyMessageProperties.java:70,79,111) are normal build-plugin output and line 53 already did the same.",
+    "category": null,
+    "comment": "Error messages in the verifier include absolute file paths; the comment states no data-exposure defect was found.",
+    "severity": "low"
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#kimi-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "AdminPermissionManagement.VIEW_SCOPE and AdminPermissionsSchema.VIEW are both \"view\" (AdminPermissionManagement.java:29, AdminPermissionsSchema.java:59), and ClientPermissionsV2.canView(ClientModel) (lines 77-83) evaluates the per-client 'view' scope via hasPermission(client, VIEW), which looks up the client resource first (lines 207-235). The claim that V2 never checks the per-client view permission is false.",
+    "category": null,
+    "comment": "Claims the canView(ClientModel) Javadoc is misleading because V2 never evaluates the per-client VIEW_SCOPE permission.",
+    "severity": "low"
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#kimi-02": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "PermissionClientTest.java:148/174/234 index into getDefaultClientScopes() of a realm client, which always has several default client scopes in the test realm (line 171 even asserts non-empty). The guard is for a state the test setup cannot reach.",
+    "category": null,
+    "comment": "Claims the tests index getDefaultClientScopes() without size checks and could throw IndexOutOfBoundsException.",
+    "severity": "low"
+  },
+  "fixing-re-authentication-with-passkeys-keycloak#kimi-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "The comment at AbstractUsernameFormAuthenticator.java:57 is unchanged and still accurate: the flag still governs user clearing at line 129 (shouldClearUserFromCtxAfterBadPassword = !isUserAlreadySetBeforeUsernamePasswordAuth) and the error message at line 250. It is not consumed only by AuthenticatorUtils.setupReauthenticationInUsernamePasswordFormError.",
+    "category": null,
+    "comment": "Claims the USER_SET_BEFORE_USERNAME_PASSWORD_AUTH comment is stale because the flag no longer governs user clearing.",
+    "severity": "low"
+  },
+  "replays-self-serve-bulk-delete-system-sentry#kimi-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "project_replay_summarize_breadcrumbs.py get_request_data calls error_events.sort(...) in place on the list passed through functools.partial. No caller reuses the list in an order-dependent way, so there is no user-visible effect.",
+    "category": "style",
+    "comment": "get_request_data sorts the caller's error_events list in place, mutating its argument as a side effect.",
+    "severity": "low"
+  },
+  "replays-self-serve-bulk-delete-system-sentry#kimi-02": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "commit_context.py get_environment_info deliberately catches Exception with the comment 'If anything goes wrong, just continue without environment info' and logs the error; environment is an optional decoration of the PR comment. Intended best-effort behaviour, not a defect.",
+    "category": null,
+    "comment": "Claims get_environment_info swallows all exceptions with an info log, hiding real failures.",
+    "severity": "medium"
+  },
+  "replays-self-serve-bulk-delete-system-sentry#kimi-03": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "commit_context.py _truncate_title returns title[:max_length].rstrip() + '...', so a long title becomes up to 53 characters. Other truncations in the repo (gitlab/issues.py:99, vsts/issues.py:226) reserve 3 chars; here it is only a display length in a PR comment with no real effect.",
+    "category": "bug",
+    "comment": "_truncate_title appends an ellipsis after slicing to max_length, so truncated titles exceed ISSUE_TITLE_MAX_LENGTH by three characters.",
+    "severity": "low"
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#kimi-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "incident_occurrence.py create_incident_occurrence (issue_title, subtitle, evidence names, 'Never') is moved verbatim from mark_failed.py (mark_failed.py -264 lines, incident_occurrence.py +171) without logic changes, so the untranslated strings are pre-existing.",
+    "category": null,
+    "comment": "Claims issue title, subtitle and evidence labels in monitor incident occurrences are hard-coded English instead of wrapped in gettext.",
+    "severity": "low"
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com#kimi-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "The comment reports no problem ('No data-exposure issue found') for CredentialActionsDropdown.tsx; there is nothing to verify as a defect.",
+    "category": null,
+    "comment": "States that CredentialActionsDropdown.tsx has no data-exposure issue.",
+    "severity": "low"
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com#kimi-02": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "The comment reports no problem ('No data-exposure issue found') for calendar-cache.repository.ts; there is nothing to verify as a defect.",
+    "category": null,
+    "comment": "States that calendar-cache.repository.ts has no data-exposure issue.",
+    "severity": "low"
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com#kimi-03": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "The comment reports no problem ('No data-exposure issue found') for selectedCalendar.ts; there is nothing to verify as a defect.",
+    "category": null,
+    "comment": "States that selectedCalendar.ts has no data-exposure issue.",
+    "severity": "low"
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com#kimi-04": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "The comment reports no problem ('No data-exposure issue found') for deleteCache.handler.ts; there is nothing to verify as a defect.",
+    "category": null,
+    "comment": "States that deleteCache.handler.ts has no data-exposure issue.",
+    "severity": "low"
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com#kimi-05": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "The comment reports no problem ('No data-exposure issue found') for test-gcal-webhooks.sh; there is nothing to verify as a defect.",
+    "category": null,
+    "comment": "States that test-gcal-webhooks.sh has no data-exposure issue.",
+    "severity": "low"
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#kimi-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "email_validator.rb:21 `value =~ regexp` with value nil does not raise: NilClass#=~ returns nil in Ruby, so no NoMethodError occurs; User also validates presence of email (user.rb `validates :email, presence: true`).",
+    "category": null,
+    "comment": "Claims EmailValidator#email_in_restriction_setting? raises NoMethodError when the email is nil.",
+    "severity": "medium"
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#kimi-02": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "email_validator_spec.rb: the second test stubs should_block? to true and asserts an error; with default empty whitelist/blacklist settings, deleting the blocked branch in email_validator.rb:13-15 makes it fail. The first is a negative test that is expected to pass either way, so the tests do verify the behaviour.",
+    "category": null,
+    "comment": "Claims the blocked-email validator specs would still pass if the blocked-email branch were removed.",
+    "severity": "medium"
+  },
+  "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#kimi-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "TopicView#topic_user is memoized lazily (lib/topic_view.rb:238-242) and TopicView#initialize (lines 31-71) never calls it, so it is first read during serialization in perform_show_response, after tu.save! in topics_controller.rb unsubscribe. The serialized notification level is the updated one.",
+    "category": null,
+    "comment": "Claims unsubscribe serializes the stale notification level because TopicView memoized topic_user before the update.",
+    "severity": "medium"
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#kimi-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "user_serializer.rb website_name uses `URI(website.to_s).host rescue nil` to tolerate invalid user-entered URLs and simply omit the name; silent fallback for bad user input is intended, not a defect.",
+    "category": null,
+    "comment": "Claims website_name silently swallows URI parse errors without logging.",
+    "severity": "low"
+  },
+  "advanced-sql-analytics-framework-grafana-codex#kimi-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "The logger.Warn(\"invalid sql query\", \"sql\", rawSQL, ...) in sql_command.go NewSQLCommand is unchanged by this PR; logging the expression query on parse failure is pre-existing, intended diagnostic behaviour. The PR only swaps duck.NewInMemoryDB for a stub (pkg/expr/sql/db.go).",
+    "category": null,
+    "comment": "Claims that with the stub DB every SQL expression fails parsing and the raw user SQL is logged verbatim, leaking sensitive data.",
+    "severity": "medium"
+  },
+  "authzservice-improve-authz-caching-grafana-codex#kimi-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "service.go Check: when cached permissions do not grant access, the code falls through to getIdentityPermissions from the store and only then decides, so the cache did not serve the answer and labelling permissionCacheUsage 'false' is a consistent design choice. Facts are right but there is no defect.",
+    "category": null,
+    "comment": "Claims permissionCacheUsage counts a cache hit that did not grant access as a cache miss.",
+    "severity": "medium"
+  },
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#kimi-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "ASN1Decoder.java:65-74 readInteger checks only readTagNumber(tag) (tag & 0x1f, line 94), so a constructed INTEGER (0x22) is accepted. The decoder only parses ECDSA signatures produced by the local JCA provider, so this leniency has no practical effect.",
+    "category": "bug",
+    "comment": "ASN1Decoder.readInteger accepts constructed INTEGER tags because it only masks the low tag bits, so malformed DER is parsed as valid.",
+    "severity": "medium"
+  },
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#kimi-02": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "CryptoIntegration.java detectProvider passes builder.toString() as the format string to logger.debugf and leaves a trailing ', '. Java class names cannot contain '%', so the claimed exception cannot happen; it is only wrong logging API usage.",
+    "category": "style",
+    "comment": "The ignored-providers message is passed to logger.debugf as a format string instead of using logger.debug, and keeps a trailing comma.",
+    "severity": "low"
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#kimi-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "GroupPermissionEvaluator.canView() Javadoc says access is also granted with VIEW/MANAGE permission on groups without a 'For V2 only' qualifier, but GroupPermissions.canView() (line 286-288) only checks MANAGE_USERS/VIEW_USERS roles. Documentation inaccuracy without behaviour change.",
+    "category": "doc_defect",
+    "comment": "GroupPermissionEvaluator.canView() Javadoc promises VIEW/MANAGE permission grants access, but the V1 GroupPermissions implementation only checks admin roles.",
+    "severity": "low"
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak#kimi-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "RecoveryAuthnCodesUtils.verifyRecoveryCodeInput (hashedInputBackupCode.equals(...)) is not changed by this PR; the diff only adds imports and getCredential(UserModel). Pre-existing code.",
+    "category": null,
+    "comment": "Claims recovery code verification compares hashes with String.equals, enabling timing attacks.",
+    "severity": "high"
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#kimi-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "BasePaginator.value_from_cursor raises NotImplementedError (paginator.py:133-134) and Paginator.value_from_cursor returns cursor.value unchanged (line 226-227); no base implementation adds +1 for prev cursors. OptimizedCursorPaginator.value_from_cursor (842-843) matches the existing behaviour.",
+    "category": null,
+    "comment": "Claims OptimizedCursorPaginator.value_from_cursor drops the +1 adjustment for prev cursors that BasePaginator applies.",
+    "severity": "high"
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#kimi-02": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "BasePaginator.get_item_key just raises NotImplementedError (paginator.py:130-131); there is no callable-key branch. OptimizedCursorPaginator.get_item_key (838-840) is identical to Paginator.get_item_key (222-224).",
+    "category": null,
+    "comment": "Claims OptimizedCursorPaginator.get_item_key omits the callable-key branch from BasePaginator.get_item_key.",
+    "severity": "high"
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#kimi-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "The comment only says the review of queue_consumer.py lines 204-345 is incomplete and that no contract mismatch was found; it reports no problem.",
+    "category": null,
+    "comment": "States review of queue_consumer.py is incomplete with no issue found.",
+    "severity": "low"
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#kimi-02": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "The comment only says the review of result_consumer.py lines 210-280 is incomplete and that no contract mismatch was found; it reports no problem.",
+    "category": null,
+    "comment": "States review of result_consumer.py is incomplete with no issue found.",
+    "severity": "low"
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#kimi-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "The comment itself notes the Kafka schema guarantees end_timestamp_precise is a valid number; a NaN guard in buffer.py zadd (line 197-199) is for a state no ingestion path produces.",
+    "category": null,
+    "comment": "Claims end_timestamp_precise is not validated as finite before being used as a ZADD score.",
+    "severity": "medium"
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#kimi-02": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "buffer.py:196 keeps the variable name set_key while the PR switches the key from sadd/sscan to zadd/zscan (lines 197-199, 434). Naming only.",
+    "category": "style",
+    "comment": "The set_key variable name no longer matches the sorted-set data type after the switch to zadd/zscan.",
+    "severity": "low"
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#kimi-03": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "test_flusher.py test_backpressure verifies flusher backpressure, not ordering/eviction; the PR adds dedicated eviction coverage in tests/sentry/spans/test_buffer.py (+22 lines). Using the same timestamp there is not a test gap.",
+    "category": null,
+    "comment": "Claims test_backpressure uses identical end_timestamp_precise values and so cannot catch timestamp-ordering or eviction regressions.",
+    "severity": "low"
+  }
+}

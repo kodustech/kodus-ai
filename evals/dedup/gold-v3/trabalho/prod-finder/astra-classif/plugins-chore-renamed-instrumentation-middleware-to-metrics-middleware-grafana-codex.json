@@ -1,0 +1,12 @@
+{
+ "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+ "items": [
+  {
+   "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#pf-kimi-C1",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "The claim that the contextual attributes are never consumed when request logging is disabled is false: downstream Graphite queries call logger.FromContext(ctx) at pkg/tsdb/graphite/graphite.go:93. That method consumes registered contextual attributes at pkg/infra/log/log.go:203-213 independently of PluginLogBackendRequests, so conditioning the contextual middleware on that flag would remove useful downstream logging context.",
+   "severity": "low"
+  }
+ ]
+}

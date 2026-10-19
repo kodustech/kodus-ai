@@ -1,0 +1,49 @@
+{
+ "caseId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+ "prOriginal": {
+  "numero": 3641,
+  "url": "https://github.com/discourse/discourse/pull/3641",
+  "mergedAt": "2015-08-04",
+  "nota": "Found via gh api commits/<head>/pulls; PR headRefOid equals the benchmark head 5b229316ee, merged as-is (commit is an ancestor of main). Reverted in full the same day by Jeff Atwood (2b2ae4bfe7). Confirmed: PR head.sha = 5b229316ee, merge commit 78056b17b9; revert 2b2ae4bfe7 is an ancestor of main."
+ },
+ "tps": {
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#pf-gpt-C1": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2015-08-04",
+    "pr": null,
+    "commit": "2b2ae4bfe79937ba1ee7143da92e5278abef7557",
+    "url": "https://github.com/discourse/discourse/commit/2b2ae4bfe79937ba1ee7143da92e5278abef7557"
+   },
+   "removidoEm": null,
+   "diasNoAr": 0,
+   "reason": "The upstream PR #3641 (head = benchmark head) was merged 2015-08-04 21:26Z and reverted in full 1.5h later by Jeff Atwood (2b2ae4bfe7, on main). The revert removes `@include flexbox(); @include align-items(center);` from .small-action in common/base/topic-post.scss, so .small-action-desc is no longer a content-sized flex item and the right-floated buttons return to the row edge. The buggy behaviour was undone by restoring the previous layout.",
+   "astra": [
+    {
+     "pergunta": "PR #3641 merged 2015-08-04 and fully reverted the same day by 2b2ae4bfe7 (no reason given; removes flexbox/align-items from .small-action and restores .small-action-desc padding 0.5em 0 0.5em 4em). Confirmado or descontinuado for both bugs?",
+     "resposta": "Both confirmado: the revert undid exactly the changes causing both bugs and restored the prior layout; any way of fixing counts, no explicit justification needed.",
+     "veredito": "confirmado (a full revert restoring the prior layout counts as a fix)"
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#pf-sonnet-C1": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2015-08-04",
+    "pr": null,
+    "commit": "2b2ae4bfe79937ba1ee7143da92e5278abef7557",
+    "url": "https://github.com/discourse/discourse/commit/2b2ae4bfe79937ba1ee7143da92e5278abef7557"
+   },
+   "removidoEm": null,
+   "diasNoAr": 0,
+   "reason": "PR #3641 was merged 2015-08-04 and reverted in full the same day (2b2ae4bfe7, on main). The revert removes the flex layout from .small-action and restores .small-action-desc `padding: 0.5em 0 0.5em 4em`, the gutter the mobile `.custom-message { margin-left: -40px }` was tuned for, so the overlap with the icon is gone.",
+   "astra": [
+    {
+     "pergunta": "PR #3641 merged 2015-08-04 and fully reverted the same day by 2b2ae4bfe7 (no reason given; removes flexbox/align-items from .small-action and restores .small-action-desc padding 0.5em 0 0.5em 4em). Confirmado or descontinuado for both bugs?",
+     "resposta": "Both confirmado: the revert undid exactly the changes causing both bugs and restored the prior layout; any way of fixing counts, no explicit justification needed.",
+     "veredito": "confirmado (a full revert restoring the prior layout counts as a fix)"
+    }
+   ]
+  }
+ }
+}

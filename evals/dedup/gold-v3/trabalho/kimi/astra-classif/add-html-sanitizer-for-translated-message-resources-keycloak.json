@@ -1,0 +1,19 @@
+{
+ "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+ "items": [
+  {
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#kimi-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "VerifyMessageProperties.java:139-145 uses case-sensitive patterns, so uppercase anchors identical in English and translation bypass the preservation logic at lines 150-155. The sanitizer policy excludes anchors (lines 58-61), causing these valid anchors to be removed and reported as illegal HTML at line 111; ThemeVerifierMojo.java:54-55 then fails the build.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#kimi-02",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "VerifyMessageProperties.java:70,79,111 includes paths in build diagnostics, consistent with existing diagnostics at lines 53 and 194. ThemeVerifierMojo.java:54-55 reports these as Maven validation failures; the comment identifies no actual sensitive-data exposure or other defect.",
+   "severity": "low"
+  }
+ ]
+}

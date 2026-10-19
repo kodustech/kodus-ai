@@ -1,0 +1,23 @@
+{
+ "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+ "items": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims record_for_host returning false causes a category_id lookup failure in TopicEmbed.import. None of the rejected issues describes this return-value problem."
+  },
+  {
+   "id": "S7",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#opa-01",
+   "newGroup": null,
+   "reason": "Matches the rejected claim that _hydrateEmbedded calls .map on *_ids values without a null/array check, causing a TypeError for null."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Claims record_for_host adds a database query to every embed request, increasing latency and load. None of the rejected issues describes this performance concern."
+  }
+ ]
+}

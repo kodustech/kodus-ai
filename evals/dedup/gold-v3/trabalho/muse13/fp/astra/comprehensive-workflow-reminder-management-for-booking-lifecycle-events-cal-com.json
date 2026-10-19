@@ -1,0 +1,23 @@
+{
+ "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#12",
+   "newGroup": null,
+   "reason": "Same immediateDelete branch and cause: SendGrid cancellation leaves the WorkflowReminder row neither deleted nor marked cancelled, creating stale rows."
+  },
+  {
+   "id": "S4",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#09",
+   "newGroup": null,
+   "reason": "Repeats #09\u2019s hard-coded verification placeholder claim and also includes #10\u2019s hard-coded Verify button claim."
+  },
+  {
+   "id": "S5",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#12",
+   "newGroup": null,
+   "reason": "Same immediateDelete row-cleanup claim. The reschedule example and comparison with SMS add detail without changing the alleged defect."
+  }
+ ]
+}

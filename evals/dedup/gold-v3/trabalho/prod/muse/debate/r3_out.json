@@ -1,0 +1,9 @@
+{
+ "database-performance-optimizations-grafana-codex#musep-01": {
+  "class": "TP",
+  "subclass": "none",
+  "severity": "medium",
+  "concede": true,
+  "text": "Conceding. Applied strictly, the rubric's nit list (naming, style, docs, dead code, micro-optimisations, redundant work with no user effect) covers non-behavioural issues; this is a behavioural one. The loop exits on `if affected == 0 { return totalAffected, nil }` (xorm_store.go:656-657) where affected is deleteByIDs' `res.RowsAffected()` (:626), not len(ids) from fetchIDs (:530/:549). If a concurrent delete removes every fetched ID first, cleanup ends while eligible rows remain, so retention is not enforced until the next cycle. The PR comment at :525 only accepts under-deletion from concurrent inserts, not abandoning an existing backlog. The race is rare and recovers on its own, but it is still wrong behaviour on uncommon input: TP (no subclass), medium."
+ }
+}

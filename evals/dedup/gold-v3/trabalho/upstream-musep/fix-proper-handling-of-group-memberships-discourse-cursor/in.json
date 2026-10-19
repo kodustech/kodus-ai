@@ -1,0 +1,24 @@
+{
+ "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+ "prTitle": "FIX: proper handling of group memberships",
+ "upstream": "discourse/discourse",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/discourse",
+ "base": "4975fc28903a84418f546b2809370f19abf10e08",
+ "head": "060cda77729cb1c4a827560e09e89a7b22078ba9",
+ "prOriginalConhecido": {
+  "numero": null,
+  "url": "https://github.com/discourse/discourse/commit/060cda77729cb1c4a827560e09e89a7b22078ba9",
+  "mergedAt": "2015-01-05",
+  "nota": "No upstream PR: the benchmark head 060cda77 (Régis Hanol, 'FIX: proper handling of group memberships') was committed directly to master on 2015-01-05 and is an ancestor of main (compare = ahead); /commits/<sha>/pulls is empty. The merged code is the benchmark head itself."
+ },
+ "tps": [
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#musep-01",
+   "severity": "medium",
+   "category": "data",
+   "bug": "Admin remove_member deletes memberships with group.users.delete, which skips GroupUser callbacks, so the cached groups.user_count is never decremented and stays inflated.",
+   "evidenciaOpus": "The new remove_member calls group.users.delete(user_id) (groups_controller.rb:90). On a has_many :through in Rails 4.1 this delete_all's the GroupUser rows without callbacks, so GroupUser's counter_cache 'user_count' (group_user.rb:2) is not decremented. The old code used Group#remove, which destroyed the records (group.rb:276-278).",
+   "evidenciaAstra": "The new removal path calls `group.users.delete(user_id)` at app/controllers/admin/groups_controller.rb:90, bypassing the destruction callback for the custom `user_count` counter in app/models/group_user.rb:2. The associations at app/models/group.rb:5-8 do not configure that custom counter, so [Rails 4.1.8's association counter handling](https://raw.githubusercontent.com/rails/rails/v4.1.8/activerecord/lib/active_record/associations/has_many_association.rb) does not decrement it. This leaves the count serialized at app/serializers/basic_group_serializer.rb:2 inflated, although member pagination independently obtains the actual count at app/controllers/groups_controller.rb:25."
+  }
+ ]
+}

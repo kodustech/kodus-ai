@@ -1,0 +1,40 @@
+{
+ "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+ "items": [
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "config/site_settings.yml:357 defines the unset username as an empty string, not nil, so downcase is safe. lib/topic_retriever.rb:49-50 then returns when no matching user exists; the claimed blank-setting crash does not occur.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-02",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "app/jobs/scheduled/poll_feed.rb:29-36 loads the feed and imports every item without a size limit, batch limit, or overall deadline. Large feeds can cause substantial parsing and database work, including during individual retrievals via lib/topic_retriever.rb:40-42. The timeout wording is overstated because open-uri inherits network defaults, but those do not bound total download and import work.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-03",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "lib/topic_retriever.rb:14-18 rescues URI::InvalidURIError, and its throttle returns false for a fresh key at lines 27-29. Consequently, bypassing host validation can invoke perform_retrieve and violate the explicit never expectations in spec/components/topic_retriever_spec.rb:9-24; the mocks do not automatically make these tests pass.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-04",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "spec/controllers/embed_controller_spec.rb:41-50 uses required expects calls, which fail if retriever invocation or TopicView construction is removed or routed incorrectly. The retriever is reached through app/controllers/embed_controller.rb:15 and app/jobs/regular/retrieve_topic.rb:17; these assertions verify actual delegation rather than automatically satisfying themselves.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-05",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "spec/jobs/poll_feed_spec.rb:8 explicitly scopes these examples to execute, and lines 31-36 correctly verify its delegation contract from app/jobs/scheduled/poll_feed.rb:14-17. Requesting additional parser/import coverage identifies no concrete implementation defect or failure to test the behavior this example claims to verify.",
+   "severity": "medium"
+  }
+ ]
+}

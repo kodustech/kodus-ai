@@ -1,0 +1,65 @@
+{
+ "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#04",
+   "newGroup": null,
+   "reason": "Both describe the compatibility break caused by adding abstract order() to CryptoProvider without a default implementation."
+  },
+  {
+   "id": "S2",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#07",
+   "newGroup": null,
+   "reason": "Both describe missing signature-length validation in concatenatedRSToASN1DER, causing short-input exceptions and trailing-byte truncation."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes ASN1Decoder.readSequence accepting invalid sequence boundaries and trailing data, which no golden issue covers."
+  },
+  {
+   "id": "S4",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#05",
+   "newGroup": null,
+   "reason": "Both describe equal-priority crypto providers being selected by ServiceLoader order instead of rejecting an ambiguous configuration."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Describes AuthzClient initialization permanently selecting a global provider from a restricted classloader view. This differs from the golden issue about tied provider priorities."
+  },
+  {
+   "id": "S6",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#11",
+   "newGroup": null,
+   "reason": "Both describe a self-consistency-only converter test that lacks independent verification of the re-encoded DER signature."
+  },
+  {
+   "id": "S7",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Both identify the discarded ASN1Encoder writes that redundantly encode r and s before the return expression encodes them again."
+  },
+  {
+   "id": "S8",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#07",
+   "newGroup": null,
+   "reason": "Both describe missing input-length validation before array copies in concatenatedRSToASN1DER and the resulting unchecked exception on short signatures."
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Describes integerToBytes accepting negative or oversized DER integers and silently changing their values through padding or truncation. No golden issue covers this integer-conversion problem."
+  },
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes the same missing sequence-boundary and trailing-data validation in ASN1Decoder.readSequence as S3."
+  }
+ ]
+}

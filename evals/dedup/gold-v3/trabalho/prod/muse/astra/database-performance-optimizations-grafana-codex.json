@@ -1,0 +1,29 @@
+{
+ "caseId": "database-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "database-performance-optimizations-grafana-codex#08",
+   "newGroup": null,
+   "reason": "Describes the same ticker change from ten minutes to one minute, increasing cleanup frequency and database load tenfold."
+  },
+  {
+   "id": "S2",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Describes the same normal cleanup logs emitting full ID batches at Error level, causing excessive log volume and false alerts."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes premature cleanup termination when concurrent deletion makes affected rows fewer than fetched rows. No golden-set issue describes this termination condition."
+  },
+  {
+   "id": "S4",
+   "match": "database-performance-optimizations-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Describes the same quadratic construction of the SQLite ID list through repeated fmt.Sprintf concatenation."
+  }
+ ]
+}

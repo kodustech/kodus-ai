@@ -1,0 +1,11 @@
+{
+ "caseId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02",
+   "newGroup": null,
+   "reason": "The comment identifies the same discarded config transformation: the function returns monitor_environment.monitor.config instead of the local config containing the human-readable schedule_type."
+  }
+ ]
+}

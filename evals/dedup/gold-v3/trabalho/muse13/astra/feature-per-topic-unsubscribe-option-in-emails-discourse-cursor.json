@@ -1,0 +1,65 @@
+{
+ "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Describes the same missing TopicUser row causing a nil dereference and a 500 in unsubscribe. The additional nil notification_level concern does not change the match."
+  },
+  {
+   "id": "S2",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes the same GET-based notification mutation without CSRF protection."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reports missing unsubscribe_url interpolation arguments breaking email generation, which is distinct from every golden issue."
+  },
+  {
+   "id": "S4",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Describes the same unchecked TopicUser.find_by result causing a nil dereference and a 500."
+  },
+  {
+   "id": "S5",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Identifies the same missing assertions for the unsubscribe_url supplied by the message builder spec fixture."
+  },
+  {
+   "id": "S6",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Includes the same missing TopicUser row and subsequent nil dereference in unsubscribe, with an additional concern about a nil notification level."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Reports a relative unsubscribe URL in emails requiring an absolute URL. No golden issue describes this URL construction problem."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Reports potential HTML injection through unescaped title interpolation in the unsubscribe template. No golden issue describes this escaping concern."
+  },
+  {
+   "id": "S9",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#11",
+   "newGroup": null,
+   "reason": "Identifies the same misspelled stopNotificiationsText property and proposes renaming it to stopNotificationsText."
+  },
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes the same missing unsubscribe_url interpolation argument and absent fallback as S3, potentially breaking email generation."
+  }
+ ]
+}

@@ -1,0 +1,508 @@
+{
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Unchecked nil from where(id:).first in update/destroy causes NoMethodError/500 instead of not-found."
+  },
+  {
+   "id": "S2",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "before_validation calls host.sub! without nil guard, raising NoMethodError for a nil host."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims false.try(:category_id) raises; Rails Object#try returns nil when the receiver does not respond, so this is not a real problem and matches no issue."
+  },
+  {
+   "id": "S4",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "lower(host) compared to un-downcased URI host, so mixed-case referers fail to match."
+  },
+  {
+   "id": "S5",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Migration interpolates legacy host values into the INSERT SQL without quoting."
+  },
+  {
+   "id": "S6",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Migration indexes execute(...)[0] without checking for an empty result, crashing when the setting is missing."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Null *_ids handling in store _hydrateEmbedded is not covered by any golden issue."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Per-request DB lookup performance concern on the embed path; no golden issue covers it."
+  },
+  {
+   "id": "S9",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "update/destroy do not guard the nil record from where(id:).first, giving 500 instead of 404."
+  },
+  {
+   "id": "S10",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "host.sub! on nil host in before_validation raises NoMethodError instead of a validation error."
+  },
+  {
+   "id": "S11",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Primary problem is the unguarded execute(...)[0] in the migration (also mentions the SQL interpolation of #06)."
+  },
+  {
+   "id": "S12",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Migration copies legacy hosts with scheme/path, so they never match the bare-host lookup."
+  },
+  {
+   "id": "S13",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "Spec named \"is false if embeddable_host is blank\" no longer exercises the host condition."
+  },
+  {
+   "id": "S14",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Migrated hosts keep scheme/path and no longer match record_for_host."
+  },
+  {
+   "id": "S15",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Case-insensitive host compare only lowercases the column, not the URI host."
+  }
+ ],
+ "fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "totalPages uses floor(count/limit)+1, giving an extra empty page on exact multiples."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "Whitespace in comma-separated usernames is not a golden issue."
+  },
+  {
+   "id": "S3",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#10",
+   "newGroup": null,
+   "reason": "remove_member uses group.users.delete instead of the proper Group removal path, skipping membership cleanup callbacks."
+  },
+  {
+   "id": "S4",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02",
+   "newGroup": null,
+   "reason": "Public members endpoint takes limit from params with no upper bound."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims add_members route supplies :id; the route is nested inside resources :groups (not member), so it supplies :group_id; false claim."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Claims remove_member route supplies :id; the nested route supplies :group_id; false claim."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Same false claim that add_members should read :id instead of :group_id."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Same false claim that remove_member should read :id instead of :group_id."
+  },
+  {
+   "id": "S9",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Off-by-one totalPages with floor+1 leads to an empty extra page."
+  },
+  {
+   "id": "S10",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "totalPages floor+1 gives extra empty page for exact multiples."
+  },
+  {
+   "id": "S11",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Proposes changing the clamp in the next action; that is different code from the totalPages formula of #01, and fixing it leaves the wrong page count."
+  },
+  {
+   "id": "S12",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Same false :id vs :group_id claim for add_members."
+  },
+  {
+   "id": "S13",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Same false :id vs :group_id claim for remove_member."
+  },
+  {
+   "id": "S14",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#12",
+   "newGroup": null,
+   "reason": "remove_member spec uses PUT although the route maps DELETE."
+  }
+ ],
+ "add-html-sanitizer-for-translated-message-resources-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+   "newGroup": null,
+   "reason": "Independent prefix/suffix trimming overlaps and substring throws StringIndexOutOfBoundsException."
+  },
+  {
+   "id": "S2",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#opa-01",
+   "newGroup": null,
+   "reason": "Missing English counterpart makes verifySafeHtml throw an unchecked RuntimeException that crashes the build."
+  },
+  {
+   "id": "S3",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Lithuanian TOTP step replaced with Italian text (login bundle)."
+  },
+  {
+   "id": "S4",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Lithuanian TOTP step replaced with Italian text (account bundle)."
+  },
+  {
+   "id": "S5",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+   "newGroup": null,
+   "reason": "zh_CN totpStep1 uses Traditional Chinese."
+  },
+  {
+   "id": "S6",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+   "newGroup": null,
+   "reason": "Overlapping prefix/suffix trim causes StringIndexOutOfBoundsException."
+  },
+  {
+   "id": "S7",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+   "newGroup": null,
+   "reason": "Overlapping prefix/suffix trim causes StringIndexOutOfBoundsException."
+  },
+  {
+   "id": "S8",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Lithuanian totpStep1 is Italian."
+  },
+  {
+   "id": "S9",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Lithuanian loginTotpStep1 is Italian."
+  },
+  {
+   "id": "S10",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+   "newGroup": null,
+   "reason": "zh_CN value uses Traditional Chinese forms."
+  }
+ ],
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": [
+  {
+   "id": "S1",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+   "newGroup": null,
+   "reason": "OptimizedCursorPaginator applies math.floor/ceil to the datetime key with order_by=-datetime, raising TypeError."
+  },
+  {
+   "id": "S2",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Negative cursor offset passed to Django queryset slicing in OptimizedCursorPaginator raises an error."
+  },
+  {
+   "id": "S3",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "BasePaginator keeps negative offset for prev cursors and Django slicing rejects it."
+  },
+  {
+   "id": "S4",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#09",
+   "newGroup": null,
+   "reason": "optimized_pagination flag exposes the negative-offset paginator to any member with global access."
+  },
+  {
+   "id": "S5",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Negative start_offset reaches queryset slicing in the advanced branch, raising instead of returning a page."
+  },
+  {
+   "id": "S6",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+   "newGroup": null,
+   "reason": "Datetime-ordered audit logs routed through the numeric paginator: math.floor on datetime raises TypeError."
+  },
+  {
+   "id": "S7",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#02",
+   "newGroup": null,
+   "reason": "BasePaginator comment claims negative offsets are safely handled, contradicting the code."
+  },
+  {
+   "id": "S8",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Negative offsets reach Django queryset slicing in OptimizedCursorPaginator."
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The trim check runs only for is_prev, where start_offset equals offset (clamping applies only to non-prev), so the claimed mismatch does not occur in BasePaginator."
+  },
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Same false trim-mismatch claim in OptimizedCursorPaginator: under is_prev start_offset equals offset."
+  }
+ ],
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "newGroup": null,
+   "reason": "Global canManage() accepts VIEW scope, letting view-only admins pass manage checks."
+  },
+  {
+   "id": "S2",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "newGroup": null,
+   "reason": "getGroupIdsWithViewPermission uses resource id instead of name (group id)."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Dropping AdminRoles.ADMIN from UserPermissionsV2 role checks is not a golden issue."
+  },
+  {
+   "id": "S4",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+   "newGroup": null,
+   "reason": "requireManageMembers Javadoc references canManageMembership."
+  },
+  {
+   "id": "S5",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#07",
+   "newGroup": null,
+   "reason": "Javadoc says Stream but method returns Set."
+  },
+  {
+   "id": "S6",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#snloop-01",
+   "newGroup": null,
+   "reason": "Null resource-type resource dereferenced in hasPermission causes NPE/500."
+  },
+  {
+   "id": "S7",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "newGroup": null,
+   "reason": "Uses groupResource.getId() instead of getName() for permission check and result set."
+  },
+  {
+   "id": "S8",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "newGroup": null,
+   "reason": "Global canManage() accepts VIEW, identical to canView()."
+  },
+  {
+   "id": "S9",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "newGroup": null,
+   "reason": "Resource id vs name (group id) mismatch in getGroupIdsWithViewPermission."
+  }
+ ],
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "id": "S1",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#04",
+   "newGroup": null,
+   "reason": "Set-to-sorted-set key type change causes WRONGTYPE on keys from the previous release during rollout."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Missing end_timestamp_precise KeyError in process_batch is not a golden issue."
+  },
+  {
+   "id": "S3",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#03",
+   "newGroup": null,
+   "reason": "ZUNIONSTORE default SUM aggregate doubles scores of duplicate payloads."
+  },
+  {
+   "id": "S4",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#05",
+   "newGroup": null,
+   "reason": "zpopmin eviction can drop the root span while has-root flag stays set."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Client-controlled timestamp used as eviction score is not a golden issue."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "O(N) ZUNIONSTORE copy per insert performance concern is not a golden issue."
+  },
+  {
+   "id": "S7",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#08",
+   "newGroup": null,
+   "reason": "Tests use identical end timestamps and never exercise score ordering/eviction."
+  },
+  {
+   "id": "S8",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#03",
+   "newGroup": null,
+   "reason": "ZUNIONSTORE SUM aggregate doubles duplicate member scores."
+  }
+ ],
+ "anonymous-add-configurable-device-limit-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Non-atomic count-then-insert lets concurrent new devices exceed the limit."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Expired existing device conflated with limit-reached in updateDevice is not a golden issue."
+  },
+  {
+   "id": "S3",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#07",
+   "newGroup": null,
+   "reason": "tagDeviceUI caches the device before CreateOrUpdateDevice, so a limit-rejected device passes on the next request."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Wire provider for ProvideAnonDBStore with bare int64 parameter is not a golden issue."
+  },
+  {
+   "id": "S5",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#09",
+   "newGroup": null,
+   "reason": "Device tagging became synchronous in Authenticate, adding DB round-trips."
+  },
+  {
+   "id": "S6",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#01",
+   "newGroup": null,
+   "reason": "TOCTOU count-then-insert race exceeds the device limit."
+  }
+ ],
+ "authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Denial cache entry short-circuits and is never cleared when access is granted; different from #05 (DB reload per denied resource)."
+  },
+  {
+   "id": "S2",
+   "match": "authzservice-improve-authz-caching-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Underscore-joined denial cache key lets distinct tuples collide (also notes identity type)."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Unbounded denial cache cardinality from request-controlled names is not a golden issue."
+  },
+  {
+   "id": "S4",
+   "match": "authzservice-improve-authz-caching-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Explicit denial-cache test seeds permCache as false, so it does not prove the short-circuit."
+  },
+  {
+   "id": "S5",
+   "match": "authzservice-improve-authz-caching-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Denial-cache test fixture seeds a deny and passes even without the denial cache check."
+  }
+ ],
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "S1",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#05",
+   "newGroup": null,
+   "reason": "Creating recovery codes in one store leaves the old credential in the other store, so rotated codes still validate."
+  },
+  {
+   "id": "S2",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#06",
+   "newGroup": null,
+   "reason": "removeStoredCredentialById only removes local credentials, so exhausted federated recovery codes are never removed."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Unchecked Optional.get() in RecoveryAuthnCodeInputLoginBean is not a golden issue."
+  }
+ ],
+ "fixing-re-authentication-with-passkeys-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "context.form() returns the session-cached LoginFormsProvider (session.getProvider), so the attributes are not lost; false claim, no golden issue."
+  }
+ ]
+}

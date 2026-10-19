@@ -1,0 +1,2422 @@
+{
+ "implement-access-token-context-encoding-framework-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "daffb05b5ad091d3ec09933c3c99c2b54f448696",
+  "base": "c22f76867f595f0f7c327376a66a08dca01949e8",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+    "lines": [
+     69,
+     73
+    ],
+    "texto": "WHAT: Constructor calls Objects.requireNonNull(grantType,...) twice and never checks rawTokenId. WHY: Null rawTokenId passes validation and later produces \"null\" suffix or NPE in encodeTokenId/getTokenContextFromTokenId. HOW: Change second check to Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")."
+   },
+   {
+    "id": "S2",
+    "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java",
+    "lines": [
+     29,
+     33
+    ],
+    "texto": "WHAT: OAuth2GrantTypeFactory adds abstract String getShortcut() with no default implementation. WHY: Every existing third-party OAuth2GrantTypeFactory fails to compile and already-deployed ones throw AbstractMethodError when DefaultTokenContextEncoderProviderFactory.postInit calls getShortcut(), breaking server startup/token issuance. HOW: Provide a default method (e.g. default returning getId() or a derived value) instead of abstract."
+   },
+   {
+    "id": "S3",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     476,
+     485
+    ],
+    "texto": "WHAT: isAccessTokenId uses substring(3,5) instead of (4,6) and returns false when the shortcut equals the expectation. WHY: Matcher rejects correct token IDs and accepts wrong-grant IDs, so grant-encoding assertions pass/fail inverted and mask regressions. HOW: Negate the equality and slice the last 2 chars of the 6-char prefix (substring(4,6))."
+   },
+   {
+    "id": "S4",
+    "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantType.java",
+    "lines": [
+     99,
+     106
+    ],
+    "texto": "WHAT: grantType is snapshotted in the constructor but setFormParams() replaces formParams without updating it, and constructor NPEs on null formParams. WHY: Any path mutating form params leaves context.getGrantType() stale so OAuth2GrantTypeBase.createTokenResponse stores the wrong grant into the token ID; null params now crash where previously tolerated. HOW: Sync grantType in setFormParams() and null-guard the constructor lookup (or compute lazily from formParams)."
+   },
+   {
+    "id": "S5",
+    "file": "services/src/main/java/org/keycloak/protocol/oidc/TokenManager.java",
+    "lines": [
+     1052,
+     1054
+    ],
+    "texto": "WHAT: initToken unconditionally encodes the ID and encodeTokenId throws IllegalStateException for any grantType with no registered shortcut. WHY: Custom/extension grants or any flow setting an unmapped grant string turn previously-successful token issuance into a 500 error. HOW: Fall back to rawTokenId (or UNKNOWN shortcut) when no shortcut is mapped instead of throwing."
+   },
+   {
+    "id": "S6",
+    "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+    "lines": [
+     69,
+     73
+    ],
+    "texto": "Second requireNonNull checks grantType again while its message says rawTokenId, so null rawTokenId slips through and the message disagrees with the code. Check rawTokenId instead."
+   },
+   {
+    "id": "S7",
+    "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java",
+    "lines": [
+     29,
+     33
+    ],
+    "texto": "Doc says 3-letters shortcut yet every grant factory in this PR returns 2 chars (ac, rt, ci, dg, cc, pg, pc, ro, te, na). Fix doc to 2-letters to match the code."
+   },
+   {
+    "id": "S8",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     479,
+     484
+    ],
+    "texto": "Logic is inverted: `if (equals) return false` fails when the grant matches and passes when it mismatches. Negate the condition so mismatch returns false."
+   },
+   {
+    "id": "S9",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     482,
+     484
+    ],
+    "texto": "Cross-reference mismatch with encoder: encode is session(0,2)+token(2,4)+grant(4,6) and decode uses substring(4,6) for grant, but matcher reads substring(3,5). Use substring(4,6) to agree with DefaultTokenContextEncoderProvider."
+   },
+   {
+    "id": "S10",
+    "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+    "lines": [
+     69,
+     74
+    ],
+    "texto": "Copy-paste error: second requireNonNull checks grantType again instead of rawTokenId, so null rawTokenId is never rejected. Check rawTokenId."
+   },
+   {
+    "id": "S11",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     476,
+     484
+    ],
+    "texto": "Generator encodes 2-char session + 2-char token + 2-char grant (grant at index 4-6) but validator reads substring(3,5) and returns false when equal. Fix to !substring(4,6).equals(...) so mismatched grants are rejected and matching grants pass."
+   },
+   {
+    "id": "S12",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     479,
+     484
+    ],
+    "texto": "Comparison is inverted: it returns false (rejects) when the extracted shortcut equals the expected grant, and accepts otherwise. Negate the condition so mismatched grants are rejected."
+   },
+   {
+    "id": "S13",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     479,
+     484
+    ],
+    "texto": "Encoded prefix is session(0,2)+tokenType(2,4)+grant(4,6) per encoder/decoder, but matcher extracts substring(3,5) (second char of tokenType + first char of grant). Use substring(4,6); e.g. 'onrtna' grant 'na' is at 4,6 not 3,5."
+   },
+   {
+    "id": "S14",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     476,
+     484
+    ],
+    "texto": "matchesSafely is inverted and slices the wrong chars: it returns false when the grant shortcut equals expected, and checks substring(3,5) instead of the grant at substring(4,6). Result: any UUID passes regardless of grant, so expectCodeToToken/expectRefresh/etc would still pass if the wrong grant were encoded."
+   },
+   {
+    "id": "S15",
+    "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+    "lines": [
+     69,
+     73
+    ],
+    "texto": "Second requireNonNull checks grantType instead of rawTokenId, so null rawTokenId creates invalid context and later encode corruption. Fix to requireNonNull(rawTokenId)."
+   },
+   {
+    "id": "S16",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     479,
+     484
+    ],
+    "texto": "Grant shortcut occupies chars 4-6 of 6-char prefix but code checks substring(3,5) and returns false when equal, so correct IDs fail and wrong IDs pass; also needs length guard to avoid StringIndexOutOfBounds."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#01",
+    "descricao": "The AccessTokenContext constructor checks grantType twice instead of rawTokenId, so a null rawTokenId passes validation and is encoded as ':null'.",
+    "textoGolden": "In AccessTokenContext constructor, the fourth Objects.requireNonNull validates grantType twice instead of validating rawTokenId, allowing null rawTokenId values to pass validation.",
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+      "lines": [
+       73,
+       73
+      ],
+      "texto": "WHAT: the constructor validates `grantType` a second time instead of `rawTokenId` (`Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\")`). WHY: a null `rawTokenId` is silently accepted, so `encodeTokenId` produces a token id ending in `:null` and any later consumer of the raw id gets an invalid value instead of an early failure. HOW: change the argument to `Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")`."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+      "lines": [
+       69,
+       78
+      ],
+      "texto": "Line 73 calls Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\") \u2014 it validates grantType a second time (line 72 already does) with a message naming a different field. rawTokenId is never validated, so a null rawTokenId is accepted at construction and the advertised check/message is wrong. It should be Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+      "lines": [
+       73,
+       73
+      ],
+      "texto": "The null-check message names the wrong parameter: `Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\")` validates `grantType` but reports `rawTokenId`, and it duplicates the check on line 72 while `rawTokenId` is never validated at all. The message that reaches the reader contradicts the code it guards; it should be `Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")`."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#02",
+    "descricao": "isAccessTokenId reads the grant shortcut at the wrong offset (3,5 instead of 4,6) and inverts the comparison, so the event assertions never verify the token's grant type.",
+    "textoGolden": "In isAccessTokenId, the substring for the grant shortcut and the equality check look inverted: the grant shortcut occupies indices 4\u20135 (substring(4,6)), and a match should return true (combined with UUID check), not false.",
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+      "lines": [
+       483,
+       483
+      ],
+      "texto": "WHAT: `isAccessTokenId` reads the grant shortcut from the wrong offset and inverts the comparison \u2014 `if (items[0].substring(3, 5).equals(expectedGrantShortcut)) return false;`. WHY: for the encoded id `ssttgg:raw` the grant shortcut occupies 0-based indices 4-5, so `substring(3,5)` inspects the token-type/grant boundary and can never equal the expected shortcut; combined with the inverted `return false`, the equality branch is unreachable and the matcher validates only the UUID part. As a result the new assertions in `expectCodeToToken`/`expectRefresh`/`expectDeviceCodeToToken`/`expectAuthReqIdToToken` do not actually assert the grant type and would pass even if the grant shortcut were wrong. HOW: use `items[0].substring(4, 6)` and negate the condition (`if (!items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;`)."
+     },
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+      "lines": [
+       476,
+       492
+      ],
+      "texto": "The matcher logic is inverted: line 483 returns false when the extracted grant shortcut EQUALS expectedGrantShortcut, so a token that actually carries the expected grant fails the matcher, while a token with any other grant shortcut falls through and passes. The condition should be negated: `if (!items[0].substring(3,5).equals(expectedGrantShortcut)) return false;`. Also note the encode site writes the grant shortcut at chars 4-6 (substring(4,6)); substring(3,5) reads one character early into the token-type field, so the offset is off by one relative to TokenManager.encodeTokenId."
+     },
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+      "lines": [
+       482,
+       483
+      ],
+      "texto": "The comment 'Grant type shortcut starts at character 4th char' disagrees with the encoding that this PR defines (sessionType chars 1-2, tokenType 3-4, grantType 5-6, e.g. 'trltcc'), and the code reads substring(3,5) \u2014 the 4th-5th chars, i.e. the token-type second char plus the grant first char, never the grant shortcut. The comment (and the index) should point at the 5th char / substring(4,6)."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#03",
+    "descricao": "getShortcut() Javadoc says shortcuts are usually 3 letters, but the encoding requires exactly 2-character shortcuts.",
+    "textoGolden": "Javadoc mentions \"usually like 3-letters shortcut\" but some implementations use 2-letter shortcuts (\"ac\", \"cc\", \"rt\", \"te\", \"pc\", \"ci\", \"ro\"). Consider updating documentation to reflect actual usage pattern.",
+    "comentarios": [
+     {
+      "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java",
+      "lines": [
+       30,
+       31
+      ],
+      "texto": "The Javadoc says getShortcut() returns 'usually like 3-letters shortcut', but every implementation introduced in this PR returns a 2-character shortcut ('ac','cc','pg','pc','rt','ro','te','ci','dg') and the encoder relies on exactly 2 chars (encoded context length 6 = 2+2+2). The doc states a length the code does not produce; it should say 2-character shortcut."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java",
+      "lines": [
+       73,
+       76
+      ],
+      "texto": "Grant shortcuts are registered without enforcing the two-character length required by the decoder. A custom grant returning a three-character shortcut, which the new OAuth2GrantTypeFactory documentation explicitly suggests, produces a seven-character prefix that getTokenContextFromTokenId rejects, breaking encode/decode round trips for that grant. Validate shortcut length during registration and dynamic refresh, and document the required two-character format."
+     },
+     {
+      "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java",
+      "lines": [
+       30,
+       31
+      ],
+      "texto": "The new contract describes getShortcut() as usually returning a three-letter shortcut, but DefaultTokenContextEncoderProvider requires exactly two characters for the grant field (six total prefix characters, decoded with substring(4, 6)). An extension author following this documentation can produce token IDs that the default decoder rejects. Document the required two-character length rather than advertising three letters."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#04",
+    "descricao": "testIncorrectGrantType catches any RuntimeException, so it passes on a NullPointerException from the unset sessionFactory rather than verifying the unknown-grant IllegalArgumentException.",
+    "textoGolden": " Catching generic RuntimeException is too broad. The implementation throws IllegalArgumentException specifically - catch that instead for more precise testing.",
+    "comentarios": [
+     {
+      "file": "services/src/test/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderTest.java",
+      "lines": [
+       77,
+       83
+      ],
+      "texto": "Catching RuntimeException allows this negative test to pass for an unrelated fixture failure. The fixture constructs the factory without postInit, leaving sessionFactory null; resolving the unregistered `ac` shortcut calls sessionFactory.getProviderFactoriesStream and throws NullPointerException before the decoder's intended unknown-grant IllegalArgumentException. Catch/assert IllegalArgumentException specifically and provide a factory fixture whose lookup returns no matching grant, so removing the decoder's validation would fail the test."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#05",
+    "descricao": "Client-credentials (and UMA permission) token issuance never sets the GRANT_TYPE attribute, so their access token ids are encoded with the unknown grant 'na' instead of their shortcut.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java",
+      "lines": [
+       57,
+       60
+      ],
+      "texto": "The new grant metadata falls back to 'na' for client-credentials and UMA tokens because their issuance paths never set Constants.GRANT_TYPE on their fresh ClientSessionContext. ClientCredentialsGrantType calls responseBuilder.generateAccessToken directly, and PermissionGrantType delegates to AuthorizationTokenService, so neither executes the new assignment in createTokenResponse; tokens from these known grants therefore carry unknown grant context. Set the grant attribute in both issuance paths before generating the access token."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#06",
+    "descricao": "Lazy registration of newly deployed grants does not check shortcut uniqueness, so a grant reusing an existing shortcut silently overwrites the reverse mapping and older tokens decode to the wrong grant.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java",
+      "lines": [
+       112,
+       114
+      ],
+      "texto": "Enforce shortcut uniqueness during lazy registration rather than overwriting grantsByShortcuts. If a newly deployed grant B uses existing grant A's shortcut, this path replaces shortcut\u2192A with shortcut\u2192B while retaining both forward entries. Previously issued A tokens then decode as B. Concurrent registrations of two new grants with the same shortcut likewise both succeed, with the last inverse-map write winning. Use collision-aware atomic registration and reject the conflicting grant before publishing its forward mapping."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#opa-01",
+    "descricao": "getShortcut() is added as an abstract method to OAuth2GrantTypeFactory without a default, breaking existing custom grant type factories (compile error or AbstractMethodError when DefaultTokenContextEncoderProviderFactory.postInit calls it).",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "de628295646d0848226618108a52f2f1e5d04ac0",
+  "base": "a308075bc39b77ed7059b0cae9d443d669a7bf98",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     254,
+     256
+    ],
+    "texto": "WHAT: updateEvent fallback searches destinationCalendar for cal.externalId === externalCalendarId when externalCalendarId is falsy, so it never matches and yields undefined. WHY: calendar.events.update is then called with calendarId: undefined and rescheduled collective updates fail. HOW: fall back to the first destinationCalendar entry or primary instead of self-comparison."
+   },
+   {
+    "id": "S2",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     315,
+     317
+    ],
+    "texto": "WHAT: deleteEvent fallback searches destinationCalendar for cal.externalId === externalCalendarId when externalCalendarId is falsy, so it never matches and yields undefined. WHY: calendar.events.delete is then called with undefined calendarId and cancellation cleanup fails. HOW: fall back to the first destinationCalendar entry instead of self-comparison."
+   },
+   {
+    "id": "S3",
+    "file": "packages/core/EventManager.ts",
+    "lines": [
+     118,
+     119
+    ],
+    "texto": "WHAT: mainHostDestinationCalendar is undefined when destinationCalendar is null/undefined/empty but .integration is accessed unguarded. WHY: throws TypeError and breaks booking creation for events with no destination calendar, where old optional-chaining code fell back to Cal Video. HOW: use mainHostDestinationCalendar?.integration."
+   },
+   {
+    "id": "S4",
+    "file": "packages/features/bookings/lib/handleNewBooking.ts",
+    "lines": [
+     1063,
+     1067
+    ],
+    "texto": "WHAT: evt.destinationCalendar is initialized to null when neither eventType nor organizer has one, so the later evt.destinationCalendar?.push(...teamDestinationCalendars) is skipped. WHY: collective secondary hosts collected in teamDestinationCalendars are silently lost and never get calendar invites. HOW: initialize to [] instead of null."
+   },
+   {
+    "id": "S5",
+    "file": "packages/core/EventManager.ts",
+    "lines": [
+     116,
+     119
+    ],
+    "texto": "Old code used evt.destinationCalendar?.integration so missing calendar fell back to daily safely. New destructured element can be undefined and .integration throws. Use ?. to preserve nullable contract."
+   },
+   {
+    "id": "S6",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     254,
+     256
+    ],
+    "texto": "Else-branch runs when externalCalendarId is falsy so find(cal.externalId===externalCalendarId) never matches; old fallback returned destinationCalendar.externalId. Use first element to restore behaviour. Same in deleteEvent."
+   },
+   {
+    "id": "S7",
+    "file": "packages/core/EventManager.ts",
+    "lines": [
+     118,
+     120
+    ],
+    "texto": "mainHostDestinationCalendar is undefined when destinationCalendar is null/empty. Accessing .integration without ?. throws TypeError when location is Google Meet, breaking the intended fallback to daily video. Restore optional chaining."
+   },
+   {
+    "id": "S8",
+    "file": "packages/core/EventManager.ts",
+    "lines": [
+     118,
+     119
+    ],
+    "texto": "Add optional chaining: mainHostDestinationCalendar?.integration, since destinationCalendar can be null leading to TypeError"
+   },
+   {
+    "id": "S9",
+    "file": "packages/core/EventManager.ts",
+    "lines": [
+     118,
+     120
+    ],
+    "texto": "mainHostDestinationCalendar is undefined when destinationCalendar is null/undefined/[] (reachable: handleNewBooking sets null, other callers set []). Unconditional .integration throws TypeError. Restore null-safety with ?. as in old code."
+   },
+   {
+    "id": "S10",
+    "file": "packages/core/EventManager.ts",
+    "lines": [
+     116,
+     120
+    ],
+    "texto": "Producer handleNewBooking.ts sets destinationCalendar to null when no calendar (and other callers set []), but this consumer destructures to undefined and reads .integration without optional chaining, throwing TypeError. Previously evt.destinationCalendar?.integration was safe. Add ?. to preserve fallback to Cal Video."
+   },
+   {
+    "id": "S11",
+    "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+    "lines": [
+     72,
+     77
+    ],
+    "texto": "CalendarManager.ts now calls createEvent(calEvent, credential.id) and EventManager builds multi-entry destinationCalendar for COLLECTIVE teams; GoogleCalendarService selects via find(credentialId) but this service always uses [0], so non-host members' events are written to the host calendar ID with the wrong credential. Accept credentialId and select matching destination like Google does."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#02",
+    "descricao": "Claims the optional chaining in mainHostDestinationCalendar?.integration is redundant because a ternary already checks it.",
+    "textoGolden": "The optional chaining on mainHostDestinationCalendar?.integration is redundant since you already check mainHostDestinationCalendar in the ternary condition.",
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+    "descricao": "When externalCalendarId is absent, updateEvent/deleteEvent look for a destination calendar whose externalId equals that absent value, so the lookup never matches and the configured destination calendar is no longer used.",
+    "textoGolden": "Logic error: when externalCalendarId is provided, you're searching for a calendar where externalId === externalCalendarId, but this will always fail since you're looking for a calendar that matches itself. Should likely find by credentialId or use different logic.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       254,
+       256
+      ],
+      "texto": "WHAT: The fallback `event.destinationCalendar?.find((cal) => cal.externalId === externalCalendarId)?.externalId` only executes when `externalCalendarId` is falsy, so it compares `cal.externalId` against `null`/`undefined` and matches nothing (the same wrong pattern is duplicated in deleteEvent at lines 315-317).\nWHY: When `updateEvent`/`deleteEvent` are called without an externalCalendarId, `selectedCalendar`/`calendarId` now resolves to `undefined` instead of the host's destination calendar externalId (old code fell back to `event.destinationCalendar?.externalId`), so the Google API is invoked with an undefined calendarId and the update/delete targets the wrong (or default) calendar or errors.\nHOW: Find the destination calendar for the current credential (e.g. by credentialId) rather than comparing `externalId` to the already-falsy `externalCalendarId`, or restore the single fallback `event.destinationCalendar?.[0]?.externalId`."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       254,
+       256
+      ],
+      "texto": "Dead computation in the fallback: the else branch runs only when externalCalendarId is falsy, yet it calls `event.destinationCalendar?.find((cal) => cal.externalId === externalCalendarId)`, comparing every cal.externalId to undefined. Nothing can match, so selectedCalendar is always undefined and the fallback that previously returned `event.destinationCalendar?.externalId` is lost. Match the intended criterion (destination calendar's own externalId/credentialId), not the already-falsy externalCalendarId."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       315,
+       317
+      ],
+      "texto": "Same dead-computation defect in deleteEvent: the else branch executes only when externalCalendarId is falsy, yet the predicate `(cal) => cal.externalId === externalCalendarId` compares against undefined and can never match, so calendarId falls through to \"primary\" and the event is deleted from the wrong calendar instead of the booking's destination calendar. Fix the predicate to use the destination calendar's externalId (or credentialId) rather than the falsy externalCalendarId."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#04",
+    "descricao": "The organization slug is now set only when team billing is enabled (inverted condition), so with billing both slug and requestedSlug are set and without billing neither is.",
+    "textoGolden": "Logic inversion in organization creation: The slug property is now conditionally set when IS_TEAM_BILLING_ENABLED is true, instead of when it's false as originally intended. This change, combined with requestedSlug still being set when IS_TEAM_BILLING_ENABLED is true, results in both properties being set when billing is enabled, and neither when disabled",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/organizations/create.handler.ts",
+      "lines": [
+       151,
+       151
+      ],
+      "texto": "Organization creation no longer assigns a slug when team billing is disabled, while requestedSlug is also omitted in that mode. New self-hosted organizations therefore have neither publication field, and publish.handler rejects them because requestedSlug is missing. Restore the non-billing slug assignment."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/organizations/create.handler.ts",
+      "lines": [
+       148,
+       152
+      ],
+      "texto": "WHAT: slug spread condition was inverted from ...(!IS_TEAM_BILLING_ENABLED && {slug}) to ...(IS_TEAM_BILLING_ENABLED ? {slug} : {}). WHY: organizations get slug when billing enabled and lose it when disabled, opposite of prior contract and breaking slug/requestedSlug pairing. HOW: restore negation for slug branch."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05",
+    "descricao": "Office365 (and Lark) createEvent ignore the new credentialId argument and always use the first destination calendar, so in collective bookings other hosts' credentials target the organizer's calendar instead of their own.",
+    "textoGolden": "The Calendar interface now requires createEvent(event, credentialId), but some implementations (e.g., Lark/Office365) still declare createEvent(event) only\u2014this breaks the interface contract (also applies to other locations in the PR).",
+    "comentarios": [
+     {
+      "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+      "lines": [
+       73,
+       76
+      ],
+      "texto": "Office365 creation always selects the first host's destination despite being invoked separately with each host's credential. A collective booking with distinct Office365 calendars sends the second host's token to the first host's calendar ID, causing failed or incorrectly targeted creation. Accept the credentialId supplied by CalendarManager and select the matching destination."
+     },
+     {
+      "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+      "lines": [
+       73,
+       76
+      ],
+      "texto": "Select the destination belonging to the current credential rather than always taking the first array entry. EventManager now calls createEvent once per destination with that destination's credential, while passing the full event array each time. In a collective booking with two Outlook hosts, the second host therefore attempts to insert into the first host's calendar using the second host's token, typically failing instead of creating the second calendar event. Accept the credentialId passed by CalendarManager and match the destination by that ID (or pass a destination-specific event)."
+     },
+     {
+      "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+      "lines": [
+       72,
+       76
+      ],
+      "texto": "Select the destination belonging to the credential passed by CalendarManager, rather than always selecting the first array element. EventManager now invokes creation for each collective host with the full destination array. A second Office365 host therefore attempts to write to the first host's calendar using its own token, causing creation to fail or target the wrong calendar; meanwhile the saved reference records the second host's externalId."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#06",
+    "descricao": "Claims updateAllCalendarEvents passes an undefined credential to updateEvent when reference.credentialId points to a credential that cannot be found.",
+    "textoGolden": "The `credential` may be undefined when passed to `updateEvent` if `reference.credentialId` is set but the credential is not found. This can lead to a runtime error when `updateEvent` is called with an undefined credential, which should be handled to prevent crashes.",
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+    "descricao": "The Google Meet fallback reads mainHostDestinationCalendar.integration without optional chaining, so a Meet booking with a null or empty destinationCalendar throws instead of falling back to Cal Video.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       119,
+       119
+      ],
+      "texto": "WHAT: `mainHostDestinationCalendar.integration` is dereferenced without optional chaining after destructuring `const [mainHostDestinationCalendar] = evt.destinationCalendar ?? []`.\nWHY: The previous code was `evt.destinationCalendar?.integration !== \"google_calendar\"`, which was null-safe; now when `destinationCalendar` is null/empty (e.g. handleNewBooking.ts:1063-1067 sets it to `null` when neither eventType nor organizer has one) and `evt.location === MeetLocationType`, destructuring yields `undefined` and `.integration` throws `TypeError: Cannot read properties of undefined`, crashing the booking creation flow.\nHOW: Use `mainHostDestinationCalendar?.integration !== \"google_calendar\"`."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       118,
+       119
+      ],
+      "texto": "`mainHostDestinationCalendar` can be `undefined` because `evt.destinationCalendar` may now be null or an empty array (callers such as handleNewBooking pass `: null` / `: []`). The old code used `evt.destinationCalendar?.integration`, but the new line dereferences `mainHostDestinationCalendar.integration` without optional chaining, throwing `TypeError: Cannot read properties of undefined (reading 'integration')` whenever `evt.location === MeetLocationType`. Use `mainHostDestinationCalendar?.integration !== \"google_calendar\"` to preserve the null-safe fallback."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       118,
+       119
+      ],
+      "texto": "The Meet-location fallback destructures `const [mainHostDestinationCalendar] = evt.destinationCalendar ?? []` and then reads `mainHostDestinationCalendar.integration` without optional chaining. When `destinationCalendar` is an empty array (which this PR now produces in many callers, e.g. handleCancelBooking.ts, the payment webhooks, confirm/editLocation/deleteCredential/requestReschedule handlers all set `[]` when there is no destination calendar), the destructured value is `undefined` and `.integration` throws `TypeError: Cannot read properties of undefined (reading 'integration')`, aborting event creation. Use `mainHostDestinationCalendar?.integration` to preserve the previous optional-chained behavior."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+    "descricao": "For collective events whose organizer has no destination calendar, destinationCalendar is null and the optional push drops all other hosts' destination calendars, so those hosts never get calendar events.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/bookings/lib/handleNewBooking.ts",
+      "lines": [
+       1077,
+       1078
+      ],
+      "texto": "WHAT: `evt.destinationCalendar?.push(...teamDestinationCalendars)` silently does nothing when `evt.destinationCalendar` is `null`.\nWHY: For a COLLECTIVE event where neither `eventType.destinationCalendar` nor `organizerUser.destinationCalendar` exists, the evt field is set to `null` (lines 1063-1067), so the collected `teamDestinationCalendars` of the other hosts are dropped and those hosts are never invited \u2014 defeating the multi-host support this PR adds.\nHOW: Initialize to an array (e.g. `evt.destinationCalendar ?? []` before pushing, or default the field to `[]` instead of `null`) so team destination calendars are always appended."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleNewBooking.ts",
+      "lines": [
+       1077,
+       1078
+      ],
+      "texto": "The optional push discards all collected team destinations when the organizer has no destination calendar. A collective booking with configured secondary hosts therefore creates none of their calendar events even though teamDestinationCalendars contains them. Initialize the array before appending the team destinations."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleNewBooking.ts",
+      "lines": [
+       1077,
+       1079
+      ],
+      "texto": "Initialize destinationCalendar to an array before appending collective hosts' destinations. When neither the event type nor organizer has a destination, it is set to null above, so optional push silently discards all the computed teamDestinationCalendars. Hosts with configured destination calendars consequently receive no calendar events."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#09",
+    "descricao": "Video booking references are now saved without their credentialId, so cancelling the booking can no longer find the video credential and the meeting is not deleted.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       169,
+       170
+      ],
+      "texto": "WHAT: `credentialId: isCalendarType ? result.credentialId : undefined` drops the previous non-calendar fallback `result.credentialId`.\nWHY: For non-calendar results (video events) `referencesToCreate` now stores `credentialId: undefined` where it previously stored `result.credentialId`, so the persisted video reference loses its credentialId; later code that looks the reference up by credentialId (e.g. handleCancelBooking.ts:491-502 deleting the video meeting, or EventManager.updateLocation) can no longer resolve the credential and the meeting is not cleaned up.\nHOW: Keep the fallback for non-calendar results: `credentialId: isCalendarType ? result.credentialId : result.credentialId` (i.e. just `result.credentialId` for both branches)."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       170,
+       170
+      ],
+      "texto": "The reference mapping discards credentialId for every video result. createMeeting returns the video credential ID, and handleCancelBooking only deletes a video meeting when its reference has that ID, so newly created video meetings are left behind on cancellation. Preserve result.credentialId for video results as well."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       170,
+       170
+      ],
+      "texto": "Retain result.credentialId for non-calendar references as well. The previous mapping saved the dedicated video integration's credential ID; this change unconditionally replaces it with undefined for video results, losing the association needed to identify the account that created the meeting during subsequent lifecycle operations."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#10",
+    "descricao": "createAllCalendarEvents and updateAllCalendarEvents fetch each missing host credential with a separate findUnique inside the loop instead of one batched query.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       341,
+       355
+      ],
+      "texto": "WHAT: The new `for (const destination of event.destinationCalendar)` loop performs a `prisma.credential.findUnique` on every destination whose credential is not found in the cached `this.calendarCredentials` (line 344); the same per-reference DB lookup was added in updateAllCalendarEvents at line 517.\nWHY: For collective bookings with multiple hosts this turns one in-memory lookup into up to N sequential database round-trips added to the booking-creation hot path, scaling with host count.\nHOW: Resolve all missing credential ids in a single batched query (`prisma.credential.findMany({ where: { id: { in: missingIds } } })`) before the loop and build a lookup map."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#12",
+    "descricao": "updateLocation stores externalCalendarId and credentialId from updateEvent's result, which never returns them, so calendar references rewritten on location edit lose their calendar and credential and later updates or cancellations misroute.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       208,
+       209
+      ],
+      "texto": "updateLocation now reads externalId and credentialId exclusively from results, but CalendarManager.updateEvent returns neither field. Calendar references produced by location editing consequently lose their calendar and credential routing information, breaking subsequent updates or cancellation, particularly for secondary collective hosts. Return those fields from updateEvent or preserve them from the corresponding booking reference."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#13",
+    "descricao": "Cancelling all remaining occurrences of a recurring collective booking deletes only the first calendar reference of each booking, repeated once per host, so the other hosts' events stay on their calendars.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       423,
+       424
+      ],
+      "texto": "The new per-reference loop runs the recurring-series deletion branch for every host, but that branch still iterates only bookingToDelete.user.credentials and selects the first calendar reference in each occurrence. Canceling all remaining collective occurrences repeatedly deletes the owner's events while leaving secondary hosts' events untouched. For each occurrence, delete the reference matching the current host credential using the resolved calendarCredential."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       449,
+       457
+      ],
+      "texto": "For cancel-all-remaining recurring collective bookings, delete each updated booking's reference matching the current outer reference/credential. The new outer loop iterates all calendar references, but this inner block still iterates only the organizer's credentials and takes the first calendar reference of each booking. Every outer iteration therefore repeats deletion of the first host's event, while the additional hosts' recurring events remain on their calendars after cancellation."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#14",
+    "descricao": "Google createEvent picks the target calendar only by matching credentialId, so destination calendars without a credentialId are ignored and events are created on the primary calendar instead.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       145,
+       154
+      ],
+      "texto": "createEvent now picks the target calendar only by matching credentialId. Destination calendars without a credentialId (handled by EventManager's integration-based branch) never match, so events are inserted into \"primary\" instead of the configured destination externalId as before."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#15",
+    "descricao": "For destination calendars without a credentialId, createEvent is called without the externalId, so the booking reference is stored with an undefined externalCalendarId.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       376,
+       381
+      ],
+      "texto": "In the no-credentialId branch createEvent(c, event) is called without externalId, so EventResult.externalId is undefined. The booking reference's externalCalendarId, which used to come from evt.destinationCalendar.externalId, is now not stored, which breaks later update/delete targeting. Pass destination.externalId."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       375,
+       381
+      ],
+      "texto": "In the branch for destinations without a credentialId, `createEvent(c, event)` is called without the externalId argument. CalendarManager.createEvent only returns `externalId` when it is passed in, and EventManager now stores `result.externalId` as externalCalendarId, so these booking references are saved with an undefined externalCalendarId. Pass `destination.externalId` as the third argument, so the producer returns what the consumer stores."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-01",
+    "descricao": "When cancelling a recurring booking with multiple calendar references, the recurring-event deletion over all remaining bookings and credentials runs once per reference, causing duplicate delete calls and errors.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-03",
+    "descricao": "loadUsers forwards raw Prisma error messages to the client in a 400 response, exposing internal model and query details.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#opa-01",
+    "descricao": "loadUsers throws a plain Error for an empty/invalid dynamicUserList, which the catch block converts into a generic 500 'Unable to load users', hiding a client input error behind a server error.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#opa-02",
+    "descricao": "Collective bookings now push every team member's DestinationCalendar row (externalId, credentialId, userId) into evt.destinationCalendar, and since evt is spread into the webhook payload these other members' calendar identifiers are sent to webhook subscribers.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#prod-01",
+    "descricao": "In Google createEvent, when no destination calendar matches the credentialId, the hangout-link events.patch is called with an undefined calendarId and fails, so the Meet link is not added to the event description.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#snloop-01",
+    "descricao": "In updateAllCalendarEvents the catch block builds an error `message` that is no longer logged or used after the PR removed console.error, leaving dead code.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "9966ec5a13e331659c3ea00981f9b11b0faf821f",
+  "base": "fd358e8a388939959369f08f616e29552cdaf96e",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     335,
+     338
+    ],
+    "texto": "WHAT: SimpleQueueProcessingStrategy.close()/terminate() shuts down the factory-owned FixedQueuePool shared across strategies. WHY: On rebalance Arroyo closes the old strategy and creates a new one reusing factory.queue_pool, but the pool workers/queues are already shut down so new submits raise queue.ShutDown and are acked without processing, causing message loss. HOW: Remove queue_pool.shutdown() from strategy close/terminate and let ResultsStrategyFactory.shutdown() own pool lifecycle, or give each strategy its own pool."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     49,
+     54
+    ],
+    "texto": "WHAT: _get_partition_lock reads/writes partition_locks dict without any global lock, so two threads adding a new partition can create two different Lock objects. WHY: Threads then guard add_offset/complete_offset/get_committable with different locks, breaking mutual exclusion and corrupting all_offsets/outstanding commit decisions. HOW: Guard lock creation with a global lock for partition_locks."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     127,
+     133
+    ],
+    "texto": "WHAT: OrderedQueueWorker loop condition while not self.shutdown exits immediately once shutdown is set, even with items still queued. WHY: FixedQueuePool.shutdown sets the flag before q.shutdown(immediate=False), so workers abandon drainable items whose offsets are then never completed or committed, losing work on clean shutdown. HOW: Loop until queue.ShutDown instead of checking the flag, or drain remaining items after flag is set."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     184,
+     186
+    ],
+    "texto": "WHAT: FixedQueuePool creates unbounded queue.Queue() and submit() does non-blocking put with no maxsize, pause, or block. WHY: Under backlog or a slow group the Kafka poll loop keeps enqueueing forever, growing memory without bound and contradicting the claimed natural backpressure, leading to OOM. HOW: Set maxsize and block/apply backpressure in submit/poll."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     83,
+     93
+    ],
+    "texto": "WHAT: get_committable_offsets iterates range(start, max_offset+1) covering every gap offset, plus min/max over the whole set each second. WHY: When head-of-line is blocked all_offsets grows unbounded and a sparse range (e.g. missing offsets, retention jumps) makes each 1s commit poll O(range) CPU, stalling the commit thread. HOW: Iterate only sorted known offsets instead of the full integer range."
+   },
+   {
+    "id": "S6",
+    "file": "tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py",
+    "lines": [
+     137,
+     173
+    ],
+    "texto": "Test claims concurrent processing but only asserts 6 items processed and 3 groups seen \u2014 a purely serial implementation satisfies both. It never measures overlap. If parallelism regressed to serial, this test would still pass."
+   },
+   {
+    "id": "S7",
+    "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+    "lines": [
+     1780,
+     1822
+    ],
+    "texto": "Test promises concurrent processing across subscriptions but only asserts call_count == 2 after draining queues. Serial processing also yields count 2, so breaking parallelism would still pass. Needs a concurrency probe such as blocking side_effect on one subscription while asserting the other completes."
+   },
+   {
+    "id": "S8",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     254,
+     254
+    ],
+    "texto": "Docstring guarantees 'Only commits offsets after successful processing' but OrderedQueueWorker.run calls offset_tracker.complete_offset in a finally block after catching Exception from result_processor, so failed items become committable and are committed. Fix prose or change worker to not complete on failure."
+   },
+   {
+    "id": "S9",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     253,
+     253
+    ],
+    "texto": "Docstring guarantees 'Natural backpressure when queues fill up' but FixedQueuePool creates unbounded queue.Queue() with no maxsize and submit uses non-blocking put, so queues never fill/block. Fix doc or add maxsize/blocking put."
+   },
+   {
+    "id": "S10",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     135,
+     149
+    ],
+    "texto": "Worker swallows result_processor exceptions then unconditionally completes the offset in finally, so get_committable_offsets/commit_loop commits past failures as if successful, losing failed results and violating the strategy guarantee of committing only after successful processing"
+   },
+   {
+    "id": "S11",
+    "file": "src/sentry/remote_subscriptions/consumers/result_consumer.py",
+    "lines": [
+     254,
+     259
+    ],
+    "texto": "SimpleQueueProcessingStrategy.submit passes FilteredPayload to decoder and expects None to skip+commit. The wired decoder partial(self.decode_payload,...) asserts not isinstance(payload, FilteredPayload), so filtered messages raise AssertionError into the generic except instead of the intended None fast-path (error log + reliance on exception fallback). Guard FilteredPayload before delegating to decode_payload."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#01",
+    "descricao": "Claims OffsetTracker.get_committable_offsets requires every integer offset to exist, so Kafka offset gaps permanently block commits for the partition and per-partition state is never cleared on rebalance.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       100,
+       105
+      ],
+      "texto": "Offsets are only tracked for messages that were submitted, and there is no partition revoke handling. Contiguity is checked with `range(start, max_offset+1)`, so any offset gap (compacted topics, transactional markers, or offsets filtered out upstream) permanently blocks commits for that partition. The `last_committed`, `all_offsets` and `outstanding` state is never cleared on rebalance, so stale state survives partition reassignment. Treat gaps as committable once all lower tracked offsets are complete, and clear per-partition state when partitions are revoked."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       86,
+       93
+      ],
+      "texto": "The commit scan assumes consecutive Kafka offsets and breaks at the first offset that is not in all_offsets. A permanent offset gap (compacted or transactional records) then blocks commits for that partition forever. Track the submitted offsets in sorted order and commit up to the highest offset below the lowest outstanding one, rather than requiring every integer in between to be present."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       86,
+       93
+      ],
+      "texto": "Determine the commit boundary from received offsets rather than requiring every integer in this range to exist. Kafka offsets need not be consecutive: if 100, 102 and 103 are delivered and completed, this scan stops at the nonexistent 101 even though there is no unfinished record. Conversely, after committing 100 and removing it, the next scan starts at 102 and commits past the gap, contradicting the added gap tests. Iterate received offsets in sorted order and stop at the first outstanding record; add a test covering legitimate skipped Kafka offsets across multiple commit cycles."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03",
+    "descricao": "OrderedQueueWorker marks a work item's offset complete in a finally block even when processing raised, so failed messages are committed and dropped, contradicting the documented guarantee of committing only after successful processing.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       144,
+       149
+      ],
+      "texto": "The worker marks the offset complete in the `finally` block even when `result_processor(...)` raises, so a message whose handling failed is reported as committable and its offset is committed (it will never be retried). This contradicts the strategy's own guarantee 'Only commits offsets after successful processing' and the new test `test_thread_queue_parallel_error_handling`, which asserts the partition is not committed after a failure. Only call `complete_offset` on the success path (or track failed offsets separately) so failures are not silently skipped."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       142,
+       149
+      ],
+      "texto": "The worker marks the offset complete in `finally` even when `result_processor` raised an exception, so a failed item's offset is reported as committable and gets committed by the commit loop. This contradicts the strategy's documented guarantee 'Only commits offsets after successful processing' and the contract asserted in test_results_consumer.py (test_thread_queue_parallel_error_handling, which expects the failed partition NOT to be committed): the failed message is committed past and never retried. Track success separately and only call `complete_offset` when processing succeeded (or make the failure explicit so the offset is withheld/retried)."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       144,
+       149
+      ],
+      "texto": "The failed item's offset is completed unconditionally in the `finally` block, so `complete_offset` runs even when `result_processor` raised. This breaks the class's documented guarantee ('Only commits offsets after successful processing', line 254): the commit loop then advances past a message that was never successfully processed, silently dropping it (and, per the PR's own test_thread_queue_parallel_error_handling, a commit is produced where none is expected). Only call `offset_tracker.complete_offset(...)` on the success path (i.e. after `result_processor` returns normally), or explicitly decide and document the at-most-once semantics; do not complete on the exception path."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#04",
+    "descricao": "test_thread_queue_parallel_error_handling's docstring says errors must not block commits for other messages, but the test asserts that nothing was committed, so it does not verify the behaviour it describes.",
+    "textoGolden": "The test test_thread_queue_parallel_error_handling has a docstring that doesn't match the test implementation.",
+    "comentarios": [
+     {
+      "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+      "lines": [
+       1911,
+       1922
+      ],
+      "texto": "The commit assertion contradicts the test's own docstring and cannot fail for the reason it claims. The docstring says \"errors in processing don't block offset commits for other messages\", but the body asserts `len(committed_offsets) == 0 or test_partition not in committed_offsets` \u2014 i.e. it passes only when nothing is committed. In queue_consumer.py ordered worker's `finally` calls `complete_offset` even after result_processor raises (lines 148-149), so offset 100 should be committable and offset 101 should advance the commit; if the whole commit path were removed (commits blocked entirely) the test would still pass. Assert the positive behaviour instead: e.g. that the failing message's offset was still completed so commits progressed (expect `committed_offsets[test_partition] == 102`, matching the follow-on offset of the successfully processed message)."
+     },
+     {
+      "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+      "lines": [
+       1874,
+       1924
+      ],
+      "texto": "test_thread_queue_parallel_error_handling claims errors don't block commits but asserts len(committed)==0 / not in, and waits only for total==0+sleep(0.2) while commit loop is 1.0s. It passes if commits are correctly made (checked before loop fires) and if commits are never made. Wait for commit condition and assert contiguous commit includes both offsets despite the exception."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#05",
+    "descricao": "The error-handling test asserts no commit happened after only a 0.2s sleep while the commit loop runs every second, so it passes without ever observing whether a failed offset gets committed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+      "lines": [
+       1915,
+       1922
+      ],
+      "texto": "The error-handling test can pass even when failed messages are committed. It waits for two processor calls, sleeps only 0.2 seconds, and asserts that no commit has happened, whereas _commit_loop waits 1 second. OrderedQueueWorker currently completes the failed offset in finally, so the unsafe commit can occur after this assertion. Synchronize with an actual commit-loop iteration before asserting that it cannot advance past the failed offset."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+    "descricao": "FixedQueuePool uses unbounded queues and the strategy never applies backpressure, so when workers fall behind the consumer keeps polling and queued work items grow memory without limit, contrary to the documented backpressure guarantee.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       184,
+       185
+      ],
+      "texto": "Each worker queue is created unbounded (queue.Queue() with no maxsize) although the class docstring promises 'Natural backpressure when queues fill up' and the strategy claims to guarantee backpressure. With no bound and no MessageRejected raised from submit(), a slow group continues to accumulate items in its queue while the consumer keeps polling, so memory grows without limit under a sustained backlog \u2014 the opposite of the intended protection. Fix: give the queues a maxsize and raise/return MessageRejected (or otherwise propagate backpressure to the caller) when a queue is full."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       246,
+       255
+      ],
+      "texto": "The `SimpleQueueProcessingStrategy` docstring promises \"Natural backpressure when queues fill up\", but the queues this strategy drives are unbounded: `FixedQueuePool` creates each one as `queue.Queue()` with no maxsize (line 185), and `submit()` puts items unconditionally. Nothing ever blocks, so no backpressure exists. Either bound the queues (pass a `maxsize` and handle `queue.Full` / block in `submit`) or correct the docstring so it does not advertise a guarantee the code does not provide."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       184,
+       185
+      ],
+      "texto": "The pool creates unbounded queues, while strategy submit always accepts messages and poll never applies backpressure. When a queue's worker is slow or ingestion exceeds processing capacity, queued WorkItems retain both decoded results and original Kafka messages without any limit, causing growing memory consumption and eventual consumer OOM. Bound queued/in-flight work and raise Arroyo MessageRejected when capacity is reached, ensuring that rejection is not swallowed by the generic submit exception handler."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10",
+    "descricao": "Graceful shutdown sets each worker's shutdown flag before draining, so workers stop with items still queued, and close() stops the commit thread first, so finished work is not committed and gets replayed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       231,
+       243
+      ],
+      "texto": "WHAT: FixedQueuePool.shutdown sets worker.shutdown=True while OrderedQueueWorker.run loops on while not self.shutdown, so workers exit without draining queued WorkItems even though queues are shut down with immediate=False. WHY: Graceful shutdown silently drops queued items and leaves their offsets in outstanding forever, causing reprocessing/duplicates and failing the claimed graceful-shutdown guarantee. HOW: Remove the shutdown-flag short-circuit and let workers drain until queue.ShutDown, e.g. loop unconditionally and break only on ShutDown."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       335,
+       345
+      ],
+      "texto": "close() stops the commit thread and shuts down workers before draining accepted work, and join() only repeats close() instead of waiting for processing and making a final commit. Pool shutdown sets worker.shutdown before workers can drain their queues, so assignment revocation abandons queued results and completed in-flight work is not finally committed, causing replay and allowing unfinished old work to overlap a new owner. Make close() stop acceptance without blocking, then have join() drain accepted work within its timeout and commit completed offsets before releasing workers."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       233,
+       238
+      ],
+      "texto": "Do not set worker.shutdown before draining the queues during graceful shutdown. If a worker is processing A while B is queued, shutdown sets the flag; after A finishes, the worker exits at `while not self.shutdown` without ever retrieving B. Calling queue.shutdown(immediate=False) does not override that loop condition. Drain accepted work before stopping workers, and keep committing available until that drain completes; currently close stops the commit thread before the workers as well, so even work finished during shutdown is not finally committed."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+    "descricao": "The strategy's close() shuts down the factory-owned shared queue pool, so after a partition rebalance the next strategy reuses a dead pool; submissions fail and the error handler marks their offsets complete, committing messages that were never processed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       335,
+       338
+      ],
+      "texto": "SimpleQueueProcessingStrategy.close() shuts down the FixedQueuePool, but that pool is a singleton owned by the factory (created once in ResultsStrategyFactory.__init__ and never recreated). Arroyo calls strategy.close() then join() on every assignment revocation/rebalance, and the factory's create_with_partitions is called again for the next assignment; the new strategy then reuses the already-shut-down queue_pool. Because q.shutdown(immediate=False) makes subsequent put() raise queue.ShutDown, submit()'s except branch (lines 317-325) swallows it and marks the offset complete, so after any rebalance every message is committed as processed without ever being handled \u2014 silent data loss. Fix: either let the factory own the pool lifecycle (don't shut it down from the strategy's close) and create a fresh pool per create_with_partitions, or reset/recreate factory.queue_pool when the strategy is closed."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       335,
+       342
+      ],
+      "texto": "WHAT: SimpleQueueProcessingStrategy.close/terminate shuts down the factory-owned shared FixedQueuePool. WHY: ResultsStrategyFactory creates one queue_pool and hands it to every strategy from create_with_partitions, so Arroyo rebalance (close old strategy, create new one reusing factory.queue_pool) reuses a dead pool with joined workers and shut-down queues, stalling all further processing. HOW: Make pool lifecycle owned only by the factory: strategy close should only stop its commit thread, not call queue_pool.shutdown()."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       335,
+       345
+      ],
+      "texto": "SimpleQueueProcessingStrategy.close(), terminate() and join() shut down the FixedQueuePool, but that pool is created once by ResultsStrategyFactory and shared by every strategy it creates. After a rebalance, Arroyo closes the old strategy and then calls create_with_partitions again, which reuses the dead pool. Messages then fail to enqueue, and the submit() exception handler marks them complete, so their offsets get committed without the messages being processed. The strategy should only stop its own commit thread. The pool should be shut down only by factory.shutdown(), or the pool should be created per strategy."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#12",
+    "descricao": "The strategy invokes Arroyo's commit callback from a background thread rather than from submit/poll on the consumer thread, so commits can race with polling and partition revocation on a non-thread-safe consumer.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       273,
+       291
+      ],
+      "texto": "`commit_function` is called from the background commit thread, but arroyo's commit callback is expected to be called from the main consumer thread, and the Kafka consumer is not thread-safe. Committing from another thread risks races with polling and with rebalances."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#15",
+    "descricao": "The WorkItem docstring says the original message is kept for offset tracking, but offset tracking only uses partition and offset and the message field is never used.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       24,
+       31
+      ],
+      "texto": "The `WorkItem` docstring says it \"includes the original message for offset tracking\", but the `message` field is never used for offset tracking \u2014 `OffsetTracker` and the commit loop only ever read `partition`/`offset`, and `submit()` even re-derives the offset from `message.value` rather than from the stored `message`. Update the docstring to describe what the field is actually for (or remove the unused field) so it does not misdescribe the dataclass contract."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       24,
+       31
+      ],
+      "texto": "`WorkItem.message` is declared with the comment 'includes the original message for offset tracking' and is populated in `SimpleQueueProcessingStrategy.submit`, but nothing ever reads it \u2014 offset tracking uses the separate `partition`/`offset` fields. The declared purpose does not match any actual use, so the field (and the extra reference to each Kafka message it keeps alive) is dead; either use it for offset tracking or remove it."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#16",
+    "descricao": "The tests named for concurrent processing across groups only check that all items were processed and all groups seen, so a fully serial implementation would pass and concurrency is never verified.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py",
+      "lines": [
+       137,
+       173
+      ],
+      "texto": "Test named/docstringed \"Test that different groups are processed concurrently\" never verifies concurrency. The body only asserts all 6 items ran and that three distinct group numbers were seen \u2014 a single worker draining one queue, or a fully serial FixedQueuePool, would satisfy both assertions. Either measure actual overlap (e.g. have result_processor block on a barrier/event until all three groups have entered, and fail on timeout) or drop the concurrency claim from the name/docstring."
+     },
+     {
+      "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+      "lines": [
+       1780,
+       1822
+      ],
+      "texto": "test_thread_queue_parallel_concurrent_subscriptions claims to verify that different subscriptions are processed concurrently, but the only assertion is `mock_processor_call.call_count == 2`, which a strictly serial implementation also satisfies. Add a real concurrency signal (e.g. a barrier in the mocked processor that requires both calls to be in flight simultaneously before either returns), otherwise this test cannot detect loss of parallelism."
+     },
+     {
+      "file": "tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py",
+      "lines": [
+       137,
+       173
+      ],
+      "texto": "test_concurrent_processing_across_groups claims concurrent processing but only asserts 6 items processed and 3 groups seen. A serial/single-queue implementation would still pass. Verify overlap (blocking processor + timing/thread IDs) or remove concurrency claim."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#17",
+    "descricao": "The strategy ordering test submits identical messages and only checks the count processed, so it cannot detect out-of-order processing within a group.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py",
+      "lines": [
+       302,
+       312
+      ],
+      "texto": "The strategy ordering test submits five identical decoded results for sub1 and only asserts their count. Processing them in reverse order would still pass. Give each message a distinguishable sequence value and assert the exact processed sequence, so this tests ordering through SimpleQueueProcessingStrategy rather than only delivery."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#18",
+    "descricao": "The graceful-shutdown test only asserts that the factory cleared its queue_pool reference, which shutdown always does, so it does not verify that pending work is drained or workers stop.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+      "lines": [
+       2004,
+       2005
+      ],
+      "texto": "This does not verify graceful shutdown: factory.shutdown unconditionally clears queue_pool after calling pool.shutdown, so the assertion passes even if pending messages are abandoned or worker threads remain alive. Retain the pool reference and assert that all submitted work completed and its workers stopped; the current worker shutdown flag can stop workers without draining their queues."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#20",
+    "descricao": "The polling bound max_wait = 50 is repeated as a magic number across the thread-queue-parallel tests instead of a named constant.",
+    "textoGolden": "The magic number 50 for max_wait is used repeatedly throughout the tests. Consider extracting this as a named constant to improve maintainability.",
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-01",
+    "descricao": "OffsetTracker.get_committable_offsets starts scanning at max(last_committed + 1, min_offset); after mark_committed prunes offsets, a gap is skipped on the next cycle, so offsets are committed past a missing offset, contrary to the 'highest contiguous offset' guarantee.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-02",
+    "descricao": "The test's wait loop stops at the first recorded commit but asserts the committed offset is exactly 105, so a commit fired mid-processing can record a lower offset and make the test flaky.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#oph-01",
+    "descricao": "The per-worker queue_depth gauge is tagged only with identifier, so all queues report into one series and the metric shows whichever queue reported last.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "6669a2d94d76eea3b99b8c476d12b1eb66726b07",
+  "base": "56abd247e1829cb6de82dfcc8ce04deb5f0d1e91",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/controllers/topics_controller.rb",
+    "lines": [
+     105,
+     108
+    ],
+    "texto": "WHAT: TopicUser.find_by can return nil when the user has no row, then tu.notification_level dereferences nil. WHY: Crashes the new GET unsubscribe endpoint with NoMethodError (500) for the common regular/default state instead of unsubscribing. HOW: Handle nil (e.g. TopicUser.get/change with default) and nil notification_level (COALESCE to regular) before comparing/saving."
+   },
+   {
+    "id": "S2",
+    "file": "config/routes.rb",
+    "lines": [
+     440,
+     441
+    ],
+    "texto": "WHAT: Per-topic unsubscribe mutates notification_level via GET (t/:slug/:topic_id/unsubscribe -> topics#unsubscribe with tu.save!). WHY: GET is exempt from CSRF protection, so an attacker can force a logged-in victim's browser (img tag, prefetch, crawler) to mute/downgrade topics without consent. HOW: Make the mutation POST/PUT/DELETE with CSRF token and keep GET as confirmation page only."
+   },
+   {
+    "id": "S3",
+    "file": "config/locales/server.en.yml",
+    "lines": [
+     1852,
+     1855
+    ],
+    "texto": "WHAT: unsubscribe_link now interpolates %{unsubscribe_url} but MessageBuilder does not guarantee it is present when add_unsubscribe_link is true. WHY: Any email built with add_unsubscribe_link:true without unsubscribe_url raises I18n::MissingInterpolationArgument and fails to send. HOW: Default unsubscribe_url to user_preferences_url or guard interpolation in MessageBuilder html_part/body."
+   },
+   {
+    "id": "S4",
+    "file": "app/controllers/topics_controller.rb",
+    "lines": [
+     105,
+     108
+    ],
+    "texto": "TopicUser.find_by returns nil when no row exists, so tu.notification_level raises NoMethodError and request 500s. Ensure record exists before dereferencing."
+   },
+   {
+    "id": "S5",
+    "file": "spec/components/email/message_builder_spec.rb",
+    "lines": [
+     167,
+     180
+    ],
+    "texto": "The PR adds unsubscribe_url to the fixture but no assertion checks it. Both tests (List-Unsubscribe header present, user_preferences_url in body) pass even if unsubscribe_url is dropped or not rendered, so breakage of the new per-topic unsubscribe link is undetected. Add an assertion that the body/header contains the supplied unsubscribe_url."
+   },
+   {
+    "id": "S6",
+    "file": "app/controllers/topics_controller.rb",
+    "lines": [
+     105,
+     108
+    ],
+    "texto": "TopicUser.find_by can return nil (row created lazily) and notification_level can be nil, so tu.notification_level raises NoMethodError and the unsubscribe link 500s. Guard the nil cases before comparing levels."
+   },
+   {
+    "id": "S7",
+    "file": "app/models/topic.rb",
+    "lines": [
+     719,
+     721
+    ],
+    "texto": "Topic#unsubscribe_url returns a site-relative path, but user_notifications.rb passes it as unsubscribe_url into emails where server.en.yml renders it as [click here](%{unsubscribe_url}). Email clients need an absolute URL (compare user_preferences_url which includes Discourse.base_url). Prefix with Discourse.base_url or build the absolute URL at the mailer call site."
+   },
+   {
+    "id": "S8",
+    "file": "app/assets/javascripts/discourse/templates/topic/unsubscribe.hbs",
+    "lines": [
+     2,
+     4
+    ],
+    "texto": "Triple-brace {{{...}}} disables escaping for a string built from I18n topic.unsubscribe.stop_notifications interpolated with model.fancyTitle. Neighbouring line uses {{i18n ...}} (escaped). If the title contains HTML, it is injected into the page. Use double braces or escape the title before interpolation."
+   },
+   {
+    "id": "S9",
+    "file": "app/assets/javascripts/discourse/controllers/topic-unsubscribe.js.es6",
+    "lines": [
+     5,
+     7
+    ],
+    "texto": "Identifier stopNotificiationsText misspells 'Notifications' (extra 'i'), disagreeing with locale key stop_notifications and user-visible prose. Rename to stopNotificationsText in controller and template so the name matches the documented intent."
+   },
+   {
+    "id": "S10",
+    "file": "config/locales/server.en.yml",
+    "lines": [
+     1852,
+     1855
+    ],
+    "texto": "unsubscribe_link gained required %{unsubscribe_url} but Email::MessageBuilder just forwards template_args to I18n.t without a default, so any existing add_unsubscribe_link:true caller that does not pass unsubscribe_url now raises MissingInterpolation (spec itself had to be fixed). Provide a fallback or keep old template working when unsubscribe_url is absent."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
+    "descricao": "The new unsubscribe endpoint changes the user's topic notification level on a plain GET request, so a third-party page can trigger it for a logged-in user without any CSRF token.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/topics_controller.rb",
+      "lines": [
+       98,
+       115
+      ],
+      "texto": "The unsubscribe endpoint mutates notification_level (tu.save!) via a plain GET route (config/routes.rb:440-441) with skip_before_filter :check_xhr, authenticating only through the session cookie. There is no CSRF token (Rails forgery protection does not cover GET) and no capability token, unlike EmailController#unsubscribe which authorizes via DigestUnsubscribeKey. Any third-party page can embed <img src=\"https://forum/t/<id>/unsubscribe\"> and, when a logged-in user loads it, silently change that user's notification_level for the topic. Require a per-user capability token (like the digest unsubscribe key) in the URL, or perform the state change from an authenticated non-GET request that carries the CSRF token."
+     },
+     {
+      "file": "config/routes.rb",
+      "lines": [
+       440,
+       441
+      ],
+      "texto": "The new GET routes mutate the authenticated user's notification preferences without CSRF verification. An attacker can navigate a logged-in user's browser to a known topic unsubscribe URL and reduce or mute its notifications, because Rails excludes GET from forgery-token checks and unsubscribe explicitly skips check_xhr. Make GET render a confirmation page and perform the preference change through a CSRF-protected POST or PUT."
+     },
+     {
+      "file": "app/controllers/topics_controller.rb",
+      "lines": [
+       98,
+       113
+      ],
+      "texto": "WHAT: The unsubscribe state change (lowering/muting notification_level + save!) runs on a GET route (config/routes.rb GET t/:slug/:topic_id/unsubscribe). WHY: An attacker can forge the URL as an image/prefetch/link to silently change a victim's notification state with no CSRF token since GETs are not CSRF-protected. HOW: Make the mutation a PUT/POST with CSRF protection or require an explicit confirmation parameter/token instead of mutating on page view."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+    "descricao": "TopicsController#unsubscribe dereferences TopicUser.find_by without handling a missing row, so users with no topic_users record get a NoMethodError/500 instead of being unsubscribed.",
+    "textoGolden": "logic: Potential nil pointer exception - if no TopicUser record exists, tu will be nil and calling methods on it will crash",
+    "comentarios": [
+     {
+      "file": "app/controllers/topics_controller.rb",
+      "lines": [
+       105,
+       107
+      ],
+      "texto": "tu is not checked for nil before use. TopicUser.find_by(user_id: current_user.id, topic_id: params[:topic_id]) returns nil whenever the logged-in user has no topic_users row for that topic (the same lookup TopicUser.get performs), and the next line dereferences tu.notification_level, raising NoMethodError and returning a 500. Because the route is only gated by ensure_logged_in, any logged-in user can hit /t/:topic_id/unsubscribe(.json) for a topic they never opened and trigger the crash. Guard the lookup, e.g. `tu = TopicUser.find_by(...); return render json: {success: false} unless tu` (or build/return early) before reading notification_level."
+     },
+     {
+      "file": "app/controllers/topics_controller.rb",
+      "lines": [
+       105,
+       113
+      ],
+      "texto": "`TopicUser.find_by(...)` can return nil (e.g. the user clicks the emailed unsubscribe link for a topic for which no TopicUser row was ever created), and the very next line dereferences it (`tu.notification_level > ...`, then `tu.save!`). This raises NoMethodError on nil and the unsubscribe request 500s. Guard the nil case (e.g. return early or use `TopicUser.change`/`find_or_create_by`) before reading/writing notification_level."
+     },
+     {
+      "file": "app/controllers/topics_controller.rb",
+      "lines": [
+       105,
+       113
+      ],
+      "texto": "`tu = TopicUser.find_by(user_id: current_user.id, topic_id: params[:topic_id])` can return nil (find_by yields nil when no row exists), but the next lines dereference it unconditionally (`tu.notification_level`, `tu.save!`). Since the new unsubscribe routes are public GET endpoints, any logged-in user visiting /t/:slug/:topic_id/unsubscribe for a topic they have never tracked will trigger a NoMethodError and a 500 instead of a sane response. Guard the nil case (e.g. create/skip or redirect) before reading notification_level."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#03",
+    "descricao": "The message builder spec passes unsubscribe_url in the fixture but never asserts the per-topic unsubscribe link appears in the email.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "spec/components/email/message_builder_spec.rb",
+      "lines": [
+       169,
+       180
+      ],
+      "texto": "The `unsubscribe_url` added to the `message_with_unsubscribe` fixture is never asserted. The two tests only check that the List-Unsubscribe header `be_present` and that the body matches `user_preferences_url`; neither references `unsubscribe_url`. So they would still pass if the topic-specific unsubscribe URL this PR introduces were dropped or wired to the wrong value. Add an assertion (e.g. that `message_with_unsubscribe.body` matches `/t/1234/unsubscribe`, and that the List-Unsubscribe header points at the topic unsubscribe URL) so the new behaviour is actually covered."
+     },
+     {
+      "file": "spec/components/email/message_builder_spec.rb",
+      "lines": [
+       169,
+       172
+      ],
+      "texto": "The fixture now passes unsubscribe_url, but no assertion reads it. The tests only check that the List-Unsubscribe header is present and that the body contains user_preferences_url, so they pass if the topic unsubscribe link is removed or broken. Add an assertion that the body includes \"/t/1234/unsubscribe\"."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#08",
+    "descricao": "The unsubscribe confirmation says the user will stop receiving notifications for the topic, but watching/tracking users are only moved to regular, which still sends mention/reply notifications.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "config/locales/client.en.yml",
+      "lines": [
+       985,
+       985
+      ],
+      "texto": "The confirmation promises that the user will stop receiving notifications for this topic, but TopicsController#unsubscribe sets watching/tracking users to regular, not muted. Regular still allows mention/reply notifications, so this confirmation (and the corresponding promise in the new email link text) overstates what clicking the link accomplished. Describe stopping notifications for every new post, or make the confirmation conditional on the resulting notification level so only muted users are told that all topic notifications have stopped."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#09",
+    "descricao": "Unsubscribe saves the new notification level without setting notifications_reason_id, so auto-tracked topics are promoted back to tracking on the next read, undoing the unsubscribe.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/topics_controller.rb",
+      "lines": [
+       113,
+       113
+      ],
+      "texto": "Saving the notification level directly leaves notifications_reason_id unchanged instead of recording an explicit user choice. For automatically tracked topics with a null reason, TopicUser.update_last_read promotes the row back to tracking when the reading threshold is exceeded, undoing the unsubscribe on the next read. Persist the change through TopicUser.change so notifications_reason_id and notifications_changed_at are set consistently with set_notifications."
+     },
+     {
+      "file": "app/controllers/topics_controller.rb",
+      "lines": [
+       113,
+       113
+      ],
+      "texto": "Saving the notification level directly bypasses the explicit-user-change metadata set by TopicUser.change. In particular, a topic_user with notifications_reason_id == nil remains eligible for TopicUser.auto_track, which checks that field and can promote the topic back to tracking after the user unsubscribes. Use the notification-change helper (or set its user-change reason and timestamp consistently) so the unsubscribe is retained as an explicit user preference."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#10",
+    "descricao": "Claims the client unsubscribe route never performs the unsubscribe when entered through an in-app transition.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/discourse/routes/topic-unsubscribe.js.es6",
+      "lines": [
+       5,
+       8
+      ],
+      "texto": "The client unsubscribe route only loads the ordinary topic view and never performs the unsubscribe operation. When entered through an in-app transition rather than a full server navigation, PostStream.loadTopicView requests /t/:id.json (or consumes preload data), so the page claims notifications will stop while the persisted notification level remains unchanged. Ensure this entry path executes the unsubscribe operation before showing confirmation."
+     },
+     {
+      "file": "app/assets/javascripts/discourse/routes/topic-unsubscribe.js.es6",
+      "lines": [
+       4,
+       9
+      ],
+      "texto": "The client route loads the topic but never invokes the unsubscribe action. Notification levels are changed only by TopicsController#unsubscribe, so navigating to this route inside the Ember application can display \u201cYou will stop receiving notifications\u201d without changing the subscription. Explicitly perform the unsubscribe operation on client-side entry rather than relying on the initial HTML request to have done it."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#11",
+    "descricao": "The property name stopNotificiationsText is misspelled (should be stopNotificationsText).",
+    "textoGolden": "Typo in property name: 'stopNotificiationsText' should be 'stopNotificationsText' (missing 'n' in 'Notifications')",
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#oph-01",
+    "descricao": "The topic unsubscribe GET endpoint is not idempotent: each visit steps the notification level down again, so reloading the link moves a topic from regular to muted.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "async-import-of-the-appstore-packages-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "820d7fa87e0c824c5dee8082a33efadb1a2566f7",
+  "base": "ba9688a04a8398c9a8332ee7061bfae2f2efd524",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/core/CalendarManager.ts",
+    "lines": [
+     23,
+     30
+    ],
+    "texto": "WHAT: getCalendarCredentials calls async getCalendar without await, storing a Promise in the calendar field while remaining a sync function. WHY: Any caller other than the patched getConnectedCalendars that uses calendar.listCalendars/createEvent directly gets a Promise object, causing runtime TypeError and broken calendar listing/booking. HOW: Make getCalendarCredentials async and await getCalendar (Promise.all) and update all callers to await it."
+   },
+   {
+    "id": "S2",
+    "file": "packages/trpc/server/routers/viewer/bookings.tsx",
+    "lines": [
+     553,
+     557
+    ],
+    "texto": "WHAT: bookingRefsFiltered.forEach(async ...) never awaits the async callbacks so calendar.deleteEvent promises are fire-and-forget. WHY: Reschedule proceeds to send emails without deleting old calendar/video events, leaving stale events and unhandled rejections that the surrounding code never catches. HOW: Replace forEach with await Promise.all(...map(async ...)) or for...of with await."
+   },
+   {
+    "id": "S3",
+    "file": "packages/app-store/vital/lib/reschedule.ts",
+    "lines": [
+     125,
+     129
+    ],
+    "texto": "WHAT: bookingRefsFiltered.forEach(async ...) does not await deleteEvent/deleteMeeting promises and try/catch around forEach cannot catch async errors. WHY: Old calendar/video events are not reliably deleted on reschedule and failures become unhandled rejections instead of logged errors. HOW: Use await Promise.all with map or for...of with await inside the try block."
+   },
+   {
+    "id": "S4",
+    "file": "packages/app-store/wipemycalother/lib/reschedule.ts",
+    "lines": [
+     125,
+     129
+    ],
+    "texto": "WHAT: bookingRefsFiltered.forEach(async ...) does not await deleteEvent/deleteMeeting promises and try/catch cannot catch async errors. WHY: Old calendar/video events are not reliably deleted on reschedule and failures become unhandled rejections. HOW: Use await Promise.all with map or for...of with await inside the try block."
+   },
+   {
+    "id": "S5",
+    "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+    "lines": [
+     458,
+     462
+    ],
+    "texto": "WHAT: Recurring-event cancellation uses .forEach(async ...) that pushes into apiDeletes asynchronously after the outer flow already proceeds to await apiDeletes. WHY: Recurring calendar deleteEvent calls are skipped/late, leaving orphan events on provider calendars. HOW: Replace forEach with for...of with await or collect promises via map + Promise.all before pushing to apiDeletes."
+   },
+   {
+    "id": "S6",
+    "file": "packages/app-store/vital/lib/reschedule.ts",
+    "lines": [
+     124,
+     132
+    ],
+    "texto": "forEach with async callback discards promises: outer try/catch cannot catch failures and reschedule does not wait for deleteEvent. Use await Promise.all with map or for...of with await."
+   },
+   {
+    "id": "S7",
+    "file": "packages/app-store/wipemycalother/lib/reschedule.ts",
+    "lines": [
+     124,
+     132
+    ],
+    "texto": "forEach with async callback discards promises: outer try/catch cannot catch failures and reschedule does not wait for deleteEvent. Use await Promise.all with map or for...of with await."
+   },
+   {
+    "id": "S8",
+    "file": "packages/trpc/server/routers/viewer/bookings.tsx",
+    "lines": [
+     550,
+     559
+    ],
+    "texto": "forEach with async callback is not awaited, so deleteEvent/deleteMeeting promises are lost and errors become unhandled rejections. Use await Promise.all with map or for...of with await."
+   },
+   {
+    "id": "S9",
+    "file": "packages/core/CalendarManager.ts",
+    "lines": [
+     28,
+     33
+    ],
+    "texto": "getCalendar() is now async (Promise<Calendar|null>) but getCalendarCredentials still calls it without await, so calendar field is a Promise, not a Calendar. Make getCalendarCredentials async and await getCalendar (and await it at callers)."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "async-import-of-the-appstore-packages-cal-com#02",
+    "descricao": "Async callbacks passed to forEach after getCalendar became async are never awaited, so calendar and video cancellations run fire-and-forget, may not finish, and their errors escape the surrounding try/catch as unhandled rejections.",
+    "textoGolden": "The code uses forEach with async callbacks, which causes asynchronous operations (e.g., calendar/video event deletions, payment refunds) to run concurrently without being awaited. This 'fire-and-forget' behavior leads to unhandled promise rejections, race conditions, and incomplete cleanup, as surrounding try-catch blocks cannot properly handle errors from these unawaited promises. Replace forEach with for...of loops or Promise.all() with map() to ensure proper sequential execution and error handling.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/vital/lib/reschedule.ts",
+      "lines": [
+       125,
+       128
+      ],
+      "texto": "The async forEach callback moves calendar factory exceptions outside the surrounding try/catch because forEach discards its returned promise. An invalid encrypted Exchange credential throws during CalendarService construction, now producing an unhandled rejection while Reschedule continues and returns success instead of logging the error; the identical regression occurs in wipemycalother/lib/reschedule.ts. Await Promise.all over bookingRefsFiltered.map(async ...) inside the try block, or use an awaited for...of loop, so factory and deletion failures reach the catch."
+     },
+     {
+      "file": "packages/app-store/vital/lib/reschedule.ts",
+      "lines": [
+       125,
+       128
+      ],
+      "texto": "The new async forEach callback is not awaited. If getCalendar rejects (for example, the dynamically imported calendar module fails to load or its service constructor throws), the callback produces a rejected promise that forEach discards; the surrounding try/catch cannot catch it. Previously a synchronous getCalendar failure reached that catch. Await Promise.all(bookingRefsFiltered.map(async ...)) or use an awaited for...of loop so these failures remain handled and calendar cleanup completes before rescheduling continues. Apply the same fix to the equivalent changed loop in wipemycalother/lib/reschedule.ts."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       458,
+       470
+      ],
+      "texto": "WHAT: credentials.filter(...).forEach(async (credential) => { await getCalendar; apiDeletes.push(...) }) pushes to apiDeletes asynchronously after outer code consumes it. WHY: outer apiDeletes is awaited elsewhere while async callbacks have not yet pushed, so recurring-event deletions are lost/partial and errors are unobserved. HOW: replace with for...of with await or collect promises via map + await Promise.all."
+     }
+    ]
+   },
+   {
+    "issueId": "async-import-of-the-appstore-packages-cal-com#sncc-01",
+    "descricao": "Each import(...) in the appStore object literal runs when app-store/index.ts is imported, so all integrations still load at startup instead of lazily, while every entry becomes a promise.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feature-automatically-downsize-large-images-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "ffbaf8c54269df2ce510de91245760fddce09896",
+  "base": "3f71fa15c93bb0b751bb92abae1b5dc9a21bd4ca",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     145,
+     151
+    ],
+    "texto": "WHAT: Second `self.downsize(from,to,dimensions)` redefinition overwrites the 4-arg `self.downsize(from,to,max_width,max_height)` so the first is dead. WHY: Existing caller `ResizeEmoji#execute` calls `OptimizedImage.downsize(path,path,100,100,opts)` with 4 positionals and now raises ArgumentError (wrong number of arguments), breaking emoji resize. HOW: Keep one signature (e.g. splat/optional) or update `resize_emoji.rb` to `downsize(path,path,\"100x100\",opts)`."
+   },
+   {
+    "id": "S2",
+    "file": "app/controllers/uploads_controller.rb",
+    "lines": [
+     64,
+     72
+    ],
+    "texto": "WHAT: Loop condition and `Upload.create_for` reuse cached `tempfile.size` after `convert` rewrites `tempfile.path` in place. WHY: File replacement does not update the open Tempfile descriptor size, so the loop never observes shrinkage (always runs 5 converts) and the upload is validated/stored with the old oversized size, failing validation that should now pass. HOW: Re-stat via `File.size(tempfile.path)` and check `downsize` return value before retrying."
+   },
+   {
+    "id": "S3",
+    "file": "app/controllers/uploads_controller.rb",
+    "lines": [
+     55,
+     55
+    ],
+    "texto": "WHAT: API URL download limit changed from `SiteSetting.max_image_size_kb` to hardcoded `10.megabytes`. WHY: Attacker via API can force server-side fetch up to 10MB even when admin configured a much lower limit, amplifying bandwidth/disk usage and feeding the 5x ImageMagick loop for DoS. HOW: Restore setting-based cap or use `min(10.megabytes, setting)` if a transitional grace is needed."
+   },
+   {
+    "id": "S4",
+    "file": "app/controllers/uploads_controller.rb",
+    "lines": [
+     65,
+     69
+    ],
+    "texto": "WHAT: Up to 5 synchronous `convert`/`gifsicle` invocations run inside `create_upload` request path for every oversized image. WHY: Each convert is CPU-heavy and blocks the Rails worker, so concurrent large-image uploads exhaust workers/CPU and cause timeouts. HOW: Downsize once and defer remainder to background job if still oversized, with timeout/limit."
+   },
+   {
+    "id": "S5",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     145,
+     151
+    ],
+    "texto": "Two self.downsize methods are defined back-to-back; Ruby keeps only the last, so the (from,to,max_width,max_height) form is lost and any caller using it raises ArgumentError (wrong number of arguments). Keep a single method that accepts both arities or rename the new dimensions-based helper."
+   },
+   {
+    "id": "S6",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     145,
+     151
+    ],
+    "texto": "Two `self.downsize` methods are defined in the same scope; Ruby keeps only the second, so the 4-arg (max_width/max_height) version can never execute and existing 4-arg callers get wrong arity/opts mapping. Merge into one variadic method that accepts either a single dimensions string (e.g. \"80%\") or width+height."
+   },
+   {
+    "id": "S7",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     145,
+     151
+    ],
+    "texto": "Second downsize(from,to,dimensions) overwrites first downsize(from,to,max_width,max_height) \u2014 Ruby has no overloading, so legacy 4-arg callers now mis-bind max_height into opts and fail. Keep one method supporting both shapes."
+   },
+   {
+    "id": "S8",
+    "file": "app/controllers/uploads_controller.rb",
+    "lines": [
+     63,
+     70
+    ],
+    "texto": "Producer/consumer mismatch: uploads_controller passes \"80%\" as dimensions to OptimizedImage.downsize, while optimized_image builds/forwards explicit \"WxH\" geometry (\"#{width}x#{height}\") to downsize_instructions/convert. A bare percentage is a different ImageMagick geometry premise and will not satisfy the WxH contract, causing failed/wrong resize while the loop ignores the return value and proceeds with an oversized file."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#01",
+    "descricao": "downsize is defined twice in OptimizedImage; the new (from, to, dimensions, opts) version overrides the (max_width, max_height) one, so existing callers such as ResizeEmoji that pass width and height now raise ArgumentError.",
+    "textoGolden": "The downsize method is defined twice. The second definition, which expects a single dimensions string parameter, overrides the first, which expected separate max_width and max_height parameters. This makes the original method unreachable and breaks existing code that calls it with separate width and height arguments.",
+    "comentarios": [
+     {
+      "file": "app/models/optimized_image.rb",
+      "lines": [
+       149,
+       151
+      ],
+      "texto": "WHAT: A second `def self.downsize(from, to, dimensions, opts={})` is defined that overrides the existing `downsize(from, to, max_width, max_height, opts={})` at lines 145-147. WHY: Ruby uses the last definition, so the effective downsize now only accepts 3-4 args, and the existing caller app/jobs/regular/resize_emoji.rb:14 (`OptimizedImage.downsize(path, path, 100, 100, opts)`) passes 5 args and raises ArgumentError (wrong number of arguments, given 5, expected 3..4), breaking emoji resizing. HOW: Remove the duplicate; keep a single downsize method whose signature matches all callers (the 4-arg uploads_controller call `downsize(path, path, \"80%\", allow_animation: ...)` and the 5-arg ResizeEmoji call), or rename one of them."
+     },
+     {
+      "file": "app/models/optimized_image.rb",
+      "lines": [
+       145,
+       151
+      ],
+      "texto": "`downsize` is defined twice: the original 5-param form `downsize(from, to, max_width, max_height, opts)` at lines 145-147 and the new 4-param form `downsize(from, to, dimensions, opts)` at lines 149-151. Ruby keeps only the last definition, so the effective signature is now 4 params and the 5-param version is dead code. The pre-existing consumer app/jobs/regular/resize_emoji.rb:14 still calls `OptimizedImage.downsize(path, path, 100, 100, opts)` with 5 positional args, which now raises ArgumentError on every emoji resize. Either update that caller to the new `dimensions` form or remove the redundant override so the old signature keeps working."
+     },
+     {
+      "file": "app/models/optimized_image.rb",
+      "lines": [
+       145,
+       151
+      ],
+      "texto": "`self.downsize` is defined twice in the same class scope (line 145 `(from, to, max_width, max_height, opts={})` and the new line 149 `(from, to, dimensions, opts={})`). Ruby keeps only the last definition, so the 4-argument version is dead and unreachable. The existing caller `OptimizedImage.downsize(path, path, 100, 100, opts)` in app/jobs/regular/resize_emoji.rb:14 passes 5 arguments and will now raise ArgumentError (expected 3..4). Remove the duplicate definition (keep only the `dimensions`-based one, or convert resize_emoji's call), otherwise emoji resizing breaks."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#02",
+    "descricao": "The client-side upload size check hardcodes 10 MB instead of the per-type max_<type>_size_kb setting, so attachment limits diverge from the server: larger allowed attachments are blocked and smaller limits are only enforced server-side.",
+    "textoGolden": "Hardcoding maxSizeKB = 10 * 1024 ignores Discourse.SiteSettings['max_' + type + '_size_kb'], so the client-side limit can diverge from server-side and per-type settings (also applies to the 413 handler below).",
+    "comentarios": [
+     {
+      "file": "utilities.js",
+      "lines": [
+       179,
+       249
+      ],
+      "texto": "Hardcoded max size literal 10 * 1024 replaces site-setting-derived max size. Behavioral concern outside assigned class."
+     },
+     {
+      "file": "app/assets/javascripts/discourse/lib/utilities.js",
+      "lines": [
+       182,
+       182
+      ],
+      "texto": "The fixed 10 MB client limit is applied to attachments as well as images, replacing max_attachment_size_kb. Sites configured to allow attachments larger than 10 MB can no longer upload those valid files through the composer, although UploadValidator still permits them. Apply the new input ceiling only to images and retain the configured attachment limit."
+     },
+     {
+      "file": "app/assets/javascripts/discourse/lib/utilities.js",
+      "lines": [
+       180,
+       184
+      ],
+      "texto": "WHAT: Client check hardcodes maxSizeKB to 10*1024 instead of Discourse.SiteSettings['max_'+type+'_size_kb'], losing image vs attachment distinction. WHY: Sites with smaller max_attachment_size_kb pass client validation then fail server-side, and sites with limits >10MB incorrectly block valid uploads with wrong max_size_kb message. HOW: Restore per-type SiteSetting lookup (keep 10MB only as image downsize ceiling)."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#03",
+    "descricao": "The upload downsizing passes a percentage ('80%') as dimensions, but for animated GIFs the gifsicle path uses --resize-fit, which expects WxH geometry, so downsizing silently fails.",
+    "textoGolden": "Passing 80% as the dimensions can fail for animated GIFs when allow_animated_thumbnails is true, since the animated path uses gifsicle --resize-fit which expects WxH geometry, not a percentage; downsizing would then silently fail.",
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       67,
+       67
+      ],
+      "texto": "The controller passes the percentage string `\"80%\"` as the dimensions argument to `OptimizedImage.downsize`, but the consumer requires explicit `WxH` geometry: the code this PR deleted built exactly `\"#{width}x#{height}\"`, and the animated path runs `gifsicle --resize-fit #{dimensions}`, which rejects a percentage. Pass an explicit size (e.g. a computed `\"WxH\"` from the max KB target) so the auto-downsize actually reduces the file, rather than silently no-oping and leaving oversized uploads."
+     },
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       63,
+       70
+      ],
+      "texto": "Caller passes \"80%\" as dimensions to OptimizedImage.downsize, but the downsize/optimize instruction builders in optimized_image.rb expect explicit \"WxH\" geometry (interpolated as -resize #{dimensions}\\>). A bare percentage does not satisfy that contract and will produce a malformed geometry. Fix the caller to supply WxH dimensions or add explicit percentage handling to the callee."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#04",
+    "descricao": "Auto-downsizing passes the upload tempfile path, which lacks a .gif extension, so the animated branch is never chosen and convert keeps only the first frame, flattening oversized animated GIFs.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       64,
+       70
+      ],
+      "texto": "WHAT: The new auto-downsize call passes a tempfile path whose name has no `.GIF` extension, so `optimize` never selects the animated branch (`method_name += \"_animated\" if opts[:allow_animation] && from =~ /\\.GIF$/i`) and uses `downsize_instructions`, which runs `convert from[0]` and keeps only the first frame. WHY: Animated GIFs larger than max_image_size_kb that are uploaded through this path have their animation flattened to a single frame even though SiteSetting.allow_animated_thumbnails is enabled. HOW: Detect the image type from the original filename/content-type rather than the tempfile path (or pass a flag) so the gifsicle animated downsize path is used for GIF inputs."
+     },
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       67,
+       67
+      ],
+      "texto": "Passing the multipart tempfile path to downsize prevents animation detection when that path does not end in .gif, even when allow_animated_thumbnails is enabled. OptimizedImage.optimize checks the path suffix and otherwise uses convert with input[0], so oversized animated GIF uploads are permanently flattened to their first frame. Preserve the original image extension in the processing path or pass the image format explicitly to select animated processing."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#05",
+    "descricao": "The comment promises images are reduced to the allowed size, but the loop only tries five 80% reductions with no guarantee of reaching the limit.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       63,
+       70
+      ],
+      "texto": "The comment says large images are \"automatically reduced to allowed size\", but the loop only resizes by 80% up to 5 attempts (\u22480.33\u00d7 of the original in the best case) and then stops without any check that the result actually meets `max_image_size_kb`. The prose promises a guarantee the code does not provide; either make the loop actually converge to the allowed size or reword the comment to state that the image is only attempted to be reduced."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#06",
+    "descricao": "The downsize retry loop ignores the false return of a failed conversion and repeats the same failing ImageMagick call up to five times.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       66,
+       68
+      ],
+      "texto": "The retry loop ignores downsize's false return value and retries failed conversions while the file remains oversized. convert_with returns false on converter failure, so an unsupported or malformed oversized image launches the same failing external conversion up to five times per upload without any changed input. Break on a failed downsize result and return an upload error rather than repeating the conversion."
+     },
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       64,
+       69
+      ],
+      "texto": "WHAT: Downsize loop ignores OptimizedImage.downsize return value and retries up to 5 times unconditionally while checking tempfile.size. WHY: Failed converts (e.g. SVG, invalid 80%> geometry, corrupt image) burn 5 ImageMagick runs then Upload.create_for still runs with oversized/unmodified file and fails validation, wasting CPU and breaking the feature. HOW: Break on false return and handle failure."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#08",
+    "descricao": "Claims up to five synchronous ImageMagick runs per oversized upload block request threads and enable DoS.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       63,
+       69
+      ],
+      "texto": "WHAT: Up to 5 synchronous OptimizedImage.downsize + ImageOptim convert runs execute inline in create_upload request cycle for every oversized image. WHY: Blocks the Rails request thread with CPU-intensive shell-outs per upload, enabling easy request-thread exhaustion/DoS with large images. HOW: Move downsizing to background job or enforce single-pass/timeout."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#09",
+    "descricao": "Claims the downsize loop checking tempfile.size may never terminate because of a stale cached size, causing infinite loops.",
+    "textoGolden": "The loop checking `tempfile.size` may never terminate correctly due to stale cached size, leading to potential infinite loops or incorrect file handling after modifications.",
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#sncc-01",
+    "descricao": "The 413 upload error message states a hard-coded 10 MB maximum that may not match the limit the server or web server actually enforces.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#opa-01",
+    "descricao": "The upload tempfile path, which for API URL uploads embeds the request-controlled type param, is now passed to OptimizedImage.downsize and run unescaped in a shell via backticks, allowing command injection through type.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "github-oauth-security-enhancement-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "bb75657fc8f13923c1d7983f422290908a1e7310",
+  "base": "344aa102e7818606e29426ebe69d5a680d8727c6",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     500,
+     505
+    ],
+    "texto": "WHAT: Direct indexing integration.metadata[\"sender\"][\"login\"] raises KeyError when sender is absent. WHY: Legacy integrations created before sender tracking (build_integration only sets sender if state.get(\"sender\")) hit this branch and crash with 500 instead of the error page. HOW: Use .get() guards and return error() when sender/login is missing."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     434,
+     436
+    ],
+    "texto": "WHAT: get_user_info() calls raise_for_status() and resp.json() without try/except, so non-200 or malformed GitHub responses propagate. WHY: A transient GitHub failure or revoked token turns a recoverable install error into an unhandled 500 instead of the intended error page. HOW: Wrap the call in try/except and return error() on failure."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     448,
+     452
+    ],
+    "texto": "WHAT: Check uses `is None` so `?installation_id=` (empty string) passes as valid and is bound to pipeline state. WHY: downstream Integration.objects.get(external_id=\"\") / API lookup runs with an empty ID instead of redirecting to the app URL, producing wrong error path and polluted pipeline state. HOW: Change to `if not installation_id:`."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     129,
+     146
+    ],
+    "texto": "The payload error string bypasses static translation extraction: error_short is a plain-string parameter later wrapped as _(error_short). Neighbouring strings use _(\"<literal>\") so makemessages can extract them; a variable lookup cannot be extracted so translators never receive the strings. Translate literals at definition/call sites and do not re-wrap the variable with _()."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     500,
+     505
+    ],
+    "texto": "Direct subscript integration.metadata[\"sender\"][\"login\"] assumes every ACTIVE Integration has sender.login. Pre-existing integrations without that metadata key raise KeyError (500) instead of showing invalid-installation error. Use .get() chain so mismatch falls through to error() path."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     500,
+     505
+    ],
+    "texto": "Direct indexing integration.metadata[\"sender\"][\"login\"] raises KeyError when metadata lacks sender/login (legacy or malformed Integration), turning the reinstall guard into a 500 instead of the invalid-request error page. Use .get() chain."
+   },
+   {
+    "id": "S7",
+    "file": "tests/sentry/integrations/github/test_integration.py",
+    "lines": [
+     398,
+     454
+    ],
+    "texto": "test_github_user_mismatch mutates the webhook body but keeps a static HMAC signature, so the webhook likely does not create the attacker-owned Integration; the later setup then fails via the Integration.DoesNotExist error branch which renders the identical template/message as the sender-login mismatch branch, so the test passes even with the mismatch check removed"
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#01",
+    "descricao": "error() calls _(error_short) on a variable and callers pass plain literals, so the short error strings are no longer extractable for translation.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       129,
+       146
+      ],
+      "texto": "The helper calls `_(error_short)` on a variable, and callers pass plain string literals. The translation extractor cannot see these strings, so the short error messages sent to the user are no longer translatable; the old code wrapped the literals directly in `_()`. Mark the literals with gettext_lazy at the call sites and the default, and pass them through without wrapping again."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       129,
+       146
+      ],
+      "texto": "error_short strings bypass translation extraction: _(error_short) uses a variable so makemessages cannot collect them. Wrap literals at definition/call sites, e.g. error_short=_(\"Invalid installation request.\") and pass _(\"...\") literals, then use data error value directly without re-wrapping."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       132,
+       141
+      ],
+      "texto": "Translate the short-message literals at their definition/call sites instead of calling `_(error_short)` on a variable. Django's message extraction cannot extract the default `\"Invalid installation request.\"` or the plain-string arguments at the two call sites from this dynamic gettext invocation. The existing pending-deletion and already-installed messages previously appeared directly inside `_()`; this refactor removes their extraction sites, and the new default message cannot enter translation catalogs. Use a translated default and translated arguments, then place `error_short` directly into the payload so these user-facing errors remain localizable."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#02",
+    "descricao": "The org parameter of error()/get_document_origin is actually the active-organization context, not an Organization, so the name is misleading.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       149,
+       152
+      ],
+      "texto": "The parameter is named `org` but the code treats it as the pipeline's active-organization context: it dereferences `org.organization` and every caller (error() and the GitHubInstallation sites) passes `self.active_organization`, not an Organization. The name misstates the argument's type/contract \u2014 a caller following the name and passing a real Organization would hit AttributeError on `.organization`. Rename the parameter (e.g. `active_organization`) and correct the corresponding name in `error()` at line 131 so the two signatures match what is actually passed."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#03",
+    "descricao": "The GitHub OAuth state is pipeline.signature, a static md5 of the pipeline view names, instead of a per-attempt random nonce, so it gives no CSRF protection.",
+    "textoGolden": "OAuth state uses pipeline.signature (static) instead of a per-request random value",
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       401,
+       412
+      ],
+      "texto": "The OAuth state is pipeline.signature, which Pipeline.__init__ computes solely from pipeline view class names and therefore shares across all users and installation attempts. An attacker can obtain an OAuth code for their own GitHub account and send a callback using this known state to a victim with an active installation pipeline, binding the attacker's GitHub identity to the victim's flow instead of rejecting the forged callback. Generate a random per-attempt nonce, store it in pipeline state, and validate that nonce on the OAuth callback."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       401,
+       413
+      ],
+      "texto": "Do not use pipeline.signature as OAuth state. It is a deterministic MD5 of the pipeline identifiers, not an unpredictable nonce tied to this user's authorization attempt (the tests reuse it across users). An attacker can know the expected state and submit a callback containing a code authorized under the attacker's GitHub account, defeating the OAuth login-CSRF protection and the intended binding to the installing user. Generate a cryptographically random per-attempt state, store it in the session/pipeline, and validate and consume it on callback."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#05",
+    "descricao": "The new OAuth step's token exchange and user lookup are not wrapped in error handling, so GitHub/network failures surface as 500s instead of the installation-failed page.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       423,
+       425
+      ],
+      "texto": "The token request is executed outside the try block. If GitHub's token endpoint is unavailable or the request fails with a connection/timeout error, safe_urlopen raises before the guarded response parsing is reached, and this new installation step returns an unhandled server error instead of the installation-failed response. Include the request itself in the error handling and handle the relevant transport exceptions."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       423,
+       436
+      ],
+      "texto": "WHAT: safe_urlopen token exchange and get_user_info() (which calls resp.raise_for_status()) are called with no exception handling. WHY: Any network error, timeout, or non-2xx from GitHub bubbles up as an unhandled exception and 500s the install instead of rendering the invalid-request page. HOW: Wrap the exchange plus get_user_info in try/except and return error() on failure."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       422,
+       436
+      ],
+      "texto": "safe_urlopen() and get_user_info() are called outside any try/except, so network errors, non-2xx responses, or API failures raise unhandled exceptions instead of returning error(). Wrap the token exchange + user-info fetch in try/except and return error() on failure, matching the handled missing-access_token path."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#06",
+    "descricao": "When no Integration exists yet for the installation_id the pipeline advances without comparing the OAuth user to the installer, bypassing the new ownership check.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       481,
+       482
+      ],
+      "texto": "The missing Integration branch advances the pipeline without verifying that github_authenticated_user installed the supplied installation_id. When the installation webhook has not created a record, or the local record was deleted, finish_pipeline calls build_integration using app credentials and attaches the installation without checking the OAuth user's access, allowing a user with another account's installation ID to bypass the new ownership check. Fail closed until trusted installer information is available and apply the ownership check before every successful next_step."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       481,
+       482
+      ],
+      "texto": "The record-absent path advances the pipeline before checking whether the authenticated GitHub user installed this app. Installation IDs arrive from the request, and a missing Integration record (for example before the installation webhook is processed) does not establish ownership. As a result, this path can attach an installation belonging to a different GitHub user despite the new authenticity check. Verify the authenticated user's authorization for the installation before advancing in this branch too, rather than relying on the webhook-created record existing."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       481,
+       482
+      ],
+      "texto": "When no Integration row exists for the installation_id, the code calls next_step() without comparing the OAuth-authenticated GitHub user to the installer. An attacker can supply an installation_id they do not own before the installation webhook has created the row, and bypass the new verification. Do not skip the check in this branch. Either fail closed, or verify ownership another way, for example by confirming the user can access the installation through the GitHub API."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#09",
+    "descricao": "The installer check indexes integration.metadata['sender']['login'] without checking that sender exists, raising KeyError for integrations created without sender metadata.",
+    "textoGolden": "The code attempts to access integration.metadata[sender][login] without checking for the existence of the sender key. This causes a KeyError for integrations where the sender metadata was not set during creation",
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       500,
+       505
+      ],
+      "texto": "integration.metadata[\"sender\"][\"login\"] is indexed without checking that \"sender\" exists, so an ACTIVE integration whose metadata has no sender raises KeyError (500) here. metadata[\"sender\"] is only populated when state.get(\"sender\") is set (integration.py:376-377), and the only writer of that state is the installation webhook (webhook.py:202-208); integrations created through the pipeline itself carry no sender (confirmed by installation.py:44 which explicitly guards `if \"sender\" not in integration.metadata`, and by the pipeline-created integration in test_integration.py:730-743). Previously this branch only bound state and called pipeline.next_step(), so this crash is newly introduced. Fix: guard the lookup, e.g. `if pipeline.fetch_state(\"github_authenticated_user\") != (integration.metadata.get(\"sender\") or {}).get(\"login\"):` and decide the desired fallback when sender is absent."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       500,
+       505
+      ],
+      "texto": "`integration.metadata[\"sender\"][\"login\"]` can raise KeyError. build_integration (line 376-377) only sets metadata[\"sender\"] when state.get(\"sender\") is truthy, so an existing Integration without a sender entry makes this subscripting throw an unhandled KeyError (500) instead of routing to the intended error page. Use `integration.metadata.get(\"sender\", {}).get(\"login\")` (and treat a missing sender as a failed verification) so the mismatch/absence case returns error() rather than crashing."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       501,
+       503
+      ],
+      "texto": "The new ownership check indexes integration.metadata['sender']['login'] even though GitHubIntegrationProvider.build_integration omits sender for normal pipeline-created integrations. Reconnecting an existing active integration without an OrganizationIntegration and without webhook-populated sender now raises KeyError and returns a server error rather than an installation failure. Handle missing sender explicitly and return the invalid-installation response when trusted installer metadata is unavailable."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#10",
+    "descricao": "test_installation_not_found uses a wrong OAuth state, so it fails at the state check and never reaches the installation-not-found path it is meant to test.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/integrations/github/test_integration.py",
+      "lines": [
+       385,
+       396
+      ],
+      "texto": "First response (installation_id) is overwritten by second response (bad state) with no assertion, so the Integration.DoesNotExist / not-ACTIVE branch in GitHubInstallation is never verified. Keep/assert the first flow through a valid OAuth step to reach the installation check instead of only asserting the OAuth state-mismatch error."
+     },
+     {
+      "file": "tests/sentry/integrations/github/test_integration.py",
+      "lines": [
+       388,
+       396
+      ],
+      "texto": "This test no longer verifies the \"installation not found\" path it exists for. The second GET supplies state=ddd023d87a913d5226e2a882c4c4cc05, which is not the github pipeline signature (that is the 9cae5e88803f35ed7970fc131e6e65d3 asserted in test_github_setup and reused elsewhere). OAuthLoginView.dispatch (integration.py:412-413) therefore returns error() before GitHubInstallation runs, producing the same generic \"Invalid installation request.\" message and the same failed template via the state-mismatch branch. The Integration.DoesNotExist handling at integration.py:493-498 is never reached, so the test would still pass if that handling were removed or broken. Use the real pipeline state so the request advances into GitHubInstallation, or assert on something that distinguishes the state-mismatch branch from the missing-installation branch."
+     },
+     {
+      "file": "tests/sentry/integrations/github/test_integration.py",
+      "lines": [
+       388,
+       396
+      ],
+      "texto": "The replacement assertion no longer verifies that a nonexistent installation is rejected: 'Invalid installation request.' is also returned for a state mismatch, missing access token, or missing authenticated login before GitHubInstallation is reached. This test can therefore pass with installation-not-found handling broken if the callback fails OAuth validation instead. Establish a successful OAuth exchange with the actual pipeline state and verify that the nonexistent installation lookup is reached and rejected, rather than accepting this shared authentication-error message alone."
+     }
+    ]
+   }
+  ]
+ },
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "6048e2a86b50e81e1e3b1b467dfea5a895add3dc",
+  "base": "d1440bb5d2f2190ad7ae1d26c165f970055b5370",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+    "lines": [
+     213,
+     223
+    ],
+    "texto": "WHAT: immediateDelete path cancels the SendGrid scheduled send then returns without deleting or updating the WorkflowReminder row. WHY: leaves stale scheduled WorkflowReminder rows for rescheduled/deleted workflows/steps that are never cleaned (cancelled flag never set), causing DB orphans and reprocessing. HOW: delete (or mark cancelled) the reminder row after the SendGrid cancel, mirroring the SMS path."
+   },
+   {
+    "id": "S2",
+    "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+    "lines": [
+     56,
+     74
+    ],
+    "texto": "WHAT: SendGrid cancel loop queues Prisma deletes but a mid-loop throw skips Promise.all so queued deletes are never executed, and the catch only logs then continues scheduling. WHY: partially cancelled batch leaves cancelled reminders in DB while SendGrid state is unknown, so cancelled emails can still send or be retried inconsistently. HOW: await each delete inside the loop or collect promises with allSettled, and return/skip scheduling on failure."
+   },
+   {
+    "id": "S3",
+    "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+    "lines": [
+     43,
+     51
+    ],
+    "texto": "WHAT: remindersToCancel is loaded unbounded and each SendGrid cancel is awaited sequentially inside the for loop. WHY: a large backlog of cancelled reminders blocks the cron with N serial network round-trips and unbounded memory, delaying all email scheduling. HOW: paginate/limit the findMany and issue SendGrid cancels concurrently with a bounded pool."
+   },
+   {
+    "id": "S4",
+    "file": "packages/features/ee/workflows/components/WorkflowStepContainer.tsx",
+    "lines": [
+     437,
+     457
+    ],
+    "texto": "The verification-code TextField placeholder \"Verification code\" and Verify Button label are hard-coded English while neighbours use t() \u2014 route through translation function."
+   },
+   {
+    "id": "S5",
+    "file": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+    "lines": [
+     213,
+     223
+    ],
+    "texto": "The immediateDelete branch cancels the SendGrid scheduled send but returns without deleting or marking the WorkflowReminder row, unlike the SMS manager which always deletes. For kept bookings (reschedule path) this orphans the email reminder so it is never cleaned by the cancelled-reminder sweeper. Delete the row after successful cancel."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+    "descricao": "Reminder cancel helpers are called without await inside forEach when bookings are cancelled/rescheduled or workflows edited, so the handler can return before reminders are cancelled or deleted and failures are unobserved.",
+    "textoGolden": "Asynchronous functions deleteScheduledEmailReminder and deleteScheduledSMSReminder are called without await inside forEach loops. This occurs during booking rescheduling/cancellation, and workflow/workflow step deletion/updates. Consequently, scheduled workflow reminders may not be reliably cancelled, potentially leaving them active.",
+    "comentarios": [
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       484,
+       493
+      ],
+      "texto": "WHAT: async deleteScheduledEmailReminder/deleteScheduledSMSReminder called inside forEach without collecting/awaiting promises. WHY: handler returns before cancels complete and rejections are unobserved, so cancellations are lost and reminder emails/SMS are still sent (same fire-and-forget pattern repeated in handleNewBooking:966, bookings.tsx:488, workflows.tsx:212/376/519/574)."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       485,
+       495
+      ],
+      "texto": "Cancellation now delegates the database update/deletion to asynchronous reminder helpers without awaiting them, while removing reminder deletes from the awaited promise list. The handler can finish before cancelled flags or unscheduled-reminder deletions are persisted, allowing a subsequent scheduler run to schedule a cancelled booking's reminder and leaving cancellation work unfinished when a serverless invocation terminates. Collect and await the helper promises; apply the same correction to the modified rescheduling and workflow-update callers that discard these promises."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       485,
+       495
+      ],
+      "texto": "Await the reminder cancellation promises before completing the cancellation request. These helpers now own persistence of cancellation: email awaits a workflowReminder update and SMS awaits Twilio before deleting the row. The forEach discards their promises, and removing remindersToDelete from the awaited promise list removes the previous guarantee that reminder state is cleared before the handler returns. In a serverless request the outstanding operations can be interrupted after the response, leaving reminders active for a cancelled booking. Collect these helper promises and include them in the awaited Promise.all."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+    "descricao": "The cron cancels SendGrid sends for cancelled reminders in one try around the whole loop, so one failing cancel aborts all remaining cancellations and the row deletions, and the failing row blocks later runs.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "lines": [
+       43,
+       77
+      ],
+      "texto": "WHAT: remindersToCancel loop awaits SendGrid cancel per-reminder inside one try and only runs Prisma deletes after the loop, with no method filter. WHY: a single throw (e.g. null SMS referenceId sent as batch_id, or one SendGrid error) aborts the loop and skips Promise.all deletes, leaving all other cancelled emails still scheduled so they are still sent."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "lines": [
+       66,
+       74
+      ],
+      "texto": "Successful cancellation records are only deleted after every SendGrid request in the loop succeeds. If a later request fails, the catch skips all queued Prisma deletions; the next run retries an already-cancelled batch, which SendGrid rejects with 400, and aborts before processing the remaining reminders. Await each reminder's database deletion immediately after its successful cancellation and isolate errors per reminder so one failed batch does not block the others."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "lines": [
+       53,
+       76
+      ],
+      "texto": "Handle cancellation failures per reminder rather than around the entire batch. If one SendGrid request rejects (for example, for an expired or invalid batch ID), the loop exits before cancelling the remaining reminders, and Promise.all is never reached, so even earlier successfully cancelled reminders remain in the database. The failed record stays eligible for the next run and can repeatedly block other cancellations until their emails are sent. Execute each successful deletion and isolate failures so the worker continues processing the remaining reminders."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#05",
+    "descricao": "Email reminders for cancelled bookings are only flagged cancelled and cancelled in SendGrid by the cron later, so reminders close to their send time can still be delivered.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "lines": [
+       46,
+       48
+      ],
+      "texto": "Deferred cancellation includes reminders less than ten minutes from their scheduled send time, when SendGrid no longer permits cancellation. A booking cancelled in that interval is only marked cancelled locally by deleteScheduledEmailReminder, and the cron's POST is rejected, so its email is still delivered. Process cancellation before SendGrid's ten-minute cutoff and explicitly handle cancellations that arrive after that deadline rather than relying on this cron query to stop delivery."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#06",
+    "descricao": "The cron cancels SendGrid scheduled sends one at a time with sequential awaits, which is slower than batching.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "lines": [
+       53,
+       74
+      ],
+      "texto": "The new cancel loop performs a sequentially awaited SendGrid HTTP request (`await client.request(...)`) for each reminder returned by an unbounded `findMany` (no `take`), then deletes them. WHY: this is O(N) serial network round-trips per cron run; if many reminders are cancelled at once (e.g. a bulk event-type disable or booking cancellation wave) the cron handler can block for a long time on serial SendGrid latency. HOW: fan the independent SendGrid cancel requests out with `Promise.all`, and/or bound the query with `take` plus pagination, then batch the DB deletes."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "lines": [
+       56,
+       64
+      ],
+      "texto": "WHAT: SendGrid cancel issued with sequential await inside for loop over remindersToCancel. WHY: cron blocks O(N) sequential network round-trips instead of parallel batch, materially slowing the hourly schedule job as cancelled backlog grows."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#11",
+    "descricao": "deleteScheduledEmailReminder and its immediateDelete flag do not delete anything; the names no longer describe the behaviour.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+      "lines": [
+       197,
+       232
+      ],
+      "texto": "`deleteScheduledEmailReminder` and its `immediateDelete` flag no longer match what the code does. The default path only marks the reminder `cancelled: true`, and the `immediateDelete` path only sends a cancel request to the email provider. Neither path deletes the scheduled send or the row, unlike the SMS counterpart, which still deletes. Rename them (for example `cancelScheduledEmailReminder` and `immediateCancel`) or document the behaviour."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#13",
+    "descricao": "deleteScheduledSMSReminder deletes the DB row only after a successful Twilio cancel, so a cancel failure leaves the reminder row behind now that callers no longer delete it.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/lib/reminders/smsReminderManager.ts",
+      "lines": [
+       177,
+       186
+      ],
+      "texto": "twilio.cancelSMS and prisma.workflowReminder.delete share one try block. If the Twilio cancel throws, the DB row is never deleted. The reminder row then stays behind for a booking that was cancelled, rescheduled or deleted, because the callers no longer delete rows themselves. Delete the row in a finally block, or handle the cancel failure separately so the delete still runs."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#14",
+    "descricao": "Prisma is imported in workflows.tsx but no longer used.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/workflows.tsx",
+      "lines": [
+       1,
+       10
+      ],
+      "texto": "`Prisma` is imported as a value (line 9) but is no longer used anywhere in this file. This PR removed the only usages (`Prisma.BatchPayload` in the now-deleted `remindersToDelete` / `deleteReminderPromise` declarations), while the import was kept. WHY: the repo's ESLint `no-unused-vars` rule will fail CI/build for an unused import. HOW: remove `Prisma` from the import list (and keep `import type { PrismaPromise }` as a type-only import)."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#prod-01",
+    "descricao": "The cron route sets the API key only on @sendgrid/mail, so the new @sendgrid/client cancellation requests are unauthenticated and reminders for cancelled bookings stay scheduled.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "5b229316ee4c661836ed1161139692a3e8527444",
+  "base": "98fa098e6fade3097a11fe7f99a98a4e6ffb4728",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/assets/stylesheets/common/foundation/mixins.scss",
+    "lines": [
+     125,
+     131
+    ],
+    "texto": "WHAT: order() copies $val verbatim into -webkit-box-ordinal-group/-moz-box-ordinal-group, but legacy ordinal-group is 1-based while modern order is 0-based (ordinal-group = order + 1). WHY: flex item ordering diverges on legacy -webkit-box/-moz-box engines \u2014 e.g. @include order(2) in topic.scss and order(3) in header.scss render as order 1 and 2 there, breaking intended visual order. HOW: emit $val + 1 for the box-ordinal-group prefixes while keeping order/$val and -ms-flex-order/-webkit-order as $val."
+   },
+   {
+    "id": "S2",
+    "file": "app/assets/stylesheets/common/foundation/mixins.scss",
+    "lines": [
+     125,
+     131
+    ],
+    "texto": "Legacy -webkit-box-ordinal-group/-moz-box-ordinal-group are 1-indexed (1 == order:0), so they must be $val+1 to agree with order:$val. As written, legacy engines render order N as N-1, disagreeing with the modern properties and breaking ordering vs default-order siblings."
+   },
+   {
+    "id": "S3",
+    "file": "app/assets/stylesheets/common/foundation/mixins.scss",
+    "lines": [
+     125,
+     131
+    ],
+    "texto": "Legacy -webkit-box-ordinal-group / -moz-box-ordinal-group are 1-based (default 1) while order is 0-based (default 0), so copying $val verbatim is off by one on old engines: e.g. order(2) renders as order 1. Add 1 for the box variants."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#01",
+    "descricao": "The flex-item styles target the inner .extra-info-wrapper instead of the component's root div, so in the flexbox header a long topic title keeps its full width and pushes the navigation panel out instead of being truncated.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/base/topic.scss",
+      "lines": [
+       29,
+       30
+      ],
+      "texto": "The flex-item styling targets the inner .extra-info-wrapper rather than the outer div generated by header-extra-info's Ember.Component. With .contents now using flexbox, that outer div retains its automatic minimum width, so a long nowrap topic title cannot shrink to the available space and pushes the navigation panel outside the header instead of being ellipsized by the existing desktop truncation rules. Move the extra-info-wrapper class onto the component's root element and set min-width: 0 on that flex item so ordering and truncation apply to the actual header child."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#02",
+    "descricao": "The align-items mixin emits no -moz-box-align, so on old Firefox versions using the display:-moz-box fallback the advertised vertical centering is not applied.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/foundation/mixins.scss",
+      "lines": [
+       117,
+       122
+      ],
+      "texto": "The alignment mixin does not match the Mozilla fallback emitted by flexbox(): when display: -moz-box is selected, neither align-items nor the WebKit/MS declarations control its cross-axis alignment. Consequently @include align-items(center) in the header and small-action leaves those children at the legacy default instead of vertically centering them. Emit -moz-box-align: $alignment alongside -webkit-box-align so the advertised fallback produces the same alignment."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#03",
+    "descricao": "The align-items mixin emits -ms-align-items, which never existed in IE/Edge; the legacy property is -ms-flex-align, so the declaration is dead.",
+    "textoGolden": "-ms-align-items never existed in any version of IE/Edge; the correct legacy property is -ms-flex-align.",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/foundation/mixins.scss",
+      "lines": [
+       117,
+       123
+      ],
+      "texto": "WHAT: align-items() mixin emits -ms-align-items: $alignment which is not a valid IE10/11 property (only -ms-flex-align exists). WHY: dead declaration shows wrong contract and leaves IE alignment dependent solely on -ms-flex-align, which also breaks for flex-start/flex-end values. HOW: remove the -ms-align-items line and map flex-start/flex-end to start/end for -ms-flex-align/-webkit-box-align."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#05",
+    "descricao": "Removing the float-based right alignment of .d-header .panel leaves the server-rendered (no-JS) header's login panel, which sits inside .row and is not a flex item, no longer right-aligned next to the title.",
+    "textoGolden": "Mixing float: left with flexbox causes layout issues. Further this PR removes the float-based right alignment for .d-header .panel, which may cause the login panel in the non-Ember/noscript header (where .panel is nested inside .row and not a flex item) to stack under the title instead of remaining right-aligned.",
+    "comentarios": []
+   }
+  ]
+ },
+ "advanced-query-processing-architecture-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "1cab4143d443c33079566f6ca36931eb8468159f",
+  "base": "d9a8253640464014aa3662c91131278990cfb828",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "public/app/plugins/datasource/loki/querySplitting.ts",
+    "lines": [
+     296,
+     299
+    ],
+    "texto": "WHAT: runSplitQuery re-applies applyTemplateVariables to queries already interpolated by runShardSplitQuery. WHY: subRequest at shardQuerySplitting.ts:154 spreads original scopedVars/filters so the second pass re-runs addAdHocFilters, duplicating ad-hoc labels and corrupting the expr sent to runQuery. HOW: skip re-interpolation for already-interpolated targets or clear scopedVars/filters on the delegated subRequest."
+   },
+   {
+    "id": "S2",
+    "file": "public/app/plugins/datasource/loki/shardQuerySplitting.ts",
+    "lines": [
+     48,
+     52
+    ],
+    "texto": "WHAT: Switching from interpolateVariablesInQueries to applyTemplateVariables drops the datasource:getRef() assignment. WHY: Old method (datasource.ts:436-438) stamped each query with datasource ref; new method (datasource.ts:1135-1140) returns only expr/step/legendFormat, leaving stale/missing datasource on split targets for downstream routing. HOW: Preserve the datasource ref when mapping, as the old path did."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "advanced-query-processing-architecture-grafana-codex#01",
+    "descricao": "Loki split/shard queries are now interpolated with applyTemplateVariables before splitting and again on execution, so ad hoc filters are applied twice and already-substituted values are re-interpolated.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/plugins/datasource/loki/shardQuerySplitting.ts",
+      "lines": [
+       52,
+       52
+      ],
+      "texto": "WHAT: runShardSplitQuery now interpolates every target via datasource.applyTemplateVariables (line 52), but it then delegates each sub-request to runSplitQuery (line 163), which this PR also changed to call datasource.applyTemplateVariables again (querySplitting.ts:299), so each target is interpolated (and ad hoc filters applied) twice. WHY: double interpolation re-runs addAdHocFilters on an already-filtered expression; the stream-selector path masks the duplicate via labelExists() dedup in addFilterToStreamSelector (modifyQuery.ts:494), but parsed/structured-metadata labels use addFilterAsLabelFilter which does not dedup, producing duplicated label filters, and any interpolated value containing '$' can be re-interpolated. This is confirmed by the updated test expecting applyTemplateVariables toHaveBeenCalledTimes(5) for a single target (1 call here + 4 sub-requests through runSplitQuery) instead of 1. HOW: interpolate only once \u2014 either remove the interpolation added to runShardSplitQuery and let runSplitQuery do it, or have splitQueriesByStreamShard pass the already-interpolated targets without re-interpolating in runSplitQuery."
+     },
+     {
+      "file": "public/app/plugins/datasource/loki/querySplitting.ts",
+      "lines": [
+       299,
+       299
+      ],
+      "texto": "The newly interpolated targets are interpolated again by DataSourceWithBackend.query when runQuery executes each split request. TemplateSrv.replace scans the resulting string again, so a variable whose literal value contains another defined variable token (for example, a log-search value containing `$other`) is expanded a second time and produces a different query from the non-splitting path; shard splitting also passes through this additional interpolation. Preserve the early interpolation needed for partitioning while ensuring already-interpolated targets are not interpolated again on execution, and test through the real backend query preparation rather than mocking runQuery."
+     },
+     {
+      "file": "public/app/plugins/datasource/loki/querySplitting.ts",
+      "lines": [
+       299,
+       299
+      ],
+      "texto": "Targets are interpolated here with `applyTemplateVariables`, including ad hoc filters, and then sent to `datasource.runQuery`, which interpolates them again through the backend path (datasource.ts:324/377). The ad hoc filters may be injected twice, and already-substituted values are re-interpolated, which can produce wrong or invalid LogQL. Interpolate only once. Either clear `scopedVars` and `filters` on the sub-requests after the first pass, or skip interpolation in `runQuery` for already-interpolated requests. The same issue applies to shardQuerySplitting.ts:52."
+     }
+    ]
+   },
+   {
+    "issueId": "advanced-query-processing-architecture-grafana-codex#05",
+    "descricao": "runShardSplitQuery now filters empty/hidden targets before interpolation, so an expr that interpolates to an empty string is no longer dropped.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/plugins/datasource/loki/shardQuerySplitting.ts",
+      "lines": [
+       49,
+       52
+      ],
+      "texto": "The order of operations was inverted relative to the previous contract: interpolation used to run before the `expr`/`hide` filters (interpolateVariablesInQueries(targets).filter(...)), and now the filters run on the *raw* targets before `applyTemplateVariables` is applied. Filtering on the un-interpolated `query.expr` means the previous fallback that dropped a target once variable substitution had emptied its expression no longer exists: a target like `{ expr: '$myVar' }` whose variable resolves to '' is truthy at filter time, survives, is then interpolated to `''`, and is passed into the shard splitting/execution loop as a blank query. To preserve the old contract the filters should run on the interpolated result (or the interpolated expr should be re-checked for emptiness)."
+     }
+    ]
+   }
+  ]
+ }
+}

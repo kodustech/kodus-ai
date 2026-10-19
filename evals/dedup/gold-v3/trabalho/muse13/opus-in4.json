@@ -1,0 +1,2360 @@
+{
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "d1c69189f3c90ecf56013a8da904da9bff9a8e19",
+  "base": "913c3d6f636d02b3dd6c2c022ca1af2bec95d752",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/controllers/admin/embeddable_hosts_controller.rb",
+    "lines": [
+     9,
+     17
+    ],
+    "texto": "WHAT: update/destroy call save_host(nil)/nil.destroy when id is not found since where().first returns nil. WHY: raises NoMethodError and returns 500 instead of 404, breaking admin UX and API contract. HOW: guard for nil and return 404 before save/destroy."
+   },
+   {
+    "id": "S2",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     5,
+     8
+    ],
+    "texto": "WHAT: before_validation calls self.host.sub! without a nil guard. WHY: any save with missing/blank host (e.g. params[:embeddable_host][:host] nil) raises NoMethodError instead of a validation error. HOW: coerce to string or return early when host blank."
+   },
+   {
+    "id": "S3",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     10,
+     18
+    ],
+    "texto": "WHAT: record_for_host returns false on failure but callers use eh.try(:category_id), and try only guards nil so false.try(:category_id) dispatches to FalseClass and raises. WHY: TopicEmbed.import (app/models/topic_embed.rb:36-43) crashes on malformed/unknown embed URLs instead of handling nil category. HOW: return nil instead of false consistently."
+   },
+   {
+    "id": "S4",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     17,
+     17
+    ],
+    "texto": "WHAT: query lowercases the column but compares against the raw URI host without downcasing. WHY: a legitimate referer like http://EVILTROUT.COM never matches stored eviltrout.com, so EmbeddableHost.host_allowed? wrongly denies embeds. HOW: downcase the input host before binding."
+   },
+   {
+    "id": "S5",
+    "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "lines": [
+     25,
+     25
+    ],
+    "texto": "WHAT: migration interpolates raw site-setting host value into SQL string without quoting/escaping. WHY: a host containing a single quote breaks the INSERT and enables SQL injection from a stored setting value. HOW: use ActiveRecord quoting, sanitize_sql, or model create! instead of string interpolation."
+   },
+   {
+    "id": "S6",
+    "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "lines": [
+     9,
+     16
+    ],
+    "texto": "WHAT: migration indexes [0]['id']/ [0]['value'] without checking for empty results. WHY: fresh installs or sites without embed_category/uncategorized rows raise NoMethodError on nil, aborting migrate. HOW: guard empty results and fall back to a safe category id."
+   },
+   {
+    "id": "S7",
+    "file": "app/assets/javascripts/discourse/models/store.js.es6",
+    "lines": [
+     196,
+     200
+    ],
+    "texto": "WHAT: _hydrateEmbedded calls obj[k].map unconditionally for *_ids keys. WHY: a null/missing ids payload (e.g. embeddable_host_ids: null) throws TypeError and breaks store hydration for that record. HOW: coerce to empty array before mapping."
+   },
+   {
+    "id": "S8",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     20,
+     22
+    ],
+    "texto": "WHAT: every embed comment/retriever check now does a SELECT via record_for_host instead of the previous in-memory SiteSetting string check. WHY: adds a DB round-trip to the hot unauthenticated embed path on every request, increasing latency and DB load. HOW: cache the host list with expiry and invalidate on EmbeddableHost save/destroy."
+   },
+   {
+    "id": "S9",
+    "file": "app/controllers/admin/embeddable_hosts_controller.rb",
+    "lines": [
+     9,
+     17
+    ],
+    "texto": "update/destroy use where(id:).first then unconditionally call save_host(host)/host.destroy. Non-existent id yields nil, so nil.host= inside save_host or nil.destroy raises NoMethodError (500) instead of 404. Guard nil and return not-found."
+   },
+   {
+    "id": "S10",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     5,
+     8
+    ],
+    "texto": "Callback calls self.host.sub! assuming non-nil string. If host is nil/blank (direct API call bypassing UI cantSave, or save_host with missing param), nil.sub! raises NoMethodError during save, turning validation failure into 500. Normalize to string first."
+   },
+   {
+    "id": "S11",
+    "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "lines": [
+     9,
+     26
+    ],
+    "texto": "Migration indexes [0]['id'] without checking zero rows (no embed_category setting) -> NoMethodError aborting migration; and interpolates raw h into INSERT VALUES ('#{h}'...) so quote in value breaks SQL/corrupts data. Check empty results and quote/escape host values."
+   },
+   {
+    "id": "S12",
+    "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "lines": [
+     22,
+     26
+    ],
+    "texto": "Producer/consumer mismatch: migration INSERTs raw embeddable_hosts values with scheme/path while EmbeddableHost normalizes to bare domain and record_for_host compares URI-parsed host. Normalize before INSERT."
+   },
+   {
+    "id": "S13",
+    "file": "spec/models/topic_spec.rb",
+    "lines": [
+     1399,
+     1405
+    ],
+    "texto": "Test named 'is false if embeddable_host is blank' does not enable embed_truncate nor stub has_topic_embed?=true, so it passes due to those other false conjuncts and never exercises the host-blank branch it names. It would still pass if the host gate were removed/broken. Fix by setting up the other conditions so only the host condition determines the result."
+   },
+   {
+    "id": "S14",
+    "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "lines": [
+     24,
+     26
+    ],
+    "texto": "Migration inserts raw embeddable_hosts setting lines with scheme/path verbatim, but EmbeddableHost normalizes to bare hostname and record_for_host queries by URI.host. Migrated rows never match host_allowed?, breaking previously-allowed embeds. Normalize h the same way before insert."
+   },
+   {
+    "id": "S15",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     10,
+     18
+    ],
+    "texto": "record_for_host lowercases the column (lower(host)) but compares to raw URI host without downcasing, so mixed-case URLs never match the stored host. Downcase the bind value to match the case-insensitive intent."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+    "descricao": "EmbeddableHost's before_validation calls self.host.sub! unconditionally, so saving a record with a nil host raises NoMethodError instead of returning a validation error.",
+    "textoGolden": "The EmbeddableHost model's before_validation callback calls self.host.sub! to strip http://, https://, and path segments, but if self.host is nil, this raises NoMethodError.",
+    "comentarios": [
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       5,
+       7
+      ],
+      "texto": "The before_validation callback calls `sub!` on host without guarding nil. Creating a host with a missing or null host field reaches this callback from save_host and raises NoMethodError instead of returning a validation error. Guard nil during normalization and let presence/format validation reject it."
+     },
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       5,
+       8
+      ],
+      "texto": "WHAT: `before_validation` calls `self.host.sub!(...)` unconditionally, so a record with a nil host raises NoMethodError (`nil.sub!`) instead of producing a normal format-invalid result. WHY: `Admin::EmbeddableHostsController#save_host` assigns `params[:embeddable_host][:host]` directly; any request that omits the host value makes the save raise a 500 instead of returning the `render_json_error(host)` validation response. HOW: guard the mutation, e.g. `return if host.blank?` at the top of the before_validation block (or use `self.host = self.host.to_s` before stripping)."
+     },
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       5,
+       8
+      ],
+      "texto": "before_validation calls self.host.sub!(...) on a possibly-nil host before validates_format_of runs. The controller assigns host.host = params[:embeddable_host][:host], so a request without a host key leaves it nil and nil.sub! raises NoMethodError at save time instead of the format validation producing a normal error response. Add a presence guard so validation reports the failure."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+    "descricao": "update and destroy in Admin::EmbeddableHostsController fetch the host with where(id:).first and never check for nil, so an unknown id raises NoMethodError and returns a 500 instead of not-found.",
+    "textoGolden": "The update and destroy methods in Admin::EmbeddableHostsController do not validate the existence of the EmbeddableHost record retrieved by ID. If EmbeddableHost.where(id: params[:id]).first returns nil (i.e., the host does not exist), attempting to call methods on the nil object (e.g., save_host or destroy) will result in a NoMethodError.",
+    "comentarios": [
+     {
+      "file": "",
+      "lines": [
+       15,
+       16
+      ],
+      "texto": "In the destroy action, the nil-host case (line 15-16) would raise NoMethodError. Consider adding a nil check to handle the case where the host is not found."
+     },
+     {
+      "file": "app/controllers/admin/embeddable_hosts_controller.rb",
+      "lines": [
+       9,
+       18
+      ],
+      "texto": "update and destroy fetch the record with EmbeddableHost.where(id: params[:id]).first but never check for nil, then immediately use it (save_host(host) does host.host = ... / host.save; destroy does host.destroy). A stale or already-deleted id, or an interleaving where a concurrent delete removes the row first, makes host nil and the first call on it raises NoMethodError -> unhandled 500. Guard with a nil/404 check before use."
+     },
+     {
+      "file": "app/controllers/admin/embeddable_hosts_controller.rb",
+      "lines": [
+       10,
+       11
+      ],
+      "texto": "Update passes the nullable result of where(...).first directly to save_host, which immediately assigns host.host. Updating a nonexistent or concurrently deleted record returns an internal error instead of a not-found response; destroy has the same lookup failure. Use find or explicitly raise a not-found error before dereferencing the lookup result."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+    "descricao": "record_for_host compares lower(host) against the un-lowercased URI host, so mixed-case referer hosts fail to match allowed hosts and embedding is rejected.",
+    "textoGolden": "record_for_host compares lower(host) = ? but does not normalize the parameter\u2019s case, so mixed\u2011case referer hosts may fail to match even though comparison intends to be case\u2011insensitive.",
+    "comentarios": [
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       14,
+       17
+      ],
+      "texto": "Normalize the parsed hostname before comparing it with lower(host). URI parsing preserves hostname case, so an allowed entry such as example.com does not match https://EXAMPLE.com/page even though DNS hostnames are case-insensitive. This makes valid embedding requests fail the host authorization check and makes category lookup inconsistent for equivalent domain identities. Compare against host.downcase (or normalize both operands equivalently), and add a mixed-case URL test."
+     },
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       17,
+       17
+      ],
+      "texto": "The query compares lower(host) to the un-downcased uri.host. A referer such as http://EvilTrout.com never matches the stored lowercase host, so embedding is wrongly denied. Fix: use where(\"lower(host) = ?\", host.downcase)."
+     },
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       14,
+       17
+      ],
+      "texto": "The query compares lower(host) in the database with uri.host, which is not lowercased, so the comparison normalizes only one side. A referer or URL with uppercase letters (e.g. http://EvilTrout.com) will not match the stored host. Compare against host.downcase, i.e. where('lower(host) = ?', host.downcase)."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04",
+    "descricao": "The migration copies the legacy embeddable_hosts values into the new table without stripping scheme and path, so hosts stored as http://example.com no longer match the bare-host lookup and previously allowed embeds are rejected after upgrade.",
+    "textoGolden": "Because this migration inserts embeddable_hosts rows with raw SQL, any existing embeddable_hosts values that include http:// or /https:// or path segments won\u2019t go through the EmbeddableHost model\u2019s normalization, so the new host lookup (which compares only the bare host) may fail for migrated data. Consider ensuring that migrated hosts are normalized to the same format as newly created EmbeddableHost records so existing embedding configurations keep working.",
+    "comentarios": [
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       24,
+       26
+      ],
+      "texto": "WHAT: migration inserts raw embeddable_hosts lines (e.g. http://example.com/123) without stripping scheme/path like the model does. WHY: migrated rows never match EmbeddableHost.record_for_host which compares bare uri.host, silently breaking previously allowed embeds."
+     },
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       22,
+       26
+      ],
+      "texto": "Migration INSERTs raw embeddable_hosts lines with scheme/path intact, but EmbeddableHost normalizes to bare domain (before_validation strips protocol/path, record_for_host looks up by URI.host). Strip protocol and path before INSERT or migrated hosts will never satisfy host_allowed?."
+     },
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       24,
+       25
+      ],
+      "texto": "Legacy hosts are inserted verbatim instead of applying the new model's scheme/path normalization. Existing values such as http://discourse.org or https://example.com/1234 remain in the table, while record_for_host compares only URI.host, so previously configured embedding hosts stop working after upgrade. Normalize migrated entries to the same representation used by the model before inserting them."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#05",
+    "descricao": "The contents of category_fabricator.rb and embeddable_host_fabricator.rb are swapped, so each file defines the other's fabricators.",
+    "textoGolden": "The contents of `category_fabricator.rb` and `embeddable_host_fabricator.rb` have been swapped, resulting in the loss of original category fabricators and potentially causing errors in fabricator usage.",
+    "comentarios": [
+     {
+      "file": "spec/fabricators/category_fabricator.rb",
+      "lines": [
+       1,
+       4
+      ],
+      "texto": "File named category_fabricator.rb now defines Fabricator(:embeddable_host) while Fabricator(:category) was moved to embeddable_host_fabricator.rb. Filenames disagree with contents \u2014 swap contents back so each file defines the fabricator its name states."
+     },
+     {
+      "file": "spec/fabricators/embeddable_host_fabricator.rb",
+      "lines": [
+       1,
+       27
+      ],
+      "texto": "The file names and contents are swapped. embeddable_host_fabricator.rb defines the category fabricators (:category, :diff_category, :happy_category, :private_category), and category_fabricator.rb defines :embeddable_host. Restore category_fabricator.rb to the original category fabricators and put the :embeddable_host fabricator in embeddable_host_fabricator.rb."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#06",
+    "descricao": "The migration builds its INSERT by interpolating each legacy host value into the SQL string instead of quoting or binding it, so a value with a quote breaks the statement.",
+    "textoGolden": "The SQL query in the `app/controllers/admin/embeddable_hosts_controller.rb` file uses string interpolation (`'#{h}'`) to insert values, which is vulnerable to SQL injection. It should use parameter binding or proper quoting to prevent this security vulnerability.",
+    "comentarios": [
+     {
+      "file": "",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The migration's INSERT statement uses string interpolation: VALUES ('#{h}', ...). This is a SQL-injection concern and should be fixed by using parameterized queries or proper escaping."
+     },
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       25,
+       25
+      ],
+      "texto": "WHAT: migration interpolates raw host string into SQL: VALUES ('#{h}', ...). WHY: a host value containing a single quote breaks the statement and allows SQL injection via site_settings value."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+    "descricao": "The migration reads execute(...)[0]['id'] for embed_category without checking for an empty result, so installs without that setting stored crash the migration instead of falling back to the uncategorized category.",
+    "textoGolden": "The migration accesses execute(...)[0]['id'] without checking if the query returned any rows, which causes a crash when no embed_category setting exists. This can lead to a broken feature when attempting to edit category/host relationships.",
+    "comentarios": [
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       9,
+       12
+      ],
+      "texto": "WHAT: migration does execute(...)[0]['id'] with no guard when embed_category setting/category is missing. WHY: nil[0] dereference crashes the migration and blocks deploy on instances without that setting."
+     },
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       9,
+       16
+      ],
+      "texto": "Migration does execute(...)[0]['id'] without checking empty result; missing site_settings row throws NoMethodError and fails migration. Check for nil row."
+     },
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       9,
+       11
+      ],
+      "texto": "The migration indexes the first category-query result before checking whether any row was returned. An installation without a persisted embed_category setting, or with no matching category name, aborts migration before reaching the uncategorized fallback. Check whether the result contains a row before accessing its id and handle missing fallback settings as well."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#09",
+    "descricao": "The spec 'is false if embeddable_host is blank' no longer sets up any host condition and passes only because embed_truncate defaults to false, so its name no longer matches what it tests.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "spec/models/topic_spec.rb",
+      "lines": [
+       1399,
+       1406
+      ],
+      "texto": "Test 'is false if embeddable_host is blank' does not establish the true-branch preconditions (embed_truncate true, has_topic_embed true) nor control host presence, so it passes regardless of host logic and would still pass if host checking were broken/removed. Set truncate true + stub embed true with no hosts for the false case."
+     },
+     {
+      "file": "spec/models/topic_spec.rb",
+      "lines": [
+       1401,
+       1404
+      ],
+      "texto": "The test named \"is false if embeddable_host is blank\" now uses an ordinary built topic without setting embed_truncate or making has_topic_embed? true. It therefore returns false for reasons unrelated to the missing host, and passes even with the new implementation that never checks host availability. If blank-host behavior remains the intended contract, arrange all the other prerequisites before asserting false; if the contract intentionally changed, replace this case with a test of the actual intended behavior rather than retaining a misleading passing test."
+     },
+     {
+      "file": "spec/models/topic_spec.rb",
+      "lines": [
+       1403,
+       1404
+      ],
+      "texto": "The description \"is false if embeddable_host is blank\" no longer matches the code. This PR changed Topic#expandable_first_post? (app/models/topic.rb:869) to `SiteSetting.embed_truncate? && has_topic_embed?`, removing the embeddable_hosts condition entirely, and removed the `SiteSetting.embeddable_hosts` setup from this test. The assertion now passes only because `has_topic_embed?` is unstubbed (false) and embed_truncate is unset, so the name states a cause the method no longer has \u2014 rename it (e.g. \"is false when there is no topic embed\") or set up the precondition it claims to test."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#10",
+    "descricao": "The 'find embedded' test requests fruit 2 but the pretender always returns fruit 1, so it asserts fruit 1's colors and would not notice a find that ignores the id.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "test/javascripts/models/store-test.js.es6",
+      "lines": [
+       109,
+       121
+      ],
+      "texto": "Test requests fruit id 2 but pretender returns fruits[0] unconditionally, so assertions on colors [1,2] never cover fruit 2's color_ids [3]. Make pretender honor :id or request id 1 / assert single-element case to actually verify plural _ids hydration."
+     },
+     {
+      "file": "test/javascripts/models/store-test.js.es6",
+      "lines": [
+       111,
+       117
+      ],
+      "texto": "This test now requests fruit 2 but expects fruit 1's two colors. The /fruits/:id Pretender handler always returns fruits[0], so the test passes while hydrating the wrong record and would not catch a find implementation that ignores the requested ID. Make the handler select the requested fruit and assert its ID and corresponding colors (fruit 2 has only color 3), or request fruit 1 if testing its two-color hydration is the goal."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#11",
+    "descricao": "After saving a host, the component overwrites its category with findById(categoryId); when no category was chosen this is null even though the server saved the uncategorized category, so the row shows no category until reload.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/admin/components/embeddable-host.js.es6",
+      "lines": [
+       38,
+       38
+      ],
+      "texto": "The save callback overwrites the category using categoryId even when the server substituted the uncategorized category for a blank selection. Adding a host without choosing a category therefore leaves its category badge empty, and editing it reads an undefined category id despite a valid category_id having been returned. Resolve the category from the saved response's category_id rather than the submitted selection."
+     },
+     {
+      "file": "app/assets/javascripts/admin/components/embeddable-host.js.es6",
+      "lines": [
+       37,
+       38
+      ],
+      "texto": "When categoryId is null (the default for a new row, or a cleared selection), the controller saves SiteSetting.uncategorized_category_id and returns that category_id. This callback instead overwrites host.category with findById(null), making the displayed category disagree with the saved category. Use the category from the save response or its returned category_id rather than the pre-save selection."
+     },
+     {
+      "file": "app/assets/javascripts/admin/components/embeddable-host.js.es6",
+      "lines": [
+       37,
+       38
+      ],
+      "texto": "Use the saved response's category rather than overwriting it from categoryId after saving. For a new host with no category selected, categoryId is null, while the new controller deliberately saves SiteSetting.uncategorized_category_id and returns that ID through the serializer. This callback replaces the hydrated category with findById(null), leaving the row without its actual category until reload (and reopening edit also initializes from that incorrect relationship)."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#14",
+    "descricao": "Hosts saved with a port (allowed by the validation regex) are stored as host:port, but lookup compares only URI.host, so those configured hosts never match and embedding fails for them.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       14,
+       17
+      ],
+      "texto": "Host lookup compares URI.host against a stored value that validation explicitly permits to include a port. Saving example.com:8080 succeeds, but a request from http://example.com:8080 produces URI.host equal to example.com and never matches that record, disabling embedding and retrieval for the configured host. Use a consistent port representation in both storage and lookup."
+     },
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       14,
+       17
+      ],
+      "texto": "The validator accepts hosts such as `example.com:8080`, but record_for_host extracts only URI.host (`example.com`) and compares it to the stored port-qualified string. An accepted and saved host therefore never authorizes its corresponding URLs. Normalize the stored and queried authority consistently, including a deliberate port policy."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#prod-01",
+    "descricao": "EmbeddableHost's host format validation only accepts TLDs of 2-5 letters, so admins cannot add embeddable hosts on longer TLDs like example.technology.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "fix-proper-handling-of-group-memberships-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "060cda77729cb1c4a827560e09e89a7b22078ba9",
+  "base": "4975fc28903a84418f546b2809370f19abf10e08",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+    "lines": [
+     11,
+     14
+    ],
+    "texto": "WHAT: totalPages uses floor(user_count/limit)+1 which is one too many when user_count is an exact multiple of limit. WHY: next action then advances offset to user_count and renders an empty page, breaking pagination. HOW: use Math.ceil(user_count/limit)."
+   },
+   {
+    "id": "S2",
+    "file": "app/controllers/admin/groups_controller.rb",
+    "lines": [
+     71,
+     75
+    ],
+    "texto": "WHAT: add_members splits on comma without stripping whitespace so \"a, b\" looks up \" b\" which misses. WHY: multi-user adds from the UI silently skip members whose lookup fails, leaving the group incomplete. HOW: strip each username before find_by_username."
+   },
+   {
+    "id": "S3",
+    "file": "app/controllers/admin/groups_controller.rb",
+    "lines": [
+     90,
+     90
+    ],
+    "texto": "WHAT: remove_member uses group.users.delete(user_id) instead of the Group#remove(user) domain method used before. WHY: bypasses callbacks/counter maintenance in the model layer, leaving stale user_count and inconsistent membership state. HOW: load the User and call group.remove(user)."
+   },
+   {
+    "id": "S4",
+    "file": "app/controllers/groups_controller.rb",
+    "lines": [
+     22,
+     26
+    ],
+    "texto": "WHAT: limit comes straight from params with no maximum and offset has no floor. WHY: a caller can request limit=1000000 and force serialization of the whole membership table per request, exhausting memory/time. HOW: clamp limit to a sane max and floor offset at 0."
+   },
+   {
+    "id": "S5",
+    "file": "app/controllers/admin/groups_controller.rb",
+    "lines": [
+     65,
+     66
+    ],
+    "texto": "Route PUT /admin/groups/:id/members supplies :id, not :group_id, so require(:group_id) raises ParameterMissing on real requests. Accept :id (or both) to match the route and JS caller."
+   },
+   {
+    "id": "S6",
+    "file": "app/controllers/admin/groups_controller.rb",
+    "lines": [
+     84,
+     86
+    ],
+    "texto": "Route DELETE /admin/groups/:id/members supplies :id, not :group_id, so require(:group_id) raises ParameterMissing on real requests. Accept :id (or both) to match the route and JS caller."
+   },
+   {
+    "id": "S7",
+    "file": "app/controllers/admin/groups_controller.rb",
+    "lines": [
+     65,
+     67
+    ],
+    "texto": "Route `put \"members\"` under `resources :groups` supplies `params[:id]`; `add_members` requires `params[:group_id]` and will raise ParameterMissing on every real request. Use `params[:id]` (as `update`/`destroy` do) or add `group_id` to the route."
+   },
+   {
+    "id": "S8",
+    "file": "app/controllers/admin/groups_controller.rb",
+    "lines": [
+     84,
+     86
+    ],
+    "texto": "Route `delete \"members\"` under `resources :groups` supplies `params[:id]`; `remove_member` requires `params[:group_id]` and will raise ParameterMissing on every real request. Use `params[:id]` (as `update`/`destroy` do) or add `group_id` to the route."
+   },
+   {
+    "id": "S9",
+    "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+    "lines": [
+     11,
+     14
+    ],
+    "texto": "totalPages uses floor(n/limit)+1 which returns 2 for 50/50 and 3 for 100/50 instead of 1 and 2. This mis-measured page count keeps showingLast false on the real last page, so next advances offset to user_count and fetches an empty page. Use ceil(n/limit)."
+   },
+   {
+    "id": "S10",
+    "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+    "lines": [
+     11,
+     14
+    ],
+    "texto": "totalPages uses floor(count/limit)+1, so exact multiples get an extra empty page (e.g. 50/50=>2, 100/50=>3). Use ceil(count/limit)."
+   },
+   {
+    "id": "S11",
+    "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+    "lines": [
+     29,
+     33
+    ],
+    "texto": "Next clamps to user_count, which is past the last page when count is a multiple of limit (e.g. count 100, limit 50, offset 50 -> 100 empty). Clamp to (totalPages-1)*limit instead."
+   },
+   {
+    "id": "S12",
+    "file": "app/controllers/admin/groups_controller.rb",
+    "lines": [
+     65,
+     66
+    ],
+    "texto": "add_members looks up params.require(:group_id) but the member route and frontend URL '/admin/groups/:id/members.json' supply :id, so every call raises ActionController::ParameterMissing instead of adding members. Use :id (or accept either)."
+   },
+   {
+    "id": "S13",
+    "file": "app/controllers/admin/groups_controller.rb",
+    "lines": [
+     84,
+     85
+    ],
+    "texto": "remove_member looks up params.require(:group_id) but the member route and frontend URL '/admin/groups/:id/members.json' supply :id, so every call raises ActionController::ParameterMissing instead of removing the member. Use :id (or accept either)."
+   },
+   {
+    "id": "S14",
+    "file": "spec/controllers/admin/groups_controller_spec.rb",
+    "lines": [
+     114,
+     116
+    ],
+    "texto": "Test uses xhr :put for remove_member but routes.rb maps DELETE members to remove_member (PUT goes to add_members). The test therefore never exercises the real endpoint and would still pass if the DELETE route were broken. Change to xhr :delete to test the claimed behavior."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+    "descricao": "The admin group pager computes total pages as floor(user_count / limit) + 1, so when the member count is an exact multiple of the limit it shows an extra page and Next navigates to an empty member list.",
+    "textoGolden": "The `totalPages` calculation using `Math.floor(user_count / limit) + 1` produces an extra page when `user_count` is an exact multiple of `limit`, leading to incorrect pagination. For example, with 100 users and a limit of 50, it reports 3 pages instead of 2, allowing navigation to an empty page.",
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+      "lines": [
+       11,
+       14
+      ],
+      "texto": "totalPages (and currentPage) use `Math.floor(user_count / limit) + 1`, which is an off-by-one when user_count is an exact multiple of limit (e.g. 50 members, limit 50 \u2192 reports 2 pages although only 1 exists). This leaves `showingLast` false on the real last page, so 'next' navigates to an empty page at offset=user_count. Use `Math.ceil(user_count / limit)` (and compute currentPage consistently) to get the correct page count."
+     },
+     {
+      "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+      "lines": [
+       11,
+       14
+      ],
+      "texto": "totalPages is off by one when user_count is an exact multiple of limit: `Math.floor(user_count / limit) + 1` gives 2 for user_count=50, limit=50, although 50 members occupy exactly one page. Correct it to `Math.ceil(this.get('user_count') / this.get('limit'))`. Effect: for a group whose member count is a multiple of the page size, totalPages is one too high, showingLast remains false so the 'next' link stays enabled, and clicking it navigates to a phantom empty page."
+     },
+     {
+      "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+      "lines": [
+       11,
+       14
+      ],
+      "texto": "`totalPages` uses `Math.floor(user_count / limit) + 1`, which over-counts by one whenever `user_count` is an exact multiple of `limit` (e.g. 50 members with limit 50 yields 2 pages instead of 1). Since `showingLast` is `propertyEqual(\"currentPage\", \"totalPages\")`, on a full last page `showingLast` is false, so the `next` action stays enabled and advances `offset` to `user_count`, rendering an empty page labeled as the last page. Use `Math.ceil(user_count / limit)` (with the zero-member guard) so the count matches the real number of pages."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#03",
+    "descricao": "Several Group model functions (findMembers, destroy, userCountDisplay) return a value on some paths and undefined on others, triggering consistent-return lint warnings.",
+    "textoGolden": "Expected to return a value at the end of function - code paths without explicit returns will return undefined",
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#04",
+    "descricao": "Paging actions fire overlapping member requests and each response unconditionally overwrites offset and members, so a stale response arriving last can revert the list to an earlier page.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/discourse/models/group.js",
+      "lines": [
+       30,
+       35
+      ],
+      "texto": "Guard against stale member-fetch responses before updating the model. `next` updates offset immediately and leaves navigation enabled, so with at least three pages two rapid clicks issue requests for offsets 50 and 100. If the offset-100 response arrives first and the offset-50 response arrives last, this unconditional `setProperties` resets both offset and members to the older page, undoing the latest navigation. Refreshes after membership changes can similarly be overwritten by an earlier fetch. Track a per-model request generation and apply only the latest response, or serialize navigation and refresh requests."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#06",
+    "descricao": "The public members endpoint now always caps results at 50 per page, but the public group members page has no pagination, so groups with more than 50 members are silently truncated for users.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/discourse/routes/group-members.js.es6",
+      "lines": [
+       10,
+       11
+      ],
+      "texto": "The public members route now loads only the model's default 50-member page without providing any way to request subsequent pages. The public group/members.hbs template only renders members and has no Next/Previous controls, so members after the first 50 become inaccessible (manual groups previously returned all members). Add public pagination controls and actions that update offset and reload members."
+     },
+     {
+      "file": "app/controllers/groups_controller.rb",
+      "lines": [
+       22,
+       26
+      ],
+      "texto": "The new default limit applies to nonautomatic groups as well, but the public group-members route still calls findMembers() only once and its template simply iterates members without pagination. Previously this endpoint returned every member of a nonautomatic group; now a group with more than 50 members exposes only the first 50 on its public members page, with no way to reach the rest. Update that consumer to fetch subsequent pages or provide pagination when introducing this endpoint contract."
+     },
+     {
+      "file": "app/assets/javascripts/discourse/routes/group-members.js.es6",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "Provide pagination or load subsequent pages for the public group-members view. findMembers now requests only 50 members, and this route calls it only once while its template simply iterates members without navigation. Custom groups previously returned all members, so groups larger than 50 now have members that cannot be viewed on this page."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#07",
+    "descricao": "Creating a group ignores the alias_level the admin selected, saving only name and visibility, so new groups keep the default alias level.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/admin/groups_controller.rb",
+      "lines": [
+       23,
+       27
+      ],
+      "texto": "Persist params[:alias_level] when creating a group, just as update does. The creation form exposes aliasLevelOptions and group.asJSON sends the selected alias_level, but create saves only name and visible. A newly created group therefore retains the default alias level instead of the administrator's selection."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#10",
+    "descricao": "Removing a member deletes the membership row directly and skips clearing the user's primary_group_id, so a removed user can keep this group as their primary group.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/admin/groups_controller.rb",
+      "lines": [
+       84,
+       91
+      ],
+      "texto": "WHAT: remove_member uses group.users.delete(user_id) instead of the Group#remove destroy path. WHY: bypasses GroupUser destroy callbacks and primary_group_id cleanup done in destroy_deletions, leaving stale membership side-effects (e.g. dangling primary_group_id). HOW: load the User and call group.remove(user)."
+     },
+     {
+      "file": "app/controllers/admin/groups_controller.rb",
+      "lines": [
+       90,
+       90
+      ],
+      "texto": "Removing a member with group.users.delete bypasses the primary_group_id cleanup previously performed by Group#destroy_deletions during usernames updates. A user whose primary group is this group remains associated with it as their primary group after membership removal, leaving stale primary-group state used by user administration and post serialization. Clear primary_group_id for the removed user when it equals this group's id as part of the removal operation."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#12",
+    "descricao": "The remove_member spec issues a PUT request although the route only maps DELETE to remove_member, so the test uses a verb never routed in production.",
+    "textoGolden": "The remove_member test uses xhr :put to call the remove_member action, but the route defines delete 'members' => 'groups#remove_member' requiring DELETE method.",
+    "comentarios": [
+     {
+      "file": "spec/controllers/admin/groups_controller_spec.rb",
+      "lines": [
+       114,
+       117
+      ],
+      "texto": "This example sends `xhr :put, :remove_member`, but the PR maps `remove_member` only to DELETE (`delete \"members\" => \"groups#remove_member\"`); PUT on that path routes to `groups#add_members`. Controller specs bypass the router, so the example still lands on `remove_member` and passes regardless \u2014 it would still pass if the DELETE route were missing or wired to the wrong action, leaving the newly introduced verb/action pairing untested. Use `xhr :delete, :remove_member`, as the sibling example at line 125 already does."
+     },
+     {
+      "file": "spec/controllers/admin/groups_controller_spec.rb",
+      "lines": [
+       114,
+       117
+      ],
+      "texto": "The test 'cannot remove members from automatic groups' sends `xhr :put, :remove_member`, but the route is `delete \"members\" => \"groups#remove_member\"`. It exercises the action with a verb that is never routed in production. Use `xhr :delete, :remove_member, group_id: 1, user_id: 42` so the test matches the real request."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-01",
+    "descricao": "Admin add_members pushes every username into group.users without skipping existing members, so adding someone already in the group hits the unique group_users index, returns a 500 and leaves earlier users partially added.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02",
+    "descricao": "The public group members endpoint takes `limit` from params with no upper bound or positivity check, letting a visitor request huge pages or trigger a 500 with a negative limit.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#snloop-01",
+    "descricao": "Admin remove_member calls group.users.delete with a raw integer id, which raises RecordNotFound (404/500) when the user is not or no longer a member, e.g. on concurrent removal.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "add-html-sanitizer-for-translated-message-resources-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "02f48f776f43734d1ac8914d3ad6a7115acdcb33",
+  "base": "f3c8e8f3487112f2c99aa78400430cce2d30be39",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "lines": [
+     101,
+     111
+    ],
+    "texto": "WHAT: prefix/suffix trimming computes start and end independently with no overlap guard, so value.substring(start, value.length() - end) throws when start + end exceeds length. WHY: aborts the whole theme verification with StringIndexOutOfBoundsException instead of reporting the offending key. HOW: cap the suffix scan by the remaining length (end < length - start) before substring."
+   },
+   {
+    "id": "S2",
+    "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "lines": [
+     65,
+     80
+    ],
+    "texto": "WHAT: verifySafeHtml throws unchecked RuntimeException when the translation or derived English file cannot be read. WHY: an absent English counterpart (new locale file or bad resources-community mapping) crashes the Maven build with a stack trace instead of a collectable verification error. HOW: throw MojoExecutionException or record the failure in messages like other checks."
+   },
+   {
+    "id": "S3",
+    "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+    "lines": [
+     68,
+     72
+    ],
+    "texto": "The Lithuanian loginTotpStep1 value is now Italian ('Installa una delle...'), so Lithuanian users will see Italian. Restore a Lithuanian translation (without vendor links, matching the other locales' intent) instead of the Italian copy-paste."
+   },
+   {
+    "id": "S4",
+    "file": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties",
+    "lines": [
+     98,
+     102
+    ],
+    "texto": "The Lithuanian totpStep1 value is now Italian, same copy-paste error as the login bundle. Lithuanian account users will see Italian. Provide the Lithuanian translation instead."
+   },
+   {
+    "id": "S5",
+    "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+    "lines": [
+     109,
+     113
+    ],
+    "texto": "The zh_CN value uses Traditional forms (\u624b\u6a5f, \u61c9\u7528\u7a0b\u5f0f, \u5b89\u88dd) instead of Simplified (\u624b\u673a, \u5e94\u7528\u7a0b\u5e8f, \u5b89\u88c5). Simplified-Chinese users get the wrong script variant. Use the Simplified wording consistent with the rest of the zh_CN file."
+   },
+   {
+    "id": "S6",
+    "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "lines": [
+     102,
+     111
+    ],
+    "texto": "The suffix-strip loop allows end to grow past start when one string is a prefix-extension of the other (e.g. value='aaa' vs sanitized='aa': start=2, end=2), making value.substring(start, value.length()-end) throw StringIndexOutOfBoundsException. Bound the suffix scan by the remaining length (end < length - start)."
+   },
+   {
+    "id": "S7",
+    "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "lines": [
+     101,
+     111
+    ],
+    "texto": "Prefix/suffix trimming computes start and end independently; when they overlap (one string is prefix of the other) value.substring(start,value.length-end) throws StringIndexOutOfBoundsException and aborts verification instead of reporting Illegal HTML. Clamp end to length-start before substring."
+   },
+   {
+    "id": "S8",
+    "file": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties",
+    "lines": [
+     101,
+     101
+    ],
+    "texto": "File declares locale lt but new totpStep1 value is Italian, not Lithuanian. Readers of the lt theme will see the wrong language. Replace with Lithuanian text without HTML anchors."
+   },
+   {
+    "id": "S9",
+    "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+    "lines": [
+     71,
+     71
+    ],
+    "texto": "File declares locale lt but new loginTotpStep1 value is Italian, not Lithuanian. Same wrong-language substitution as the account bundle. Replace with Lithuanian text without HTML anchors."
+   },
+   {
+    "id": "S10",
+    "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+    "lines": [
+     112,
+     112
+    ],
+    "texto": "File declares zh_CN (Simplified) but new value uses Traditional forms\u624b\u6a5f/\u61c9\u7528\u7a0b\u5f0f. Use Simplified\u624b\u673a/\u5e94\u7528\u7a0b\u5e8f to match the declared locale."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+    "descricao": "The Lithuanian TOTP setup step was replaced with Italian text in both the account and login bundles.",
+    "textoGolden": "The translation is in Italian instead of Lithuanian. This should be translated to Lithuanian to match the file's locale (messages_lt.properties).",
+    "comentarios": [
+     {
+      "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+      "lines": [
+       71,
+       71
+      ],
+      "texto": "The Lithuanian OTP setup instruction has been replaced with an Italian sentence. login-config-totp.ftl renders this message directly, so users selecting Lithuanian receive an instruction in the wrong language; the same copied sentence also appears in the Lithuanian account bundle at line 101. Replace both values with the Lithuanian translation of the new installation instruction."
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties",
+      "lines": [
+       101,
+       101
+      ],
+      "texto": "The replacement OTP setup instruction is Italian (\u201cInstalla una delle seguenti applicazioni sul tuo cellulare\u201d), but this is the Lithuanian locale and the surrounding setup steps are Lithuanian. Translate the new instruction into Lithuanian rather than copying the Italian translation. The same incorrect replacement appears in the login bundle at themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties:71 and should be corrected there too; otherwise Lithuanian users see an untranslated first step in both OTP setup flows."
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+      "lines": [
+       71,
+       71
+      ],
+      "texto": "The replacement OTP setup instruction is Italian, not Lithuanian (`Installa una delle seguenti applicazioni sul tuo cellulare`). The same replacement was made for `totpStep1` in the Lithuanian account bundle. Translate both replacements into Lithuanian so selecting Lithuanian does not display Italian instructions during authenticator setup."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+    "descricao": "The zh_CN totpStep1 translation is written in Traditional Chinese instead of Simplified Chinese.",
+    "textoGolden": "The totpStep1 value uses Traditional Chinese terms in the Simplified Chinese file (zh_CN), which is likely incorrect for this locale. Please verify the locale\u2011appropriate translation.",
+    "comentarios": [
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+      "lines": [
+       112,
+       112
+      ],
+      "texto": "The zh_CN (Simplified Chinese) file was given Traditional Chinese characters: totpStep1=\u5728\u60a8\u7684\u624b\u6a5f\u4e0a\u5b89\u88dd\u4ee5\u4e0b\u61c9\u7528\u7a0b\u5f0f\u4e4b\u4e00\uff1a. Compare the unchanged neighbouring lines (e.g. '\u6253\u5f00\u5e94\u7528\u626b\u63cf\u4e8c\u7ef4\u7801\u2026') which use Simplified forms; \u624b\u6a5f/\u61c9\u7528\u7a0b\u5f0f/\u5b89\u88dd are Traditional. zh_CN must be Simplified Chinese, so this string is in the wrong script/variant for the locale."
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+      "lines": [
+       112,
+       112
+      ],
+      "texto": "totpStep1 in messages_zh_CN uses Traditional Chinese (\u624b\u6a5f, \u5b89\u88dd, \u61c9\u7528\u7a0b\u5f0f), not Simplified Chinese as the rest of the file does. Replace it with the Simplified form: \u5728\u60a8\u7684\u624b\u673a\u4e0a\u5b89\u88c5\u4ee5\u4e0b\u5e94\u7528\u4e4b\u4e00\uff1a"
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+      "lines": [
+       112,
+       112
+      ],
+      "texto": "The Simplified Chinese (zh_CN) totpStep1 was replaced with Traditional Chinese (\"\u5728\u60a8\u7684\u624b\u6a5f\u4e0a\u5b89\u88dd\u4ee5\u4e0b\u61c9\u7528\u7a0b\u5f0f\u4e4b\u4e00\uff1a\"). Use the Simplified form, \"\u5728\u60a8\u7684\u624b\u673a\u4e0a\u5b89\u88c5\u4ee5\u4e0b\u5e94\u7528\u7a0b\u5e8f\u4e4b\u4e00\uff1a\"."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#04",
+    "descricao": "The method santizeAnchors is misspelled; it should be sanitizeAnchors.",
+    "textoGolden": "The method name 'santizeAnchors' should be 'sanitizeAnchors' (missing 'i').",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#05",
+    "descricao": "HTML_TAGS is a non-static, non-private field instead of a private static final constant.",
+    "textoGolden": "Field HTML_TAGS should be declared as 'private static final' following Java naming conventions for constants",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+    "descricao": "The diff-trimming code computes common prefix and suffix independently, so they can overlap and substring throws StringIndexOutOfBoundsException, crashing the verifier instead of reporting the illegal HTML.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       101,
+       111
+      ],
+      "texto": "The common prefix (start) and common suffix (end) are computed independently and can overlap, for example value \"aa\" vs sanitized \"a\". Then substring(start, length - end) gets begin > end and throws StringIndexOutOfBoundsException, so the verifier crashes instead of reporting the illegal HTML. Bound the suffix scan so that start + end <= min(value.length(), sanitized.length()), e.g. `while (end < min - start && ...)`."
+     },
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       102,
+       111
+      ],
+      "texto": "The common prefix and common suffix are computed independently and can overlap, so `sanitized.substring(start, sanitized.length() - end)` can have start > end and throw StringIndexOutOfBoundsException. This crashes the verifier instead of reporting 'Illegal HTML'. Cap the suffix scan with `end < Math.min(value.length(), sanitized.length()) - start`."
+     },
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       102,
+       111
+      ],
+      "texto": "WHAT: Common prefix/suffix stripping for the diff message can compute start+end larger than the string length and call substring(start, length-end) with start > end. WHY: Throws StringIndexOutOfBoundsException inside the key loop and crashes verification instead of reporting Illegal HTML. HOW: Clamp end so start+end <= min lengths, e.g. stop suffix scan when end >= length-start."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#07",
+    "descricao": "normalizeValue blanks the entire choice expression for some keys before HTML validation, so markup placed inside a choice branch of those keys bypasses the new verifier.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       124,
+       126
+      ],
+      "texto": "Choice normalization removes all branch content before HTML validation, allowing prohibited markup to bypass the new translation policy. A translated error-invalid-multivalued-size value such as `{2,choice,0#values|1#<a href=\"https://malicious.example\">value</a>|1<values}` becomes `...` and passes without checking the injected link, while consumers using MessageFormat expand that branch into the rendered message. Preserve and validate branch text, normalizing only the choice comparison syntax that conflicts with HTML parsing."
+     },
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       124,
+       127
+      ],
+      "texto": "WHAT: normalizeValue replaces the entire {n,choice,...} block with ... before sanitizing, so HTML inside choice options is never checked. WHY: A translation can smuggle tags (e.g. {2,choice,0#<script>...}) in error-invalid-multivalued-size/linkExpirationFormatter keys and pass the verifier, reaching UI rendering as XSS. HOW: Sanitize/validate the choice body instead of blanking it, or run the HTML policy on the inner choice text as well."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#10",
+    "descricao": "The account and admin UI bundles now use Java MessageFormat placeholders and choice syntax for error-invalid-multivalued-size, but i18next expects {{n}}, so the UI shows literal {0}/{1}/{2} and the raw choice text.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "js/apps/admin-ui/maven-resources/theme/keycloak.v2/admin/messages/messages_en.properties",
+      "lines": [
+       3138,
+       3138
+      ],
+      "texto": "The admin-ui bundle is consumed by react-i18next, which interpolates with double-brace `{{0}}` syntax (the previous value was `Attribute {{0}} ... {{2}}`). This line was rewritten to Java MessageFormat/ICU syntax (`{0}` ... `{2,choice,0#values|1#value|1<values}`), which i18next does not understand: the placeholders will not be substituted and the literal `{2,choice,...}` text will be shown to users. Keep the JS-side value in `{{0}}` form (and don't introduce ICU ChoiceFormat into the JS bundle); the ICU/choice spelling belongs only in the Java theme properties."
+     },
+     {
+      "file": "js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties",
+      "lines": [
+       188,
+       188
+      ],
+      "texto": "Same contract break in the account-ui bundle: the value was `Attribute {{0}} must have at least {{1}} and at most {{2}} value(s).` (i18next double-brace interpolation) and was changed to `{0}`/`{2,choice,...}` MessageFormat+ICU syntax. The account console's i18next based consumer was not updated to match, so interpolation will fail and the raw placeholder/choice syntax will be rendered. Restore `{{0}}`-style placeholders for the JS bundle."
+     },
+     {
+      "file": "js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties",
+      "lines": [
+       188,
+       188
+      ],
+      "texto": "The account-ui bundle is consumed by i18next, which interpolates with double braces (the original string was `Attribute {{0}} must have at least {{1}} and at most {{2}} value(s).`). This PR aligned the value to the Java theme convention, replacing `{{0}}/{{1}}/{{2}}` with `{0}/{1}/{2}` and adding ICU `{2,choice,...}`. i18next will no longer substitute the placeholders and cannot interpret the ICU choice, so the account UI shows the raw `{0}`, `{1}`, `{2}` and literal choice text. Keep the JS-side double-brace form for this bundle (adapt the choice accordingly) rather than the Java single-brace/ICU form used by the theme messages."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#opa-01",
+    "descricao": "If the English counterpart of a messages_*.properties file does not exist, verifySafeHtml throws an unchecked RuntimeException that escapes the mojo, crashing the build instead of reporting a validation message.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "8ab88145113dd23a930e23b9cbbcf8b30e4c0b17",
+  "base": "a5d290951def84afdcc4c88d2f1f20023fc36e2a",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     838,
+     843
+    ],
+    "texto": "WHAT: OptimizedCursorPaginator.get_item_key calls math.floor/ceil directly on the datetime key and value_from_cursor returns raw numeric value. WHY: The sole caller uses order_by=\"-datetime\" so getattr returns a datetime, causing TypeError on every page with results and mismatched filter type in build_queryset. HOW: Reuse DateTimePaginator conversion (strftime to ms timestamp and fromtimestamp back to datetime)."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     877,
+     882
+    ],
+    "texto": "WHAT: Negative cursor.offset is passed directly to Django queryset slicing queryset[start_offset:stop]. WHY: Django rejects any negative slice bound with ValueError/AssertionError, so an attacker-supplied cursor like 0:-5:0 triggers an unhandled 500, enabling authenticated DoS contrary to the safe-handling comment."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     179,
+     184
+    ],
+    "texto": "WHAT: The is_prev branch keeps the raw negative offset and slices the queryset with it. WHY: Django raises on negative slice bounds, so a crafted prev cursor (e.g. 0:-1:1) crashes with 500 instead of a 400, and forward clamping silently rewrites invalid cursors to page one."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+    "lines": [
+     70,
+     73
+    ],
+    "texto": "WHAT: Advanced/negative-offset path is gated on has_global_access which defaults True for organization members. WHY: Any standard member with org:write can activate the vulnerable optimized paginator via ?optimized_pagination=true, defeating the intended superuser/admin-only restriction."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     877,
+     882
+    ],
+    "texto": "Allowing negative start_offset in queryset[start_offset:stop] breaks execution: Django QuerySet.__getitem__ raises AssertionError for any negative slice bound, so a crafted cursor with negative offset (reachable via ?optimized_pagination=true&cursor=) throws unhandled exception and returns 500 instead of a page. Clamp to max(0, offset) or reject negative cursors with 400."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+    "lines": [
+     73,
+     83
+    ],
+    "texto": "OptimizedCursorPaginator.get_item_key (paginator.py:838-840) does int(math.floor/ceil(value)) which requires a numeric key, but this endpoint passes order_by=\"-datetime\" so value is a datetime object and math.floor raises TypeError; value_from_cursor also lacks DateTimePaginator's datetime parsing. Do not route datetime-ordered audit logs through the numeric optimized paginator."
+   },
+   {
+    "id": "S7",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     179,
+     184
+    ],
+    "texto": "Comment states negative offsets are safe because queryset handles boundaries, but code keeps negative start_offset and Django rejects negative slicing. Prose disagrees with code; correct or remove claim and clamp offsets."
+   },
+   {
+    "id": "S8",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     877,
+     882
+    ],
+    "texto": "Django QuerySets raise AssertionError on negative slicing, and Python list negative slices wrap from the end. Allowing start_offset < 0 to reach queryset[start:stop] either crashes or returns tail rows outside pagination bounds. Clamp to >=0 / reject negative cursors instead of passing them through."
+   },
+   {
+    "id": "S9",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     182,
+     184
+    ],
+    "texto": "start_offset is clamped with max(0,offset) but the is_prev trimming check at line 192 compares len(results)==offset+limit+extra using raw offset. With offset<0 the fetched window is larger than the compared value by |offset|, so the extra-row trim never triggers (or triggers wrongly for is_prev path which still passes negative offset to slice). Use start_offset consistently or reject negative offsets."
+   },
+   {
+    "id": "S10",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     884,
+     892
+    ],
+    "texto": "start_offset is computed from offset (clamped with max(0,offset)) and used for slicing, but the prev-page boundary check still uses the original offset. When clamping applies the length comparison is off, causing incorrect trimming/reversing and wrong pagination results. Use start_offset in the len() comparison."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+    "descricao": "OptimizedCursorPaginator passes negative cursor offsets straight into Django queryset slicing, which Django does not support, so requests with a negative offset raise an error instead of returning a page.",
+    "textoGolden": "The OptimizedCursorPaginator in organization_auditlogs.py attempts to use negative slice offsets on Django querysets, but Django querysets do not support negative slicing and will raise an AssertionError.",
+    "comentarios": [
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       877,
+       882
+      ],
+      "texto": "The advanced negative-offset branch passes a negative slice start directly to a Django QuerySet, which does not support negative indexing. A cursor such as 0:-1:0 is accepted by Cursor.from_string but crashes the optimized audit-log request instead of providing reverse pagination. Reject negative offsets with BadPaginationError or implement reverse traversal using nonnegative slices and reversed ordering."
+     },
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       874,
+       880
+      ],
+      "texto": "The comment claiming that Django ORM 'properly handles negative slicing automatically' is false: Django QuerySet slicing rejects negative indices. This branch passes cursor.offset straight into queryset[start_offset:stop], so it raises rather than supplying the documented negative-offset pagination. Correct the negative-offset support claims here, in the class docstring, and in the new BasePaginator boundary-handling comment (or implement actual supported boundary handling) so callers are not promised a pagination mode that the underlying queryset cannot provide."
+     },
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       877,
+       882
+      ],
+      "texto": "Django QuerySets do not support negative slice bounds. Passing a negative cursor offset directly into `queryset[start_offset:stop]` raises an exception instead of enabling advanced pagination. Validate or normalize negative offsets before slicing, or implement reverse traversal through ordering/filtering rather than negative slices."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#02",
+    "descricao": "The comment added to BasePaginator claims negative offsets are allowed and safely handled by the queryset, but the code clamps non-prev offsets to zero and leaves prev offsets as before, so the comment misdescribes the behaviour.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       179,
+       184
+      ],
+      "texto": "The added comment says this change will \"allow negative offsets to enable efficient bidirectional pagination ... safe because the underlying queryset will handle boundary conditions\", but the statement it annotates, line 182, is `start_offset = max(0, offset) if not cursor.is_prev else offset` \u2014 it clamps negative offsets to 0, i.e. it does the opposite of what the comment claims and leaves the 'negative offset' (offset < 0) paging behaviour exactly as before. The comment is now untrue for the code it sits on; either drop the 'allow negative offsets' wording or make the code actually permit them."
+     },
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       179,
+       184
+      ],
+      "texto": "The comment declares this change `allow[s] negative offsets to enable efficient bidirectional pagination`, but the actual computation is `start_offset = max(0, offset) if not cursor.is_prev else offset`, which clamps non-prev offsets at 0 \u2014 i.e. it never permits a negative offset. The declared optimization is a no-op relative to the original `queryset[offset:stop]`; the comment describes behavior the code does not have."
+     },
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       182,
+       184
+      ],
+      "texto": "BasePaginator now passes the raw `offset` to the slice whenever `cursor.is_prev` is true (`max(0, offset) if not cursor.is_prev else offset`). A negative offset from a user-supplied prev cursor therefore reaches `queryset[negative:stop]`, which Django rejects. This crashes every endpoint that uses BasePaginator. Fix: always use `max(0, offset)`, or validate the offset when the cursor is parsed."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#04",
+    "descricao": "The OptimizedCursorPaginator docstring claims streamlined boundary handling, an optimized query path and backward compatibility that the implementation, a copy of BasePaginator plus a negative-offset branch, does not provide.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       821,
+       832
+      ],
+      "texto": "Docstring lists 'Streamlined boundary condition handling', 'Optimized query path for large datasets', and 'maintaining backward compatibility', but get_result (845-886) is a copy of BasePaginator with only a negative-offset branch added \u2014 no streamlined handling or optimized path exists, and negative-offset slicing breaks prior cursor semantics. Doc describes behavior the function does not produce \u2014 align doc to code or implement the claimed handling."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+    "descricao": "OptimizedCursorPaginator computes cursor keys with math.floor/ceil on the raw attribute, but the audit log endpoint uses it with order_by='-datetime', so building the cursor raises TypeError for any non-empty result.",
+    "textoGolden": "get_item_key assumes a numeric key, but the paginator is used with order_by=-datetime in the audit logs endpoint; calling math.floor/ceil on a datetime will raise a TypeError.",
+    "comentarios": [
+     {
+      "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+      "lines": [
+       73,
+       83
+      ],
+      "texto": "OptimizedCursorPaginator requires numeric integer keys (get_item_key uses math.floor/ceil + int, cursor_value defaults to 0) but is instantiated here with order_by=\"-datetime\". This mismatched producer/consumer contract breaks pagination for datetime-ordered audit logs. Fix: do not use OptimizedCursorPaginator for datetime ordering; keep DateTimePaginator or make OptimizedCursorPaginator datetime-aware."
+     },
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       838,
+       843
+      ],
+      "texto": "WHAT: OptimizedCursorPaginator.get_item_key/value_from_cursor mishandles datetime ordering by calling math.floor/ceil directly on a datetime and returning raw int cursor value. WHY: Used with order_by=\"-datetime\" it crashes with TypeError on floor(datetime) when building cursors and filters the datetime column against an int in build_queryset, breaking pagination. HOW: Copy DateTimePaginator logic \u2014 timestamp via strftime/multiplier with floor/ceil and convert cursor value back with datetime.fromtimestamp."
+     },
+     {
+      "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+      "lines": [
+       79,
+       80
+      ],
+      "texto": "The optimized branch selects a numeric-key paginator while ordering by the datetime field. On any nonempty first page, build_cursor invokes OptimizedCursorPaginator.get_item_key, which calls math.ceil on a datetime and raises TypeError; nonzero cursors also lack the datetime conversion provided by DateTimePaginator. Make the optimized paginator inherit DateTimePaginator or preserve its timestamp encoding and decoding."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#07",
+    "descricao": "The audit log endpoint always dereferences organization_context.member.has_global_access, which crashes with AttributeError for authorized token requests that have no member, even on the default pagination path.",
+    "textoGolden": "When requests are authenticated with API keys or org auth tokens (which have user_id=None), organization_context.member is None. Line 71 attempts to access organization_context.member.has_global_access without checking if member is None, causing an AttributeError crash when optimized_pagination=true is used, even though the request passed all permission checks with valid org:write scope.",
+    "comentarios": [
+     {
+      "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+      "lines": [
+       71,
+       71
+      ],
+      "texto": "The unconditional advanced-access check dereferences organization_context.member although RpcUserOrganizationContext permits member=None. Authorized non-member organization-token requests therefore raise AttributeError even when optimized_pagination is absent, instead of returning audit logs through the existing paginator. Guard the optional member and evaluate eligibility only when optimized pagination is requested."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#08",
+    "descricao": "The comments and enable_advanced variable describe the optimized_pagination path as a performance optimization for administrators, hiding that it enables negative-offset slicing.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+      "lines": [
+       68,
+       72
+      ],
+      "texto": "The comments describe a 'performance optimization' for 'authorized administrators', and the variable is named enable_advanced. In fact it opts into negative-offset slicing, and the optimized_pagination query parameter gates it. The names and comments hide what the flag actually enables. Rename them to say what is enabled, or remove the path."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#09",
+    "descricao": "A user-controlled optimized_pagination flag lets any member with global access switch to a paginator that accepts unvalidated negative cursor offsets, widening the attack surface and causing server errors.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+      "lines": [
+       70,
+       83
+      ],
+      "texto": "A user-controlled `optimized_pagination` query flag switches the endpoint to a paginator that accepts attacker-supplied negative cursor offsets. This is available to any user with global access, not only to real admins. It widens the attack surface for unvalidated cursor offsets and causes server errors. The comment 'permissions are checked at the queryset level' is not backed by any check in the paginator. Fix: remove the optimized path, or have the paginator validate and clamp offsets."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01",
+    "descricao": "BasePaginator.get_result clamps negative offsets only for next cursors; a prev cursor with a negative offset is passed straight into the queryset slice, which Django rejects with an error (500) on every paginated endpoint.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-02",
+    "descricao": "The new comment in Cursor says negative offsets are allowed to enable efficient reverse pagination, but the constructor only calls int(offset) and provides no such behaviour.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#oph-01",
+    "descricao": "OptimizedCursorPaginator.value_from_cursor returns the raw integer cursor value, which is then compared against the datetime column, so next/prev cursor pagination of audit logs breaks.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#snapi-01",
+    "descricao": "Comments in OptimizedCursorPaginator.get_result claim Django handles negative slicing and that permissions are checked at the queryset level; both are false.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "7355f05e6aafe2a7acc6434fb40c686665416606",
+  "base": "7ea067aae9be56cb2622bce6563864817c3dfeaf",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+    "lines": [
+     64,
+     71
+    ],
+    "texto": "WHAT: Global canManage() grants manage permission when caller has only VIEW scope. WHY: Allows a viewer with all-groups VIEW to pass requireManage() gates and create/manage groups (privilege escalation). HOW: Check only MANAGE scope for manage, e.g. hasPermission(null, MANAGE)."
+   },
+   {
+    "id": "S2",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+    "lines": [
+     119,
+     125
+    ],
+    "texto": "WHAT: getGroupIdsWithViewPermission passes authz resource UUID instead of group ID to hasPermission and granted set. WHY: Breaks view-members filtering \u2014 UsersResource GROUPS attribute gets wrong IDs so user search/count returns empty/wrong results. HOW: Use groupResource.getName() (group ID per AdminPermissionsSchema.resolveGroup) for both check and add."
+   },
+   {
+    "id": "S3",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/UserPermissionsV2.java",
+    "lines": [
+     46,
+     62
+    ],
+    "texto": "WHAT: canView(user)/canManage(user) dropped ADMIN role from hasOneAdminRole check. WHY: Admins relying on ADMIN role lose view/manage access (denial) diverging from prior contract and V1 behavior. HOW: Restore AdminRoles.ADMIN in the role checks or prove ADMIN is handled elsewhere."
+   },
+   {
+    "id": "S4",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+    "lines": [
+     132,
+     135
+    ],
+    "texto": "The Javadoc for requireManageMembers states it throws if canManageMembership returns false, duplicating requireManageMembership doc. Name and link disagree; should reference canManageMembers."
+   },
+   {
+    "id": "S5",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+    "lines": [
+     142,
+     147
+    ],
+    "texto": "The @return documents Stream of IDs but signature returns Set<String>. Prose describes return shape function does not produce; change to Set."
+   },
+   {
+    "id": "S6",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+    "lines": [
+     130,
+     152
+    ],
+    "texto": "hasPermission falls back to getResourceTypeResource which can return null; dereferencing it causes NPE/unhandled 500 instead of deny. Add null guard to return false."
+   },
+   {
+    "id": "S7",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+    "lines": [
+     121,
+     125
+    ],
+    "texto": "Resource name is the groupId (AdminPermissionsSchema creates group resources with name=group.getId()), but this loop passes groupResource.getId() (internal UUID) to hasPermission which does findByName(server, groupId) and stores getId() in the granted set. Use getName() for both lookup and result so filtering via UserModel.GROUPS receives real group IDs and per-group evaluation hits the correct resource instead of falling back to all-groups."
+   },
+   {
+    "id": "S8",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+    "lines": [
+     64,
+     71
+    ],
+    "texto": "Global canManage() accepts VIEW or MANAGE making it identical to canView() and disagreeing with canManage(GroupModel) which requires only MANAGE. A caller with only VIEW on all-groups passes requireManage() and can create/update groups. Require only MANAGE for the global manage check."
+   },
+   {
+    "id": "S9",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+    "lines": [
+     121,
+     125
+    ],
+    "texto": "Producer/consumer mismatch: AdminPermissionsSchema stores the Keycloak groupId in Resource.name (Resource.id is the authz UUID), and hasPermission()/downstream UserModel.GROUPS filtering expect the groupId. Using groupResource.getId() for both the permission check and the granted set means findByName misses and UsersResource gets UUIDs that match no groups. Use groupResource.getName() on both lines."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+    "descricao": "GroupPermissionsV2.canManage() accepts the VIEW scope as well as MANAGE, so an admin with only view permission on all groups passes manage checks such as group creation.",
+    "textoGolden": "In GroupPermissionsV2.canManage(), the permission fallback checks for both VIEW and MANAGE scopes (hasPermission(null, AdminPermissionsSchema.VIEW, AdminPermissionsSchema.MANAGE)), but canManage() should only grant access for MANAGE scope, not VIEW. This means users with only VIEW permission on groups can pass the canManage() check, granting them write access they should not have. The canView() method correctly checks both VIEW and MANAGE, but canManage() should only check MANAGE.",
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       64,
+       71
+      ],
+      "texto": "The no-arg canManage() returns true when the caller holds only an all-groups VIEW permission (`hasPermission(null, VIEW, MANAGE)`), whereas the per-group canManage(GroupModel) (line 79) requires MANAGE. WHAT: a caller with only the view scope on all groups is treated as having manage rights. WHY: canManage()/requireManage() gate group creation and other manage operations (e.g. GroupsResource.addGroup -> auth.groups().requireManage()), so a read-only viewer of all groups can create/manage groups \u2014 privilege escalation. HOW: drop VIEW from the scope list so canManage() only returns true for MANAGE, aligning it with canManage(GroupModel): `return hasPermission(null, AdminPermissionsSchema.MANAGE);`"
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       65,
+       71
+      ],
+      "texto": "GroupPermissionsV2.canManage() (line 70) evaluates hasPermission(null, AdminPermissionsSchema.VIEW, AdminPermissionsSchema.MANAGE), identical to canView() at line 52, so a caller granted only the VIEW scope on the all-groups resource is treated as a group manager. The per-group overload canManage(GroupModel) (line 79) correctly requires only MANAGE, and AdminPermissionsSchema defines MANAGE as the manage scope for GROUPS_RESOURCE_TYPE, so the two checks disagree. requireManage() therefore succeeds for read-only administrators, letting them create/update/delete groups, add subgroups and map group roles. Drop VIEW from the scope list so canManage() checks MANAGE only."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       64,
+       71
+      ],
+      "texto": "WHAT: GroupPermissionsV2.canManage() grants global manage on VIEW scope (hasPermission(null, VIEW, MANAGE)). WHY: A caller with only view-all-groups permission passes the manage check, allowing group creation/management reserved for manage. HOW: Check only MANAGE, e.g. hasPermission(null, AdminPermissionsSchema.MANAGE)."
+     }
+    ]
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+    "descricao": "getGroupIdsWithViewPermission uses the authorization resource id instead of the resource name (the group id) for both the permission check and the returned set, so per-group view-members grants are not resolved and user filtering gets wrong ids.",
+    "textoGolden": "In getGroupIdsWithViewPermission, hasPermission is called with groupResource.getId() and the same groupResource.getId() is added to granted, but hasPermission resolves resources by name (treating the argument as a group id) and the GroupPermissionEvaluator contract says this method returns group IDs that are later used as UserModel.GROUPS and in getUsersCount group filters. This mismatch means per-group VIEW_MEMBERS/MANAGE_MEMBERS permissions may not yield the expected group IDs for filtering and counts, and evaluation may effectively only look at the type-level 'all-groups' resource; consider revisiting whether this should operate on the underlying group ids (resource names) instead so it aligns with the JPA queries and the interface contract.",
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       119,
+       125
+      ],
+      "texto": "WHAT: getGroupIdsWithViewPermission() uses authz resource IDs (groupResource.getId()) as group IDs and looks them up via findByName. WHY: Resource names equal group IDs (AdminPermissionsSchema.resolveGroup returns group.getId()), so findByName(resourceId) misses and the returned set contains unusable IDs, breaking user search/count filtering by group. HOW: Use groupResource.getName() like V1 does (resource.getName().substring prefix / name) for both the hasPermission lookup and the granted set."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       119,
+       125
+      ],
+      "texto": "findByType callback passes groupResource.getId() to hasPermission() and granted set, but AdminPermissionsSchema.resolveGroup defines resource name (not UUID) as groupId and hasPermission looks up via findByName(server, groupId). Use groupResource.getName() for both check and granted set, otherwise lookups miss to all-groups fallback and callers receive authz UUIDs instead of group IDs."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       119,
+       125
+      ],
+      "texto": "getGroupIdsWithViewPermission uses groupResource.getId() for lookup and result collection, but V2 group resources are named with the group ID (resolveGroup returns group.getId()) and hasPermission does findByName. Use groupResource.getName() in both places to evaluate the correct per-group resource and to return actual group IDs."
+     }
+    ]
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+    "descricao": "Per-group resources are created without the Groups type, so getGroupIdsWithViewPermission's findByType never sees specific group grants.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       121,
+       121
+      ],
+      "texto": "findByType(GROUPS_RESOURCE_TYPE) does not enumerate the specific group resources created by AdminPermissionsSchema.getOrCreateResource, because that method creates them without setting their type. Consequently, specific VIEW_MEMBERS or MANAGE_MEMBERS grants are omitted from the group IDs used for user counts and database filtering. Assign the Groups type to specific group resources and ensure the all-Groups resource is not treated as a model group."
+     }
+    ]
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#04",
+    "descricao": "The user search filter still requires legacy 'group.resource.<id>' resources, so with V2 group permissions the members of authorized groups are excluded from user searches.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/UsersResource.java",
+      "lines": [
+       448,
+       450
+      ],
+      "texto": "The new V2 group permission IDs are passed into a JPA filter that still requires a legacy group.resource.<groupId> authorization resource. JpaUserProvider.groupsWithPermissionsSubquery checks for that prefixed name, whereas AdminPermissionsSchema creates V2 group resources named only with the group ID, so authorized group members are excluded from user searches even with valid group IDs. Update the database filtering path to support V2 resource naming rather than requiring a legacy V1 resource."
+     }
+    ]
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+    "descricao": "The new Javadoc for requireManageMembers points to canManageMembership instead of canManageMembers.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+      "lines": [
+       132,
+       135
+      ],
+      "texto": "The javadoc for requireManageMembers says it throws ForbiddenException if canManageMembership(GroupModel) returns false, but this method is the require-variant of canManageMembers, not canManageMembership. The text was copied from requireManageMembership above it. It should reference canManageMembers so the documented contract matches the method name and behavior."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+      "lines": [
+       132,
+       135
+      ],
+      "texto": "The Javadoc for requireManageMembers says it throws if canManageMembership(GroupModel) returns false. It should refer to canManageMembers(GroupModel), which is a different check, so the doc misdescribes the method."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+      "lines": [
+       132,
+       135
+      ],
+      "texto": "Javadoc for requireManageMembers references canManageMembership instead of canManageMembers (copy-paste). Fix link to {@link #canManageMembers(GroupModel)} so the contract describes the method it guards."
+     }
+    ]
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#07",
+    "descricao": "The Javadoc of getGroupIdsWithViewPermission says it returns a Stream though the method returns a Set.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+      "lines": [
+       142,
+       147
+      ],
+      "texto": "The Javadoc for getGroupIdsWithViewPermission says it returns a 'Stream of IDs', but the method returns Set<String>. Change the @return text to describe a Set of group IDs."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+      "lines": [
+       142,
+       147
+      ],
+      "texto": "@return says 'Stream of IDs' but method returns Set<String> getGroupIdsWithViewPermission. Fix doc to 'Set of IDs' to match the signature."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+      "lines": [
+       145,
+       147
+      ],
+      "texto": "The new @return documentation promises a Stream of IDs, but the method declares Set<String> and both implementations return sets. Describe a set of IDs instead, so the documented return contract matches what callers actually receive."
+     }
+    ]
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02",
+    "descricao": "GroupPermissionsV2.getGroupIdsWithViewPermission runs a full permission evaluation for every group resource on each user search and count, costing O(groups) policy evaluations per request.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#snloop-01",
+    "descricao": "GroupPermissionsV2.hasPermission passes getResourceTypeResource's result to policyStore.findByResource without a null check, causing an NPE and 500 on group listing and user search when the Groups type resource is missing.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "eb9623b4e787303a3bd15e10bbbdb78d59875ac6",
+  "base": "28e3db2520d4ea28c57b08da57b83917ba7b2e15",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/spans/buffer.py",
+    "lines": [
+     194,
+     200
+    ],
+    "texto": "WHAT: Existing span-buf:s:* keys written as SETs by old code are now accessed with ZADD/ZCARD/ZUNIONSTORE/ZSCAN/ZPOPMIN which fail with WRONGTYPE. WHY: Keys live for redis_ttl (3600s) across a rolling deploy so mixed writers/readers hit type errors and process_spans/flush fails. HOW: Use new key names/version or add type migration before switching commands."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/spans/consumers/process/factory.py",
+    "lines": [
+     134,
+     142
+    ],
+    "texto": "WHAT: process_batch indexes val[\"end_timestamp_precise\"] directly with no fallback. WHY: A single span event missing the field raises KeyError and aborts the whole ValuesBatch in buffer.process_spans (poison-pill/consumer stall). HOW: Use .get with fallback/clamp instead of direct indexing."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/scripts/spans/add-buffer.lua",
+    "lines": [
+     46,
+     54
+    ],
+    "texto": "WHAT: Both merges use ZUNIONSTORE default AGGREGATE SUM so a duplicate payload present in both inputs gets its end-timestamp score summed. WHY: Doubled score makes the duplicate look newest and immune to ZPOPMIN, corrupting the claimed recency/hierarchy eviction order. HOW: Pass AGGREGATE MAX (or MIN) to preserve timestamp semantics."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/scripts/spans/add-buffer.lua",
+    "lines": [
+     62,
+     64
+    ],
+    "texto": "WHAT: Eviction scores only by end timestamp with no hierarchy boost, so ZPOPMIN can evict the segment/root payload while span-buf:hrs stays \"1\". WHY: Flush then emits a rootless/incomplete segment downstream despite has_root_span=true, breaking segment assembly the old count-skip avoided. HOW: Exclude or score-boost the segment span before popping."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/spans/buffer.py",
+    "lines": [
+     197,
+     199
+    ],
+    "texto": "WHAT: Untrusted SDK-controlled end_timestamp_precise is used verbatim as the ZSET score driving ZPOPMIN eviction. WHY: An attacker can send far-future timestamps to pin their spans and force eviction of legitimate spans in the same segment, biasing sampling/storage. HOW: Validate/clamp the score server-side instead of trusting client time."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/scripts/spans/add-buffer.lua",
+    "lines": [
+     46,
+     55
+    ],
+    "texto": "WHAT: Every span insert runs up to two ZUNIONSTORE full copies of the up-to-1000-member set plus ZCARD/ZPOPMIN. WHY: Building a segment span-by-span copies O(N) per insert, i.e. O(N^2) total per segment and O(B*N) per batch in the ingest hot path. HOW: Merge once per batch or skip union when keys are already joined."
+   },
+   {
+    "id": "S7",
+    "file": "tests/sentry/spans/test_buffer.py",
+    "lines": [
+     123,
+     152
+    ],
+    "texto": "All spans in changed tests share end_timestamp_precise=1700000000.0 with tiny batches, so the new zset score ordering and lua zpopmin keep-newest-1000 logic is never exercised; a reversed trim (zpopmax) or ignored score would still pass"
+   },
+   {
+    "id": "S8",
+    "file": "src/sentry/scripts/spans/add-buffer.lua",
+    "lines": [
+     46,
+     54
+    ],
+    "texto": "Both ZUNIONSTORE calls merge ZSETs whose scores are end_timestamp_precise produced in buffer.py. Default AGGREGATE SUM doubles the score for any member present in both inputs (retry/duplicate payload), breaking the timestamp ordering that zpopmin eviction relies on. Specify AGGREGATE MAX (or MIN) on both merges so duplicate members keep a valid timestamp."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#03",
+    "descricao": "ZUNIONSTORE merges sorted sets with the default SUM aggregate, so a span payload present in both keys gets a doubled end-timestamp score and is wrongly kept by the oldest-first eviction.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       46,
+       53
+      ],
+      "texto": "ZUNIONSTORE uses AGGREGATE SUM by default, so when the same span payload is present in both `set_key` and the merged `span_key`/`parent_key` (duplicate delivery is anticipated by this buffer's own comments), its score is added instead of being kept equal to `end_timestamp_precise`. Because eviction at line 63 (`zpopmin` by score) compares scores across all members of `set_key`, a summed score makes the duplicated span appear far newer than its real end timestamp and biases eviction away from legitimately-old spans, breaking the stated 'evict oldest end timestamps' contract. Use ZUNIONSTORE ... AGGREGATE MIN (or MAX) so a duplicate keeps a single end timestamp score rather than doubling it."
+     },
+     {
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       53,
+       53
+      ],
+      "texto": "ZUNIONSTORE uses its default SUM aggregation, so replayed payloads present in both the temporary parent_key and the resolved set_key receive the sum of their end timestamps. Replaying a child whose parent already redirects to an ancestor therefore makes that old span score roughly twice its actual timestamp, protecting it from eviction over genuinely newer spans. Use AGGREGATE MAX (or MIN for identical timestamp scores) on both union operations to preserve timestamp scores when members overlap."
+     },
+     {
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       47,
+       47
+      ],
+      "texto": "ZUNIONSTORE defaults to AGGREGATE SUM, so a payload present in both the destination and source has its timestamp doubled rather than preserved. This can happen when a previously merged span is replayed into its original subtree key. The duplicated span then sorts after genuinely newer spans and survives ZPOPMIN eviction incorrectly. Specify AGGREGATE MAX (or MIN, since identical payloads should have identical timestamps) on both union calls so merging remains idempotent and scores remain end timestamps."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#04",
+    "descricao": "Segment keys change from Redis sets to sorted sets under the same key names, so keys left by the previous release make ZADD, ZCARD and ZSCAN fail with WRONGTYPE during rollout, crashing span processing and flushing.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       46,
+       54
+      ],
+      "texto": "WHAT: Changed SET ops (scard/sunionstore) to ZSET ops (zcard/zunionstore/zpopmin) with no migration breaks in-flight segments. WHY: Old keys of type SET still live up to TTL; ZCARD/ZUNIONSTORE/ZSCAN/ZADD on the opposite type raises WRONGTYPE and fails inserts/flushes during rollout."
+     },
+     {
+      "file": "src/sentry/spans/buffer.py",
+      "lines": [
+       197,
+       199
+      ],
+      "texto": "The segment keys were migrated from Redis SETs to SORTED SETs (ZADD/ZSCAN/ZCARD/ZUNIONSTORE/ZPOPMIN), but nothing handles the keys written by the currently deployed release. During a rolling deploy, an existing `span-buf:s:{...}:{id}` key is still a SET, so this `p.zadd(...)` (and the flusher's `p.zscan(...)`, and the Lua `zcard`/`zunionstore`) raises WRONGTYPE 'Operation against a key holding the wrong kind of value'. That exception is unhandled: it aborts the whole pipeline/Lua invocation and crashes the consumer batch. Add a key-schema version to the key name (or a migration/fallback) so old SET-typed keys cannot be touched as sorted sets."
+     },
+     {
+      "file": "src/sentry/spans/buffer.py",
+      "lines": [
+       197,
+       199
+      ],
+      "texto": "The new ZADD writes sorted sets into the same span-buf:s namespace previously populated by SADD, without migrating existing set keys. During deployment, inserting into an existing buffered segment fails with WRONGTYPE, and the new ZSCAN reader likewise fails on pending old-format segments instead of flushing them. Introduce a coordinated migration/drain or a versioned namespace with compatible handling of pending old-format buffers."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#05",
+    "descricao": "Claims zpopmin eviction can drop the root span while the has-root flag stays set, flushing a segment without its root.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       62,
+       64
+      ],
+      "texto": "WHAT: zpopmin eviction by lowest end_timestamp has no protection for the segment/root span. WHY: Root with smallest or tied timestamp (tests use identical timestamps, ties break lexicographically) is evicted while hrs flag stays 1, flushing a root-marked segment missing its root."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+    "descricao": "max_segment_spans is still a constructor parameter but is no longer enforced; the segment cap is now hardcoded to 1000 in the Lua script, so the configured value is ignored.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/buffer.py",
+      "lines": [
+       439,
+       449
+      ],
+      "texto": "This hunk removes the only load-time span-count cap (`self.max_segment_spans`): previously a segment exceeding 1001 spans was logged, deleted from `payloads`/`cursors`, and skipped, but now every scanned span is unconditionally appended via `payloads[key].extend(...)`. The new bound relies entirely on insert-time eviction in the Lua script; if that eviction fails to bound a key (e.g. duplicated/scored members or the concurrent-writer case the code itself warns about at lines 457-461), this method will now materialize an unbounded number of spans into memory and emit them, whereas before it was safely skipped. Re-introduce a span-count guard (or verify the invite-time eviction strictly caps cardinality) to keep memory bounded."
+     },
+     {
+      "file": "src/sentry/spans/buffer.py",
+      "lines": [
+       446,
+       449
+      ],
+      "texto": "buffer.py declares the segment span limit as the configurable `max_segment_spans` (default 1001, line 150) and this hunk removed the `len(payloads[key]) > self.max_segment_spans` size guard from the flush path, while the other changed file (add-buffer.lua line 62) now enforces a hardcoded cap of 1000 spans. The two changed files disagree on what the segment span limit is: the Lua cap (1000) is not the declared `max_segment_spans`, and the buffer no longer applies the declared limit at all. If `max_segment_spans` is configured below 1000 (or below the Lua cap), oversized segments that this code used to skip will now be flushed. Reconcile the constant: either keep/restore the buffer-side guard against `self.max_segment_spans`, or make the Lua cap derive from the same limit instead of hardcoding 1000."
+     },
+     {
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       62,
+       63
+      ],
+      "texto": "The segment size cap is hardcoded as 1000 here, but SpansBuffer still declares max_segment_spans = 1001 in src/sentry/spans/buffer.py, and this PR deleted the flush-time guard that used that constant. The declared limit and the actually-enforced limit now disagree (and the Python constant is no longer honored anywhere). Make the Lua cap and the Python constant agree \u2014 either pass max_segment_spans in as an ARGV instead of the literal 1000, or update the declared constant to 1000 \u2014 so the buffer's enforced bound matches the value it declares."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#08",
+    "descricao": "Tests give every span the same end timestamp and never exceed 1000 spans, so the new score ordering and oldest-first eviction are not tested.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/spans/test_buffer.py",
+      "lines": [
+       120,
+       152
+      ],
+      "texto": "All spans in the fixture use identical end_timestamp_precise=1700000000.0, so the ZSET score-dependent behavior (ordering by end time, zunionstore score merge, and Lua zpopmin keeping newest 1000) is neutralised \u2014 tests pass even if scores are wrong or eviction keeps the wrong end. Use distinct timestamps and add a >1000-span trimming test asserting oldest evicted."
+     },
+     {
+      "file": "tests/sentry/spans/test_buffer.py",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The missing test for the new trim path (zset ordering/trim by end_timestamp_precise, the >1000-span zpopmin path) is a coverage gap. Add a test that verifies the new trim behavior."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01",
+    "descricao": "The span redirect-walk limit was cut from 10000 to 1000 iterations, so trees deeper than 1000 may not resolve to the correct segment root.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#snloop-01",
+    "descricao": "The spans buffer module docstring still describes span-buf:s:* keys as plain sets, though they are now sorted sets scored by end_timestamp_precise and trimmed to 1000 spans by add-buffer.lua.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "anonymous-add-configurable-device-limit-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "bbd8c507cdf56f6b884373809e0b24abd4a2353d",
+  "base": "50f4e78a39914711d0d231a501ba215becf17ebc",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+    "lines": [
+     108,
+     118
+    ],
+    "texto": "WHAT: CreateOrUpdateDevice does a separate CountDevices check then a separate INSERT with no lock/transaction. WHY: Two concurrent requests can both observe count < limit and both insert, exceeding the configured device limit and breaking the enforcement invariant. HOW: Hold a lock/transaction across check-and-insert or enforce via DB constraint and map violation to ErrDeviceLimitReached."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+    "lines": [
+     90,
+     97
+    ],
+    "texto": "WHAT: updateDevice returns ErrDeviceLimitReached whenever rowsAffected==0, which includes an existing device_id whose updated_at is older than 30 days (outside the BETWEEN window). WHY: A returning device after expiry can never re-register when the limit is hit, even though it is an update not a new device, and not-found is conflated with limit-reached."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/services/anonymous/anonimpl/impl.go",
+    "lines": [
+     144,
+     148
+    ],
+    "texto": "WHAT: tagDeviceUI does localCache.SetDefault before CreateOrUpdateDevice and never deletes on error, while TagDevice now propagates the error. WHY: After one ErrDeviceLimitReached the deviceId stays cached, so the next request hits the cache early-return and authenticates successfully, making limit enforcement one-shot and inconsistent."
+   },
+   {
+    "id": "S4",
+    "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+    "lines": [
+     52,
+     54
+    ],
+    "texto": "WHAT: ProvideAnonDBStore now requires a bare int64 deviceLimit but pkg/server/wire.go still lists it as a provider with no int64 binding. WHY: Wire cannot resolve the bare int64 dependency (only construction site passing cfg.AnonymousDeviceLimit is manual in impl.go), so generation/build breaks or creates a duplicate store with divergent limits."
+   },
+   {
+    "id": "S5",
+    "file": "pkg/services/anonymous/anonimpl/client.go",
+    "lines": [
+     44,
+     50
+    ],
+    "texto": "WHAT: Authenticate changed from fire-and-forget tagging (background context with 2m timeout) to synchronous TagDevice doing CountDevices + upsert inline. WHY: Every anonymous-request cache miss now pays two DB round-trips on the auth hot path, adding latency and DB fanout under load versus the prior async path."
+   },
+   {
+    "id": "S6",
+    "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+    "lines": [
+     105,
+     118
+    ],
+    "texto": "TOCTOU race: count is checked then a new device is inserted in separate DB round-trips with no lock/transaction. Two concurrent CreateOrUpdateDevice calls for different new device_ids can both see count < deviceLimit and both insert, exceeding the limit and breaking the size invariant this PR adds."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#01",
+    "descricao": "The device limit check counts devices and then inserts in separate non-atomic steps, so concurrent requests from new devices can all pass the check and exceed the configured limit.",
+    "textoGolden": "Race condition: Multiple concurrent requests could pass the device count check simultaneously and create devices beyond the limit. Consider using a database transaction or lock.",
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       108,
+       118
+      ],
+      "texto": "The limit check counts devices and then inserts in separate steps with no lock or transaction. Concurrent requests from new devices can all see count < limit and all insert, so the limit is exceeded. Make the count-and-insert atomic, for example with a conditional INSERT ... SELECT ... WHERE (SELECT COUNT(*)) < limit."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       108,
+       118
+      ],
+      "texto": "The device limit check is a non-atomic count followed by an insert. Concurrent requests from different new devices can all see count < limit and all insert, so the number of devices exceeds deviceLimit. Make the check and insert atomic, for example with a conditional INSERT ... SELECT WHERE (SELECT COUNT(*)) < limit, or serialize the check and insert under a lock."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       108,
+       118
+      ],
+      "texto": "WHAT: CreateOrUpdateDevice does check-then-act (CountDevices then INSERT/UPSERT) with no lock, transaction, or unique-guard when deviceLimit>0. WHY: Two concurrent new-device requests can both observe count < limit and both insert, exceeding the configured limit and breaking the enforcement contract. HOW: Enforce atomically (e.g., conditional insert guarded by count in one statement/transaction with serializable lock, or re-check count on conflict)."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#02",
+    "descricao": "Device slots are keyed by the client-controlled X-Grafana-Device-Id header with no validation or rate limiting, so an anonymous caller can fill the limit with fake IDs and deny anonymous access to every new legitimate device.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       109,
+       117
+      ],
+      "texto": "WHAT: Device slots counted toward deviceLimit are keyed by the unauthenticated X-Grafana-Device-Id header (read in impl.go TagDevice) with no validation or rate-limit. WHY: Any anonymous caller can mint arbitrary device IDs to fill the table up to the limit, after which all legitimate new anonymous devices get ErrDeviceLimitReached and authentication is denied \u2014 a trivial anonymous-access DoS introduced by the limit. HOW: Do not let a single client consume many slots (e.g., bind slot consumption to IP/fingerprint, rate-limit new-device creation, or require proof of distinct device)."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#05",
+    "descricao": "TestIntegrationBeyondDeviceLimit only checks that a new device is rejected at the limit and never verifies that an existing device can still be updated at the limit.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database_test.go",
+      "lines": [
+       51,
+       70
+      ],
+      "texto": "The at-limit call reuses a brand-new device ID (\"keep\") that was never inserted, so it only reaches updateDevice's `rowsAffected == 0` -> ErrDeviceLimitReached branch. The success branch of the newly added updateDevice (an existing device still being updated while the store is at the limit) is never exercised by any test \u2014 every other call uses deviceLimit 0, so updateDevice is never invoked. A regression that made updateDevice always affect 0 rows, use a wrong WHERE/SET, or unconditionally return ErrDeviceLimitReached whenever limit>0 would leave this and all other tests green. Add a case that, after the store is at the limit, calls CreateOrUpdateDevice again with the SAME DeviceID and asserts require.NoError (and ideally that client_ip/user_agent/updated_at were changed), so the update path is actually verified."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database_test.go",
+      "lines": [
+       51,
+       70
+      ],
+      "texto": "TestIntegrationBeyondDeviceLimit only checks that a new device is rejected at the limit. It would still pass if updateDevice always returned ErrDeviceLimitReached, because it never re-submits the existing device (DeviceID \"32mdo31deeqwes\") at the limit. Add a call that updates the existing device with a new UserAgent or UpdatedAt, require NoError, and check the stored row changed."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#07",
+    "descricao": "tagDeviceUI caches the device key before CreateOrUpdateDevice; when the store returns ErrDeviceLimitReached the entry stays, so the next request from the same device skips the limit check and authenticates for up to 29 minutes.",
+    "textoGolden": "The `tagDeviceUI` function populates the local cache with the device ID before the `CreateOrUpdateDevice` call. If `ErrDeviceLimitReached` is returned, the cache entry remains set, allowing subsequent requests to bypass the device limit until the cache expires after 29 minutes.",
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/client.go",
+      "lines": [
+       44,
+       47
+      ],
+      "texto": "WHAT: TagDevice failures that triggered the new ErrDeviceLimitReached early-return are not permanent, because tagDeviceUI (impl.go:87) writes the device key into localCache BEFORE CreateOrUpdateDevice (impl.go:93) and never evicts it on error; tagDeviceUI returns early on any cache hit (impl.go:83-84). WHY: the first request from a new over-limit device is denied, but the poisoned cache makes every subsequent request from that same device skip the limit check entirely and authenticate successfully, so the configurable device limit is bypassed by simply retrying. HOW: only set the cache key after CreateOrUpdateDevice returns nil (e.g. move a.localCache.SetDefault after the successful DB write, or delete the key when it returns ErrDeviceLimitReached)."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/impl.go",
+      "lines": [
+       144,
+       148
+      ],
+      "texto": "TagDevice now propagates ErrDeviceLimitReached to deny an over-limit anonymous device, but tagDeviceUI (impl.go:83-95) records the device in localCache at line 87 *before* calling a.anonStore.CreateOrUpdateDevice. When the store rejects the device with ErrDeviceLimitReached, the key is already cached, so the next request for that same device returns early at line 83 with a nil error and the device is admitted. The limit therefore only blocks the first request and is silently bypassed on retry. Fix by only setting the cache entry after CreateOrUpdateDevice succeeds (move SetDefault after the store call), or by removing/not caching the key on failure."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/client.go",
+      "lines": [
+       44,
+       46
+      ],
+      "texto": "The new authentication gate accepts retries from devices that were rejected by the limit because tagDeviceUI inserts the cache entry before CreateOrUpdateDevice succeeds. At capacity, the first request with a new X-Grafana-Device-Id fails, but subsequent requests with that same ID hit the 29-minute cache and receive an anonymous identity without admission to the device store. Cache only successful admissions, and ensure concurrent requests cannot treat an in-progress admission as successful."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#09",
+    "descricao": "Device tagging now runs synchronously in Authenticate, adding DB round-trips on cache-miss anonymous requests where it used to be fire-and-forget.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/client.go",
+      "lines": [
+       44,
+       50
+      ],
+      "texto": "WHAT: Anonymous.Authenticate changed from fire-and-forget goroutine TagDevice to synchronous TagDevice(ctx) that runs CountDevices + INSERT/UPDATE inline. WHY: Every cache-miss anonymous authentication now blocks on two DB round-trips in the login hot path, adding latency and DB load per request where previously auth returned immediately. HOW: Restore async tagging for the non-limit path or at least decouple denial from the hot path (e.g., async count with cached count, or only synchronously enforce when near limit)."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#11",
+    "descricao": "The new auth.anonymous device_limit setting has no entry in conf/defaults.ini, so the GF_AUTH_ANONYMOUS_DEVICE_LIMIT environment override is ignored and the limit stays 0.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/setting/setting.go",
+      "lines": [
+       1654,
+       1654
+      ],
+      "texto": "The new device_limit setting is read without adding a corresponding key to conf/defaults.ini. applyEnvVariableOverrides only visits keys already present in the loaded INI and runs before readAuthSettings, so setting GF_AUTH_ANONYMOUS_DEVICE_LIMIT alone is ignored and leaves the limit at zero, disabling enforcement. Add an uncommented device_limit = 0 entry under auth.anonymous in defaults.ini so the standard environment override mechanism can apply it."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#opa-02",
+    "descricao": "The anonymous device limit is enforced only through TagDevice, which returns nil when the client-controlled device ID header is missing, so requests without the header authenticate anonymously regardless of the configured limit.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#opa-04",
+    "descricao": "The doc comment on updateDevice says it updates a device \"updated between the given times\", but the function takes no times, computes the 30-day window itself and returns ErrDeviceLimitReached when no row matches.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#prod-02",
+    "descricao": "updateDevice prepends the query to the captured args inside the retried DB callback, so a SQLite lock retry runs Exec with the query duplicated in the arguments and the update fails.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "authzservice-improve-authz-caching-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "7562f37880367411a62304bcdcdc178bced23906",
+  "base": "5634ca44f799a82161f0401dadc286452f3bdbf8",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/services/authz/rbac/service.go",
+    "lines": [
+     116,
+     121
+    ],
+    "texto": "WHAT: Check returns deny from permDenialCache before trying cached perms or the DB requery, and the entry is never cleared when access is later granted. WHY: A deny cached at T blocks the fresh-DB fallback added in the same PR until TTL expiry, so newly granted dashboards/folders stay denied and the PR goal is defeated. HOW: Delete the denial key on allow (or only set/check it on the DB path miss) instead of short-circuiting unconditionally."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/services/authz/rbac/cache.go",
+    "lines": [
+     30,
+     32
+    ],
+    "texto": "WHAT: userPermDenialCacheKey concatenates namespace/userUID/action/name/parent with '_' and omits IdentityType while TypeUser and TypeServiceAccount share the same key space. WHY: Two principals with the same UID string (user vs service-account) share denial entries causing false denies, and '_' in any field makes distinct tuples collide to the same key. HOW: Include IdentityType in the key and use an unambiguous encoding (length-prefix or unprintable separator with escaping)."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/services/authz/rbac/service.go",
+    "lines": [
+     153,
+     155
+    ],
+    "texto": "WHAT: A denial entry is stored per (namespace, user, action, name, parent) where name/parent are request-controlled, in a local cache with only TTL expiry. WHY: Enumerating random resource names creates one entry per guess and grows memory/serialization load per user until expiry, turning a cheap deny into a cache-blowup vector. HOW: Omit if speculative \u2014 verifier to confirm local-cache bounds; otherwise bound cardinality (e.g. cap entries, hash, or cache negative action-level results only)."
+   },
+   {
+    "id": "S4",
+    "file": "pkg/services/authz/rbac/service_test.go",
+    "lines": [
+     981,
+     983
+    ],
+    "texto": "Comment claims permCache allows dash1 to prove permDenialCache short-circuits, but value is false so it does not allow; cached-allow path would fall through to DB and the test passes vacuously. Set the cached scope to true to match the comment and actually exercise denial precedence."
+   },
+   {
+    "id": "S5",
+    "file": "pkg/services/authz/rbac/service_test.go",
+    "lines": [
+     973,
+     995
+    ],
+    "texto": "The 'Should deny on explicit cache deny entry' fixture neutralises the thing under test: permCache is seeded deny (false) with no allowing DB entry, so assert.False passes even if the permDenialCache check is removed. Seed an allowing entry so deny can only come from the denial cache."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#01",
+    "descricao": "The denial cache key joins name and parent folder with underscores, so different name/parent pairs can collide and a cached denial for one resource denies another until TTL expiry.",
+    "textoGolden": "The cache key construction in `userPermDenialCacheKey` uses simple string concatenation with underscores, which can lead to ambiguous keys and collision risks when any component contains underscores or is empty. This could result in incorrect denial cache hits, affecting user permissions.",
+    "comentarios": [
+     {
+      "file": "pkg/services/authz/rbac/cache.go",
+      "lines": [
+       30,
+       31
+      ],
+      "texto": "The denial cache key does not distinguish underscores inside resource and parent UIDs from its field separators. For the same namespace, user and action, (name=\"a_b\", parent=\"c\") and (name=\"a\", parent=\"b_c\") generate the same key, so denying the first request makes Check return false for the second even if its permissions explicitly allow it. Encode the components unambiguously, for example as a JSON tuple or length-prefixed fields."
+     },
+     {
+      "file": "pkg/services/authz/rbac/cache.go",
+      "lines": [
+       30,
+       31
+      ],
+      "texto": "The denial cache key is not injective: for the same namespace, user and action, `(name=\"a_b\", parent=\"c\")` and `(name=\"a\", parent=\"b_c\")` produce the same key. After the first request stores a denial, Check's new early cache return denies the second request without checking its permissions, even if it is allowed. Encode the components unambiguously (for example a JSON tuple or length-prefixed components) and add a test verifying that these two requests do not share a denial entry."
+     },
+     {
+      "file": "pkg/services/authz/rbac/cache.go",
+      "lines": [
+       30,
+       31
+      ],
+      "texto": "Make the denial-cache key encode component boundaries unambiguously (for example, length-prefix or serialize the components). For the same namespace, user and action, name `a_b` with parent `c` and name `a` with parent `b_c` both produce the suffix `_a_b_c`. Underscores can occur in resource UIDs, so denying the first request caches a key that causes Check to immediately deny the second request without evaluating its permissions, even if that resource is allowed."
+     }
+    ]
+   },
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#04",
+    "descricao": "The explicit denial-cache test seeds the cached permission as false instead of true, so it would pass without the denial-cache short-circuit and does not verify it.",
+    "textoGolden": "The test comment says the cached permissions 'allow access', but the map stores false for dashboards:uid:dash1, so checkPermission will still treat this scope as not allowed.",
+    "comentarios": [
+     {
+      "file": "pkg/services/authz/rbac/service_test.go",
+      "lines": [
+       973,
+       995
+      ],
+      "texto": "This test claims to prove the permDenialCache short-circuit (service.go:116-121) denies access, but it seeds the cached permission as map[string]bool{\"dashboards:uid:dash1\": false} (a deny), contradicting its comment \"Allow access to the dashboard to prove this is not checked\". Because the cached set is already a deny, checkPermission returns allowed=false, the code falls through to the DB path, and the fake store also returns no permissions, so Allowed stays false. The assertion passes even if the entire permDenialCache early-return were deleted. Seed the cached permission as true (map[string]bool{\"dashboards:uid:dash1\": true}) so that only the denial-cache entry can force Allowed=false; otherwise the test does not verify the feature."
+     },
+     {
+      "file": "pkg/services/authz/rbac/service_test.go",
+      "lines": [
+       981,
+       982
+      ],
+      "texto": "The comment says \"Allow access to the dashboard to prove this is not checked\", but the code sets the permCache entry to `false`, which is a deny. The test therefore does not show that the permission cache is skipped. Set the value to `true`, or change the comment to match."
+     },
+     {
+      "file": "pkg/services/authz/rbac/service_test.go",
+      "lines": [
+       973,
+       995
+      ],
+      "texto": "The 'Should deny on explicit cache deny entry' test would still pass if the permDenialCache check were removed. permCache is seeded with dash1:false, not true as the comment claims, so the normal path also denies. Seed permCache with {\"dashboards:uid:dash1\": true} and a store that grants the permission, so Allowed=false can only come from the denial entry."
+     }
+    ]
+   },
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#05",
+    "descricao": "A cached permission set that denies a resource always triggers a full DB permission reload, so checks over many inaccessible dashboards issue one query per resource instead of being served from cache.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/authz/rbac/service.go",
+      "lines": [
+       123,
+       139
+      ],
+      "texto": "Every distinct resource denied by the cached permission map triggers a reload of the entire user's action permission set, because the denial cache is resource-specific and a cached false result always falls through to getIdentityPermissions. Sequential checks of N inaccessible dashboards therefore execute N full permission queries and cache rewrites even with a current action-wide cache; getUserPermissions' singleflight only merges overlapping requests. Bound refreshes per user/action with a short refresh cooldown or generation marker so different resource misses can share a recent refresh."
+     }
+    ]
+   },
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#08",
+    "descricao": "The Service struct comment listing its caches was not updated for the new permDenialCache field.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/authz/rbac/service.go",
+      "lines": [
+       55,
+       58
+      ],
+      "texto": "The struct doc comment still reads \"// Cache for user permissions, user team memberships and user basic roles\", but this PR added the new `permDenialCache` field (line 58). The comment no longer enumerates what the struct actually holds and misleads a reader about the new denial-cache field; update it to mention the permission-denial cache so the prose matches the fields."
+     }
+    ]
+   }
+  ]
+ },
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "ce2dcc537b4b1f98a335e88cfe8e0b804483252a",
+  "base": "85737f52b59aa2e3403c9b8e48acf71ccc5bfae3",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+    "lines": [
+     125,
+     130
+    ],
+    "texto": "WHAT: createRecoveryCodesCredential never removes the credential in the non-chosen store, so re-setup leaves duplicates (new federated + old local, or new local + old federated). WHY: getCredential prefers federated but isValid can still accept the stale credential in the other store, so rotated-out recovery codes remain usable."
+   },
+   {
+    "id": "S2",
+    "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java",
+    "lines": [
+     79,
+     80
+    ],
+    "texto": "WHAT: After switching lookup to federated-first, the allCodesUsed cleanup still calls removeStoredCredentialById with a federated credential id, which only deletes local storage. WHY: Exhausted federated recovery codes are never removed, leaving stale state and repeated CONFIGURE_RECOVERY_AUTHN_CODES prompts instead of the local-path delete behavior."
+   },
+   {
+    "id": "S3",
+    "file": "services/src/main/java/org/keycloak/forms/login/freemarker/model/RecoveryAuthnCodeInputLoginBean.java",
+    "lines": [
+     17,
+     19
+    ],
+    "texto": "WHAT: Constructor calls credentialModelOpt.get() with no presence check, throwing NoSuchElementException when no federated or local recovery-codes credential exists. WHY: Crashes recovery-code login rendering instead of failing with a handled error, newly reachable when a storage provider accepts updateCredential but exposes nothing via getCredentials."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#01",
+    "descricao": "The test user-storage provider validates recovery codes without consuming the used code, so the same code can be replayed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       326,
+       340
+      ],
+      "texto": "WHAT: The new recovery-codes branch of isValid only checks whether the submitted code appears in the stored list and never removes the consumed entry. WHY: Unlike the local RecoveryAuthnCodesCredentialProvider.isValid (which calls removeRecoveryAuthnCode()+updateStoredCredential), the federated path never consumes a code and allCodesUsed() can never become true, so a used recovery code remains valid and can be replayed indefinitely. HOW: On a successful match, remove that entry from the stored codes (rewrite recoveryCodes.credentialData), mirroring the local provider's consume-on-success semantics."
+     },
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       340,
+       340
+      ],
+      "texto": "The new recovery-code validator accepts any code in the original list without consuming the accepted code. Repeating a successful login with the same code succeeds indefinitely, while getCredentials reconstructs all original codes so the login form never advances or detects exhaustion. Validate the next unused code and persist its consumption before returning success."
+     },
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       340,
+       340
+      ],
+      "texto": "The new federated recovery-code validator accepts any code in the original list but never removes a successfully used code from myUser.recoveryCodes. Consequently the same recovery code remains valid on subsequent logins, and getCredentials reconstructs the full original set every time. Consume and persist the successfully validated code (and test a second login/replay), so federated recovery codes retain their one-time semantics."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#02",
+    "descricao": "getCredentials rebuilds the recovery-codes credential without copying the stored credential id, so the returned federated credential has a null id and cannot be targeted by id-based removal.",
+    "textoGolden": "After creating the RecoveryAuthnCodesCredentialModel, consider setting its id from the stored credential (e.g., myUser.recoveryCodes.getId()); otherwise getId() will be null and downstream removal by id (e.g., removeStoredCredentialById in the authenticator flow) may not work.",
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       237,
+       242
+      ],
+      "texto": "WHAT: getCredentials builds the RecoveryAuthnCodesCredentialModel via createFromValues but never sets its id from the stored myUser.recoveryCodes.getId() (createFromValues does not populate id). WHY: The returned federated model has a null id, so callers that identify/delete the credential by id \u2014 e.g. RecoveryAuthnCodesFormAuthenticator.removeStoredCredentialById(recoveryCodeCredentialModel.getId()) when all codes are used, or federated-credential deletion via getFederatedCredentialsStream \u2014 cannot target the actual credential. HOW: call model.setId(myUser.recoveryCodes.getId()) after createFromValues."
+     },
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       237,
+       242
+      ],
+      "texto": "getCredentials rebuilds the recovery-code model without copying the ID assigned during updateCredential. createFromValues does not assign an ID, so the exposed federated credential has a null ID and CredentialDeleteHelper cannot resolve it by the stored credential ID for account deletion. Copy myUser.recoveryCodes.getId() to the reconstructed model before returning it."
+     },
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       237,
+       242
+      ],
+      "texto": "The CredentialModel returned from getCredentials for recovery codes is built with createFromValues and never gets the stored credential's id (myUser.recoveryCodes.getId()). RecoveryAuthnCodesFormAuthenticator later calls removeStoredCredentialById(model.getId()) once all codes are used, and this would pass a null id. Fix: call model.setId(myUser.recoveryCodes.getId()) after creating the model."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#05",
+    "descricao": "Creating recovery codes in external storage does not remove a previously stored local recovery-codes credential, and validation falls back to local storage, so the replaced codes still authenticate.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+      "lines": [
+       125,
+       129
+      ],
+      "texto": "Successful recovery-code creation in external storage leaves any existing locally stored recovery-code credential active. For a federated user who previously stored codes locally and now has an external provider supporting this type, regeneration no longer calls RecoveryAuthnCodesCredentialProvider.createCredential's replacement cleanup; UserCredentialManager.isValid falls back to the local validator when external validation rejects an old code, so the supposedly replaced codes still authenticate. Remove the previous local recovery-code credential after successful external creation."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#06",
+    "descricao": "Exhausted recovery codes are removed with removeStoredCredentialById, which only covers local storage, so a federated recovery-codes credential is never removed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java",
+      "lines": [
+       80,
+       88
+      ],
+      "texto": "RecoveryAuthnCodesUtils.getCredential() can now return a credential from user storage (federated), but this code still calls removeStoredCredentialById() on it once all codes are used. That removal only targets local stored credentials, so a federated credential may not be removed. The user could then be left with an exhausted credential in user storage. Remove federated credentials through the federated path, or confirm the removal reaches user storage."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java",
+      "lines": [
+       80,
+       88
+      ],
+      "texto": "RecoveryAuthnCodesUtils.getCredential can now return a credential from user storage, but exhausted codes are cleaned up with removeStoredCredentialById, which only targets the local DB. For a federated credential (possibly with a null id), the exhausted credential is never removed or the call misbehaves, so the user keeps a dead credential. Remove federated credentials through a path that covers user storage, for example by checking where the credential came from."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java",
+      "lines": [
+       80,
+       89
+      ],
+      "texto": "RecoveryAuthnCodesUtils.getCredential can now return a federated credential. The authenticator still removes an exhausted one with removeStoredCredentialById(getId()), which only deletes from the local store, and the federated model's id may be null. Remove the credential through the path that matches where it was found, for example by checking whether it came from the federated stream and using the federated removal."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-01",
+    "descricao": "Looking up recovery codes now always queries the federated provider first, which for LDAP users adds an LDAP round-trip and can throw IllegalStateException, failing recovery-code login with a 500.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-03",
+    "descricao": "An error log in the test user storage hard-codes the credential type as 'recovery-codes' instead of using RecoveryAuthnCodesCredentialModel.TYPE ('recovery-authn-codes').",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "fixing-re-authentication-with-passkeys-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "25bf964a844ea0bc64dc838bff038345048cb1fa",
+  "base": "744e031019af8dbaacf407e792fbb3756364e2b4",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "services/src/main/java/org/keycloak/authentication/authenticators/util/AuthenticatorUtils.java",
+    "lines": [
+     125,
+     132
+    ],
+    "texto": "WHAT: setupReauthenticationInUsernamePasswordFormError sets USERNAME_HIDDEN/REGISTRATION_DISABLED on a fresh context.form() instance that is then discarded before rendering. WHY: callers (AbstractUsernameFormAuthenticator.badPasswordHandler before challenge(), WebAuthnConditionalUIAuthenticator.createErrorResponse before fillContextForm()+errorChallenge) each obtain new LoginFormsProvider instances to render, so the re-auth error page loses hidden-username state and falls back to regular login form. HOW: thread the same LoginFormsProvider instance through \u2014 set the attributes on the form used by challenge/fill/errorChallenge instead of calling context.form() inside the helper."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#03",
+    "descricao": "PasswordForm now accepts passkey-only users, but only the keycloak.v2 login-password.ftl renders the passkeys conditional UI; the base template (used by the legacy keycloak theme) does not, so a passkey-only user is shown a password-only form they cannot complete.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/PasswordForm.java",
+      "lines": [
+       63,
+       63
+      ],
+      "texto": "PasswordForm.configuredFor now accepts passkey-only users even when the active login theme renders the unchanged base login-password.ftl, which contains no passkeys UI. The legacy keycloak theme inherits that template, so a user without a password reaches a password-only challenge with no way to authenticate instead of being able to use the newly accepted passkey credential. Add the passkeys import and conditionalUIData invocation to the base login-password.ftl as well as the keycloak.v2 override."
+     }
+    ]
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#04",
+    "descricao": "The comment 'setup webauthn data when passkeys enabled' does not mention that the condition also requires a selected user to own a passkey credential.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernamePasswordForm.java",
+      "lines": [
+       114,
+       117
+      ],
+      "texto": "The new comment says webauthn data is set up \"when passkeys enabled\", but the guard `isConditionalPasskeysEnabled(context.getUser())` also requires that a known/already-selected user actually has a passkey credential. With realm passkeys enabled and a selected user without a passkey, `fillContextForm` is skipped (the test `passwordLogin_reauthenticationOfUserWithoutPasskey` relies on exactly this), so the comment misdescribes the condition it documents. Rephrase it to match the code, e.g. \"setup webauthn data when conditional passkeys can be used (user unknown or user has a passkey)\"."
+     }
+    ]
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#06",
+    "descricao": "The test comment says it sets the passwordless policy for discoverable keys, but the updater only disables passkeys for the realm.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernamePasswordFormTest.java",
+      "lines": [
+       281,
+       283
+      ],
+      "texto": "The comment 'set passwordless policy for discoverable keys' is stale. The updater now only calls setWebAuthnPolicyPasskeysEnabled(Boolean.FALSE), so it disables passkeys for the realm. Change the comment to say that passkeys are disabled for the realm."
+     }
+    ]
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#snapi-01",
+    "descricao": "reauthenticationOfUserWithoutPasskey disables passkeys for the realm, so the hidden webauthn form is guaranteed by isPasskeysEnabled() and the new per-user isConfiguredFor check for users without a passkey is never exercised in UsernamePasswordForm.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ }
+}

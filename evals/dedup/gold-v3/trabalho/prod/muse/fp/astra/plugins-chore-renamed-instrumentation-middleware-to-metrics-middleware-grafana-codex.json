@@ -1,0 +1,11 @@
+{
+ "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Both claim that ContextualLoggerMiddleware dereferences a nil request without a guard, causing a panic. The suggested passthrough guard addresses the same alleged defect."
+  }
+ ]
+}

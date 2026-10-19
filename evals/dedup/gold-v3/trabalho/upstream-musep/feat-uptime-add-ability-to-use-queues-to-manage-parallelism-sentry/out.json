@@ -1,0 +1,24 @@
+{
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "prOriginal": {
+  "numero": 95633,
+  "url": "https://github.com/getsentry/sentry/pull/95633",
+  "mergedAt": "2025-07-16",
+  "nota": "From prOriginalConhecido, reconfirmed with gh pr view: MERGED 2025-07-16, branch danf/uptime-queue-consumer, squash 33f4fddf."
+ },
+ "tps": {
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#musep-01": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2025-07-17",
+    "pr": 95753,
+    "commit": "82e2139720c76694e89f0297b370e1556d047201",
+    "url": "https://github.com/getsentry/sentry/pull/95753"
+   },
+   "removidoEm": null,
+   "diasNoAr": 1,
+   "reason": "PR #95753 'Fix thread-queue-parallel consumer to handle Kafka rebalances correctly' states the commit thread kept running after partition revocation and committed offsets for partitions no longer owned. It moved the commit thread from SimpleQueueProcessingStrategy into FixedQueuePool (joined on shutdown), added a shutdown recheck after wait(), and resets the offset tracker on revocation; terminate() no longer owns a commit thread. The whole thread-queue-parallel mode and queue_consumer.py were later removed (e6ab8605, 2025-08-07, #97340).",
+   "astra": []
+  }
+ }
+}

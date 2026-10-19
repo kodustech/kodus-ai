@@ -1,0 +1,11 @@
+{
+ "caseId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02",
+   "newGroup": null,
+   "reason": "Both describe returning the original monitor.config instead of the modified copy, which loses the human-readable schedule_type conversion."
+  }
+ ]
+}

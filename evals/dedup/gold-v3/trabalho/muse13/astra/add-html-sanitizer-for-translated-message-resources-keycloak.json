@@ -1,0 +1,65 @@
+{
+ "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+   "newGroup": null,
+   "reason": "The independent prefix and suffix scans can overlap, causing substring to throw and abort verification."
+  },
+  {
+   "id": "S2",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#opa-01",
+   "newGroup": null,
+   "reason": "The comment includes the missing English counterpart case, where an unchecked RuntimeException escapes instead of producing a validation message."
+  },
+  {
+   "id": "S3",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "The Lithuanian login TOTP instruction was replaced with Italian text."
+  },
+  {
+   "id": "S4",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "The Lithuanian account TOTP instruction contains the same incorrect Italian translation."
+  },
+  {
+   "id": "S5",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+   "newGroup": null,
+   "reason": "The zh_CN TOTP instruction uses Traditional Chinese instead of Simplified Chinese."
+  },
+  {
+   "id": "S6",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+   "newGroup": null,
+   "reason": "The suffix scan can overlap the common prefix, causing a substring exception during verification."
+  },
+  {
+   "id": "S7",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+   "newGroup": null,
+   "reason": "Independent prefix and suffix trimming can overlap and crash verification instead of reporting illegal HTML."
+  },
+  {
+   "id": "S8",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "The Lithuanian account totpStep1 value is incorrectly written in Italian."
+  },
+  {
+   "id": "S9",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "The Lithuanian login loginTotpStep1 value is incorrectly written in Italian."
+  },
+  {
+   "id": "S10",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+   "newGroup": null,
+   "reason": "The zh_CN totpStep1 value uses Traditional characters where Simplified Chinese is required."
+  }
+ ]
+}

@@ -1,0 +1,17 @@
+{
+ "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+ "items": [
+  {
+   "id": "S3",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#12",
+   "newGroup": null,
+   "reason": "It repeats the rejected claim that the plural *_ids hydration branch throws on null or non-array values when calling map."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "It claims incomplete underscore replacement causes ADMIN_MODELS matching and routing failures. None of the rejected issues describes this problem."
+  }
+ ]
+}

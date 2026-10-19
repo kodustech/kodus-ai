@@ -1,0 +1,12 @@
+{
+ "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+ "items": [
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#kimip-01",
+   "class": "TP",
+   "subclass": "nit",
+   "severity": "low",
+   "reply": "I change my classification to TP/nit. The base UI called saveWithUsernames \u2192 update_put \u2192 Group#usernames=, which batched user lookups with User.where; the new UI calls add_members, which executes User.find_by_username for every supplied username. This changes the active UI path, so the relocation ruling does not apply despite the similar old update_patch loop. The extra lookups are a minor optimization opportunity in this admin-only action, with no demonstrated meaningful performance impact, warranting low severity."
+  }
+ ]
+}

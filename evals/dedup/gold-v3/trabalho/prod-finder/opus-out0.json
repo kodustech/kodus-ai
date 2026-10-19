@@ -1,0 +1,408 @@
+{
+ "kimi|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": [
+  {
+   "id": "C1",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Mobile .custom-message-length dark-light-choose pair is inverted, giving 30% in light theme instead of 70%."
+  },
+  {
+   "id": "C2",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": ".topic-meta-data h5 a has its dark-light-choose arguments inverted, making the light-theme link 70% instead of 30%."
+  },
+  {
+   "id": "C3",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Mobile topic-post h3 light-theme lightness changed from 20% to 50% instead of 20%/80%."
+  },
+  {
+   "id": "C4",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Desktop user.scss .name changed from 30% to 50% instead of preserving 30% with 70% secondary."
+  },
+  {
+   "id": "C5",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Mobile user.scss .name changed from 30% to 50% instead of preserving 30% with 70% secondary."
+  },
+  {
+   "id": "C6",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Same inverted 30%/70% pair in mobile .custom-message-length."
+  },
+  {
+   "id": "C7",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Same inverted 70%/30% pair in .topic-meta-data h5 a; light theme should stay 30%."
+  },
+  {
+   "id": "C8",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Same mobile h3 change from 20% to 50%, diverging from desktop 20%/80%."
+  },
+  {
+   "id": "C9",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Same desktop .name change from 30% to 50%."
+  },
+  {
+   "id": "C10",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Same mobile .name change from 30% to 50%."
+  }
+ ],
+ "opus|dual-storage-architecture-grafana-codex": [
+  {
+   "id": "C1",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage Create (and Update) failure recorded with recordLegacyDuration instead of recordStorageDuration."
+  },
+  {
+   "id": "C2",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Update error path records unified-storage failure under the legacy metric."
+  },
+  {
+   "id": "C3",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Legacy DeleteCollection goroutine records its duration with recordStorageDuration."
+  },
+  {
+   "id": "C4",
+   "match": "dual-storage-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Delete puts d.Log instead of the enriched log into the context."
+  }
+ ],
+ "opus|add-html-sanitizer-for-translated-message-resources-keycloak": [
+  {
+   "id": "C1",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#10",
+   "newGroup": null,
+   "reason": "Account UI message uses MessageFormat {0}/choice syntax that i18next does not interpolate."
+  },
+  {
+   "id": "C2",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Lithuanian totpStep1 replaced with Italian text."
+  },
+  {
+   "id": "C3",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+   "newGroup": null,
+   "reason": "zh_CN totpStep1 written in Traditional Chinese."
+  }
+ ],
+ "muse|optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
+  {
+   "id": "C1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "order() mixin copies a 0-indexed order value into 1-indexed legacy box-ordinal-group; no golden issue covers the order mixin."
+  },
+  {
+   "id": "C2",
+   "match": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "align-items mixin emits no -moz-box-align, so old Firefox gets no centering; adding it fixes the issue."
+  },
+  {
+   "id": "C3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Claims removal of the bullet margin-top compensation shifts bullets; not among golden issues."
+  }
+ ],
+ "kimi|async-import-of-the-appstore-packages-cal-com": [
+  {
+   "id": "C1",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "forEach(async) after getCalendar became async is not awaited in reschedule, so deletions are fire-and-forget and errors escape try/catch."
+  },
+  {
+   "id": "C2",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Same un-awaited forEach(async) in handleCancelBooking, a location the issue already covers."
+  },
+  {
+   "id": "C3",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Same un-awaited forEach(async) calendar/video deletion loop in the bookings router."
+  }
+ ],
+ "ds|add-html-sanitizer-for-translated-message-resources-keycloak": [
+  {
+   "id": "C1",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Lithuanian loginTotpStep1 replaced with Italian text (login bundle)."
+  },
+  {
+   "id": "C2",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Lithuanian totpStep1 replaced with Italian text (account bundle)."
+  }
+ ],
+ "ds|database-performance-optimizations-grafana-codex": [
+  {
+   "id": "C1",
+   "match": "database-performance-optimizations-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Broader comment whose fix includes replacing repeated fmt.Sprintf concatenation of the SQLite inline ID list with a builder."
+  },
+  {
+   "id": "C2",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Leftover Error-level logs with the full ID list on every cleanup batch."
+  }
+ ],
+ "sonnet|implement-access-token-context-encoding-framework-keycloak": [
+  {
+   "id": "C1",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "isAccessTokenId reads substring(3,5) instead of (4,6) and inverts the comparison."
+  },
+  {
+   "id": "C2",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Constructor checks grantType twice instead of rawTokenId."
+  }
+ ],
+ "muse|enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "C1",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "postMessage origin check uses indexOf substring test instead of exact equality."
+  },
+  {
+   "id": "C2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Null comments div causing appendChild TypeError in embed.js; no golden issue covers it."
+  }
+ ],
+ "muse|implement-access-token-context-encoding-framework-keycloak": [
+  {
+   "id": "C1",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Constructor checks grantType twice and never rawTokenId."
+  },
+  {
+   "id": "C2",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "isAccessTokenId slices the wrong offset and inverts the comparison."
+  }
+ ],
+ "kimi|feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": [
+  {
+   "id": "C1",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#03",
+   "newGroup": null,
+   "reason": "Upsampling decision uses the outer dataset instead of scoped_dataset."
+  },
+  {
+   "id": "C2",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#kimip-01",
+   "newGroup": null,
+   "reason": "Allowlist membership test on a list gives O(N*M); convert to a set."
+  }
+ ],
+ "kimi|ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": [
+  {
+   "id": "C1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Repeated URI parsing in website_name is a performance nit not in the golden set."
+  },
+  {
+   "id": "C2",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "include_website_name ignores restrict_user_fields, leaking the TL0 website hidden from anonymous viewers; same fix as marking it untrusted."
+  }
+ ],
+ "ds|anonymous-add-configurable-device-limit-grafana-codex": [
+  {
+   "id": "C1",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Device key cached before CreateOrUpdateDevice, so a limit-reached failure stays cached for 29 minutes."
+  }
+ ],
+ "ds|feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": [
+  {
+   "id": "C1",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "State-changing unsubscribe on a GET without CSRF protection."
+  }
+ ],
+ "ds|replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "C1",
+   "match": "replays-self-serve-bulk-delete-system-sentry#12",
+   "newGroup": null,
+   "reason": "TableWidgetVisualization rendered with hardcoded empty columns and data."
+  }
+ ],
+ "gpt|dual-storage-architecture-grafana-codex": [
+  {
+   "id": "C1",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Legacy DeleteCollection observation recorded in the storage histogram (primary claim at line 166); also mentions Create/Update."
+  }
+ ],
+ "gpt|fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "C1",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "totalPages adds one for exact multiples of limit, showing an extra empty page."
+  }
+ ],
+ "opus|add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "C1",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Throwaway ASN1Encoder encodings of r and s before the real encoding."
+  }
+ ],
+ "opus|authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "C1",
+   "match": "authzservice-improve-authz-caching-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Denial-cache test seeds the cached permission as false, so it passes without the short-circuit."
+  }
+ ],
+ "opus|oauth-credential-sync-and-app-integration-enhancements-cal-com": [
+  {
+   "id": "C1",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#02",
+   "newGroup": null,
+   "reason": "schema.parse/decrypt/JSON.parse without error handling produce 500 instead of 400."
+  }
+ ],
+ "sonnet|add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "C1",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Dead ASN1Encoder computations of r and s duplicated by the real encoding."
+  }
+ ],
+ "sonnet|database-performance-optimizations-grafana-codex": [
+  {
+   "id": "C1",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Leftover Error-level logs with full ID lists on every cleanup batch."
+  }
+ ],
+ "sonnet|feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "C1",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "update/destroy use where(id:).first without nil check, returning 500 for unknown ids (also touches the nil-host callback)."
+  }
+ ],
+ "sonnet|optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "id": "C1",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "Redirect-walk limit cut from 10000 to 1000."
+  }
+ ],
+ "muse|add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "C1",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#05",
+   "newGroup": null,
+   "reason": "Default, Elytron and FIPS providers all at order 200, so ties are resolved by classpath order instead of failing."
+  }
+ ],
+ "muse|enhanced-pagination-performance-for-high-volume-audit-logs-sentry": [
+  {
+   "id": "C1",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "OptimizedCursorPaginator passes negative offsets into queryset slicing, which Django rejects."
+  }
+ ],
+ "muse|fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "C1",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "floor(count/limit)+1 overcounts pages for exact multiples of limit."
+  }
+ ],
+ "muse|ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": [
+  {
+   "id": "C1",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Broader comment including the case-sensitive host comparison; downcasing hosts fixes the issue."
+  }
+ ],
+ "kimi|add-html-sanitizer-for-translated-message-resources-keycloak": [
+  {
+   "id": "C1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Anchor regex </?a[^>]*> also matches <abbr>/<address>/<area>; distinct from the case-sensitivity issue."
+  }
+ ],
+ "kimi|feat-2fa-backup-codes-cal-com": [
+  {
+   "id": "C1",
+   "match": "feat-2fa-backup-codes-cal-com#01",
+   "newGroup": null,
+   "reason": "Backup-code login skips the password check when a dummy totpCode is supplied."
+  }
+ ],
+ "kimi|frontend-asset-optimization-grafana-codex": [
+  {
+   "id": "C1",
+   "match": "frontend-asset-optimization-grafana-codex#01",
+   "newGroup": null,
+   "reason": "GetWebAssets does not re-check the cache after acquiring the write lock."
+  }
+ ],
+ "kimi|optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "id": "C1",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#03",
+   "newGroup": null,
+   "reason": "ZUNIONSTORE default SUM aggregate doubles scores of duplicate members, distorting eviction."
+  }
+ ]
+}

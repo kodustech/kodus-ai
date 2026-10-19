@@ -1,0 +1,19 @@
+{
+ "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
+ "items": [
+  {
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#kimi-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "lib/validators/email_validator.rb:21 evaluates `value =~ regexp`, but Ruby supports `nil =~ regexp` and returns nil; a direct Ruby check confirmed this does not raise NoMethodError. The actual User model also declares email presence validation at app/models/user.rb:46, which supplies the missing-email validation error.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#kimi-02",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "spec/spec_helper.rb:82-87 clears setting overrides before each example, leaving the whitelist unset and blacklist as mailinator.com (app/models/site_setting.rb:45-46), neither of which rejects the test's bad@spamclub.com address. Removing the blocked-email branch would therefore fail the positive assertion at spec/components/validators/email_validator_spec.rb:19. Although stubs do not require invocation, the paired tests already verify the observable blocked/unblocked behavior.",
+   "severity": "medium"
+  }
+ ]
+}

@@ -1,0 +1,30 @@
+{
+ "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+ "prOriginal": {
+  "numero": null,
+  "url": "https://github.com/discourse/discourse/commit/4f8aed295a29954023b2849c060ef4fb299d1b5d",
+  "mergedAt": "2013-12-31",
+  "nota": "Confirmed via gh api: benchmark head 4f8aed2 is a direct commit on discourse main by Robin Ward dated 2013-12-31, no associated PR."
+ },
+ "tps": {
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimip-01": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2023-11-09",
+    "pr": 24304,
+    "commit": "5f20748e402223b265e6fee381472c14e2604da6",
+    "url": "https://github.com/discourse/discourse/commit/5f20748e402223b265e6fee381472c14e2604da6"
+   },
+   "removidoEm": null,
+   "diasNoAr": 3600,
+   "reason": "The open-uri fetch persisted through rewrites (2017: open(url, allow_redirections: :safe).read; later uri.read). Commit da839e6 (2020-05-27, 'SECURITY: Use FinalDestination for topic embeds') added FinalDestination resolution with validate_uri, validating each redirect hop, but still fetched the resolved URL with open-uri following redirects without IP checks. Commit 5f20748 'SECURITY: SSRF vulnerability in TopicEmbed - Block redirects when making the final request' (authored 2023-10-27, landed on main via PR #24304 merged 2023-11-09) replaced it with FinalDestination::HTTP.get plus DisallowedIpError, closing the redirect-follow SSRF; main today still uses FinalDestination + FinalDestination::HTTP.get_response.",
+   "astra": [
+    {
+     "pergunta": "Which change fixes the bug: 2020 FinalDestination resolve (validates hops, but final fetch still open-uri following redirects) or 2023 commit blocking redirects on the final fetch?",
+     "resposta": "The 2023 commit 5f20748: the 2020 change blocks the plain redirect chain during resolution but the actual fetch still follows redirects without IP validation; 2023 disables redirects on the fetch and applies IP checks.",
+     "veredito": "confirmado, fix = 5f20748 / PR #24304 (2023-11-09); 2020 da839e6 noted as partial mitigation."
+    }
+   ]
+  }
+ }
+}

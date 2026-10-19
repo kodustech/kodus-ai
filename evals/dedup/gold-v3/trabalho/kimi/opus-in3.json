@@ -1,0 +1,2511 @@
+{
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "d1c69189f3c90ecf56013a8da904da9bff9a8e19",
+  "base": "913c3d6f636d02b3dd6c2c022ca1af2bec95d752",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/controllers/admin/embeddable_hosts_controller.rb",
+    "lines": [
+     9,
+     18
+    ],
+    "texto": "WHAT: `update` and `destroy` fetch a host with `.first` and use it without checking for nil. WHY: A request with a non-existent ID causes `NoMethodError` when `save_host` assigns `host.host = ...` or when `destroy` calls `nil.destroy`, returning a 500 instead of a clean 404. HOW: Use `EmbeddableHost.find(params[:id])` (raises ActiveRecord::RecordNotFound \u2192 404) or guard nil and `render_json_error` / head 404."
+   },
+   {
+    "id": "S2",
+    "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "lines": [
+     24,
+     26
+    ],
+    "texto": "WHAT: The migration interpolates values from `site_settings` directly into an INSERT statement. WHY: An admin who previously set `embeddable_hosts` to a value containing a single quote can inject arbitrary SQL that runs with full database privileges during migration. HOW: Use parameterized SQL or escape each host value before interpolation."
+   },
+   {
+    "id": "S3",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     17,
+     17
+    ],
+    "texto": "WHAT: `record_for_host` queries with `lower(host) = ?` but the table has no index on `host`. WHY: This lookup runs on every embedded request, and as the allowed-hosts list grows it degrades to a full table scan. HOW: Add an index on `host` in the migration, ideally `lower(host)` if the database supports expression indexes, or a standard btree index with case-insensitive comparisons in the query."
+   },
+   {
+    "id": "S4",
+    "file": "spec/fabricators/category_fabricator.rb",
+    "lines": [
+     1,
+     5
+    ],
+    "texto": "WHAT: The fabricator file contents are swapped between `category_fabricator.rb` and `embeddable_host_fabricator.rb`. WHY: `category_fabricator.rb` now defines `:embeddable_host`, while category-related fabricators were moved to `embeddable_host_fabricator.rb`, making the file names misleading and breaking the convention that a fabricator file defines the model named in its filename. HOW: Move the `:category`, `:diff_category`, `:happy_category`, and `:private_category` fabricators back to `category_fabricator.rb`, and keep `:embeddable_host` in `embeddable_host_fabricator.rb`."
+   },
+   {
+    "id": "S5",
+    "file": "app/models/topic_embed.rb",
+    "lines": [
+     36,
+     43
+    ],
+    "texto": "WHAT: `TopicEmbed.import` now passes `category: eh.try(:category_id)`, which becomes nil when no embeddable host matches the URL. WHY: Previously the default `SiteSetting.embed_category` was always used; feed polling and import scripts that call `import` directly can now create topics with no explicit category, changing behavior for URLs that do not match a configured host. HOW: Fall back to the uncategorized category or the old default when `eh` is blank, matching the controller's blank-category handling."
+   },
+   {
+    "id": "S6",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     10,
+     18
+    ],
+    "texto": "In record_for_host, the query uses `lower(host) = ?` but passes `uri.host` without downcasing it. If the stored value or database collation is case-sensitive, comparison semantics become inconsistent and a case-variation host can bypass or fail the allowlist unexpectedly. Normalize both sides consistently: downcase `uri.host` before comparing, and consider downcasing `self.host` in before_validation so stored hosts are always lowercase."
+   },
+   {
+    "id": "S7",
+    "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "lines": [
+     18,
+     26
+    ],
+    "texto": "The migration splits the old site setting value on `\\n` and inserts each segment directly into SQL. Old values may contain empty lines, whitespace, protocol prefixes, or trailing paths, but the migration bypasses the model's `before_validation` normalization and the format validation. Use `h.strip` to discard blanks and rely on `EmbeddableHost.create!` (or explicitly apply the same strip logic as the model) instead of raw SQL so the validation/normalization callbacks run."
+   },
+   {
+    "id": "S8",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     10,
+     17
+    ],
+    "texto": "`record_for_host` builds a URI, extracts `uri.host`, and queries `where(\"lower(host) = ?\", host)`. The right-hand side is not downcased, so a stored host such as `EvilTrout.com` will be compared as `lower(host) = 'EvilTrout.com'` and fail to match. Downcase the extracted host before the query to make matching case-insensitive as intended."
+   },
+   {
+    "id": "S9",
+    "file": "app/controllers/admin/embeddable_hosts_controller.rb",
+    "lines": [
+     22,
+     25
+    ],
+    "texto": "`host.category_id = SiteSetting.uncategorized_category_id if host.category_id.blank?` treats `0` and empty string the same as `nil`. If category id `0` is ever meaningful, it will be silently replaced. Use `if host.category_id.nil?` to test for an explicitly absent value rather than any falsy/blank value."
+   },
+   {
+    "id": "S10",
+    "file": "app/controllers/admin/embeddable_hosts_controller.rb",
+    "lines": [
+     9,
+     17
+    ],
+    "texto": "`update` does `EmbeddableHost.where(id: params[:id]).first` and immediately passes the result to `save_host`; `destroy` calls `host.destroy`. If the id does not exist, these actions raise `NoMethodError`. Return a 404/not-found response when the record is nil."
+   },
+   {
+    "id": "S11",
+    "file": "spec/models/embeddable_host_spec.rb",
+    "lines": [
+     23,
+     23
+    ],
+    "texto": "The describe block is named 'allows_embeddable_host' but the model method added in this PR is 'host_allowed?'. The test description names a non-existent method, which is confusing and will break navigation/expectations. Rename the describe block to 'host_allowed?' to match the actual API."
+   },
+   {
+    "id": "S12",
+    "file": "app/assets/javascripts/admin/templates/components/embeddable-host.hbs",
+    "lines": [
+     3,
+     3
+    ],
+    "texto": "The input placeholder is hardcoded English text 'example.com' instead of using the I18n translation mechanism. This bypasses localization and will appear untranslated for non-English users. Add a translation key (e.g. admin.embedding.host_placeholder) and use it here."
+   },
+   {
+    "id": "S13",
+    "file": "spec/controllers/admin/embeddable_hosts_controller_spec.rb",
+    "lines": [
+     1,
+     9
+    ],
+    "texto": "The spec added for Admin::EmbeddableHostsController only checks that it is a subclass of Admin::AdminController. It does not exercise create, update, or destroy. Those actions could be completely broken and this spec would still pass, so it does not verify the controller behaviour it appears to cover. Add request specs for the actual actions, or at least assert that saving/destroying a host has the expected side effects."
+   },
+   {
+    "id": "S14",
+    "file": "spec/controllers/admin/embedding_controller_spec.rb",
+    "lines": [
+     1,
+     9
+    ],
+    "texto": "The spec added for Admin::EmbeddingController only checks that it inherits from Admin::AdminController. It does not call show or update, which in this PR return a serialized embedding object. Those actions could be removed or broken and the spec would still pass. Add tests that hit the routes and verify the serialized response contains the embeddable hosts."
+   },
+   {
+    "id": "S15",
+    "file": "spec/models/topic_spec.rb",
+    "lines": [
+     1403,
+     1405
+    ],
+    "texto": "The test 'is false if embeddable_host is blank' builds a default topic and asserts expandable_first_post? is false. The implementation no longer depends on embeddable hosts, and the body does not configure or assert anything about them; the assertion passes because embed_truncate and has_topic_embed? are false by default. Rename the test to match what it actually checks (e.g. 'is false by default') or make it explicitly exercise the embeddable_host condition and assert the method returns false for that reason."
+   },
+   {
+    "id": "S16",
+    "file": "app/controllers/admin/embeddable_hosts_controller.rb",
+    "lines": [
+     9,
+     18
+    ],
+    "texto": "Both `update` and `destroy` use `EmbeddableHost.where(id: params[:id]).first`. When the id is not found, `update` passes `nil` into `save_host`, which then calls `host.host = ...` and raises `NoMethodError`; `destroy` calls `host.destroy` on `nil`. This produces a 500 error for a missing resource instead of a 404. Use `EmbeddableHost.find(params[:id])` (which raises `ActiveRecord::RecordNotFound` and is handled by the base controller) or explicitly guard for `host.blank?` and render a 404."
+   },
+   {
+    "id": "S17",
+    "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "lines": [
+     9,
+     16
+    ],
+    "texto": "The migration fetches `embed_category` and `uncategorized_category_id` with `execute(...)[0]['id']` / `[0]['value']`. If either setting is missing, `[0]` is nil and the migration fails. Use safe row access (`rows.first`) and provide a sensible default so the migration can run on databases that lack those settings."
+   },
+   {
+    "id": "S18",
+    "file": "spec/fabricators/category_fabricator.rb",
+    "lines": [
+     1,
+     4
+    ],
+    "texto": "The file `spec/fabricators/category_fabricator.rb` now contains only the `:embeddable_host` fabricator, while `spec/fabricators/embeddable_host_fabricator.rb` contains the `:category` fabricators. Swap the contents back so each file defines the fabricator its name indicates."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+    "descricao": "EmbeddableHost's before_validation calls self.host.sub! unconditionally, so saving a record with a nil host raises NoMethodError instead of returning a validation error.",
+    "textoGolden": "The EmbeddableHost model's before_validation callback calls self.host.sub! to strip http://, https://, and path segments, but if self.host is nil, this raises NoMethodError.",
+    "comentarios": [
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       5,
+       7
+      ],
+      "texto": "The before_validation callback calls `sub!` on host without guarding nil. Creating a host with a missing or null host field reaches this callback from save_host and raises NoMethodError instead of returning a validation error. Guard nil during normalization and let presence/format validation reject it."
+     },
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       5,
+       8
+      ],
+      "texto": "WHAT: `before_validation` calls `self.host.sub!(...)` unconditionally, so a record with a nil host raises NoMethodError (`nil.sub!`) instead of producing a normal format-invalid result. WHY: `Admin::EmbeddableHostsController#save_host` assigns `params[:embeddable_host][:host]` directly; any request that omits the host value makes the save raise a 500 instead of returning the `render_json_error(host)` validation response. HOW: guard the mutation, e.g. `return if host.blank?` at the top of the before_validation block (or use `self.host = self.host.to_s` before stripping)."
+     },
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       5,
+       8
+      ],
+      "texto": "before_validation calls self.host.sub!(...) on a possibly-nil host before validates_format_of runs. The controller assigns host.host = params[:embeddable_host][:host], so a request without a host key leaves it nil and nil.sub! raises NoMethodError at save time instead of the format validation producing a normal error response. Add a presence guard so validation reports the failure."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+    "descricao": "update and destroy in Admin::EmbeddableHostsController fetch the host with where(id:).first and never check for nil, so an unknown id raises NoMethodError and returns a 500 instead of not-found.",
+    "textoGolden": "The update and destroy methods in Admin::EmbeddableHostsController do not validate the existence of the EmbeddableHost record retrieved by ID. If EmbeddableHost.where(id: params[:id]).first returns nil (i.e., the host does not exist), attempting to call methods on the nil object (e.g., save_host or destroy) will result in a NoMethodError.",
+    "comentarios": [
+     {
+      "file": "",
+      "lines": [
+       15,
+       16
+      ],
+      "texto": "In the destroy action, the nil-host case (line 15-16) would raise NoMethodError. Consider adding a nil check to handle the case where the host is not found."
+     },
+     {
+      "file": "app/controllers/admin/embeddable_hosts_controller.rb",
+      "lines": [
+       9,
+       18
+      ],
+      "texto": "update and destroy fetch the record with EmbeddableHost.where(id: params[:id]).first but never check for nil, then immediately use it (save_host(host) does host.host = ... / host.save; destroy does host.destroy). A stale or already-deleted id, or an interleaving where a concurrent delete removes the row first, makes host nil and the first call on it raises NoMethodError -> unhandled 500. Guard with a nil/404 check before use."
+     },
+     {
+      "file": "app/controllers/admin/embeddable_hosts_controller.rb",
+      "lines": [
+       10,
+       11
+      ],
+      "texto": "Update passes the nullable result of where(...).first directly to save_host, which immediately assigns host.host. Updating a nonexistent or concurrently deleted record returns an internal error instead of a not-found response; destroy has the same lookup failure. Use find or explicitly raise a not-found error before dereferencing the lookup result."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+    "descricao": "record_for_host compares lower(host) against the un-lowercased URI host, so mixed-case referer hosts fail to match allowed hosts and embedding is rejected.",
+    "textoGolden": "record_for_host compares lower(host) = ? but does not normalize the parameter\u2019s case, so mixed\u2011case referer hosts may fail to match even though comparison intends to be case\u2011insensitive.",
+    "comentarios": [
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       14,
+       17
+      ],
+      "texto": "Normalize the parsed hostname before comparing it with lower(host). URI parsing preserves hostname case, so an allowed entry such as example.com does not match https://EXAMPLE.com/page even though DNS hostnames are case-insensitive. This makes valid embedding requests fail the host authorization check and makes category lookup inconsistent for equivalent domain identities. Compare against host.downcase (or normalize both operands equivalently), and add a mixed-case URL test."
+     },
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       17,
+       17
+      ],
+      "texto": "The query compares lower(host) to the un-downcased uri.host. A referer such as http://EvilTrout.com never matches the stored lowercase host, so embedding is wrongly denied. Fix: use where(\"lower(host) = ?\", host.downcase)."
+     },
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       14,
+       17
+      ],
+      "texto": "The query compares lower(host) in the database with uri.host, which is not lowercased, so the comparison normalizes only one side. A referer or URL with uppercase letters (e.g. http://EvilTrout.com) will not match the stored host. Compare against host.downcase, i.e. where('lower(host) = ?', host.downcase)."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04",
+    "descricao": "The migration copies the legacy embeddable_hosts values into the new table without stripping scheme and path, so hosts stored as http://example.com no longer match the bare-host lookup and previously allowed embeds are rejected after upgrade.",
+    "textoGolden": "Because this migration inserts embeddable_hosts rows with raw SQL, any existing embeddable_hosts values that include http:// or /https:// or path segments won\u2019t go through the EmbeddableHost model\u2019s normalization, so the new host lookup (which compares only the bare host) may fail for migrated data. Consider ensuring that migrated hosts are normalized to the same format as newly created EmbeddableHost records so existing embedding configurations keep working.",
+    "comentarios": [
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       24,
+       26
+      ],
+      "texto": "WHAT: migration inserts raw embeddable_hosts lines (e.g. http://example.com/123) without stripping scheme/path like the model does. WHY: migrated rows never match EmbeddableHost.record_for_host which compares bare uri.host, silently breaking previously allowed embeds."
+     },
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       22,
+       26
+      ],
+      "texto": "Migration INSERTs raw embeddable_hosts lines with scheme/path intact, but EmbeddableHost normalizes to bare domain (before_validation strips protocol/path, record_for_host looks up by URI.host). Strip protocol and path before INSERT or migrated hosts will never satisfy host_allowed?."
+     },
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       24,
+       25
+      ],
+      "texto": "Legacy hosts are inserted verbatim instead of applying the new model's scheme/path normalization. Existing values such as http://discourse.org or https://example.com/1234 remain in the table, while record_for_host compares only URI.host, so previously configured embedding hosts stop working after upgrade. Normalize migrated entries to the same representation used by the model before inserting them."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#05",
+    "descricao": "The contents of category_fabricator.rb and embeddable_host_fabricator.rb are swapped, so each file defines the other's fabricators.",
+    "textoGolden": "The contents of `category_fabricator.rb` and `embeddable_host_fabricator.rb` have been swapped, resulting in the loss of original category fabricators and potentially causing errors in fabricator usage.",
+    "comentarios": [
+     {
+      "file": "spec/fabricators/category_fabricator.rb",
+      "lines": [
+       1,
+       4
+      ],
+      "texto": "File named category_fabricator.rb now defines Fabricator(:embeddable_host) while Fabricator(:category) was moved to embeddable_host_fabricator.rb. Filenames disagree with contents \u2014 swap contents back so each file defines the fabricator its name states."
+     },
+     {
+      "file": "spec/fabricators/embeddable_host_fabricator.rb",
+      "lines": [
+       1,
+       27
+      ],
+      "texto": "The file names and contents are swapped. embeddable_host_fabricator.rb defines the category fabricators (:category, :diff_category, :happy_category, :private_category), and category_fabricator.rb defines :embeddable_host. Restore category_fabricator.rb to the original category fabricators and put the :embeddable_host fabricator in embeddable_host_fabricator.rb."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#06",
+    "descricao": "The migration builds its INSERT by interpolating each legacy host value into the SQL string instead of quoting or binding it, so a value with a quote breaks the statement.",
+    "textoGolden": "The SQL query in the `app/controllers/admin/embeddable_hosts_controller.rb` file uses string interpolation (`'#{h}'`) to insert values, which is vulnerable to SQL injection. It should use parameter binding or proper quoting to prevent this security vulnerability.",
+    "comentarios": [
+     {
+      "file": "",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The migration's INSERT statement uses string interpolation: VALUES ('#{h}', ...). This is a SQL-injection concern and should be fixed by using parameterized queries or proper escaping."
+     },
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       25,
+       25
+      ],
+      "texto": "WHAT: migration interpolates raw host string into SQL: VALUES ('#{h}', ...). WHY: a host value containing a single quote breaks the statement and allows SQL injection via site_settings value."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+    "descricao": "The migration reads execute(...)[0]['id'] for embed_category without checking for an empty result, so installs without that setting stored crash the migration instead of falling back to the uncategorized category.",
+    "textoGolden": "The migration accesses execute(...)[0]['id'] without checking if the query returned any rows, which causes a crash when no embed_category setting exists. This can lead to a broken feature when attempting to edit category/host relationships.",
+    "comentarios": [
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       9,
+       12
+      ],
+      "texto": "WHAT: migration does execute(...)[0]['id'] with no guard when embed_category setting/category is missing. WHY: nil[0] dereference crashes the migration and blocks deploy on instances without that setting."
+     },
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       9,
+       16
+      ],
+      "texto": "Migration does execute(...)[0]['id'] without checking empty result; missing site_settings row throws NoMethodError and fails migration. Check for nil row."
+     },
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       9,
+       11
+      ],
+      "texto": "The migration indexes the first category-query result before checking whether any row was returned. An installation without a persisted embed_category setting, or with no matching category name, aborts migration before reaching the uncategorized fallback. Check whether the result contains a row before accessing its id and handle missing fallback settings as well."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#09",
+    "descricao": "The spec 'is false if embeddable_host is blank' no longer sets up any host condition and passes only because embed_truncate defaults to false, so its name no longer matches what it tests.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "spec/models/topic_spec.rb",
+      "lines": [
+       1399,
+       1406
+      ],
+      "texto": "Test 'is false if embeddable_host is blank' does not establish the true-branch preconditions (embed_truncate true, has_topic_embed true) nor control host presence, so it passes regardless of host logic and would still pass if host checking were broken/removed. Set truncate true + stub embed true with no hosts for the false case."
+     },
+     {
+      "file": "spec/models/topic_spec.rb",
+      "lines": [
+       1401,
+       1404
+      ],
+      "texto": "The test named \"is false if embeddable_host is blank\" now uses an ordinary built topic without setting embed_truncate or making has_topic_embed? true. It therefore returns false for reasons unrelated to the missing host, and passes even with the new implementation that never checks host availability. If blank-host behavior remains the intended contract, arrange all the other prerequisites before asserting false; if the contract intentionally changed, replace this case with a test of the actual intended behavior rather than retaining a misleading passing test."
+     },
+     {
+      "file": "spec/models/topic_spec.rb",
+      "lines": [
+       1403,
+       1404
+      ],
+      "texto": "The description \"is false if embeddable_host is blank\" no longer matches the code. This PR changed Topic#expandable_first_post? (app/models/topic.rb:869) to `SiteSetting.embed_truncate? && has_topic_embed?`, removing the embeddable_hosts condition entirely, and removed the `SiteSetting.embeddable_hosts` setup from this test. The assertion now passes only because `has_topic_embed?` is unstubbed (false) and embed_truncate is unset, so the name states a cause the method no longer has \u2014 rename it (e.g. \"is false when there is no topic embed\") or set up the precondition it claims to test."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#10",
+    "descricao": "The 'find embedded' test requests fruit 2 but the pretender always returns fruit 1, so it asserts fruit 1's colors and would not notice a find that ignores the id.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "test/javascripts/models/store-test.js.es6",
+      "lines": [
+       109,
+       121
+      ],
+      "texto": "Test requests fruit id 2 but pretender returns fruits[0] unconditionally, so assertions on colors [1,2] never cover fruit 2's color_ids [3]. Make pretender honor :id or request id 1 / assert single-element case to actually verify plural _ids hydration."
+     },
+     {
+      "file": "test/javascripts/models/store-test.js.es6",
+      "lines": [
+       111,
+       117
+      ],
+      "texto": "This test now requests fruit 2 but expects fruit 1's two colors. The /fruits/:id Pretender handler always returns fruits[0], so the test passes while hydrating the wrong record and would not catch a find implementation that ignores the requested ID. Make the handler select the requested fruit and assert its ID and corresponding colors (fruit 2 has only color 3), or request fruit 1 if testing its two-color hydration is the goal."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#11",
+    "descricao": "After saving a host, the component overwrites its category with findById(categoryId); when no category was chosen this is null even though the server saved the uncategorized category, so the row shows no category until reload.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/admin/components/embeddable-host.js.es6",
+      "lines": [
+       38,
+       38
+      ],
+      "texto": "The save callback overwrites the category using categoryId even when the server substituted the uncategorized category for a blank selection. Adding a host without choosing a category therefore leaves its category badge empty, and editing it reads an undefined category id despite a valid category_id having been returned. Resolve the category from the saved response's category_id rather than the submitted selection."
+     },
+     {
+      "file": "app/assets/javascripts/admin/components/embeddable-host.js.es6",
+      "lines": [
+       37,
+       38
+      ],
+      "texto": "When categoryId is null (the default for a new row, or a cleared selection), the controller saves SiteSetting.uncategorized_category_id and returns that category_id. This callback instead overwrites host.category with findById(null), making the displayed category disagree with the saved category. Use the category from the save response or its returned category_id rather than the pre-save selection."
+     },
+     {
+      "file": "app/assets/javascripts/admin/components/embeddable-host.js.es6",
+      "lines": [
+       37,
+       38
+      ],
+      "texto": "Use the saved response's category rather than overwriting it from categoryId after saving. For a new host with no category selected, categoryId is null, while the new controller deliberately saves SiteSetting.uncategorized_category_id and returns that ID through the serializer. This callback replaces the hydrated category with findById(null), leaving the row without its actual category until reload (and reopening edit also initializes from that incorrect relationship)."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#14",
+    "descricao": "Hosts saved with a port (allowed by the validation regex) are stored as host:port, but lookup compares only URI.host, so those configured hosts never match and embedding fails for them.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       14,
+       17
+      ],
+      "texto": "Host lookup compares URI.host against a stored value that validation explicitly permits to include a port. Saving example.com:8080 succeeds, but a request from http://example.com:8080 produces URI.host equal to example.com and never matches that record, disabling embedding and retrieval for the configured host. Use a consistent port representation in both storage and lookup."
+     },
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       14,
+       17
+      ],
+      "texto": "The validator accepts hosts such as `example.com:8080`, but record_for_host extracts only URI.host (`example.com`) and compares it to the stored port-qualified string. An accepted and saved host therefore never authorizes its corresponding URLs. Normalize the stored and queried authority consistently, including a deliberate port policy."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#prod-01",
+    "descricao": "EmbeddableHost's host format validation only accepts TLDs of 2-5 letters, so admins cannot add embeddable hosts on longer TLDs like example.technology.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "1950a511026d520a7329c7b6b9ee60a4af8f8b55",
+  "base": "b8c1cd410f4499c77a8b372decfe1718b80ccfd2",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java",
+    "lines": [
+     77,
+     78
+    ],
+    "texto": "WHAT: The provider event listener that disables permissions on role/client/group removal now runs only when the legacy ADMIN_FINE_GRAINED_AUTHZ feature is enabled. WHY: ADMIN_FINE_GRAINED_AUTHZ_V2 is independent (it depends only on AUTHORIZATION), so in V2-only deployments the listener is skipped and stale permissions remain after resources are deleted, breaking the invariant that permissions disappear with their target. HOW: Change the guard to check both features, e.g. `Profile.isFeatureEnabled(Profile.Feature.ADMIN_FINE_GRAINED_AUTHZ) || Profile.isFeatureEnabled(Profile.Feature.ADMIN_FINE_GRAINED_AUTHZ_V2)`."
+   },
+   {
+    "id": "S2",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+    "lines": [
+     224,
+     234
+    ],
+    "texto": "WHAT: `hasPermission(ClientModel, String)` and `hasPermission(String)` do not verify that returned `Permission.resourceId` matches the resource being evaluated. WHY: If `root.evaluatePermission` returns permissions for other resources (e.g. a different client or the all-clients resource), the loops will grant access based solely on matching scopes, allowing a permission meant for one client to satisfy a check for another. UserPermissionsV2.hasPermission filters on `permission.getResourceId().equals(resource.getId())`, so the same defensive check should be applied here. HOW: Add the resourceId equality guard inside the permission loops in `hasPermission(ClientModel, String)`, `hasPermission(String)`, and `hasGrantedPermission`."
+   },
+   {
+    "id": "S3",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+    "lines": [
+     136,
+     145
+    ],
+    "texto": "WHAT: `getClientsWithPermission(String)` loads every client resource of type Clients and evaluates permissions for each one. WHY: For realms with many clients this produces O(N) authorization evaluations on every caller such as `AvailableRoleMappingResource`, causing linear slowdown of role-mapping and client-listing operations. HOW: Consider evaluating a single all-clients resource first and returning early when a global grant exists; otherwise keep per-client evaluation but bound it with pagination or cache granted scopes per request."
+   },
+   {
+    "id": "S4",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionEvaluator.java",
+    "lines": [
+     95,
+     98
+    ],
+    "texto": "The Javadoc for requireView() says 'Returns {@code true} if {@link #canView()} returns {@code true}.', but the method signature is 'void requireView();'. This contradicts the actual contract and should be corrected to 'Throws ForbiddenException if {@link #canView()} returns {@code false}.' to match the pattern used by the neighbouring require* methods."
+   },
+   {
+    "id": "S5",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionEvaluator.java",
+    "lines": [
+     100,
+     103
+    ],
+    "texto": "The Javadoc for requireViewClientScopes() says 'Returns {@code true} if {@link #canViewClientScopes()} returns {@code true}.', but the method signature is 'void requireViewClientScopes();'. The prose should be updated to 'Throws ForbiddenException if {@link #canViewClientScopes()} returns {@code false}.' to reflect the actual API contract."
+   },
+   {
+    "id": "S6",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionEvaluator.java",
+    "lines": [
+     133,
+     140
+    ],
+    "texto": "The Javadoc says 'Or if the caller has a permission to {@link AdminPermissionManagement#VIEW_SCOPE} the client. For V2 only: Also if the caller has a permission to {@link org.keycloak.authorization.AdminPermissionsSchema#VIEW} all clients.' However, ClientPermissionsV2.canView(ClientModel) only checks canView()/canConfigure(client) and AdminPermissionsSchema.VIEW; it never evaluates AdminPermissionManagement.VIEW_SCOPE. The 'Also' wording is misleading because the V1 per-client check is absent in V2."
+   },
+   {
+    "id": "S7",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+    "lines": [
+     187,
+     195
+    ],
+    "texto": "ClientPermissionsV2 overrides isPermissionsEnabled(ClientModel) and setPermissionsEnabled(ClientModel, boolean) to throw UnsupportedOperationException, even though these methods are part of the ClientPermissionEvaluator interface contract. Since MgmtPermissionsV2.clients() now returns ClientPermissionsV2, callers holding a ClientPermissionEvaluator reference that invoke these methods will break. Either provide a V2 implementation that honors the interface contract, add default no-op behavior to the interface, or update all consumers to avoid calling these methods on V2."
+   },
+   {
+    "id": "S8",
+    "file": "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/PermissionClientTest.java",
+    "lines": [
+     145,
+     245
+    ],
+    "texto": "The tests call getDefaultClientScopes().get(1) and .get(0) without checking that the list contains enough elements. If the realm has fewer default scopes than assumed, the test throws IndexOutOfBoundsException before it can verify the intended ForbiddenException behavior. Guard the index access with an isEmpty()/size() check or select a scope safely, and fail with a clear message if none are available."
+   },
+   {
+    "id": "S9",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java",
+    "lines": [
+     89,
+     91
+    ],
+    "texto": "The ClientRemovedEvent handler calls management(...).clients().setPermissionsEnabled(cast.getClient(), false), but in the V2 permission path clients() returns ClientPermissionsV2 whose setPermissionsEnabled throws UnsupportedOperationException. When ADMIN_FINE_GRAINED_AUTHZ is enabled, deleting a client will therefore raise an unhandled exception and abort the transaction. The cleanup should either be skipped for V2, or ClientPermissionsV2.setPermissionsEnabled should be a no-op (or properly clean up V2 authorization resources)."
+   },
+   {
+    "id": "S10",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+    "lines": [
+     192,
+     195
+    ],
+    "texto": "In V2 there is no per-client permission toggle, but the client-removal cleanup path in AdminPermissions.java still invokes setPermissionsEnabled(...). Make this method a no-op instead of throwing UnsupportedOperationException, so deleting a client does not fail when admin fine-grained authz V2 is enabled."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+    "descricao": "Claims the removal-cleanup listener is guarded by the V1 fine-grained flag, so client/role/group permissions are orphaned when V1 is disabled or only V2 is enabled.",
+    "textoGolden": "Inconsistent feature flag bug causing orphaned permissions. The AdminPermissions event listener, responsible for cleaning up permissions upon role, client, or group removal, is incorrectly guarded by the ADMIN_FINE_GRAINED_AUTHZ (V1) feature flag. This is inconsistent with other methods in the class that use ADMIN_FINE_GRAINED_AUTHZ_V2. Consequently, if ADMIN_FINE_GRAINED_AUTHZ_V2 is enabled but V1 is not, the permission cleanup logic will not execute, leading to orphaned permission data. Cleanup should occur regardless of which fine-grained authorization version is enabled.",
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java",
+      "lines": [
+       77,
+       95
+      ],
+      "texto": "The cleanup is now entirely wrapped in Profile.isFeatureEnabled(ADMIN_FINE_GRAINED_AUTHZ), so when the feature is disabled the pre-existing removal cleanup (roles/clients/groups .setPermissionsEnabled(..., false)) no longer runs. Realms using the non-V2 permission model will keep orphaned authorization resources/permissions after a client, role or group is removed. The gate should preserve the old behavior when the feature is off (run for V1), or the V1 cleanup must be performed elsewhere."
+     }
+    ]
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+    "descricao": "getClientsWithPermission in ClientPermissionsV2 only finds the type-level 'Clients' resource and returns its name, never actual client ids, so callers that resolve the returned values as client ids get wrong results or null clients.",
+    "textoGolden": "In getClientsWithPermission(String scope), iterating resourceStore.findByType(server, AdminPermissionsSchema.CLIENTS_RESOURCE_TYPE) and returning resource.getName() will only ever consider the type-level 'Clients' resource (per-client resources have no type) and return its name, while AvailableRoleMappingResource#getRoleIdsWithPermissions expects actual client IDs to pass to realm.getClientById, which can lead to incorrect behavior or a null client and subsequent failures.",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#04",
+    "descricao": "Claims getResourceTypeResource can return null in ClientPermissionsV2.hasPermission, causing a NullPointerException in findByResource.",
+    "textoGolden": "In ClientPermissionsV2.hasPermission, the method getResourceTypeResource could return null, leading to a NullPointerException in findByResource. Defensive null checks are needed to prevent this issue.",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#05",
+    "descricao": "ClientPermissionsV2 has an unused private getEvaluationContext method.",
+    "textoGolden": "Remove unused getEvaluationContext private method in ClientPermissionsV2 - it is defined but never called",
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+      "lines": [
+       262,
+       272
+      ],
+      "texto": "Dead computation: `getEvaluationContext(ClientModel, AccessToken)` is private and has no caller anywhere in the class. Its only possible consumer in the V1 class, `canExchangeTo`, was overridden to throw UnsupportedOperationException (line 148-150). The EvaluationContext and its overridden getBaseAttributes are built and then never used \u2014 remove the method (or wire it into canExchangeTo if token-exchange is meant to be supported)."
+     }
+    ]
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#08",
+    "descricao": "The Javadoc of the void requireView() and requireViewClientScopes() methods says they return true instead of documenting that they throw ForbiddenException.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionEvaluator.java",
+      "lines": [
+       95,
+       98
+      ],
+      "texto": "The Javadoc for `void requireView()` says \"Returns {@code true} if {@link #canView()} returns {@code true}\", but requireView() is void and throws ForbiddenException rather than returning a value. It is a copy-paste of the canView() doc and should read \"Throws ForbiddenException if {@link #canView()} returns {@code false}\", matching the sibling require* methods (requireListClientScopes, requireConfigure, etc.)."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionEvaluator.java",
+      "lines": [
+       100,
+       103
+      ],
+      "texto": "The Javadoc for `void requireViewClientScopes()` says \"Returns {@code true} if {@link #canViewClientScopes()} returns {@code true}\", but the method is void and throws ForbiddenException. The doc describes a boolean return the method never produces; it should state that it throws ForbiddenException if canViewClientScopes() returns false, consistent with the other require* methods."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionEvaluator.java",
+      "lines": [
+       95,
+       103
+      ],
+      "texto": "Declaration does not match the method it documents: the javadoc for `requireView()` ('Returns {@code true} if {@link #canView()} returns {@code true}.') and for `requireViewClientScopes()` ('Returns {@code true} if {@link #canViewClientScopes()} returns {@code true}.') describes a boolean-returning accessor, but both methods are declared `void` and are the require* counterparts that throw ForbiddenException (as documented for requireManage/requireConfigure above). The text was copy-pasted from the corresponding can* methods; it should state that the method throws when canView()/canViewClientScopes() is false."
+     }
+    ]
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#09",
+    "descricao": "ClientPermissionsV2.canView() ignores a global MANAGE permission, so admins with only global manage take the unpaginated, per-client evaluated listing path.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+      "lines": [
+       86,
+       87
+      ],
+      "texto": "canView() does not recognize an all-clients MANAGE permission even though canView(client) grants viewing through canConfigure(client) and canManage(client). For an administrator with global MANAGE but no VIEW, ClientsResource.getClients selects an unpaginated realm-wide client stream and evaluates authorization for clients before applying pagination, instead of fetching the requested database page. Include the global MANAGE permission in the global viewing capability while preserving client-specific denial semantics."
+     }
+    ]
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#10",
+    "descricao": "canView(client) short-circuits on the global all-clients VIEW permission, so a client-specific permission denying an admin is never evaluated and the client is still viewable.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+      "lines": [
+       78,
+       82
+      ],
+      "texto": "The global VIEW check returns true before evaluating client-specific VIEW permissions, bypassing a negative permission on an individual client. An administrator granted VIEW on all clients can therefore read a client explicitly excluded by a client-specific denial; ClientsResource.getClients also bypasses per-client checks when this evaluator's parameterless canView() returns true. Evaluate the specific client resource before falling back to the all-clients permission, and ensure listing does not use a global grant to skip specific denials."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+      "lines": [
+       78,
+       79
+      ],
+      "texto": "Do not short-circuit resource-specific view evaluation on the global fine-grained VIEW grant. With an all-clients VIEW permission allowing an administrator and a client-specific VIEW permission denying that administrator, canView() returns true here and the specific client permission is never evaluated. This differs from the specific-over-global override behavior exercised for users in this PR and exposes the denied client's representation. Keep the administrative-role bypass separate from fine-grained grants and evaluate the client's resource before falling back to the all-clients resource; also ensure the global view result used by client listing cannot bypass those overrides."
+     }
+    ]
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#11",
+    "descricao": "The negative check for removing a default client scope expects ForbiddenException, but it can come from the preceding getDefaultClientScopes() call, so the test passes even without a permission check on removal.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/PermissionClientTest.java",
+      "lines": [
+       147,
+       152
+      ],
+      "texto": "The expected ForbiddenException can come from getDefaultClientScopes(), before removeDefaultClientScope() is invoked. With no permission granted, the initial read is forbidden, so this test still passes if removal's manage-permission check is removed entirely; the later granted removal also succeeds in that broken implementation. Obtain the scope ID using the privileged realm client outside this try block, then invoke only removeDefaultClientScope() through the restricted client and assert that it is forbidden."
+     }
+    ]
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-02",
+    "descricao": "ClientPermissionsV2.canExchangeTo throws UnsupportedOperationException, but AbstractTokenExchangeProvider still calls clients().canExchangeTo for client-to-client exchange, so with token exchange and FGAP V2 enabled the request fails with a server error instead of a permission decision.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01",
+    "descricao": "In ClientPermissionsV2.hasPermission, an admin granted a permission on all clients is denied on any client that also has its own per-client permission resource, because only the per-client resource is evaluated.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "de628295646d0848226618108a52f2f1e5d04ac0",
+  "base": "a308075bc39b77ed7059b0cae9d443d669a7bf98",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/core/EventManager.ts",
+    "lines": [
+     118,
+     119
+    ],
+    "texto": "WHAT: mainHostDestinationCalendar is destructured from evt.destinationCalendar and its .integration is accessed without optional chaining. WHY: When destinationCalendar is null, undefined, or empty, mainHostDestinationCalendar is undefined and mainHostDestinationCalendar.integration throws a TypeError, breaking event creation. HOW: Use optional chaining: mainHostDestinationCalendar?.integration !== \"google_calendar\"."
+   },
+   {
+    "id": "S2",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     254,
+     256
+    ],
+    "texto": "WHAT: When externalCalendarId is undefined, the fallback searches event.destinationCalendar for an entry whose externalId equals undefined, which can never match. WHY: updateEvent loses the previous default of event.destinationCalendar.externalId and may call calendar.events.update with an undefined calendarId; deleteEvent falls back to \"primary\" instead of the intended host calendar. HOW: Fall back to the first destinationCalendar entry, e.g. event.destinationCalendar?.[0]?.externalId. The same fix applies to deleteEvent at lines 315-317."
+   },
+   {
+    "id": "S3",
+    "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+    "lines": [
+     72,
+     77
+    ],
+    "texto": "WHAT: Office365 createEvent still has the old one-argument signature and always uses event.destinationCalendar[0]. WHY: CalendarManager now calls createEvent(calEvent, credential.id), and for collective bookings it expects the credential's matching destination calendar to be selected; Office365 ignores credentialId and writes every host's event to the first destination calendar. HOW: Accept credentialId and select the destinationCalendar entry whose credentialId matches, then use that entry's externalId."
+   },
+   {
+    "id": "S4",
+    "file": "packages/app-store/larkcalendar/lib/CalendarService.ts",
+    "lines": [
+     125,
+     129
+    ],
+    "texto": "WHAT: Lark createEvent was not updated to accept credentialId and still reads event.destinationCalendar[0].externalId. WHY: With multiple destination calendars, Lark events for additional hosts are created in the wrong calendar because the implementation cannot select the calendar matching the credential in use. HOW: Update the signature to (event: CalendarEvent, credentialId: number) and select event.destinationCalendar?.find(cal => cal.credentialId === credentialId)."
+   },
+   {
+    "id": "S5",
+    "file": "packages/trpc/server/routers/viewer/organizations/create.handler.ts",
+    "lines": [
+     151,
+     153
+    ],
+    "texto": "WHAT: The slug and requestedSlug metadata conditions were inverted from !IS_TEAM_BILLING_ENABLED to IS_TEAM_BILLING_ENABLED. WHY: Non-billing/self-hosted instances no longer store the organization slug, breaking routing, while billing-enabled instances store both slug and requestedSlug, bypassing the verification flow. HOW: Restore the original conditions: write slug when billing is disabled and requestedSlug only when billing is enabled."
+   },
+   {
+    "id": "S6",
+    "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+    "lines": [
+     444,
+     468
+    ],
+    "texto": "WHAT: The recurring-event cancellation branch iterates over all user calendar credentials inside a loop over every calendar reference. WHY: For collective recurring bookings with multiple calendar references, each calendar event is deleted once per reference, producing redundant API calls and 404/not-found errors. HOW: Use only the credential from the current reference (the already-resolved calendarCredential) instead of looping over bookingToDelete.user.credentials."
+   },
+   {
+    "id": "S7",
+    "file": "packages/core/EventManager.ts",
+    "lines": [
+     116,
+     121
+    ],
+    "texto": "After destructuring `const [mainHostDestinationCalendar] = evt.destinationCalendar ?? []`, the code does `mainHostDestinationCalendar.integration !== \"google_calendar\"`. If `evt.destinationCalendar` is null or empty, `mainHostDestinationCalendar` is undefined and accessing `.integration` throws a TypeError. Add optional chaining (`mainHostDestinationCalendar?.integration`) or explicitly handle the empty case so the fallback does not crash."
+   },
+   {
+    "id": "S8",
+    "file": "packages/core/CalendarManager.ts",
+    "lines": [
+     228,
+     231
+    ],
+    "texto": "The string \"Notes have been hidden by the organizer\" is written directly into calEvent.additionalNotes and shown to users in calendar events, but it is not routed through the project's i18n system. The existing TODO even notes this. The PR changed the spelling of this line without resolving the localization gap, so attendees/organizers whose locale is not English still see an untranslated message. Replace the hard-coded string with a translated key (e.g., t(\"notes_hidden_by_organizer\")) and add it to the locale files."
+   },
+   {
+    "id": "S9",
+    "file": "packages/core/EventManager.ts",
+    "lines": [
+     116,
+     121
+    ],
+    "texto": "The code destructures `const [mainHostDestinationCalendar] = evt.destinationCalendar ?? [];` and then reads `mainHostDestinationCalendar.integration` without checking whether `mainHostDestinationCalendar` exists. Since `destinationCalendar` can be `null`, `undefined`, or `[]` per the type, this causes a TypeError for bookings with no destination calendar. Add an explicit guard, e.g. `if (evt.location === MeetLocationType && mainHostDestinationCalendar?.integration !== \"google_calendar\")` or check `mainHostDestinationCalendar` first."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#02",
+    "descricao": "Claims the optional chaining in mainHostDestinationCalendar?.integration is redundant because a ternary already checks it.",
+    "textoGolden": "The optional chaining on mainHostDestinationCalendar?.integration is redundant since you already check mainHostDestinationCalendar in the ternary condition.",
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+    "descricao": "When externalCalendarId is absent, updateEvent/deleteEvent look for a destination calendar whose externalId equals that absent value, so the lookup never matches and the configured destination calendar is no longer used.",
+    "textoGolden": "Logic error: when externalCalendarId is provided, you're searching for a calendar where externalId === externalCalendarId, but this will always fail since you're looking for a calendar that matches itself. Should likely find by credentialId or use different logic.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       254,
+       256
+      ],
+      "texto": "WHAT: The fallback `event.destinationCalendar?.find((cal) => cal.externalId === externalCalendarId)?.externalId` only executes when `externalCalendarId` is falsy, so it compares `cal.externalId` against `null`/`undefined` and matches nothing (the same wrong pattern is duplicated in deleteEvent at lines 315-317).\nWHY: When `updateEvent`/`deleteEvent` are called without an externalCalendarId, `selectedCalendar`/`calendarId` now resolves to `undefined` instead of the host's destination calendar externalId (old code fell back to `event.destinationCalendar?.externalId`), so the Google API is invoked with an undefined calendarId and the update/delete targets the wrong (or default) calendar or errors.\nHOW: Find the destination calendar for the current credential (e.g. by credentialId) rather than comparing `externalId` to the already-falsy `externalCalendarId`, or restore the single fallback `event.destinationCalendar?.[0]?.externalId`."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       254,
+       256
+      ],
+      "texto": "Dead computation in the fallback: the else branch runs only when externalCalendarId is falsy, yet it calls `event.destinationCalendar?.find((cal) => cal.externalId === externalCalendarId)`, comparing every cal.externalId to undefined. Nothing can match, so selectedCalendar is always undefined and the fallback that previously returned `event.destinationCalendar?.externalId` is lost. Match the intended criterion (destination calendar's own externalId/credentialId), not the already-falsy externalCalendarId."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       315,
+       317
+      ],
+      "texto": "Same dead-computation defect in deleteEvent: the else branch executes only when externalCalendarId is falsy, yet the predicate `(cal) => cal.externalId === externalCalendarId` compares against undefined and can never match, so calendarId falls through to \"primary\" and the event is deleted from the wrong calendar instead of the booking's destination calendar. Fix the predicate to use the destination calendar's externalId (or credentialId) rather than the falsy externalCalendarId."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#04",
+    "descricao": "The organization slug is now set only when team billing is enabled (inverted condition), so with billing both slug and requestedSlug are set and without billing neither is.",
+    "textoGolden": "Logic inversion in organization creation: The slug property is now conditionally set when IS_TEAM_BILLING_ENABLED is true, instead of when it's false as originally intended. This change, combined with requestedSlug still being set when IS_TEAM_BILLING_ENABLED is true, results in both properties being set when billing is enabled, and neither when disabled",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/organizations/create.handler.ts",
+      "lines": [
+       151,
+       151
+      ],
+      "texto": "Organization creation no longer assigns a slug when team billing is disabled, while requestedSlug is also omitted in that mode. New self-hosted organizations therefore have neither publication field, and publish.handler rejects them because requestedSlug is missing. Restore the non-billing slug assignment."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/organizations/create.handler.ts",
+      "lines": [
+       148,
+       152
+      ],
+      "texto": "WHAT: slug spread condition was inverted from ...(!IS_TEAM_BILLING_ENABLED && {slug}) to ...(IS_TEAM_BILLING_ENABLED ? {slug} : {}). WHY: organizations get slug when billing enabled and lose it when disabled, opposite of prior contract and breaking slug/requestedSlug pairing. HOW: restore negation for slug branch."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05",
+    "descricao": "Office365 (and Lark) createEvent ignore the new credentialId argument and always use the first destination calendar, so in collective bookings other hosts' credentials target the organizer's calendar instead of their own.",
+    "textoGolden": "The Calendar interface now requires createEvent(event, credentialId), but some implementations (e.g., Lark/Office365) still declare createEvent(event) only\u2014this breaks the interface contract (also applies to other locations in the PR).",
+    "comentarios": [
+     {
+      "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+      "lines": [
+       73,
+       76
+      ],
+      "texto": "Office365 creation always selects the first host's destination despite being invoked separately with each host's credential. A collective booking with distinct Office365 calendars sends the second host's token to the first host's calendar ID, causing failed or incorrectly targeted creation. Accept the credentialId supplied by CalendarManager and select the matching destination."
+     },
+     {
+      "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+      "lines": [
+       73,
+       76
+      ],
+      "texto": "Select the destination belonging to the current credential rather than always taking the first array entry. EventManager now calls createEvent once per destination with that destination's credential, while passing the full event array each time. In a collective booking with two Outlook hosts, the second host therefore attempts to insert into the first host's calendar using the second host's token, typically failing instead of creating the second calendar event. Accept the credentialId passed by CalendarManager and match the destination by that ID (or pass a destination-specific event)."
+     },
+     {
+      "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+      "lines": [
+       72,
+       76
+      ],
+      "texto": "Select the destination belonging to the credential passed by CalendarManager, rather than always selecting the first array element. EventManager now invokes creation for each collective host with the full destination array. A second Office365 host therefore attempts to write to the first host's calendar using its own token, causing creation to fail or target the wrong calendar; meanwhile the saved reference records the second host's externalId."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#06",
+    "descricao": "Claims updateAllCalendarEvents passes an undefined credential to updateEvent when reference.credentialId points to a credential that cannot be found.",
+    "textoGolden": "The `credential` may be undefined when passed to `updateEvent` if `reference.credentialId` is set but the credential is not found. This can lead to a runtime error when `updateEvent` is called with an undefined credential, which should be handled to prevent crashes.",
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+    "descricao": "The Google Meet fallback reads mainHostDestinationCalendar.integration without optional chaining, so a Meet booking with a null or empty destinationCalendar throws instead of falling back to Cal Video.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       119,
+       119
+      ],
+      "texto": "WHAT: `mainHostDestinationCalendar.integration` is dereferenced without optional chaining after destructuring `const [mainHostDestinationCalendar] = evt.destinationCalendar ?? []`.\nWHY: The previous code was `evt.destinationCalendar?.integration !== \"google_calendar\"`, which was null-safe; now when `destinationCalendar` is null/empty (e.g. handleNewBooking.ts:1063-1067 sets it to `null` when neither eventType nor organizer has one) and `evt.location === MeetLocationType`, destructuring yields `undefined` and `.integration` throws `TypeError: Cannot read properties of undefined`, crashing the booking creation flow.\nHOW: Use `mainHostDestinationCalendar?.integration !== \"google_calendar\"`."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       118,
+       119
+      ],
+      "texto": "`mainHostDestinationCalendar` can be `undefined` because `evt.destinationCalendar` may now be null or an empty array (callers such as handleNewBooking pass `: null` / `: []`). The old code used `evt.destinationCalendar?.integration`, but the new line dereferences `mainHostDestinationCalendar.integration` without optional chaining, throwing `TypeError: Cannot read properties of undefined (reading 'integration')` whenever `evt.location === MeetLocationType`. Use `mainHostDestinationCalendar?.integration !== \"google_calendar\"` to preserve the null-safe fallback."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       118,
+       119
+      ],
+      "texto": "The Meet-location fallback destructures `const [mainHostDestinationCalendar] = evt.destinationCalendar ?? []` and then reads `mainHostDestinationCalendar.integration` without optional chaining. When `destinationCalendar` is an empty array (which this PR now produces in many callers, e.g. handleCancelBooking.ts, the payment webhooks, confirm/editLocation/deleteCredential/requestReschedule handlers all set `[]` when there is no destination calendar), the destructured value is `undefined` and `.integration` throws `TypeError: Cannot read properties of undefined (reading 'integration')`, aborting event creation. Use `mainHostDestinationCalendar?.integration` to preserve the previous optional-chained behavior."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+    "descricao": "For collective events whose organizer has no destination calendar, destinationCalendar is null and the optional push drops all other hosts' destination calendars, so those hosts never get calendar events.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/bookings/lib/handleNewBooking.ts",
+      "lines": [
+       1077,
+       1078
+      ],
+      "texto": "WHAT: `evt.destinationCalendar?.push(...teamDestinationCalendars)` silently does nothing when `evt.destinationCalendar` is `null`.\nWHY: For a COLLECTIVE event where neither `eventType.destinationCalendar` nor `organizerUser.destinationCalendar` exists, the evt field is set to `null` (lines 1063-1067), so the collected `teamDestinationCalendars` of the other hosts are dropped and those hosts are never invited \u2014 defeating the multi-host support this PR adds.\nHOW: Initialize to an array (e.g. `evt.destinationCalendar ?? []` before pushing, or default the field to `[]` instead of `null`) so team destination calendars are always appended."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleNewBooking.ts",
+      "lines": [
+       1077,
+       1078
+      ],
+      "texto": "The optional push discards all collected team destinations when the organizer has no destination calendar. A collective booking with configured secondary hosts therefore creates none of their calendar events even though teamDestinationCalendars contains them. Initialize the array before appending the team destinations."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleNewBooking.ts",
+      "lines": [
+       1077,
+       1079
+      ],
+      "texto": "Initialize destinationCalendar to an array before appending collective hosts' destinations. When neither the event type nor organizer has a destination, it is set to null above, so optional push silently discards all the computed teamDestinationCalendars. Hosts with configured destination calendars consequently receive no calendar events."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#09",
+    "descricao": "Video booking references are now saved without their credentialId, so cancelling the booking can no longer find the video credential and the meeting is not deleted.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       169,
+       170
+      ],
+      "texto": "WHAT: `credentialId: isCalendarType ? result.credentialId : undefined` drops the previous non-calendar fallback `result.credentialId`.\nWHY: For non-calendar results (video events) `referencesToCreate` now stores `credentialId: undefined` where it previously stored `result.credentialId`, so the persisted video reference loses its credentialId; later code that looks the reference up by credentialId (e.g. handleCancelBooking.ts:491-502 deleting the video meeting, or EventManager.updateLocation) can no longer resolve the credential and the meeting is not cleaned up.\nHOW: Keep the fallback for non-calendar results: `credentialId: isCalendarType ? result.credentialId : result.credentialId` (i.e. just `result.credentialId` for both branches)."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       170,
+       170
+      ],
+      "texto": "The reference mapping discards credentialId for every video result. createMeeting returns the video credential ID, and handleCancelBooking only deletes a video meeting when its reference has that ID, so newly created video meetings are left behind on cancellation. Preserve result.credentialId for video results as well."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       170,
+       170
+      ],
+      "texto": "Retain result.credentialId for non-calendar references as well. The previous mapping saved the dedicated video integration's credential ID; this change unconditionally replaces it with undefined for video results, losing the association needed to identify the account that created the meeting during subsequent lifecycle operations."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#10",
+    "descricao": "createAllCalendarEvents and updateAllCalendarEvents fetch each missing host credential with a separate findUnique inside the loop instead of one batched query.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       341,
+       355
+      ],
+      "texto": "WHAT: The new `for (const destination of event.destinationCalendar)` loop performs a `prisma.credential.findUnique` on every destination whose credential is not found in the cached `this.calendarCredentials` (line 344); the same per-reference DB lookup was added in updateAllCalendarEvents at line 517.\nWHY: For collective bookings with multiple hosts this turns one in-memory lookup into up to N sequential database round-trips added to the booking-creation hot path, scaling with host count.\nHOW: Resolve all missing credential ids in a single batched query (`prisma.credential.findMany({ where: { id: { in: missingIds } } })`) before the loop and build a lookup map."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#12",
+    "descricao": "updateLocation stores externalCalendarId and credentialId from updateEvent's result, which never returns them, so calendar references rewritten on location edit lose their calendar and credential and later updates or cancellations misroute.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       208,
+       209
+      ],
+      "texto": "updateLocation now reads externalId and credentialId exclusively from results, but CalendarManager.updateEvent returns neither field. Calendar references produced by location editing consequently lose their calendar and credential routing information, breaking subsequent updates or cancellation, particularly for secondary collective hosts. Return those fields from updateEvent or preserve them from the corresponding booking reference."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#13",
+    "descricao": "Cancelling all remaining occurrences of a recurring collective booking deletes only the first calendar reference of each booking, repeated once per host, so the other hosts' events stay on their calendars.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       423,
+       424
+      ],
+      "texto": "The new per-reference loop runs the recurring-series deletion branch for every host, but that branch still iterates only bookingToDelete.user.credentials and selects the first calendar reference in each occurrence. Canceling all remaining collective occurrences repeatedly deletes the owner's events while leaving secondary hosts' events untouched. For each occurrence, delete the reference matching the current host credential using the resolved calendarCredential."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       449,
+       457
+      ],
+      "texto": "For cancel-all-remaining recurring collective bookings, delete each updated booking's reference matching the current outer reference/credential. The new outer loop iterates all calendar references, but this inner block still iterates only the organizer's credentials and takes the first calendar reference of each booking. Every outer iteration therefore repeats deletion of the first host's event, while the additional hosts' recurring events remain on their calendars after cancellation."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#14",
+    "descricao": "Google createEvent picks the target calendar only by matching credentialId, so destination calendars without a credentialId are ignored and events are created on the primary calendar instead.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       145,
+       154
+      ],
+      "texto": "createEvent now picks the target calendar only by matching credentialId. Destination calendars without a credentialId (handled by EventManager's integration-based branch) never match, so events are inserted into \"primary\" instead of the configured destination externalId as before."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#15",
+    "descricao": "For destination calendars without a credentialId, createEvent is called without the externalId, so the booking reference is stored with an undefined externalCalendarId.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       376,
+       381
+      ],
+      "texto": "In the no-credentialId branch createEvent(c, event) is called without externalId, so EventResult.externalId is undefined. The booking reference's externalCalendarId, which used to come from evt.destinationCalendar.externalId, is now not stored, which breaks later update/delete targeting. Pass destination.externalId."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       375,
+       381
+      ],
+      "texto": "In the branch for destinations without a credentialId, `createEvent(c, event)` is called without the externalId argument. CalendarManager.createEvent only returns `externalId` when it is passed in, and EventManager now stores `result.externalId` as externalCalendarId, so these booking references are saved with an undefined externalCalendarId. Pass `destination.externalId` as the third argument, so the producer returns what the consumer stores."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-01",
+    "descricao": "When cancelling a recurring booking with multiple calendar references, the recurring-event deletion over all remaining bookings and credentials runs once per reference, causing duplicate delete calls and errors.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-03",
+    "descricao": "loadUsers forwards raw Prisma error messages to the client in a 400 response, exposing internal model and query details.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#opa-01",
+    "descricao": "loadUsers throws a plain Error for an empty/invalid dynamicUserList, which the catch block converts into a generic 500 'Unable to load users', hiding a client input error behind a server error.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#opa-02",
+    "descricao": "Collective bookings now push every team member's DestinationCalendar row (externalId, credentialId, userId) into evt.destinationCalendar, and since evt is spread into the webhook payload these other members' calendar identifiers are sent to webhook subscribers.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#prod-01",
+    "descricao": "In Google createEvent, when no destination calendar matches the credentialId, the hangout-link events.patch is called with an undefined calendarId and fails, so the Meet link is not added to the event description.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#snloop-01",
+    "descricao": "In updateAllCalendarEvents the catch block builds an error `message` that is no longer logged or used after the PR removed console.error, leaving dead code.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#musep-01",
+    "descricao": "When updateAllCalendarEvents fails before the calendar references are loaded, its catch now returns an empty array instead of a failed result, so a failed reschedule or location update looks successful to callers.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "ee38fd295fd294b9fc787eba482bde24bbfea69b",
+  "base": "93cb21f55a2a40d9116c014741f5679fbeff5fd9",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/trpc/server/routers/viewer/slots.ts",
+    "lines": [
+     133,
+     135
+    ],
+    "texto": "WHAT: checkIfIsAvailable returns true as soon as it finds a matching date override, before checking the host's busy times. WHY: A fixed host with a conflicting booking during an override window is still considered available, so round-robin/collective slots can be double-booked. HOW: Move the date-override validation into the existing `busy.every` check or keep the override guard but still evaluate `busy` before returning true."
+   },
+   {
+    "id": "S2",
+    "file": "packages/trpc/server/routers/viewer/slots.ts",
+    "lines": [
+     141,
+     142
+    ],
+    "texto": "WHAT: The working-hours guard sets `end` to the same minute-of-day value as `start` (lines 141-142). WHY: Slots that start within working hours but run past the host's end time are accepted, letting a host be booked outside their availability. HOW: Compute `end` from `slotEndTime.hour() * 60 + slotEndTime.minute()`."
+   },
+   {
+    "id": "S3",
+    "file": "packages/trpc/server/routers/viewer/slots.ts",
+    "lines": [
+     114,
+     115
+    ],
+    "texto": "WHAT: The all-day-unavailable override check compares two dayjs objects with `===` (line 114). WHY: Each `dayjs(...)` call returns a new object, so the comparison is always false and a same-start/end override is treated as a normal availability window instead of blocking the whole day. HOW: Use `.isSame()` to compare the two moments."
+   },
+   {
+    "id": "S4",
+    "file": "packages/trpc/server/routers/viewer/slots.ts",
+    "lines": [
+     109,
+     126
+    ],
+    "texto": "WHAT: Date-override comparisons in checkIfIsAvailable format dayjs objects that were constructed from a Date without forcing UTC mode (lines 110-111, 114, 118, 123). WHY: Because the dayjs default is not pinned to UTC, the formatted day/hour depends on the server's local timezone, so the override may match the wrong UTC slot or not match at all. HOW: Parse and format the override dates in UTC: `dayjs.utc(date.start).add(utcOffset, \"minutes\")` and use `.utc()` consistently for comparisons."
+   },
+   {
+    "id": "S5",
+    "file": "apps/web/test/lib/getSchedule.test.ts",
+    "lines": [
+     788,
+     804
+    ],
+    "texto": "The test at lines 788-804 asserts only the final UTC time slots, with a comment claiming 'it should return the same as this is the utc time'. Because UTC slot strings are compared against themselves, the test would still pass if the date-override timezone conversion were removed or broken. To make the test meaningful, compare the slots produced with the invitee timezone against the slots produced with a neutral/UTC invitee timezone (or directly verify the override's local boundaries are converted correctly), so a regression in the timezone offset math causes a mismatch."
+   },
+   {
+    "id": "S6",
+    "file": "packages/trpc/server/routers/viewer/slots.ts",
+    "lines": [
+     114,
+     115
+    ],
+    "texto": "Line 114 uses strict equality (`===`) to compare two distinct `dayjs(...)` instances. Because each `dayjs()` call returns a new object, the comparison always fails even when the dates are equal. This causes zero-length date overrides not to be treated as unavailable. Use `.isSame(...)` or compare Unix timestamps/ISO strings instead."
+   },
+   {
+    "id": "S7",
+    "file": "packages/trpc/server/routers/viewer/slots.ts",
+    "lines": [
+     141,
+     143
+    ],
+    "texto": "Lines 141-142 compute `start` and `end` from the same `slotStartTime`, so `end` never reflects `slotEndTime`. The subsequent check `end > workingHour.endTime` therefore cannot reject a slot that starts within working hours but ends after them. Change `end` to `slotEndTime.hour() * 60 + slotEndTime.minute()`."
+   },
+   {
+    "id": "S8",
+    "file": "packages/trpc/server/routers/viewer/slots.ts",
+    "lines": [
+     581,
+     586
+    ],
+    "texto": "The `checkIfIsAvailable` function was changed to also validate `dateOverrides` and `workingHours`, but the call inside the `selectedSlots` block only passes `busy` and `...availabilityCheckProps`. Since `availabilityCheckProps` only contains `eventLength` and `currentSeats`, the new date-override and working-hours checks are skipped for this re-filtering pass. Pass `...userSchedule` (or explicitly include `dateOverrides` and `workingHours`) so the consumer matches the updated contract."
+   },
+   {
+    "id": "S9",
+    "file": "packages/trpc/server/routers/viewer/slots.ts",
+    "lines": [
+     105,
+     127
+    ],
+    "texto": "Each date override now carries its own `timeZone` (added in the same PR at lines 411-415 and used by `packages/lib/slots.ts` at lines 211-225), but `checkIfIsAvailable` ignores that field and converts every override with the single `organizerTimeZone` argument. For multi-host events this can map an override to the wrong UTC day. Use `date.timeZone` (falling back to `organizerTimeZone` only when absent) inside the `dateOverrides.find` callback when formatting/comparing `date.start` and `date.end`, and update the `dateOverrides` parameter type to include `timeZone?: string`."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+    "descricao": "The working-hours check computes end from slotStartTime instead of slotEndTime, so slots that start within working hours but end after them are accepted.",
+    "textoGolden": "Incorrect end time calculation using slotStartTime instead of slotEndTime",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       141,
+       143
+      ],
+      "texto": "WHAT: `end` is computed as `slotStartTime.hour() * 60 + slotStartTime.minute()` \u2014 an exact duplicate of `start` \u2014 instead of using `slotEndTime`. WHY: the working-hours upper-bound test `end > workingHour.endTime` therefore compares the slot START against the working-day end, so a slot whose start is inside working hours but whose end (start + eventLength) overruns `workingHour.endTime` is never filtered and is reported as available, allowing bookings outside the host's working hours. HOW: compute `const end = slotEndTime.hour() * 60 + slotEndTime.minute();`."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       141,
+       142
+      ],
+      "texto": "`end` is computed from `slotStartTime` instead of `slotEndTime`, so it always equals `start`. The `end > workingHour.endTime` check is identical to the `start` check and never catches a slot that starts within working hours but ends past them. Use `slotEndTime.hour() * 60 + slotEndTime.minute()` for `end`."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       141,
+       143
+      ],
+      "texto": "`end` is computed identically to `start` (both from slotStartTime), so the check `start < workingHour.startTime || end > workingHour.endTime` can never reject a slot on the upper bound. A slot starting inside working hours but ending after workingHour.endTime is wrongly considered available; derive `end` from slotEndTime instead."
+     }
+    ]
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+    "descricao": "The date-override check compares two dayjs objects with ===, which is always false, so zero-length (day off) overrides are never detected.",
+    "textoGolden": "Using === for dayjs object comparison will always return false as it compares object references, not values. Use .isSame() method instead: dayjs(date.start).add(utcOffset, 'minutes').isSame(dayjs(date.end).add(utcOffset, minutes))",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       114,
+       114
+      ],
+      "texto": "This compares two separately constructed dayjs objects with `===` (reference equality), which is always false, so a zero-length override (start equal to end, whole day blocked) never returns true here. Compare timestamps, e.g. `dayjs(date.start).add(utcOffset, 'minutes').isSame(dayjs(date.end).add(utcOffset, 'minutes'))`."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       114,
+       116
+      ],
+      "texto": "`dayjs(date.start).add(utcOffset, \"minutes\") === dayjs(date.end).add(utcOffset, \"minutes\")` compares two separate dayjs object references, so `===` is always false. The zero-length date-override branch is dead code and such an override is never recognised as covering the day; compare values (e.g. .isSame() or .valueOf() === .valueOf()) instead."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       114,
+       115
+      ],
+      "texto": "The equality check compares two separately created Dayjs objects with ===, which is always false, even when the override start and end represent the same instant. The intended zero-length/closed-day rejection is unreachable, and a slot beginning exactly at that instant can reach the dateOverrideExist success return. Compare timestamps or use isSame instead."
+     }
+    ]
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03",
+    "descricao": "When a date override exists for the day, checkIfIsAvailable returns true before checking busy times, so slots overlapping existing bookings are reported available.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       133,
+       135
+      ],
+      "texto": "WHAT: when `dateOverrideExist` is true the function returns `true` before running the `busy.every(...)` check at the end. WHY: on any day that has a matching date override, a slot inside the override is reported available without checking the host's existing bookings (`busy` is spread via `...schedule`/`...userSchedule`), so a fixed/loose host who already has a booking during the override window is still shown as free \u2014 enabling double-booking. HOW: do not return early here; fall through so the override branch only decides whether the slot is inside the override window, and let the existing `busy` evaluation decide availability (e.g. `if (dateOverrideExist) { /* within override, still check busy */ } else { /* fall through to busy */ }`)."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       133,
+       135
+      ],
+      "texto": "The new `if (dateOverrideExist) return true;` short-circuits the `busy` conflict check (and the workingHours check) for any slot that falls inside a date override window. Every caller of `checkIfIsAvailable` previously counted on it returning false for a slot that overlaps an existing booking; on days covered by a date override that guarantee is gone, so slots conflicting with the user's real bookings are now reported as available and can be double-booked. The override branch should let control fall through to the `busy.every(...)` check (returning true only for the availability-window part) instead of returning early."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       133,
+       134
+      ],
+      "texto": "A matching date override returns true before checking busy periods. Both fixed-host and loose-host callers pass calendar and booking conflicts in busy, so a host with an override is offered even when an existing booking overlaps the slot. Continue to the busy checks after validating the override instead of returning true."
+     }
+    ]
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#04",
+    "descricao": "The working-hours check rejects a slot when any interval for the weekday excludes it, so split schedules (e.g. morning and afternoon) reject all slots.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       138,
+       147
+      ],
+      "texto": "The working-hours predicate rejects a slot if any interval on its weekday does not contain it. A split schedule of 09:00\u201312:00 and 13:00\u201317:00 therefore loses every slot, since each valid slot lies outside the other interval. Require at least one matching interval to contain the full event instead of finding an interval that excludes it."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       138,
+       150
+      ],
+      "texto": "This search rejects a slot if it falls outside any working-hours window on that weekday. With split hours of 09:00\u201312:00 and 13:00\u201317:00, a valid 10:00 slot is rejected because it is outside the afternoon window. Check for containment in at least one applicable window rather than finding any window that excludes the slot."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       138,
+       151
+      ],
+      "texto": "WHAT: Outside-working-hours test uses workingHours.find() returning true if ANY entry rejects the slot. WHY: With split schedules (two entries same weekday, e.g. morning+afternoon) a valid morning slot is outside the afternoon entry, find() matches and the slot is wrongly rejected as outside hours. HOW: Invert logic to accept if ANY entry contains the slot (e.g. !workingHours.some(entry contains slot) => outside)."
+     }
+    ]
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#05",
+    "descricao": "The date-override bound compares the slot start, not the slot end, with the override end, so slots extending past the override are accepted.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       117,
+       124
+      ],
+      "texto": "The override bounds reject only non-overlapping slots rather than requiring the entire event to fit inside an override. A fixed host with a 10:00\u201311:00 override accepts a 10:30\u201311:30 event generated from another host's availability, despite being unavailable for its final half hour. Accept only when at least one override contains both slotStartTime and slotEndTime; this also avoids rejecting a slot merely because another interval on the same date does not overlap it."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       123,
+       125
+      ],
+      "texto": "The upper bound checks whether slotStartTime is after the override end. A slot that starts before the override end but finishes after it is treated as available. Compare slotEndTime with the override end using isAfter, so the slot must fit entirely inside the override."
+     }
+    ]
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#06",
+    "descricao": "The override timezone conversion keeps only hour and minute, so overrides that cross midnight in the invitee timezone become inverted ranges or are applied to the wrong day.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/lib/slots.ts",
+      "lines": [
+       218,
+       223
+      ],
+      "texto": "Timezone conversion takes only hour and minute, discarding day rollover and turning intervals crossing attendee midnight into reversed ranges. A UTC organizer's 22:00\u201323:00 override viewed in UTC+01:30 becomes startTime 1410 and endTime 30, which buildSlots skips because start is greater than end, removing valid availability. Preserve the converted dates and split the interval across attendee-day boundaries before building slots."
+     },
+     {
+      "file": "packages/lib/slots.ts",
+      "lines": [
+       206,
+       224
+      ],
+      "texto": "WHAT: activeOverrides are filtered by UTC day (line 206-207) before the invitee/organizer offset is applied (lines 212-224), and shifted hours are not re-bucketed across midnight. WHY: An override that shifts to the previous/next calendar day in the invitee timezone is dropped from the wrong day or applied to the wrong day, so slots show open when the organizer is off (and vice versa). HOW: Filter/bucket overrides in the invitee-local date after applying the offset, or emit split entries spanning two invitee days."
+     }
+    ]
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#07",
+    "descricao": "The new working-hours check does not reject slots on weekdays that have no working-hours entry, so those slots are treated as available.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       140,
+       146
+      ],
+      "texto": "A weekday with no matching working-hours entry falls through to the busy checks and is treated as available when there are no conflicts. In round-robin events, slots generated for a loose host can consequently include a fixed host whose schedule excludes that day. Reject slots unless a working-hours interval on the slot's weekday contains the event, when no date override applies."
+     }
+    ]
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-01",
+    "descricao": "checkIfIsAvailable's date-override check never rejects a slot that starts before the override start (only one that ends before it), so slots partly outside the override hours are treated as available.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-02",
+    "descricao": "The override day is computed with local-time dayjs(date.start) while the slot day is formatted in UTC, so on a server not running in UTC overrides near midnight are applied to the wrong day or skipped.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-03",
+    "descricao": "With several date-override ranges on the same day, a slot is rejected as soon as it falls outside any one of them, so slots inside the other ranges become unavailable.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "replays-self-serve-bulk-delete-system-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "ea188e2d736fd6ed27c1dba8aae63b7268e2a7a9",
+  "base": "49a275847631e231672d01b5dcd66558c069d25b",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+    "lines": [
+     164,
+     174
+    ],
+    "texto": "WHAT: TableWidgetVisualization is rendered with hardcoded empty columns and empty data when the use-table-widget-visualization feature is enabled. WHY: Widgets with real table results display a blank table instead of the fetched data, breaking the dashboard table visualization for that feature. HOW: Pass the actual fields/result data (e.g., result.data, result.meta, widget.queries[i]?.fields) into TableWidgetVisualization instead of the placeholder values."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+    "lines": [
+     47,
+     60
+    ],
+    "texto": "WHAT: BrowserReportSerializer makes both age and timestamp optional without requiring at least one, and the cross-field validation messages are swapped. WHY: A report can pass validation with neither age nor timestamp, violating both Reporting API specs, and the returned errors point the caller to the wrong field. HOW: Add serializer-level validate() that ensures exactly one of age/timestamp is present, and fix the messages so the timestamp validator complains about age and vice versa."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+    "lines": [
+     110,
+     119
+    ],
+    "texto": "WHAT: fetch_error_details pairs error_ids with nodestore results by relying on dict insertion order via zip(error_ids, events.values()). WHY: If the nodestore backend returns results in a different order, omits missing keys, or if any error_id maps to None, the returned ErrorEvent id can be attached to the wrong event data. HOW: Iterate over node_ids and lookup each node_id in the events dict, then map back to the original event_id."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+    "lines": [
+     134,
+     139
+    ],
+    "texto": "WHAT: get_request_data sorts the error_events list in place. WHY: Callers that reuse the error_events list after calling get_request_data will see it reordered, which is an unexpected side effect and can break downstream logic. HOW: Sort a copy of the list instead of mutating the input."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/integrations/source_code_management/commit_context.py",
+    "lines": [
+     584,
+     597
+    ],
+    "texto": "WHAT: get_environment_info catches the base Exception class and silently continues. WHY: Real failures (e.g., database or nodestore errors) are swallowed and hidden from monitoring, making debugging impossible and potentially masking data corruption. HOW: Catch only the specific exceptions that indicate a missing environment, and send actual infrastructure errors to sentry_sdk instead of logging at info."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+    "lines": [
+     89,
+     118
+    ],
+    "texto": "The endpoint logs the entire request body (`request.data`) at info level and logs each raw report on validation failure. Browser reports include `url`, `user_agent`, and arbitrary report bodies that can contain page URLs, source file paths, and other browsing context. This exposes potentially sensitive data to logs. Redact or omit the request body/raw report from log messages, and log only non-sensitive identifiers such as report type and validation error category."
+   },
+   {
+    "id": "S7",
+    "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+    "lines": [
+     50,
+     60
+    ],
+    "texto": "The `validate_timestamp` and `validate_age` methods check for the presence of the opposite field with `if self.initial_data.get(\"age\"):` and `if self.initial_data.get(\"timestamp\"):`. Because `0` is a valid integer value for both fields but is falsy, a report containing `timestamp: 0` with an `age`, or `age: 0` with a `timestamp`, will incorrectly pass validation. Use explicit existence checks such as `\"age\" in self.initial_data` / `\"timestamp\" in self.initial_data` instead of relying on truthiness."
+   },
+   {
+    "id": "S8",
+    "file": "src/sentry/integrations/source_code_management/commit_context.py",
+    "lines": [
+     577,
+     583
+    ],
+    "texto": "`_truncate_title` returns `title[:max_length].rstrip() + \"...\"` when the title exceeds `max_length`. For a 51-character title this yields 50 characters plus 3 ellipsis characters (53 total), exceeding the intended `ISSUE_TITLE_MAX_LENGTH` of 50. Either reserve room for the ellipsis before slicing (e.g., slice to `max_length - 3`) or ensure the final string is clamped to `max_length`."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#01",
+    "descricao": "The age/timestamp mutual-exclusion validators check truthiness via initial_data.get(), so a zero value is treated as absent and a report carrying both fields passes validation.",
+    "textoGolden": "Validation logic incorrectly uses .get('timestamp'), which treats a timestamp of 0 as absent. It should directly check 'timestamp' in self.initial_data to ensure proper field presence detection, preventing both 'age=0' and 'timestamp' from passing mutual-exclusion validation.",
+    "comentarios": [
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       47,
+       59
+      ],
+      "texto": "The timestamp/age validators test truthiness and make both fields optional instead of enforcing exactly one field. Reports with both age=0 and timestamp=0, or with neither field, pass validation despite violating the stated mutually exclusive report formats. Enforce field presence and exclusivity in object-level validate using key membership rather than truthiness."
+     },
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       50,
+       59
+      ],
+      "texto": "Check key presence rather than truthiness when enforcing age/timestamp mutual exclusion. Both fields permit 0, so a report with age=0 and timestamp=0 passes both validators even though both fields are present; a zero-valued counterpart also bypasses the corresponding check. Use `\"age\" in self.initial_data` and `\"timestamp\" in self.initial_data` (or object-level validation) and add zero-value tests."
+     },
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       50,
+       59
+      ],
+      "texto": "Check field presence rather than truthiness when enforcing timestamp/age exclusivity. A report containing both `timestamp: 0` and `age: 0` passes both validators, despite the declared constraint that they must not coexist; with only one zero value, validation is also asymmetric. Use membership checks on initial_data (or object-level validation) and add zero-value mixed-field tests."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#02",
+    "descricao": "The validation-failure warning logs the entire raw, attacker-controlled browser report instead of a redacted subset.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       111,
+       114
+      ],
+      "texto": "The new validation-failure warning logs `raw_report`, the full unvalidated report object supplied by the caller. This endpoint is public and unauthenticated (permission_classes = (), @csrf_exempt), so the payload is attacker-controlled, and browser report bodies routinely carry sensitive values (CSP blocked-uri/document-uri/script-sample, sourceFile, plus the full user_agent). Logging the raw payload on every validation failure writes potentially sensitive data into application logs; log only the report `type` (or a sanitized/redacted subset) instead of the entire raw object."
+     },
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       111,
+       114
+      ],
+      "texto": "Do not attach the complete raw report to the validation warning. Browser reports contain page URLs (potentially including tokens or personal data in query strings) and arbitrary body contents. Any invalid field now causes that entire payload to be emitted at warning level, exposing it in operational logs even where the existing info-level request logging is filtered out. Log the failed field names/report type or a redacted diagnostic instead."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#06",
+    "descricao": "fetch_error_details pairs error_ids positionally with nodestore get_multi values, but get_multi does not preserve input order (cached items are appended last) and drops missing nodes, so error details get attached to the wrong error IDs.",
+    "textoGolden": "Using zip(error_ids, events.values()) assumes the get_multi result preserves the input order; dict value order is not guaranteed to match error_ids, so event data can be paired with the wrong ID (missing nodes also shift alignment).",
+    "comentarios": [
+     {
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       110,
+       120
+      ],
+      "texto": "WHAT: fetch_error_details zips error_ids with events.values() instead of mapping by node_id, misaligning ids to payloads and dropping/mismatching on missing keys. WHY: assigns wrong title/message/timestamp to wrong error id and yields incorrect Seer logs. HOW: look up each node_id in the get_multi dict (e.g. dict keyed by node_id) and preserve error_ids order."
+     },
+     {
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       104,
+       120
+      ],
+      "texto": "`zip(error_ids, events.values())` assumes `nodestore.backend.get_multi(node_ids)` values preserve input order and that all keys exist. Dict values give no such guarantee; missing keys shorten/misalign the zip, attaching the wrong event payload to the wrong error_id. Lookup per-id: iterate node_ids/error_ids and do `events.get(node_id)` instead of zipping with `.values()`."
+     },
+     {
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       104,
+       121
+      ],
+      "texto": "fetch_error_details pairs IDs to payloads with zip(error_ids, events.values()) where events is dict from nodestore get_multi. Values order need not match IDs and missing keys misalign, attaching wrong title/message to wrong error. Look up per node_id instead."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#07",
+    "descricao": "The Snuba replay lookup for error IDs runs even when enable_error_context=false, adding a needless query (and failure point) to opt-out requests.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       67,
+       77
+      ],
+      "texto": "The new Snuba replay lookup executes even when enable_error_context=false. Every opt-out summary request incurs an unnecessary database round trip and can now fail on Snuba availability even though it only needs recording storage. Evaluate the flag first and perform the replay lookup only when error context is enabled."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#12",
+    "descricao": "With the use-table-widget-visualization flag on, the widget renders TableWidgetVisualization with hardcoded empty columns and data instead of the query results, so every table widget shows an empty table.",
+    "textoGolden": "Hardcoded empty data passed to TableWidgetVisualization causes it to always render an empty table instead of displaying actual results when the feature flag is enabled.",
+    "comentarios": [
+     {
+      "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+      "lines": [
+       164,
+       174
+      ],
+      "texto": "WHAT: the `use-table-widget-visualization` branch renders `<TableWidgetVisualization columns={[]} tableData={{data: [], meta: {fields: {}, units: {}}}} />`, hardcoding empty rows and no columns instead of the actual query result. WHY: when the feature flag is enabled for an org, every table widget renders an empty table and silently drops `result.data`/`result.meta`/`columns`, a functional regression for all dashboard table widgets. HOW: build `columns`/`tableData` from the existing `result` (and `widget.queries[i].fields`/`fieldAliases`) rather than the empty placeholder objects."
+     },
+     {
+      "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+      "lines": [
+       164,
+       174
+      ],
+      "texto": "In the new feature-flagged branch, TableWidgetVisualization is rendered with hardcoded empty props: columns={[]} (an empty array, which is truthy for the `columns ?? fallback` logic, so no columns are derived) and tableData={data: [], meta: {fields: {}, units: {}}}. All the real result data computed above (result.data, result.meta, fields, fieldAliases, eventView) is discarded, so any organization with 'use-table-widget-visualization' enabled gets an empty table instead of the query results. Pass the actual result data/columns into the visualization (or keep the old StyledSimpleTableChart) until the widget is properly wired."
+     },
+     {
+      "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+      "lines": [
+       164,
+       174
+      ],
+      "texto": "With the 'use-table-widget-visualization' feature enabled, TableWidgetVisualization is rendered with columns=[] and empty data/meta instead of result.data and result.meta. Every table widget therefore renders empty for orgs with the flag. Fix: pass tableData={{data: result.data, meta: result.meta}} and build columns from the fields."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#13",
+    "descricao": "The custom cell renderers fall back to default rendering on any falsy return (0, '', null), not only undefined, so a renderer cannot render zero or an empty cell.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "static/app/views/dashboards/widgets/tableWidget/defaultTableCellRenderers.tsx",
+      "lines": [
+       70,
+       73
+      ],
+      "texto": "The documented custom-renderer contract says fallback runs when the callback returns undefined, but `if (cell)` also falls back for valid ReactNode results such as `0`, an empty string, or `null`. A caller trying to render zero or deliberately suppress a cell instead gets the default field rendering. Check `cell !== undefined` here and in the head-cell renderer so the implementation honors the advertised contract."
+     },
+     {
+      "file": "static/app/views/dashboards/widgets/tableWidget/defaultTableCellRenderers.tsx",
+      "lines": [
+       70,
+       72
+      ],
+      "texto": "Use `cell !== undefined` instead of `if (cell)` to select the custom renderer result, and apply the same correction to the header renderer. The API documents undefined as the fallback sentinel, but valid ReactNode results such as numeric 0, an empty string, or null are falsy. A custom renderer returning 0 or intentionally hiding a cell with null therefore unexpectedly renders the default value instead."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#19",
+    "descricao": "The attribute-keys query key no longer includes the organization slug, so two organizations with the same filters share a cache entry and switching orgs can show the previous org's attribute names.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+      "lines": [
+       39,
+       41
+      ],
+      "texto": "The new attribute query key omits the organization even though its query function fetches an organization-specific endpoint. Switching organizations with identical project selections such as all projects and the same date range reuses the singleton query client's prior organization's attribute metadata, including while the new request refetches. Include organization.slug or organization.id in the query key."
+     },
+     {
+      "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+      "lines": [
+       39,
+       42
+      ],
+      "texto": "Include the organization slug in this query key. The new useGetTraceItemAttributeKeys implementation fetches `/organizations/${organization.slug}/trace-items/attributes/`, but makeTraceItemAttributeKeysQueryOptions contains no organization identity. Two organizations with identical filters (particularly the default all-project selection) therefore share this cache entry. Switching organizations can display the previous organization's attribute names, and concurrently mounted consumers can reuse a request for the wrong organization. Preserve the organization-specific cache identity that the previous endpoint-based key provided."
+     },
+     {
+      "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+      "lines": [
+       39,
+       42
+      ],
+      "texto": "Include the organization slug or ID in this query key. The query function fetches `/organizations/${organization.slug}/trace-items/attributes/`, but the key contains only query options. Two organizations with the same project selection (especially the all-projects selection), date range and dataset therefore share a cache entry. Switching organizations can display the previous organization's attributes, and overlapping requests can populate the shared entry with the wrong organization's result."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#20",
+    "descricao": "The UseTraceItemAttributeBaseProps doc says only LOGS is supported, although the hooks are also used with SPANS.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "static/app/views/explore/types.tsx",
+      "lines": [
+       9,
+       12
+      ],
+      "texto": "The new shared prop documentation claims the endpoint currently supports only LOGS, but this PR also uses these hooks with TraceItemDataset.SPANS (for example in TransactionNameSearchBar). Update this comment to describe both supported datasets; as written it incorrectly tells callers that a supported and actively used input is unsupported."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#sncc-01",
+    "descricao": "Error event timestamps (seconds) are compared with replay recording event timestamps (milliseconds), so errors are not interleaved chronologically with breadcrumbs.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#sncc-03",
+    "descricao": "dedupedYAxes is now just [yAxis], so its name misdescribes the code.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-01",
+    "descricao": "Every paginated breadcrumb-summary request queries the replay and fetches all of its error events from nodestore with no cap, adding latency and memory proportional to the replay's error count on each page.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-02",
+    "descricao": "HIDDEN_ATTRIBUTES is applied only when a search query is present; the no-search early return shows all attributes, so the hidden attributes still appear in the default span attributes view.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-03",
+    "descricao": "The bulk delete test sets max_segment_id to None to cover the new guard in _make_recording_filenames, but it mocks delete_matched_rows, so the guard is never executed and removing it would not fail the test.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#snloop-01",
+    "descricao": "BrowserReportSerializer's validate_timestamp/validate_age docstrings claim one of age/timestamp must be present, but the code only enforces mutual exclusion, so reports with neither are accepted.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "sms-workflow-reminder-retry-count-tracking-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "c790227e0cda780e6fea9bb03af27948d9e286b9",
+  "base": "917c7b0764f4c6bfdca95db2c5f73dbfdbe11757",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     189,
+     199
+    ],
+    "texto": "WHAT: The catch block increments retryCount for any error in the try block, not only for SMS scheduling failures. WHY: Failures from `prisma.profile.findFirst`, `getBookerBaseUrl`, or other unrelated setup can mark a reminder for deletion even though Twilio was never attempted. HOW: Wrap only the `twilio.scheduleSMS` call and the successful update in try/catch, or restructure so retryCount is incremented only when scheduling itself fails."
+   },
+   {
+    "id": "S2",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     38,
+     43
+    ],
+    "texto": "WHAT: The deleteMany second OR branch deletes WorkflowReminder rows with retryCount > 1 without filtering by method. WHY: This cron job is scoped to SMS reminders, but the new condition would also delete email or other-method reminders if any future code increments their retryCount. HOW: Add `method: WorkflowMethods.SMS` to the retryCount branch so both disjuncts are method-scoped."
+   },
+   {
+    "id": "S3",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     38,
+     43
+    ],
+    "texto": "WHAT: The cron job's deleteMany queries `retryCount: { gt: 1 }` on WorkflowReminder, but there is no index on the new retryCount column. WHY: The OR branch has no method filter, so the planner cannot use the existing `method, scheduled, scheduledDate` index for it; on a large table this can become a sequential scan every cron run. HOW: Add an index on `retryCount` (e.g., `@@index([retryCount])` or `@@index([method, retryCount])`) in schema.prisma and the migration."
+   },
+   {
+    "id": "S4",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     28,
+     45
+    ],
+    "texto": "The comment says it deletes only past-due scheduled SMS reminders, but the query now also deletes reminders of any method or date whose retryCount is greater than 1. Update the comment so future maintainers do not assume the cleanup is limited to SMS/past-due rows."
+   },
+   {
+    "id": "S5",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     198,
+     198
+    ],
+    "texto": "The catch block logs the raw `error` object from SMS scheduling. Provider error responses often include PII such as recipient/sender phone numbers and message bodies. Redact or summarize the error before logging (e.g., log only the provider error code and a generic message) to prevent leaking sensitive data into application logs."
+   },
+   {
+    "id": "S6",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     31,
+     44
+    ],
+    "texto": "The second branch of the deleteMany OR condition (retryCount > 1) does not include method: WorkflowMethods.SMS. WorkflowReminder is shared between SMS and EMAIL methods, so this branch can silently delete email reminders if retryCount is ever set on them. Add method: WorkflowMethods.SMS to the retryCount branch to keep the cleanup scoped to SMS reminders, matching the comment and the findMany query."
+   },
+   {
+    "id": "S7",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     28,
+     45
+    ],
+    "texto": "The new `retryCount: { gt: 1 }` branch in the `deleteMany` filter is not restricted to `WorkflowMethods.SMS`, so this SMS cron can now delete email/other-method workflow reminders that use the same `retryCount` column. This changes the behavior contract of the endpoint for any non-SMS consumer of `WorkflowReminder` without updating those consumers. Scope the whole cleanup to SMS reminders."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#01",
+    "descricao": "retryCount is set to reminder.retryCount + 1 from a value read at the start of the run instead of an atomic increment, so overlapping runs can lose increments.",
+    "textoGolden": "Using retryCount: reminder.retryCount + 1 reads a possibly stale value and can lose increments under concurrency; consider an atomic increment via Prisma (increment: 1) to avoid race conditions (also applies to the similar update in the catch block).",
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       179,
+       197
+      ],
+      "texto": "WHAT: retryCount is incremented with a read-value computed at the start of the run (`retryCount: reminder.retryCount + 1`) instead of an atomic increment. WHY: if two cron invocations overlap (or the same reminder is processed twice before the write commits), both read the same retryCount and both write N+1, so failures are undercounted and the reminder can loop forever without ever reaching the `retryCount > 1` deletion threshold. HOW: use `data: { retryCount: { increment: 1 } }` so the increment is atomic (the initial read value is then irrelevant)."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       190,
+       197
+      ],
+      "texto": "`retryCount: reminder.retryCount + 1` is a read-modify-write of the value fetched at the top of the handler, not an atomic increment. Two overlapping cron runs both read the same retryCount and both write the same +1, losing an update, so failed reminders can be retried indefinitely and never reach the `gt: 1` deletion threshold. Use Prisma's atomic `retryCount: { increment: 1 }` instead of computing from the stale in-memory value (same issue in the else branch at lines 179-186)."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       183,
+       185
+      ],
+      "texto": "Retry counts are assigned from the stale findMany snapshot instead of incremented atomically, both here and in the catch branch. Two overlapping cron requests can each fail scheduling the same reminder with retryCount zero and both write one, so two failed attempts do not reach the deletion threshold and additional attempts are scheduled. Use Prisma's atomic retryCount increment operation in both failure branches."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+    "descricao": "The deleteMany OR clause applies retryCount > 1 without the SMS method filter, so the SMS cron deletes any workflow reminder (email, WhatsApp) with retryCount above 1.",
+    "textoGolden": "The deletion logic in scheduleSMSReminders.ts incorrectly deletes non-SMS workflow reminders (e.g., Email, WhatsApp) that have retryCount > 1. This occurs because the retryCount condition within the OR clause for deletion lacks a method: WorkflowMethods.SMS filter, causing it to apply to all reminder types instead of only SMS reminders, which is the intended scope of this function.",
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       28,
+       43
+      ],
+      "texto": "The comment \"//delete all scheduled sms reminders where scheduled date is past current date\" no longer describes the deleteMany below it. After this change the query also deletes reminders with retryCount > 1, and that OR branch has no `method: WorkflowMethods.SMS` filter, so non-SMS (email) reminders with retryCount > 1 are now deleted too. Update the comment (or add the missing SMS filter to the retryCount branch) so the prose matches what the code actually deletes."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       53,
+       63
+      ],
+      "texto": "The deleteMany OR clause deletes any reminder with retryCount > 1 regardless of method."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       38,
+       43
+      ],
+      "texto": "The second OR branch `{ retryCount: { gt: 1 } }` has no `method` filter, unlike the first branch (`method: WorkflowMethods.SMS`). Because `retryCount` is a generic column on WorkflowReminder used by all reminder methods, this deleteMany now permanently deletes every reminder of ANY method (including EMAIL) whose retryCount exceeds 1, even though this cron is only supposed to clean up SMS reminders. Add `method: WorkflowMethods.SMS` to this branch (or scope the whole where to SMS) so non-SMS reminders are never destroyed."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#03",
+    "descricao": "The cleanup comment describes only past-date SMS deletion and omits the new retryCount > 1 deletion branch.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       38,
+       42
+      ],
+      "texto": "Update the cleanup comment to describe the new retry-exhaustion deletion branch. It currently says this deletes scheduled SMS reminders whose date has passed, but this OR branch also deletes any reminder with retryCount > 1, including future-dated reminders and without an SMS restriction. The comment now misrepresents the scope of this destructive operation."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       28,
+       44
+      ],
+      "texto": "Stale comment: line 28 says 'delete all scheduled sms reminders where scheduled date is past current date' but the new OR clause also deletes any reminder with retryCount > 1 regardless of method or date. Update the comment to describe both branches."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
+    "descricao": "The retry-count update inside the catch block is not guarded, so if it throws (for example the reminder was deleted concurrently) the error escapes the loop and the cron run fails, skipping the remaining reminders.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       189,
+       198
+      ],
+      "texto": "WHAT: the catch block performs an unguarded `prisma.workflowReminder.update` while handling the scheduling error. WHY: if this write itself rejects (e.g. the row was concurrently removed, or a transient DB error), the rejection is not caught and escapes the for-loop, aborting the whole cron run so all remaining reminders go unprocessed. HOW: wrap the retryCount update in its own try/catch (log and continue) so a failure to record the retry does not abort processing of the remaining reminders."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       190,
+       197
+      ],
+      "texto": "This new `prisma.workflowReminder.update` sits inside the catch block, which is NOT protected by any try/catch. If this update throws (e.g. the reminder was already removed by the `deleteMany` at the top of the file during a concurrent run -> Prisma P2025, or a transient DB error), the exception escapes the `for` loop and rejects the handler, so all remaining unscheduled reminders are skipped and the cron request fails. Previously the catch only did `console.log`, so a single bad reminder never aborted the batch and the endpoint always returned 200. Wrap this update in its own try/catch (or `updateMany`/catch-and-log) so a failed retry-count write cannot take down the whole scheduling run."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       190,
+       197
+      ],
+      "texto": "The new database update inside catch can itself throw when a reminder has been deleted during scheduling. Booking cancellation deletes reminders through handleCancelBooking and deleteScheduledSMSReminder, so a concurrent cancellation followed by a scheduling error now rejects the entire cron handler and prevents the remaining reminders from being processed. Use an updateMany filtered by the reminder ID to tolerate an already-deleted row, and guard errors from retry bookkeeping so they do not escape the per-reminder error handler."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#06",
+    "descricao": "Claims transient errors increment retryCount, so two runs during an outage delete the whole pending SMS reminder queue.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       190,
+       197
+      ],
+      "texto": "WHAT: The catch block unconditionally increments retryCount for any exception (profile/bookerUrl/templating/rate-limit/Twilio outage). WHY: Two consecutive cron runs with a transient global failure increment every pending SMS reminder to 2 and the startup deleteMany then wipes the entire future SMS queue, not just permanently-invalid numbers. HOW: Only increment on permanent scheduleSMS failure, or distinguish transient errors from terminal ones before counting toward deletion."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#07",
+    "descricao": "The new OR arm on retryCount has no supporting index, so the cleanup delete can no longer be fully served by the existing index and may scan the table.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       31,
+       43
+      ],
+      "texto": "WHAT: the deleteMany WHERE now uses `OR` between `(method = SMS AND scheduledDate <= now)` and `retryCount > 1`, but WorkflowReminder has no index on the newly added retryCount column. WHY: Postgres cannot satisfy a two-way OR using the existing (method, scheduled, scheduledDate) index and will fall back to a sequential scan of the entire WorkflowReminder table on every cron invocation, turning a previously indexed delete into a full table scan as the table grows. HOW: add an index on retryCount (or restructure so each branch is index-usable), then re-check the query plan."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#09",
+    "descricao": "The retryCount increment update is duplicated in the else branch and the catch block.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "scheduleSMSReminders.ts",
+      "lines": [
+       178,
+       197
+      ],
+      "texto": "The retryCount increment is duplicated in the else-branch and catch."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#e2b-01",
+    "descricao": "SMS-sending locks are counted as failed scheduling attempts: scheduleSMS returns undefined for locked users/teams, retryCount is incremented, and after two cron runs the retryCount > 1 cleanup deletes future reminders even if sending is later unlocked.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#sncc-01",
+    "descricao": "retryCount is not incremented when a reminder has no message or no sendTo number, so such reminders are reprocessed on every cron run until their scheduled date.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "e944e2acf1e64421860a8e827f93ad06c169621b",
+  "base": "272cfc68dcc88615396ae62ed1571918e9c58ad3",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+    "lines": [
+     380,
+     382
+    ],
+    "texto": "WHAT: The test cleanup references the literal string \"alias\" instead of the actual IDP alias. WHY: Created identity providers are never removed after the test, leaking state into subsequent tests and the test realm. HOW: Use the actual alias variable in the cleanup closure, e.g. testRealm().identityProviders().get(\"idp-alias-\" + i)::remove and testRealm().identityProviders().get(\"idp-alias-20\")::remove."
+   },
+   {
+    "id": "S2",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+    "lines": [
+     424,
+     425
+    ],
+    "texto": "WHAT: The second cleanup in the same test method also references the literal string \"alias\" instead of \"idp-alias-20\". WHY: The identity provider created for the invalidation scenario is not removed, leaving stale test data behind. HOW: Change the cleanup to reference the actual alias: testRealm().identityProviders().get(\"idp-alias-20\")::remove."
+   },
+   {
+    "id": "S3",
+    "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+    "lines": [
+     98,
+     113
+    ],
+    "texto": "WHAT: remove(String) now calls idpDelegate.getByAlias(alias) unconditionally before the existing cache branch. WHY: The delegate database query previously only ran when the alias cache entry was already invalid; it now runs on every IDP removal, adding a redundant round-trip. HOW: Keep the delegate lookup inside the invalidation branch, or derive the login-cache invalidation from the CachedIdentityProvider already fetched in the else branch when present."
+   },
+   {
+    "id": "S4",
+    "file": "OrganizationCacheTest.java",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "The added test testCacheIDPForLogin validates implementation details (exact cache-key presence/absence after create/update/remove operations) rather than externally observable behavior. This soft concern does not cause the test to pass when the behavior is broken, but the test remains coupled to internal cache keys instead of public behavior."
+   },
+   {
+    "id": "S5",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+    "lines": [
+     381,
+     381
+    ],
+    "texto": "The cleanup lambda references the literal alias \"alias\" instead of the IDP's real alias \"idp-alias-\" + i that was just set on idpRep. As a result the cleanup will fail to remove the created provider and may throw, leaving test data behind. Use the actual alias variable or inline the computed alias in the cleanup."
+   },
+   {
+    "id": "S6",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+    "lines": [
+     425,
+     425
+    ],
+    "texto": "The cleanup lambda again references the literal alias \"alias\" instead of the created IDP's alias \"idp-alias-20\". The cleanup will not remove the provider created in this block. Use \"idp-alias-20\" in the cleanup reference."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+    "descricao": "The test registers cleanup for the literal alias \"alias\" instead of the created IDP aliases, so the created identity providers are never cleaned up.",
+    "textoGolden": "Cleanup reference uses incorrect alias - should be 'idp-alias-' + i instead of 'alias'.",
+    "comentarios": [
+     {
+      "file": "testCacheIDPForLogin",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The cleanup registers `identityProviders().get(\"alias\")::remove` inside the loop, and also for idp-alias-20. \"alias\" is a literal string rather than the actual IDP alias, so none of the created IDPs is ever cleaned up. Use the real alias (e.g. the loop's alias variable / \"idp-alias-20\") when registering the cleanup. As written, the 21 leaked providers can skew later tests that count IDPs or login caches."
+     },
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+      "lines": [
+       381,
+       381
+      ],
+      "texto": "The cleanup is registered for the literal alias \"alias\" rather than the IDP just created (\"idp-alias-\" + i). The 20 created IDPs are never removed, and the same applies to the cleanup at line 425 for \"idp-alias-20\". Use the actual alias, e.g. get(\"idp-alias-\" + i)::remove, so the IDPs don't leak into other tests."
+     },
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+      "lines": [
+       381,
+       381
+      ],
+      "texto": "The cleanup registered here uses the literal alias \"alias\", but the provider just created has alias \"idp-alias-\" + i. The same mismatch is repeated at line 425 for \"idp-alias-20\". The cleanup can never find/remove the created providers (null dereference/404 on remove, or at best a silent no-op), so none of the 21 IDPs this test creates are cleaned up and the realm is left polluted for later tests. Use the actual alias, e.g. `testRealm().identityProviders().get(\"idp-alias-\" + i)::remove` and `get(\"idp-alias-20\")::remove`."
+     }
+    ]
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#05",
+    "descricao": "On a partial cache miss getForLogin merges the previously read login query into a newly revisioned entry, so a concurrent invalidation can be lost and stale IDP IDs for other organizations persist.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+      "lines": [
+       236,
+       240
+      ],
+      "texto": "Do not merge the previously read query into a newly revisioned entry without verifying its revision. A reader can obtain a query containing organization A's IDs, then another transaction disables a provider or changes its organization and invalidates this key. When the reader requests an uncached organization B, this branch obtains a fresh revision but copies the old A results into the new query and publishes it using the current counter. Subsequent A requests receive stale membership indefinitely (a disabled or moved provider still exists, so the null-ID fallback does not repair it). Rebuild rather than copy after invalidation, or ensure the old query's revision is still valid atomically before publishing the merged entry."
+     }
+    ]
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#08",
+    "descricao": "Login-cache invalidation on update compares the organization-aware enabled state, so changing a broker to private while its organization is disabled skips invalidation and leaves the now-private IDP in the cached login list.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+      "lines": [
+       405,
+       406
+      ],
+      "texto": "The early return compares the original IDP's organization-aware enabled state rather than the persisted enabled state used to populate the login cache. If a cached public IDP's organization is disabled and an admin changes BROKER_PUBLIC to false, the original predicate is false because the organization is disabled and the updated predicate is false because the broker is private, so the stale ID remains cached; re-enabling the organization displays the now-private broker because the login bean only rechecks isEnabled. Compare raw persisted models for login-cache invalidation, for example by loading the original through idpDelegate.getById before applying this predicate."
+     }
+    ]
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#11",
+    "descricao": "The LoginFilter javadoc still claims its constants are all criteria for login availability although getLoginPredicate now also checks organization link and BROKER_PUBLIC.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "server-spi/src/main/java/org/keycloak/models/IdentityProviderStorageProvider.java",
+      "lines": [
+       252,
+       256
+      ],
+      "texto": "getLoginPredicate now also filters on organization link plus the BROKER_PUBLIC config (line 254), but the enum's javadoc directly above (lines 215-217) still states that the enum \"contains all fields that are considered when deciding if a provider should be available for login or not\", presenting ENABLED/LINK_ONLY/HIDE_ON_LOGIN as the exhaustive criteria. Any reader \u2014 or a future LoginFilter constant added against that documented assumption \u2014 will believe organization link and BROKER_PUBLIC play no role. Update the javadoc to include the organization-link/public-broker condition, or move the condition into a documented LoginFilter constant."
+     }
+    ]
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#13",
+    "descricao": "The login-cache test creates only public org-linked IDPs, so the new BROKER_PUBLIC check in getLoginPredicate is not covered.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+      "lines": [
+       369,
+       388
+      ],
+      "texto": "Test fixture never covers the new BROKER_PUBLIC branch: all org-linked IDPs are created public, so reverting the getLoginPredicate public-check leaves all counts unchanged and the test still passes. Add at least one org-linked non-public (BROKER_PUBLIC false/missing) enabled IDP and assert it is excluded from getForLogin counts."
+     }
+    ]
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#14",
+    "descricao": "The test never consumes or asserts getForLogin's returned providers and never repeats a query, so the cache-hit path that builds the result is untested and could return wrong IDPs without failing.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+      "lines": [
+       401,
+       414
+      ],
+      "texto": "Consume and assert the results of getForLogin, including a repeat query for the same mode/organization to exercise a cache hit. All calls in this test discard the returned stream and assert only IdentityProviderListQuery contents. The implementation populates that query before reconstructing the returned models, so returning an empty stream (or the wrong providers) at line 254 would still pass the entire test. Assert the expected provider identities on both the initial query and the cached query, rather than only the internal cached count."
+     }
+    ]
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#opa-01",
+    "descricao": "Adding the organization/BROKER_PUBLIC check to the shared LoginFilter.getLoginPredicate also changes IdentityProviderBean.federatedProviderPredicate, so with organizations disabled a user's linked IdP that has an organizationId but is not public is no longer shown on the login page.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#snapi-01",
+    "descricao": "remove() always queries idpDelegate.getByAlias(alias), adding a database lookup on every IDP removal even when the cached entry already holds the model.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "da09bc0808e7c6df1bc10e00d5acf764d94c7cc7",
+  "base": "c9a47dd0cebd121ff73f24e1f8c1829579daf8e3",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts",
+    "lines": [
+     294,
+     299
+    ],
+    "texto": "WHAT: Tests assert equality between flat Prisma.sql template literals and nested Prisma.sql compositions returned by the service. WHY: The service builds compound conditions by interpolating Prisma.Sql fragments into other Prisma.sql templates (e.g., buildFilterConditions and buildOrgAuthorizationCondition), producing Sql objects whose values array contains nested Sql objects; Jest toEqual compares enumerable strings/values properties, so the flat expected literals will not match the nested actual values and the tests will fail. HOW: Assert on the emitted SQL text instead, e.g., expect(conditions.text).toEqual(expected.text), or use a helper that normalizes Prisma.Sql to its flattened text/values before comparison."
+   },
+   {
+    "id": "S2",
+    "file": "packages/lib/server/service/insightsBooking.ts",
+    "lines": [
+     100,
+     112
+    ],
+    "texto": "`this.filters.eventTypeId` and `this.filters.memberUserId` are optional `number`s, but the code tests them with `if (this.filters.eventTypeId)` and `if (this.filters.memberUserId)`. A caller passing the perfectly valid numeric ID `0` will be treated as if no filter was supplied, causing rows for ID 0 to be excluded or, worse, included when they shouldn't be. Use explicit null/undefined checks such as `this.filters.eventTypeId != null` or `typeof this.filters.eventTypeId !== \"undefined\"` instead of truthiness."
+   },
+   {
+    "id": "S3",
+    "file": "packages/lib/server/service/insightsBooking.ts",
+    "lines": [
+     164,
+     174
+    ],
+    "texto": "buildOrgAuthorizationCondition always emits `(\"teamId\" = ANY(${teamIds}))`. When the organization has no child teams, `teamIds` is empty and PostgreSQL cannot infer the element type of the empty array parameter, causing a runtime error. Guard the team branch the same way the user branch is guarded, and fall back to `1=0` (NOTHING_CONDITION) when both lists are empty."
+   },
+   {
+    "id": "S4",
+    "file": "packages/lib/server/service/insightsBooking.ts",
+    "lines": [
+     29,
+     34
+    ],
+    "texto": "InsightsBookingServicePublicOptions makes teamId optional for scope \"team\", but buildTeamAuthorizationCondition assumes it is defined and interpolates `options.teamId` directly into Prisma.sql. Either keep the schema discriminated-union type in the constructor (requiring teamId for team scope) or validate/throw before using options.teamId, so the previous invariant is not broken."
+   },
+   {
+    "id": "S5",
+    "file": "packages/lib/server/service/insightsBooking.ts",
+    "lines": [
+     29,
+     34
+    ],
+    "texto": "The exported `InsightsBookingServicePublicOptions` type marks `teamId` as optional, but the `insightsBookingServiceOptionsSchema` and the team-scope authorization logic require it. A caller can pass `{ scope: \"team\", userId, orgId }` without `teamId`; runtime validation fails, `this.options` is set to `null`, and `getAuthorizationConditions()` returns `Prisma.sql`1=0``, producing empty results with no error. Align the public type with the schema so missing `teamId` is caught at compile time, e.g. replace the manual type with `z.input<typeof insightsBookingServiceOptionsSchema>` or use a discriminated union that requires `teamId` for `scope: \"team\"`."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#01",
+    "descricao": "In getBaseConditions, the branches for a missing authorization condition are unreachable because getAuthorizationConditions always returns a Prisma.Sql.",
+    "textoGolden": "In getBaseConditions(), the else if (filterConditions) and final else branches are unreachable. This is because getAuthorizationConditions() always returns a non-null Prisma.Sql object, making authConditions always truthy, which means only the first two if/else if conditions are ever evaluated.",
+    "comentarios": [
+     {
+      "file": "packages/lib/server/service/insightsBooking.ts",
+      "lines": [
+       72,
+       80
+      ],
+      "texto": "getAuthorizationConditions() always returns a non-null Prisma.Sql, so the `else if (filterConditions)` and final `else` branches (returning NOTHING_CONDITION) in getBaseConditions can never execute. Simplify to: if filterConditions, combine it with authConditions; otherwise return authConditions."
+     },
+     {
+      "file": "packages/lib/server/service/insightsBooking.ts",
+      "lines": [
+       68,
+       81
+      ],
+      "texto": "Unreachable branches in getBaseConditions: authConditions is always a truthy Prisma.Sql object (never null, NOTHING is `1=0`), so `else if (filterConditions)` and final `else { return NOTHING }` can never execute. Simplify to if(filter) return auth AND filter else return auth, or make the nothing-case explicit."
+     },
+     {
+      "file": "packages/lib/server/service/insightsBooking.ts",
+      "lines": [
+       76,
+       77
+      ],
+      "texto": "WHAT: `getBaseConditions` returns `filterConditions` alone (no authorization predicate) when `authConditions` is falsy (`else if (filterConditions) { return filterConditions; }`). WHY: The WHERE clause returned to consumers then contains no ownership/authorization restriction, so a caller using it would return every booking matching the filters (e.g. all bookings for the given eventTypeId/memberUserId) regardless of the requesting user's org/team membership \u2014 an authorization-boundary bypass if `getAuthorizationConditions()` ever yields a falsy value. HOW: Always AND the authorization predicate with the filters and fall back to `NOTHING_CONDITION` when no auth predicate exists, e.g. `return filterConditions ? Prisma.sql`(${authConditions}) AND (${filterConditions})` : authConditions;` (or keep the `NOTHING_CONDITION` default when auth is missing)."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#03",
+    "descricao": "The getBaseConditions test uses a single booking matching both auth and filter conditions, so it would pass even if the conditions were not combined.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts",
+      "lines": [
+       480,
+       491
+      ],
+      "texto": "The rewritten \"should combine authorization and filter conditions\" test cannot fail if the combination is broken. The fixture creates a single booking that satisfies the auth condition (userId = user.id AND teamId IS NULL) and the filter condition (eventTypeId = eventType.id) independently, so getBaseConditions returning auth-only, filter-only, or the AND combination all yield the same single-row result asserted here. Only a `1=0` result would be caught. Make the data distinguish the two: add a booking that matches the filter but not the auth (e.g. a team booking with the same eventTypeId), then assert the result excludes it, so that dropping either branch changes the returned rows."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-01",
+    "descricao": "The caching tests for getAuthorizationConditions/getFilterConditions were removed in the Prisma.sql conversion, leaving the cached-condition logic untested.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-02",
+    "descricao": "Claims getBaseConditions returns OR fragments without parentheses, so a caller appending `AND <extra>` would leak rows outside the authorization scope.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "8422030ef456e3a898415e96475b4d8ddfc7640f",
+  "base": "bdd229e3f22e307fe40b30ef99e92ff3f6723da4",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/incidents/grouptype.py",
+    "lines": [
+     10,
+     12
+    ],
+    "texto": "WHAT: MetricAlertDetectorHandler now extends StatefulDetectorHandler but does not implement the required abstract methods counter_names, get_dedupe_value, get_group_key_values, or build_occurrence_and_event_data, so Python treats the class as abstract. WHY: Detector.detector_handler instantiates group_type.detector_handler(self) at runtime; any detector whose type maps to MetricAlertFire will raise TypeError: Can't instantiate abstract class MetricAlertDetectorHandler. HOW: Add stub implementations for the abstract methods (raising NotImplementedError where behavior is still TODO) so the class remains instantiable while the stateful abstraction is being built."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/incidents/grouptype.py",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "MetricAlertDetectorHandler now extends StatefulDetectorHandler but provides no implementation of the abstract methods (counter_names, get_dedupe_value, get_group_key_values, build_occurrence_and_event_data), making the class abstract/instantiable-only-after-subclassing. MetricAlertFire.detector_handler points directly to it. This is a potential issue, though the TODO comment suggests it is known/incomplete."
+   },
+   {
+    "id": "S3",
+    "file": "tests/sentry/workflow_engine/processors/test_detector.py",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "In the multi-group test, occurrence_2 construction calls build_mock_occurrence_and_event(detector.detector_handler, \"group_2\", 6, PriorityLevel.HIGH) but group_2 value is 10. The mock builder does not validate the value against the condition, so the assertion can still pass. This is a test-local issue, not a cross-file contract mismatch."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/incidents/grouptype.py",
+    "lines": [
+     10,
+     12
+    ],
+    "texto": "MetricAlertDetectorHandler was changed to inherit from StatefulDetectorHandler but remains a `pass` body, leaving required abstract methods unimplemented (counter_names, get_dedupe_value, get_group_key_values, and the new build_occurrence_and_event_data). This makes the class non-instantiable. Either keep it as a DetectorHandler stub until the stateful implementation is written, or implement the required StatefulDetectorHandler abstract methods."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#01",
+    "descricao": "The TODO above MetricAlertDetectorHandler says it will become a stateful detector, but the class already subclasses StatefulDetectorHandler.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/incidents/grouptype.py",
+      "lines": [
+       10,
+       12
+      ],
+      "texto": "The comment 'TODO: This will be a stateful detector when we build that abstraction' is now stale. MetricAlertDetectorHandler already subclasses StatefulDetectorHandler. Remove or reword the TODO."
+     },
+     {
+      "file": "src/sentry/incidents/grouptype.py",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "Remove or revise the adjacent TODO saying this will become a stateful detector 'when we build that abstraction'. The class now inherits StatefulDetectorHandler, so the comment describes already-completed work as a future migration and misleads maintainers about which abstraction this handler uses."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+    "descricao": "MetricAlertDetectorHandler subclasses StatefulDetectorHandler without implementing its abstract methods, so instantiating it for metric alert detectors raises TypeError where it previously returned an empty-result handler.",
+    "textoGolden": "MetricAlertDetectorHandler inherits from StatefulDetectorHandler but only contains pass, failing to implement its required abstract methods: counter_names (property), get_dedupe_value(), get_group_key_values(), and build_occurrence_and_event_data(). This will cause a TypeError at runtime when the class is instantiated.",
+    "comentarios": [
+     {
+      "file": "src/sentry/incidents/grouptype.py",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "WHAT: MetricAlertDetectorHandler now subclasses StatefulDetectorHandler with an empty body, so it does not implement the abstract methods counter_names, get_dedupe_value, get_group_key_values, and build_occurrence_and_event_data declared on StatefulDetectorHandler. WHY: the class is now abstract, and Detector.detector_handler (src/sentry/workflow_engine/models/detector.py:86) instantiates it via group_type.detector_handler(self), so any detector whose type resolves to this grouptype will raise TypeError: Can't instantiate abstract class MetricAlertDetectorHandler \u2014 the previous version implemented evaluate and was instantiable. HOW: implement the required abstract methods (or keep a concrete evaluate override) so the handler can be constructed."
+     },
+     {
+      "file": "src/sentry/incidents/grouptype.py",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "MetricAlertDetectorHandler now subclasses StatefulDetectorHandler but with `pass`, so it implements none of the abstract methods it inherits (counter_names, get_dedupe_value, get_group_key_values, and the newly added build_occurrence_and_event_data). The class is therefore still abstract and instantiating it (it is registered as `detector_handler` on MetricAlertFire and is constructed by Detector.detector_handler) raises `TypeError: Can't instantiate abstract class MetricAlertDetectorHandler with abstract methods ...`. Before this change it subclassed DetectorHandler and implemented the single abstract `evaluate`, so it was instantiable; the PR makes the metric-alert handler path throw. Either implement the required abstract methods or keep the class free of unimplemented abstracts."
+     },
+     {
+      "file": "src/sentry/incidents/grouptype.py",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "MetricAlertDetectorHandler now subclasses StatefulDetectorHandler (an abc.ABC) with only `pass`. StatefulDetectorHandler declares four abstract methods \u2014 counter_names, get_dedupe_value, get_group_key_values, and the newly added build_occurrence_and_event_data (detector.py:142-170) \u2014 none of which are implemented here. The class therefore remains abstract and cannot be instantiated; Detector.detector_handler's `group_type.detector_handler(self)` will raise `TypeError: Can't instantiate abstract class MetricAlertDetectorHandler` for the metric_alert_fire group type. Previously this class was a concrete DetectorHandler with an implemented evaluate, so this PR newly makes it uninstantiable. Implement the required abstract methods (or revert to a concrete handler) to satisfy the base-class contract."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#03",
+    "descricao": "The evaluate() docstring says it returns a list of DetectorEvaluationResult, but it now returns a dict keyed by group key.",
+    "textoGolden": "Docstring says this returns a list of DetectorEvaluationResult, but the method now returns a dict keyed by DetectorGroupKey. Consider updating the docstring to match the new return type.",
+    "comentarios": [
+     {
+      "file": "src/sentry/workflow_engine/processors/detector.py",
+      "lines": [
+       226,
+       228
+      ],
+      "texto": "Update evaluate's adjacent docstring to describe a dictionary keyed by DetectorGroupKey rather than a list of DetectorEvaluationResult. This change returns a dictionary and callers now consume .values(), but the documented return contract still tells readers to expect a list; iterating the documented result as a list would instead yield group keys."
+     },
+     {
+      "file": "src/sentry/workflow_engine/processors/detector.py",
+      "lines": [
+       226,
+       231
+      ],
+      "texto": "Docstring says 'returns a list of DetectorEvaluationResult' but signature/body now return dict[DetectorGroupKey, DetectorEvaluationResult]. Update docstring to describe dict keyed by group_key."
+     },
+     {
+      "file": "src/sentry/workflow_engine/processors/detector.py",
+      "lines": [
+       226,
+       233
+      ],
+      "texto": "The evaluate() docstring still says it returns a list of `DetectorEvaluationResult`. The method now returns a dict mapping group key to `DetectorEvaluationResult`. Update the docstring to describe the dict return shape."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#04",
+    "descricao": "The mock occurrence builder ignores its value argument, so tests (e.g. group_2 expected with 6 while the packet carries 10) pass regardless of which value is passed to build_occurrence_and_event_data.",
+    "textoGolden": "Wrong value `6` passed for `group_2` occurrence \u2014 the data packet specifies `\"group_2\": 10`. Should be `10` to accurately reflect the test scenario, which will ensure the test produces the correct occurrence data.",
+    "comentarios": [
+     {
+      "file": "tests/sentry/workflow_engine/processors/test_detector.py",
+      "lines": [
+       244,
+       265
+      ],
+      "texto": "The new occurrence builder accepts `value` but never incorporates or asserts it, so the occurrence tests cannot detect incorrect forwarding of the measured value to `build_occurrence_and_event_data`. For example, `test_state_results_multi_group` supplies 10 for group_2 but builds its expected occurrence with 6 and still passes. A regression that passes a constant or another group's measurement at the new production hook would therefore go unnoticed. Include the value in the mock occurrence's evidence and use the actual expected measurement, or assert the hook's arguments directly."
+     },
+     {
+      "file": "tests/sentry/workflow_engine/processors/test_detector.py",
+      "lines": [
+       244,
+       275
+      ],
+      "texto": "`build_mock_occurrence_and_event` accepts `value: int` but never uses it (the occurrence is built only from `group_key`/`new_status`), and this same helper is also the implementation of `MockDetectorStateHandler.build_occurrence_and_event_data`. Because neither the expected occurrence nor the handler output depends on the value, tests like `test_state_results_multi_group` (which incorrectly builds the group_2 occurrence with `value=6` while the packet carries `10`) and `TestEvaluate.test_dedupe` (expected built with 6 vs packet 8) pass regardless of the value actually passed into `build_occurrence_and_event_data`. If evaluation passed a wrong value, these tests would still pass, so they do not verify the value/threshold path they appear to cover. Include `value` in a field of the occurrence (or assert on it in the handler) and fix the wrong expected values so the argument is actually checked."
+     },
+     {
+      "file": "tests/sentry/workflow_engine/processors/test_detector.py",
+      "lines": [
+       244,
+       275
+      ],
+      "texto": "`build_mock_occurrence_and_event` accepts a `value: int` parameter but never uses it \u2014 the returned IssueOccurrence is derived only from `group_key` and `new_status`. Because `value` is dead, callers can pass a mismatched value with no failure: in `test_state_results_multi_group` the packet contains `group_2: 10`, but the expected occurrence for `group_2` is built with `6`. Either use `value` when constructing the occurrence so the test validates the group value, or drop the unused parameter and pass the correct value; otherwise the test silently accepts wrong group values."
+     }
+    ]
+   }
+  ]
+ },
+ "feature-localization-fallbacks-server-side-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "ecfa17b5a79dfdc91e7a4d50b42ae78a35d0a293",
+  "base": "728845d008f06828630a632e5c7d67e11bf15deb",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "config/initializers/i18n.rb",
+    "lines": [
+     12,
+     24
+    ],
+    "texto": "WHAT: FallbackLocaleList subclasses Hash but leaves the underlying hash empty, so every method other than `[]` (e.g. `each`, `keys`, `defaults`, `map`) sees an empty collection. WHY: This violates the I18n::Locale::Fallbacks/Hash contract; any future caller that iterates or inspects `I18n.fallbacks` will get no locales even though `I18n.fallbacks[:en]` returns a fallback chain. HOW: Delegate storage to a real Hash by calling `super` in `[]` and populating defaults explicitly, or do not inherit from Hash and instead implement only the small interface I18n::Backend::Fallbacks actually needs (e.g. `def [](locale); ... end`)."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#01",
+    "descricao": "Fallback locale catalogs are only loaded in the controller's set_locale filter, while translate loads just the current locale, so translations outside requests (jobs, mailers) cannot fall back to the site default or English.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/application_controller.rb",
+      "lines": [
+       159,
+       159
+      ],
+      "texto": "Fallback catalogs are ensured loaded only in the controller filter, leaving non-controller translation paths without the catalogs required by the newly enabled fallback backend. Jobs::Base sets I18n.locale directly and PostAlerter uses I18n.with_locale, while the accelerator loads only the current locale and backend fallback lookups bypass that loader; missing keys therefore still produce missing translations or skip the configured site fallback until another request happens to load those catalogs. Ensure the full fallback chain is loaded at the translation boundary, rather than relying solely on the controller filter."
+     },
+     {
+      "file": "lib/freedom_patches/translate_accelerator.rb",
+      "lines": [
+       62,
+       69
+      ],
+      "texto": "The new fallbacks contract requires the fallback locales (site default and :en, from FallbackLocaleList#[]) to be loaded before Backend::Simple#translate is asked for them \u2014 Backend::Simple only returns already-loaded translations. This PR added I18n.ensure_loaded!/I18n.fallbacks.ensure_loaded! but wired it only into ApplicationController#set_locale, and the loader that actually gates every translation, I18n.translate (line 68), still loads only `config.locale`. As a result, any I18n.t performed outside the request cycle (console, background jobs, mailers) or before set_locale runs will not load the fallback locales and will silently return 'translation missing' instead of the fallback the new I18n.fallbacks advertises. Fix: have translate ensure the fallback chain is loaded (e.g. call I18n.fallbacks.ensure_loaded! / load the fallback locales here), not rely on the controller hook."
+     },
+     {
+      "file": "lib/freedom_patches/translate_accelerator.rb",
+      "lines": [
+       67,
+       68
+      ],
+      "texto": "translate loads only config.locale, but the new fallback chain (default_locale, :en) is loaded only by the controller's I18n.fallbacks.ensure_loaded!. Outside controllers (jobs, mailers, rake), a key missing in the current locale falls back to a locale that is not loaded, so it returns 'translation missing', and the LRU cache then stores that result. Fix: in translate, call I18n.fallbacks.ensure_loaded! (or load each locale in fallbacks[config.locale]) before the lookup."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#06",
+    "descricao": "The translation cache key does not include the site or its default locale, but fallback results now depend on SiteSetting.default_locale, so multisite processes or a changed default locale serve stale fallback translations.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "config/initializers/i18n.rb",
+      "lines": [
+       17,
+       17
+      ],
+      "texto": "The new fallback order depends on SiteSetting.default_locale, but the accelerator's translation cache does not include that setting or the current site in its key. In a multisite process, two sites with the same user locale and different default locales reuse the first site's cached fallback translation; changing the default locale also leaves cached fallback results stale. Include the effective fallback chain or site/default-locale context in the translation cache key."
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,35 @@
+{
+ "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#04",
+   "newGroup": null,
+   "reason": "Describes the same unchecked null fallback from getResourceTypeResource before findByResource in ClientPermissionsV2.hasPermission."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes cleanup executing against V2 and throwing UnsupportedOperationException when both flags are enabled. Issue #01 concerns cleanup being skipped and leaving orphaned permissions; fixing this crash would not fix that omission."
+  },
+  {
+   "id": "S3",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#09",
+   "newGroup": null,
+   "reason": "Identifies the same missing global MANAGE check in canView(). Although it describes a different consequence, correcting that omission addresses issue #09."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Claims an existing per-client resource incorrectly prevents fallback to a global grant. This differs from #04's null fallback and #10's global VIEW shortcut bypassing client-specific denials."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Claims excessive scanning and policy-evaluation cost in getClientsWithPermission. Issue #03 concerns selecting the wrong resources and returning names instead of client IDs; optimizing the scan would not fix that problem."
+  }
+ ]
+}

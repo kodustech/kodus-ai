@@ -1,0 +1,24 @@
+{
+ "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+ "prTitle": "Enhance embed URL handling and validation system",
+ "upstream": "discourse/discourse",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/discourse",
+ "base": "62db063e1e1abe691313ab42682a68f796d63769",
+ "head": "4f8aed295a29954023b2849c060ef4fb299d1b5d",
+ "prOriginalConhecido": {
+  "numero": null,
+  "url": "https://github.com/discourse/discourse/commit/4f8aed295a29954023b2849c060ef4fb299d1b5d",
+  "mergedAt": "2013-12-31",
+  "nota": "Benchmark head 4f8aed2 is itself on upstream main: direct commit by Robin Ward, 2013-12-31 ('FEATURE: Embeddable Discourse comments, now with simple-rss instead of feedzirra'), no PR associated (gh commits/<sha>/pulls empty). Base 62db063 is the revert of the earlier attempt; diff identical to the benchmark."
+ },
+ "tps": [
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimip-01",
+   "severity": "high",
+   "category": "security",
+   "bug": "`import_remote` fetches the embed URL with open-uri, which follows redirects, so the embeddable-host check on the initial URL can be bypassed to reach internal services (SSRF).",
+   "evidenciaOpus": "topic_embed.rb:48 fetches with `open(url).read` (open-uri, follows redirects), while the only host validation is TopicRetriever#invalid_host? (lib/topic_retriever.rb:14-15) on the initial URL; a redirect from the embeddable host to an internal address is fetched and its content imported into a post.",
+   "evidenciaAstra": "The newly added lib/topic_retriever.rb:15 validates only the original URL’s host, then passes that URL to import_remote at line 52. app/models/topic_embed.rb:48 calls open(url).read without restricting or validating redirects, allowing an allowed-host endpoint that redirects to an internal address to trigger SSRF."
+  }
+ ]
+}

@@ -1,0 +1,17 @@
+{
+ "caseId": "github-oauth-security-enhancement-sentry",
+ "items": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This concerns an empty installation_id, whereas prod-02 concerns the literal string 'null'. These are distinct validation cases: the proposed truthiness check handles the empty string but not 'null'."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "This alleges an invalid webhook HMAC after modifying the payload, preventing creation of the intended test fixture. The rejected test claims concern generic assertions; they do not identify a signature or fixture-creation defect."
+  }
+ ]
+}

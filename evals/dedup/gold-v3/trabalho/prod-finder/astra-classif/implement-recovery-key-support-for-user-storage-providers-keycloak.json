@@ -1,0 +1,12 @@
+{
+ "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+ "items": [
+  {
+   "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#pf-ds-C1",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The added BackwardsCompatibilityUserStorage.java:237-242 rebuilds credentials from the original list, while validation at :334-340 never removes accepted codes; RecoveryAuthnCodesCredentialModel.java:65-71 consequently recreates every code with numbering starting at one. RecoveryAuthnCodeInputLoginBean.java:21 therefore keeps requesting code 1, and RecoveryAuthnCodesFormAuthenticator.java:85-91 never detects exhaustion or requests replacement codes. This is a functional defect in the test storage provider introduced by this PR.",
+   "severity": "medium"
+  }
+ ]
+}

@@ -1,0 +1,320 @@
+{
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "98fa098e6fade3097a11fe7f99a98a4e6ffb4728",
+  "head": "5b229316ee4c661836ed1161139692a3e8527444",
+  "prTitle": "Optimize header layout performance with flexbox mixins",
+  "issues": [
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#pf-muse-C3",
+    "comentarios": [
+     {
+      "gid": "prodfinder-muse:C3",
+      "file": "app/assets/stylesheets/common/base/topic.scss",
+      "lines": [
+       29,
+       35
+      ],
+      "texto": "WHAT: Removed &.bullet{margin-top:5px} while parent stays float-based, not flex. WHY: The 5px compensation for the floated bullet is lost on topic pages where order() is a no-op, shifting bullet badges up relative to title text."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#pf-gpt-C1",
+    "comentarios": [
+     {
+      "gid": "prodfinder-gpt:C1",
+      "file": "app/assets/stylesheets/common/base/topic-post.scss",
+      "lines": [
+       279,
+       280
+      ],
+      "texto": "Making `.small-action-desc` a content-sized flex item causes its right-floated edit/delete buttons to sit beside short descriptions instead of at the right edge of the action row. Give `.small-action-desc` `flex: 1` (with the corresponding supported prefixes) so it fills the space remaining after the avatar."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#pf-sonnet-C1",
+    "comentarios": [
+     {
+      "gid": "prodfinder-sonnet:C1",
+      "file": "app/assets/stylesheets/common/base/topic-post.scss",
+      "lines": [
+       279,
+       280
+      ],
+      "texto": "WHAT: `.small-action-desc` padding changed from a 4em left padding to `0 1.5%`, but `mobile/topic-post.scss` still applies `.small-action .small-action-desc .custom-message { margin-left: -40px; }`, which was tuned for the old 4em padding. WHY: on mobile the custom message is now pulled about 35px left of the description box and overlaps or clips against the avatar icon. HOW: update or remove the mobile `margin-left: -40px` override to match the new padding."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "7a5fbae060bd0d3e29f3a4b5c6f2bfd8b2914dc7",
+  "head": "267d8be1f556ed59639ced396c885bb44586da19",
+  "prTitle": "UX: show complete URL path if website domain is same as instance domain",
+  "issues": [
+   {
+    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#pf-kimi-C1",
+    "comentarios": [
+     {
+      "gid": "prodfinder-kimi:C1",
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       137,
+       150
+      ],
+      "texto": "WHAT: website_name parses URI(website.to_s) up to four times per serialization. WHY: Repeated URI parsing is wasted work on a per-user serialization path; the host and path can be read from a single parsed object. HOW: Parse once at the start and reuse the URI object, e.g. uri = URI(website.to_s) rescue nil; return if uri.nil?; website_host = uri.host; return if website_host.nil?; then use uri.path in the branches."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "add-html-sanitizer-for-translated-message-resources-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "f3c8e8f3487112f2c99aa78400430cce2d30be39",
+  "head": "02f48f776f43734d1ac8914d3ad6a7115acdcb33",
+  "prTitle": "Add HTML sanitizer for translated message resources",
+  "issues": [
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#pf-kimi-C1",
+    "comentarios": [
+     {
+      "gid": "prodfinder-kimi:C1",
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       145,
+       145
+      ],
+      "texto": "WHAT: The anchor pattern Pattern.compile(\"</?a[^>]*>\") matches any tag whose name begins with 'a', such as <abbr>, <address>, and <area>, not just anchor tags. WHY: Non-anchor 'a' tags are treated as anchors, so the verifier can emit misleading \"Didn't find anchor tag\" errors, or silently strip a non-anchor tag before the HTML policy runs when English contains the same tag. HOW: Require a word boundary after the 'a', e.g., </?a(?:\\s[^>]*)?>, so only <a ...>, </a>, and <a> are matched."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#pf-muse-C2",
+    "comentarios": [
+     {
+      "gid": "prodfinder-muse:C2",
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       150,
+       159
+      ],
+      "texto": "WHAT: Anchor-mismatch message reports only the tag text while the `key` parameter is unused. WHY: Build failure gives no key or file, so the offending translation cannot be located unlike the Illegal-HTML message. HOW: Include `key` and `file` in the message."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "30a92a4d66b417f7c19dee2b343099adc6e88aa6",
+  "head": "5fd11f9faa79c4aefd39975d1b0e963e5034f793",
+  "prTitle": "feat: add calendar cache status and actions (#22532)",
+  "issues": [
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#pf-opus-C2",
+    "comentarios": [
+     {
+      "gid": "prodfinder-opus:C2",
+      "file": "scripts/test-gcal-webhooks.sh",
+      "lines": [
+       5,
+       5
+      ],
+      "texto": "Bash resolves `../.env` against the directory the script is run from, not the script's own directory. Running `./scripts/test-gcal-webhooks.sh` from the repo root creates or edits a `.env` in the folder above the repo, so the app never sees `GOOGLE_WEBHOOK_URL`. Build the path from the script's location instead."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#pf-muse-C1",
+    "comentarios": [
+     {
+      "gid": "prodfinder-muse:C1",
+      "file": "packages/features/calendar-cache/calendar-cache.repository.ts",
+      "lines": [
+       173,
+       182
+      ],
+      "texto": "WHAT: `getCacheStatusByCredentialIds` aggregates `max(updatedAt)` without filtering `expiresAt`, while `getCachedAvailability` only honors non-expired rows. WHY: The UI shows a cache timestamp and delete action even when no usable cache remains, misrepresenting cache state. HOW: Add `expiresAt: { gte: new Date() }` to the `groupBy` where clause."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "85737f52b59aa2e3403c9b8e48acf71ccc5bfae3",
+  "head": "ce2dcc537b4b1f98a335e88cfe8e0b804483252a",
+  "prTitle": "Implement recovery key support for user storage providers",
+  "issues": [
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#pf-ds-C1",
+    "comentarios": [
+     {
+      "gid": "prodfinder-ds:C1",
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       235,
+       246
+      ],
+      "texto": "WHAT: getCredentials() rebuilds the recovery-codes model with RecoveryAuthnCodesCredentialModel.createFromValues(...), which hashes the codes and always reproduces them in original order, so the model returned by the federated store never reflects consumed codes. WHY: RecoveryAuthnCodeInputLoginBean derives the 'next code to enter' number from this model and RecoveryAuthnCodesFormAuthenticator relies on allCodesUsed() to decide whether to remove the credential; with a freshly rebuilt model the displayed code number can be stale and the removal branch is driven by clone state rather than persisted state, producing wrong results for federated users. HOW: Persist and rehydrate the hashed secretData (and consumed-code state) instead of regenerating it from the raw list on each read."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "add-guest-management-functionality-to-existing-bookings-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "b004587262e8221083bafbe9a0c515e7becaa7b3",
+  "head": "92f44dcea7ff19e9123a30c63c167a2938df5a55",
+  "prTitle": "Add guest management functionality to existing bookings",
+  "issues": [
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#pf-muse-C1",
+    "comentarios": [
+     {
+      "gid": "prodfinder-muse:C1",
+      "file": "packages/emails/templates/organizer-add-guests-email.ts",
+      "lines": [
+       26,
+       30
+      ],
+      "texto": "WHAT: Organizer subject uses attendees[0].name after nameless guests are added. WHY: New guests are created with name \"\" so the subject renders an empty or wrong booker name. HOW: Use the original booker/organizer name instead of attendees[0]."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "58ba11ecbd60863e2bfc6e32f0399ed4feb3927a",
+  "head": "303cdc2caf256aa5df660611120c2e3f7392365d",
+  "prTitle": "Plugins: Chore: Renamed instrumentation middleware to metrics middleware",
+  "issues": [
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#pf-kimi-C1",
+    "comentarios": [
+     {
+      "gid": "prodfinder-kimi:C1",
+      "file": "pkg/services/pluginsintegration/pluginsintegration.go",
+      "lines": [
+       159,
+       161
+      ],
+      "texto": "WHAT: ContextualLoggerMiddleware is unconditionally added to the middleware stack even when backend request logging is disabled. WHY: When cfg.PluginLogBackendRequests is false, NewLoggerMiddleware returns next and bypasses itself, so the attributes added by ContextualLoggerMiddleware are never consumed, yet every plugin request still pays for the slice allocation and context.WithValue call. HOW: only append NewContextualLoggerMiddleware() when cfg.PluginLogBackendRequests is true, or move the contextual logger creation inside/before LoggerMiddleware so it runs only when logging is enabled."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "d1440bb5d2f2190ad7ae1d26c165f970055b5370",
+  "head": "6048e2a86b50e81e1e3b1b467dfea5a895add3dc",
+  "prTitle": "Comprehensive workflow reminder management for booking lifecycle events",
+  "issues": [
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#pf-ds-C2",
+    "comentarios": [
+     {
+      "gid": "prodfinder-ds:C2",
+      "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "lines": [
+       44,
+       51
+      ],
+      "texto": "WHAT: the new `remindersToCancel` query selects `cancelled: true` rows without excluding a null `referenceId`, unlike the analogous query at workflows.tsx:205 that adds `NOT: { referenceId: null }`. WHY: cancelled rows can have a null referenceId (any reminder never given a SendGrid batch id), and those are sent to SendGrid as `batch_id: null`, which fails the request and \u2014 since the whole loop shares one try/catch \u2014 aborts cancellation of the remaining reminders. HOW: add `NOT: { referenceId: null }` to the `where` clause of the `remindersToCancel` query."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feat-2fa-backup-codes-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "efa6d464a38e60ceeeb88f40668c1c4ac4bfaf54",
+  "head": "54486a059cd2032042189bb565646ba4e0f6bd61",
+  "prTitle": "feat: 2fa backup codes",
+  "issues": [
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#pf-muse-C2",
+    "comentarios": [
+     {
+      "gid": "prodfinder-muse:C2",
+      "file": "apps/web/pages/api/auth/two-factor/totp/disable.ts",
+      "lines": [
+       48,
+       52
+      ],
+      "texto": "WHAT: The new missing-encryption-key branch throws instead of returning a JSON error response. WHY: Throwing from the Next API route yields a non-JSON 500 page, so the caller's await response.json() rejects and the UI can only show a generic error with an unhandled server exception. HOW: Return res.status(500).json({ error: ErrorCode.InternalServerError }) like the surrounding branches."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "a308075bc39b77ed7059b0cae9d443d669a7bf98",
+  "head": "de628295646d0848226618108a52f2f1e5d04ac0",
+  "prTitle": "fix: handle collective multiple host on destinationCalendar",
+  "issues": [
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#pf-kimi-C2",
+    "comentarios": [
+     {
+      "gid": "prodfinder-kimi:C2",
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       422,
+       441
+      ],
+      "texto": "WHAT: `handleCancelBooking` calls `prisma.credential.findUnique` inside a loop over calendar references. WHY: Cancelling a collective booking issues one credential query per host calendar reference rather than a single batched query. HOW: Collect all `credentialId` values from `bookingCalendarReference`, run one `prisma.credential.findMany({ where: { id: { in: ids } } })`, and map the results."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ }
+}

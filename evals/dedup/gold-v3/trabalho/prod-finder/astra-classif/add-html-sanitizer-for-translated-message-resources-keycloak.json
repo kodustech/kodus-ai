@@ -1,0 +1,19 @@
+{
+ "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+ "items": [
+  {
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#pf-kimi-C1",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "VerifyMessageProperties.java:145 matches tags such as <abbr>, and lines 154\u2013155 remove them when identical tags appear in English. Because removal precedes policy validation at lines 88\u201392, these non-anchor tags bypass the allowed-element policy; this PR introduces the defect.",
+   "severity": "medium"
+  },
+  {
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#pf-muse-C2",
+   "class": "TP",
+   "subclass": "nit",
+   "reason": "VerifyMessageProperties.java:157 omits both key and file, and ThemeVerifierMojo.java:51\u201355 aggregates messages without adding that context. The omission is real and newly introduced, but concerns diagnostic context only; validation still rejects the offending translation.",
+   "severity": "low"
+  }
+ ]
+}

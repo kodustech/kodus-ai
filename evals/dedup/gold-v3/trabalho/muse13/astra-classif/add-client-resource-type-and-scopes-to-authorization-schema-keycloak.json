@@ -1,0 +1,12 @@
+{
+ "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#muse13-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "The claimed regression is absent: RolePermissions.java:392 and :475-480 already apply manage-clients authorization before checking composite permissions, and :432 does likewise for client-scope mappings. Ordinary role mapping uses manage-users authorization at RolePermissions.java:302, not manage-clients. The base implementation also lacks manage-clients shortcuts in ClientPermissions.java:536-557, :613-632 and :635-654, contradicting the claimed V1 behavior.",
+   "severity": "high"
+  }
+ ]
+}

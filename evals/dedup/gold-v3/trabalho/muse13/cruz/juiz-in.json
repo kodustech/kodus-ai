@@ -1,0 +1,230 @@
+{
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "9fde0e906897cc0f4f71793f647dd629faba3317",
+  "base": "bc89fe00ea84d20bedcec782f0701b9711dc8201",
+  "sugestoes": [
+   {
+    "id": "S6",
+    "file": "apps/web/pages/api/webhook/app-credential.ts",
+    "lines": [
+     24,
+     29
+    ],
+    "texto": "WHAT: Single static header comparison gates overwrite of any userId/appSlug credential keys with decrypted attacker-influenced JSON. WHY: Anyone holding the shared secret can overwrite any user's third-party OAuth keys, hijacking calendar/video access with no per-user auth, HMAC, replay protection, or rate limit. HOW: See improvedCode; at minimum require HMAC-signed body with timestamp."
+   },
+   {
+    "id": "S10",
+    "file": ".env.example",
+    "lines": [
+     241,
+     244
+    ],
+    "texto": "The comment requires 32 bytes for AES256 but the generation command `openssl rand -base64 24` produces only 24 bytes, so a user following the docs creates a key that disagrees with the documented requirement and will fail/shorten encryption. Change the command to `openssl rand -base64 32`."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#musep-01",
+    "descricao": "A loggable, prefetchable, CSRF-able `GET` carrying the shared secret can overwrite any user's stored OAuth keys. Reject non-`POST` requests with a 405 before any secret, user, or app lookup.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "d1c69189f3c90ecf56013a8da904da9bff9a8e19",
+  "base": "913c3d6f636d02b3dd6c2c022ca1af2bec95d752",
+  "sugestoes": [
+   {
+    "id": "S3",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     10,
+     18
+    ],
+    "texto": "WHAT: record_for_host returns false on failure but callers use eh.try(:category_id), and try only guards nil so false.try(:category_id) dispatches to FalseClass and raises. WHY: TopicEmbed.import (app/models/topic_embed.rb:36-43) crashes on malformed/unknown embed URLs instead of handling nil category. HOW: return nil instead of false consistently."
+   },
+   {
+    "id": "S8",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     20,
+     22
+    ],
+    "texto": "WHAT: every embed comment/retriever check now does a SELECT via record_for_host instead of the previous in-memory SiteSetting string check. WHY: adds a DB round-trip to the hot unauthenticated embed path on every request, increasing latency and DB load. HOW: cache the host list with expiry and invalidate on EmbeddableHost save/destroy."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#musep-01",
+    "descricao": "Model types with multiple underscores never match `ADMIN_MODELS` and get the wrong base path. Change `type.replace('_', '-')` to use `/_/g` so all underscores are replaced.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "fix-proper-handling-of-group-memberships-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "060cda77729cb1c4a827560e09e89a7b22078ba9",
+  "base": "4975fc28903a84418f546b2809370f19abf10e08",
+  "sugestoes": [
+   {
+    "id": "S11",
+    "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+    "lines": [
+     29,
+     33
+    ],
+    "texto": "Next clamps to user_count, which is past the last page when count is a multiple of limit (e.g. count 100, limit 50, offset 50 -> 100 empty). Clamp to (totalPages-1)*limit instead."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#musep-01",
+    "descricao": "The cached `groups.user_count` stays inflated, so admin pagination and counts disagree with actual membership. In `remove_member`, destroy the `GroupUser` records instead of calling `users.delete` so `counter_cache` decrements.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "1950a511026d520a7329c7b6b9ee60a4af8f8b55",
+  "base": "b8c1cd410f4499c77a8b372decfe1718b80ccfd2",
+  "sugestoes": [
+   {
+    "id": "S3",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+    "lines": [
+     90,
+     103
+    ],
+    "texto": "WHAT: canMapRoles/canMapCompositeRoles/canMapClientScopeRoles only check fine-grained permission and never check MANAGE_CLIENTS role, unlike canManage/canManageClientScopes siblings. WHY: A realm admin with manage-clients (or existing V1 behavior) is incorrectly denied role-mapping on clients, breaking the implied-admin contract."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01",
+    "descricao": "A global grant is silently ignored once any per-client resource exists, denying legitimate admins in `hasPermission(ClientModel, String)`. Check the per-client resource from `findByName` and then the all-clients type resource from `getResourceTypeResource` so either grant succeeds.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "database-performance-optimizations-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "04cfa3bfd469c035ff8b35f9a66867c4e8d5dcf4",
+  "base": "a886bd3c79a417a70b51509384d1f1ec3e87e96b",
+  "sugestoes": [
+   {
+    "id": "S3",
+    "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "lines": [
+     548,
+     558
+    ],
+    "texto": "WHAT: MaxCount cleanup fetches victim IDs with LIMIT/OFFSET then deletes them in a separate statement with no transaction. WHY: Concurrent deletion of newer rows between fetch and delete shifts the OFFSET window, so a fetched ID can slide back into the top-MaxCount set that must be kept yet still gets deleted. HOW: Re-check membership or perform the delete atomically if exact MaxCount retention is required."
+   },
+   {
+    "id": "S7",
+    "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "lines": [
+     643,
+     658
+    ],
+    "texto": "untilDoneOrCancelled stops when batchWork returns affected==0, but batchWork now returns RowsAffected from deleteByIDs after a separate fetchIDs with LIMIT. Under concurrent deletes the fetched IDs can already be gone so delete affects 0 even though unfetched matching rows remain beyond the LIMIT window, causing early exit with MaxAge/MaxCount/orphan invariant still violated. Terminate on fetched count == 0 instead of deleted count == 0."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#musep-01",
+    "descricao": "A concurrent deleter racing between `SELECT` and `DELETE` leaves work remaining until the next cycle. Check `fetched` from `batchWork` instead of `affected` to decide when `untilDoneOrCancelled` is done.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "79d11c4890cc4792e3dc3535af59e4e5f7a2739d",
+  "base": "10aca5552314d6e5c9226f3c6d0107861c38c693",
+  "sugestoes": [
+   {
+    "id": "S5",
+    "file": "authz/client/src/main/java/org/keycloak/authorization/client/AuthzClient.java",
+    "lines": [
+     94,
+     97
+    ],
+    "texto": "WHAT: AuthzClient.create calls global CryptoIntegration.init which initializes a static singleton only once with the authz classloader view. WHY: If called before server init with a classloader seeing only the order-100 Authz provider, the server is permanently pinned to the weak provider whose methods throw UnsupportedOperationException."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#musep-01",
+    "descricao": "Because `CryptoIntegration.init` is one-shot, calling `AuthzClient.create` first cements the global singleton with its own classloader and the minimal `AuthzClientCryptoProvider`, so later server init is ignored and unsupported operations break. Guard the init in `AuthzClient.create` or avoid global init from the lightweight client.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "7355f05e6aafe2a7acc6434fb40c686665416606",
+  "base": "7ea067aae9be56cb2622bce6563864817c3dfeaf",
+  "sugestoes": [
+   {
+    "id": "S3",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/UserPermissionsV2.java",
+    "lines": [
+     46,
+     62
+    ],
+    "texto": "WHAT: canView(user)/canManage(user) dropped ADMIN role from hasOneAdminRole check. WHY: Admins relying on ADMIN role lose view/manage access (denial) diverging from prior contract and V1 behavior. HOW: Restore AdminRoles.ADMIN in the role checks or prove ADMIN is handled elsewhere."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01",
+    "descricao": "With V2 all-groups `VIEW`/`MANAGE` granted, every listing costs O(N) authz evaluations instead of one. Restore the cached `canViewGlobal` check from `auth.groups().canView()` and short-circuit the per-subgroup `canView(g)` filter when it passes.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "9966ec5a13e331659c3ea00981f9b11b0faf821f",
+  "base": "fd358e8a388939959369f08f616e29552cdaf96e",
+  "sugestoes": [
+   {
+    "id": "S2",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     49,
+     54
+    ],
+    "texto": "WHAT: _get_partition_lock reads/writes partition_locks dict without any global lock, so two threads adding a new partition can create two different Lock objects. WHY: Threads then guard add_offset/complete_offset/get_committable with different locks, breaking mutual exclusion and corrupting all_offsets/outstanding commit decisions. HOW: Guard lock creation with a global lock for partition_locks."
+   },
+   {
+    "id": "S11",
+    "file": "src/sentry/remote_subscriptions/consumers/result_consumer.py",
+    "lines": [
+     254,
+     259
+    ],
+    "texto": "SimpleQueueProcessingStrategy.submit passes FilteredPayload to decoder and expects None to skip+commit. The wired decoder partial(self.decode_payload,...) asserts not isinstance(payload, FilteredPayload), so filtered messages raise AssertionError into the generic except instead of the intended None fast-path (error log + reliance on exception fallback). Guard FilteredPayload before delegating to decode_payload."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#musep-01",
+    "descricao": "The background thread keeps calling `get_committable_offsets` and `commit_function` after rebalance/terminate with revoked partitions. After signaling `shutdown_event`, join `commit_thread` in `terminate` as `close` does.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ }
+}

@@ -1,0 +1,23 @@
+{
+ "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#10",
+   "newGroup": null,
+   "reason": "It makes the same null-config NPE claim in getLoginPredicate's BROKER_PUBLIC check. The added write-path consequences do not change the alleged cause."
+  },
+  {
+   "id": "S2",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#opa-02",
+   "newGroup": null,
+   "reason": "It identifies the same accumulation of organization-specific searches in one realm/mode cache entry. Memory growth and replication payload size are additional consequences of that same caching design."
+  },
+  {
+   "id": "S3",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#03",
+   "newGroup": null,
+   "reason": "It repeats the claim that cache hits return models without organization-aware wrapping, despite getById already performing that wrapping."
+  }
+ ]
+}

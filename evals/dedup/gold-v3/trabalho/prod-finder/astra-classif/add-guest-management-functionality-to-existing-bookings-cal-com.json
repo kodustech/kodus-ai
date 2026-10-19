@@ -1,0 +1,12 @@
+{
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "items": [
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#pf-muse-C1",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "New guests receive an empty name in packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:83-89, and the updated attendees are fetched without ordering at lines 92-108, so the original booker is not guaranteed to remain first. packages/emails/templates/organizer-add-guests-email.ts:26-29 directly interpolates attendees[0].name, allowing a nameless guest to produce a blank booker name in the subject.",
+   "severity": "medium"
+  }
+ ]
+}

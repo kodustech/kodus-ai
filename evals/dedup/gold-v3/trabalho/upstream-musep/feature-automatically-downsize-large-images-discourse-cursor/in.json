@@ -1,0 +1,24 @@
+{
+ "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+ "prTitle": "FEATURE: automatically downsize large images",
+ "upstream": "discourse/discourse",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/discourse",
+ "base": "3f71fa15c93bb0b751bb92abae1b5dc9a21bd4ca",
+ "head": "ffbaf8c54269df2ce510de91245760fddce09896",
+ "prOriginalConhecido": {
+  "numero": null,
+  "url": "https://github.com/discourse/discourse/commit/ffbaf8c54269df2ce510de91245760fddce09896",
+  "mergedAt": "2015-08-12",
+  "nota": "No upstream PR: the benchmark head ffbaf8c5 (Régis Hanol, 2015-08-12) was pushed directly to discourse/discourse and is an ancestor of main (compare ffbaf8c...main = ahead). gh pr search on the title returns nothing; the commit has no associated PR. Reference date is the commit date."
+ },
+ "tps": [
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#musep-01",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "Oversized SVG uploads go through the new ImageMagick downsize loop because SVG counts as an image, so the vector file is rasterized or corrupted in place before Upload.create_for parses it as SVG.",
+   "evidenciaOpus": "The new auto-downsize block (uploads_controller.rb:63-70) runs whenever FileHelper.is_image?(filename) matches, and FileHelper.images includes svg (file_helper.rb:31). An oversized SVG is therefore passed to ImageMagick convert -resize 80%> and overwritten in place, even though Upload.create_for handles SVGs separately via Nokogiri (upload.rb:63-66).",
+   "evidenciaAstra": "SVG is included in the image whitelist (lib/file_helper.rb:31), so the new loop rewrites oversized SVG uploads in place (app/controllers/uploads_controller.rb:64–67). That invokes ImageMagick’s raster resize pipeline (app/models/optimized_image.rb:126–133), which does not preserve the original vector content, before Upload.create_for parses the file as SVG (app/models/upload.rb:63–66). This introduces a bug for oversized SVG uploads."
+  }
+ ]
+}

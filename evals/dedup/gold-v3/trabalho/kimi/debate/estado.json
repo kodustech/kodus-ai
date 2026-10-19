@@ -1,0 +1,1050 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#kimi-01": {
+  "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+  "issue": {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#kimi-01",
+   "comentarios": [
+    {
+     "gid": "kimi-kimi:S8",
+     "file": "packages/core/CalendarManager.ts",
+     "lines": [
+      228,
+      231
+     ],
+     "texto": "The string \"Notes have been hidden by the organizer\" is written directly into calEvent.additionalNotes and shown to users in calendar events, but it is not routed through the project's i18n system. The existing TODO even notes this. The PR changed the spelling of this line without resolving the localization gap, so attendees/organizers whose locale is not English still see an untranslated message. Replace the hard-coded string with a translated key (e.g., t(\"notes_hidden_by_organizer\")) and add it to the locale files."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "packages/core/CalendarManager.ts:230 the PR edits the hard-coded 'Notes have been hidden by the organizer' string (spelling only) and keeps the existing '// TODO: i18n this string?'. The untranslated text is real but pre-dates the PR and has no behavioural impact beyond localization."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "packages/core/CalendarManager.ts:229-230 assigns a hard-coded English message when hideCalendarNotes is enabled, and this PR edits that exact assignment. packages/lib/CalEventParser.ts:67-73 translates the notes heading but interpolates additionalNotes verbatim, so the message remains English regardless of locale."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "low",
+    "text": "I am changing my label to FP (none), not adopting TP. The PR's only change to this line is a spelling fix, and the English literal and its TODO were already there at base. diff: `-    calEvent.additionalNotes = \"Notes have been hidden by the organiser\"; // TODO: i18n this string?` / `+    ... \"Notes have been hidden by the organizer\"; // TODO: i18n this string?` (CalendarManager.ts:230). The ruling says code the PR only moves or re-indents without changing its logic counts as pre-existing. A one-letter spelling edit is the same kind of change: no logic changes. So the missing localization is a pre-existing gap in code this PR does not change in substance, and that makes it FP (none). Rated as stated, an untranslated note does not change what the program does, so severity is low.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "I retain TP: the PR changes the user-visible string assigned in CalendarManager.ts:230, so the exemption for code merely moved or re-indented does not apply. CalEventParser.ts interpolates additionalNotes verbatim while translating its heading, confirming that the edited message remains English for non-English locales. This affects rendered calendar content, making it a localization defect rather than a wording nit; medium reflects the incorrect localized output when hideCalendarNotes is enabled."
+   },
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "Partly agree: the PR does edit the assigned literal (CalendarManager.ts:230, '-...organiser' -> '+...organizer'), so the moved/re-indented exemption does not strictly apply and I drop FP. But the missing localization is not introduced or worsened by this PR: the English literal and its '// TODO: i18n this string?' are identical at base apart from one letter, and the PR's subject (collective hosts' destinationCalendar) is unrelated. Asking a spelling fix to add i18n is a comment a developer would not want on this PR; the message is only shown when hideCalendarNotes is on and is still readable. TP nit, low.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "I retain TP: CalendarManager.ts:230 changes the assigned user-visible literal, so the explicit exemption for moved or re-indented code does not apply. CalEventParser.ts:getAdditionalNotes translates the heading but interpolates this message verbatim, leaving it English regardless of locale. Although the localization gap predates this edit, it affects code the PR changes and user-facing output; readability for non-English users cannot be assumed, making this a localized-output defect rather than a wording nit."
+   },
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "Agreed it is TP: the PR edits the literal (CalendarManager.ts:230 '-...organiser' -> '+...organizer'). Disagree on subclass. The diff changes one letter; the English literal and its '// TODO: i18n this string?' are identical at base, so the PR neither introduces nor worsens the localization gap, and the PR's subject (collective hosts' destinationCalendar) is unrelated. The text is only shown when hideCalendarNotes is on, and it is a short readable notice, not wrong or misleading output. Asking a spelling fix to add i18n keys is a comment a developer would not want here: nit. Rated as stated, an untranslated notice does not change what the program does or mislead anyone: low.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "I change to TP/nit, low. The PR edits the English literal in CalendarManager.ts, and CalEventParser.ts:getAdditionalNotes renders it verbatim, so the localization gap is real and touches changed code. However, this short informational notice remains accurate, and the spelling change neither introduces nor worsens the existing gap; requesting localization here is a minor wording improvement rather than a substantive behavioral defect."
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com#kimi-01": {
+  "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com",
+  "issue": {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#kimi-01",
+   "comentarios": [
+    {
+     "gid": "kimi-kimi:S8",
+     "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+     "lines": [
+      8,
+      14
+     ],
+     "texto": "WHAT: The fetch to CALCOM_CREDENTIAL_SYNC_ENDPOINT has no timeout or abort signal. WHY: If the external endpoint hangs, the calling calendar/video request also hangs indefinitely, consuming workers and potentially blocking user-facing operations. HOW: Add an AbortController with a timeout and handle abort errors."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts:8-14 indeed calls fetch with no AbortSignal, but this is a hardening suggestion about a hypothetical hanging sync endpoint, not a defect observed in the code."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "The new fetch in packages/app-store/_utils/oauth/refreshOAuthTokens.ts:8-14 has no abort signal or application timeout. Zoom awaits this refresh at packages/app-store/zoomvideo/lib/VideoApiAdapter.ts:79 and awaits authentication before API requests at :237, so a stalled sync endpoint blocks dependent operations without an application-controlled deadline."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "refreshOAuthTokens.ts:8 `const response = await fetch(process.env.CALCOM_CREDENTIAL_SYNC_ENDPOINT, {` has no signal. However, the 'else' branch it sits beside (`const response = await refreshFunction();`, :17), which calls the providers' own refresh endpoints, has no app-level timeout either. That is the codebase's existing convention for these outbound token calls. The fetch also cannot 'hang indefinitely': Node's built-in fetch (undici) applies default header and body timeouts. The endpoint is an operator-configured, self-hosted sync service. Nothing here is a defect; it is a hardening request ('add an AbortController'), so it is FP (none).",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "I change my classification to FP. The new fetch has no application timeout and Zoom awaits it, but the previous provider-refresh fetch also lacked one; the sync branch substitutes an explicitly configured endpoint. These facts establish a dependency on the endpoint\u2019s response, not indefinite blocking or worker exhaustion. Without a demonstrated timeout-contract violation or failure mechanism beyond hypothetical endpoint unresponsiveness, adding an AbortController is a hardening suggestion."
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "sms-workflow-reminder-retry-count-tracking-cal-com#kimi-01": {
+  "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+  "issue": {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#kimi-01",
+   "comentarios": [
+    {
+     "gid": "kimi-kimi:S1",
+     "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+     "lines": [
+      189,
+      199
+     ],
+     "texto": "WHAT: The catch block increments retryCount for any error in the try block, not only for SMS scheduling failures. WHY: Failures from `prisma.profile.findFirst`, `getBookerBaseUrl`, or other unrelated setup can mark a reminder for deletion even though Twilio was never attempted. HOW: Wrap only the `twilio.scheduleSMS` call and the successful update in try/catch, or restructure so retryCount is incremented only when scheduling itself fails."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "scheduleSMSReminders.ts:189-198 the catch increments retryCount for any error in the try block, as claimed, but counting any failure to schedule a reminder toward the retry limit is the intended retry-tracking behaviour; a reminder that fails setup repeatedly also cannot be sent."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "high",
+    "text": "In packages/features/ee/workflows/api/scheduleSMSReminders.ts:111-121, profile and URL lookups execute inside the same try block as scheduling, and the new catch increments retryCount at lines 189-195 even when those lookups fail before Twilio runs. Two such failures make the reminder eligible for deletion at lines 29-40, permanently dropping an unsent reminder."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "The facts are right: the catch at scheduleSMSReminders.ts:189-197 does `retryCount: reminder.retryCount + 1` for any error. But the feature this PR adds is 'stop retrying reminders that keep failing to schedule'. If prisma.profile.findFirst or getBookerBaseUrl (:111-121) throws on every run, the SMS can never be scheduled either, so counting that failure toward the limit is the intended semantics. A transient DB error is treated exactly like a transient Twilio error, which the PR also counts (`} else { ... retryCount: reminder.retryCount + 1`, :179-186). The comment proposes a different retry policy; it does not show a defect.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "I change my classification to FP. The catch does count setup exceptions, but those exceptions prevent scheduling, so counting them is consistent with limiting failed scheduling attempts; nothing establishes a Twilio-only retry contract. My earlier reasoning demonstrated the retry limit\u2019s consequence, not a defect in applying it to setup failures."
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-02": {
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "issue": {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-02",
+   "comentarios": [
+    {
+     "gid": "kimi-kimi:S7",
+     "file": "app/jobs/scheduled/poll_feed.rb",
+     "lines": [
+      28,
+      37
+     ],
+     "texto": "WHAT: poll_feed calls open(feed_url).read without a timeout and iterates rss.items without any limit. WHY: A slow or unresponsive feed can hold a worker indefinitely, and a very large feed can consume excessive memory and time importing every item. HOW: Add a read timeout to open and cap the number of items processed per run."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "app/jobs/scheduled/poll_feed.rb:29 calls SimpleRSS.parse open(url) (not .read) without explicit timeouts in an hourly background job with retry disabled; open-uri/Net::HTTP already apply a read timeout. This is a hardening suggestion, not a defect."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "app/jobs/scheduled/poll_feed.rb:29-36 loads the feed and imports every item without a size limit, batch limit, or overall deadline. Large feeds can cause substantial parsing and database work, including during individual retrievals via lib/topic_retriever.rb:40-42. The timeout wording is overstated because open-uri inherits network defaults, but those do not bound total download and import work."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "poll_feed.rb:29 `rss = SimpleRSS.parse open(SiteSetting.feed_polling_url)` (not `.read`, as the comment says). It runs in an hourly scheduled job with `sidekiq_options retry: false` (:11\u201312) against a single admin-configured feed URL, and open-uri/Net::HTTP apply a default read timeout. RSS feeds are bounded documents published by the admin's own blog. Capping items or the total work is a hardening/performance suggestion for an admin-controlled input, with no defect shown. You agree the timeout part is overstated. The remaining 'no item cap' point is speculative, so it is FP (none).",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "I change my classification to FP. The job calls `SimpleRSS.parse open(SiteSetting.feed_polling_url)` and inherits the network read timeout; lacking an explicit timeout does not establish indefinite blocking. Processing every item in the configured feed supports the intended import/update behavior, and neither this loop nor its invocation from TopicRetriever demonstrates a meaningful performance defect. An item cap or overall deadline is speculative hardening without evidence of problematic feed sizes or runtime."
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-04": {
+  "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+  "issue": {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-04",
+   "comentarios": [
+    {
+     "gid": "kimi-kimi:S11",
+     "file": "spec/controllers/embed_controller_spec.rb",
+     "lines": [
+      40,
+      52
+     ],
+     "texto": "The 'tells the topic retriever to work' and 'creates a topic view' tests stub TopicEmbed.topic_id_for_embed, TopicRetriever.new, TopicView.new, and the retriever's retrieve method. They therefore pass even if the controller action's real logic for calling TopicRetriever, TopicView, or rendering 'loading' is removed or inverted. These tests assert only that mocks are called with the expected arguments, which by construction matches the test setup; they do not verify the actual response body, template, or that an embed record is created. Add expectations on response.body/rendered_template (e.g. assert the loading partial is rendered when no topic exists and the topic view partial is rendered when one exists) and use real collaborators or at least assert the side effects."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "spec/controllers/embed_controller_spec.rb:40-52 set expectations (retriever.expects(:retrieve), TopicView.expects(:new).with(123,...)) that fail if the controller stops making those calls, and the after block asserts success and X-Frame-Options. Asking for template assertions is a test-strengthening suggestion, not a broken test."
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "medium",
+    "text": "spec/controllers/embed_controller_spec.rb:41-50 uses required expects calls, which fail if retriever invocation or TopicView construction is removed or routed incorrectly. The retriever is reached through app/controllers/embed_controller.rb:15 and app/jobs/regular/retrieve_topic.rb:17; these assertions verify actual delegation rather than automatically satisfying themselves."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "medium",
+    "text": "Concede. The comment's central claim is false: the tests 'pass even if the controller action's real logic ... is removed'. The tests use mocha `expects`, which fails when the call does not happen. embed_controller_spec.rb:43-44 `TopicRetriever.expects(:new).returns(retriever)` / `retriever.expects(:retrieve)` and :50 `TopicView.expects(:new).with(123, nil, {best: 5})`, and the after block asserts `response.should be_success`. The described problem is impossible, so the label is hallucination rather than FP (none).",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-03": {
+  "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+  "issue": {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-03",
+   "comentarios": [
+    {
+     "gid": "kimi-kimi:S9",
+     "file": "app/controllers/admin/embeddable_hosts_controller.rb",
+     "lines": [
+      22,
+      25
+     ],
+     "texto": "`host.category_id = SiteSetting.uncategorized_category_id if host.category_id.blank?` treats `0` and empty string the same as `nil`. If category id `0` is ever meaningful, it will be silently replaced. Use `if host.category_id.nil?` to test for an explicitly absent value rather than any falsy/blank value."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "low",
+    "text": "app/controllers/admin/embeddable_hosts_controller.rb:25 uses category_id.blank?; category ids start at 1 and the value comes from request params, so a meaningful category id 0 cannot occur."
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "medium",
+    "text": "app/controllers/admin/embeddable_hosts_controller.rb:25 checks blank?, which does not consider numeric zero blank. The claimed replacement of category ID 0 therefore cannot happen through this condition."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "medium",
+    "text": "Concede. embeddable_hosts_controller.rb:24-25 `host.category_id = params[...][:category_id]` then `... if host.category_id.blank?`. category_id is an integer column, so the value is typecast, and `0.blank?` is false in Ruby. Id 0 is therefore never replaced. The claim 'treats 0 the same as nil' is false, so the label is hallucination. I adopt your severity (edge-case input \u2192 medium).",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "feature-automatically-downsize-large-images-discourse-cursor#kimi-01": {
+  "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+  "issue": {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#kimi-01",
+   "comentarios": [
+    {
+     "gid": "kimi-kimi:S10",
+     "file": "app/controllers/uploads_controller.rb",
+     "lines": [
+      67,
+      67
+     ],
+     "texto": "`OptimizedImage.downsize(tempfile.path, tempfile.path, \"80%\", ...)` asks ImageMagick to read from and write to the same file. The model's `convert_with` builds a `convert <from> ... <to>` shell command and assumes distinct paths; overwriting the source during conversion can corrupt or truncate the upload. Downsize to a temporary path and then replace the original."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "high",
+    "text": "uploads_controller.rb:67 calls OptimizedImage.downsize(tempfile.path, tempfile.path, ...) as claimed, but ImageMagick convert decodes the whole input before writing the output, so in-place conversion to the same path does not corrupt the file."
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "high",
+    "text": "app/controllers/uploads_controller.rb:67 passes the same path, but app/models/optimized_image.rb:126-134 builds a normal convert command, and :160-164 imposes no distinct-path requirement. ImageMagick supports overwriting its input after reading and processing it; identical paths do not cause the alleged truncation ([ImageMagick reference](https://www.imagemagick.org/discourse-server/viewtopic.php?t=17376))."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "high",
+    "text": "Concede. uploads_controller.rb:67 passes the same path, and optimized_image.rb's convert_with just runs `convert <from> ... <to>` without assuming distinct paths. ImageMagick reads and decodes the whole input before it writes the output, so the 'corrupt or truncate the upload' outcome the comment depends on cannot occur. The problem is impossible given the code and tool, so the label is hallucination rather than FP (none).",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "anonymous-add-configurable-device-limit-grafana-codex#kimi-01": {
+  "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+  "issue": {
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#kimi-01",
+   "comentarios": [
+    {
+     "gid": "kimi-kimi:S5",
+     "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+     "lines": [
+      18,
+      18
+     ],
+     "texto": "The error message 'device limit reached' is user-facing but is a hard-coded English literal. It bypasses Grafana's i18n/translation system, so users in other locales will see untranslated English text. This string should be passed through the project's translation mechanism (e.g., i18n.Translate) and added to the relevant locale file(s)."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "low",
+    "text": "anonstore/database.go:18 ErrDeviceLimitReached is a Go sentinel error checked with errors.Is in client.go:45; backend error values are not translated through i18n in Grafana, so there is no defect."
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "low",
+    "text": "The literal in pkg/services/anonymous/anonimpl/anonstore/database.go:18 is an internal sentinel error, not the user-facing message claimed. pkg/middleware/auth.go:39 supplies \u201cUnauthorized\u201d as the response fallback, and pkg/services/contexthandler/model/model.go:116-149 logs ordinary errors while returning that fallback; browser requests redirect to login (pkg/middleware/auth.go:50)."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "low",
+    "text": "Concede. The claim that it is 'user-facing' is false. The only use is client.go:45 `if errors.Is(err, anonstore.ErrDeviceLimitReached) { return nil, err }`. For a non-errutil error, the auth middleware answers with `c.WriteErrOrFallback(http.StatusUnauthorized, http.StatusText(http.StatusUnauthorized), ...)` (middleware/auth.go:39). model.go only logs the error and sets `data[\"message\"] = http.StatusText(status)`. The text 'device limit reached' never reaches a user, so the label is hallucination.",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#kimi-01": {
+  "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+  "issue": {
+   "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#kimi-01",
+   "comentarios": [
+    {
+     "gid": "kimi-kimi:S2",
+     "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+     "lines": [
+      144,
+      167
+     ],
+     "texto": "WHAT: QueryData and CallResource look up the plugin target from the registry twice per request (once for size and once for duration). WHY: The duplicated registry lookup doubles the work on every plugin request for the two instrumented endpoints. HOW: Resolve the target once per method and pass it into both instrumentPluginRequestSize and instrumentPluginRequest, or add a helper that records size and duration with a single lookup."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "low",
+    "text": "metrics_middleware.go QueryData/CallResource calling pluginTarget in both instrumentPluginRequestSize and instrumentPluginRequest is pre-existing; the PR only renames InstrumentationMiddleware to MetricsMiddleware and removes the contextual logger, leaving this logic unchanged."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "The renamed middleware calls both helpers for QueryData and CallResource at metrics_middleware.go:149,153,161,164; each resolves pluginTarget at lines 95 and 105. The lookup is only a read-locked in-memory map access (pkg/plugins/manager/registry/in_memory.go:77\u201389), so removing the duplicate is a micro-optimization without demonstrated user impact. This duplication already existed before the PR, which renames the involved methods."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "low",
+    "text": "You confirm yourself that 'this duplication already existed before the PR'. `git diff -M` shows instrumentation_middleware.go \u2192 metrics_middleware.go (similarity 67%). For QueryData and CallResource, the only changed lines are the receiver renames: `-func (m *InstrumentationMiddleware) QueryData(` / `+func (m *MetricsMiddleware) QueryData(`. Both `target, err := m.pluginTarget(ctx, pluginCtx.PluginID)` calls inside the helpers are unchanged context lines. Under the ruling, code the PR only moves or renames without changing its logic is pre-existing, so a defect in it is FP (none) and not TP nit.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "low",
+    "text": "Changed to FP: the base-to-head diff confirms that both registry lookups and the calls to both instrumentation helpers already existed. QueryData and CallResource only change receiver names, leaving the duplicate-lookup logic unchanged. Under the pre-existing-code ruling, this is not reportable in this PR."
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "dual-storage-architecture-grafana-codex#kimi-01": {
+  "caseId": "dual-storage-architecture-grafana-codex",
+  "issue": {
+   "issueId": "dual-storage-architecture-grafana-codex#kimi-01",
+   "comentarios": [
+    {
+     "gid": "kimi-kimi:S6",
+     "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+     "lines": [
+      50,
+      167
+     ],
+     "texto": "WHAT: Every Create, Update, Delete, and DeleteCollection spawns a new goroutine that can live up to 10 seconds with no concurrency limit or backpressure. WHY: Under high write throughput this creates unbounded goroutine fanout and memory growth, especially if the legacy store is slow or times out. HOW: Bound concurrency with a worker pool or semaphore, or use a rate-limited background queue for legacy writes."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "dualwriter_mode3.go:50-167 does spawn a goroutine per write with a 10s timeout, as claimed, but each goroutine is bounded by that timeout and by the write rate of the API; unbounded fan-out under high throughput is speculative, not an observed defect."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "The PR replaces synchronous legacy writes with unrestricted goroutine launches in pkg/apiserver/rest/dualwriter_mode3.go:50, :108, :134 and :161, returning without waiting for completion. The ten-second contexts limit cooperative execution time, not concurrency; slow legacy operations can accumulate goroutines and retained request objects as successful primary writes continue. Parent cancellation may shorten their lifetime, but no worker limit or backpressure bounds outstanding legacy writes."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "Each goroutine is bounded in time: dualwriter_mode3.go:51 `ctx, cancel := context.WithTimeoutCause(ctx, time.Second*10, ...)`, and the same appears at :110, :135 and :163. Because ctx derives from the request context, which is cancelled when the handler returns, most goroutines end even sooner. At most about write-rate \u00d7 10s goroutines can be outstanding, and each is a cheap goroutine holding one request object. Going from that to 'unbounded fan-out and memory growth' is a speculative capacity concern under hypothetical load, with no defect shown, so it is FP (none).",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "I change my classification to FP. The PR introduces one goroutine per successful primary write, but each legacy call receives a ten-second timeout derived from the caller\u2019s context, preserving request cancellation. Cancellation is cooperative, so this does not strictly guarantee goroutine termination; however, the issue establishes neither cancellation-resistant blocking nor a workload causing meaningful resource exhaustion. The missing concurrency limit alone supports a speculative capacity concern, not a demonstrated performance defect."
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#kimi-01": {
+  "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+  "issue": {
+   "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#kimi-01",
+   "comentarios": [
+    {
+     "gid": "kimi-kimi:S1",
+     "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+     "lines": [
+      137,
+      149
+     ],
+     "texto": "WHAT: The reader thread in the new test catches only Exception, so any Error (e.g., AssertionError, OutOfMemoryError) thrown during concurrent group reads is silently swallowed. WHY: The main thread then asserts caughtExceptions is empty and passes even though the reader thread failed, masking real failures and making the test give false confidence. HOW: Change the catch to Throwable, keep the exception list typed as Throwable, and use assertTrue(caughtThrowables.isEmpty(), ...) so any failure fails the test visibly."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "GroupTest.java:137-149 the reader thread catches Exception, as claimed, but it only performs admin REST calls with no assertions; a server-side NPE surfaces as a RuntimeException that is caught and asserted. An Error such as AssertionError cannot arise there, so nothing realistic is masked."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "In tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:139-149, the newly added reader thread catches only Exception, so an Error terminates it without entering caughtExceptions. The assertion at line 157 checks only that list, allowing the test to pass despite the reader failing; the Error may print to stderr rather than being literally swallowed."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "The test exists to catch the server-side NPE. That NPE reaches the reader thread as a 500 from the admin client, i.e. a RuntimeException (WebApplicationException), and `} catch (Exception e) { caughtExceptions.add(e); }` (GroupTest.java:144-146) does record it. The reader body is only `managedRealm.admin().groups().groups(null, 0, Integer.MAX_VALUE, true);` (:143), with no assertions, so no AssertionError can arise there. The remaining Errors (OOM, StackOverflow) are environment failures, not behaviour the test verifies. The test does verify what it was written for, so it is FP (none).",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "I change my classification to FP. The reader performs an admin REST call without assertions; the server-side NPE being tested surfaces as a client exception covered by catch (Exception). Although an Error could terminate the thread without entering caughtExceptions, no concrete path to a relevant Error is established here. Catching hypothetical JVM failures is defensive hardening, not a demonstrated gap in the behavior this test verifies."
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "add-html-sanitizer-for-translated-message-resources-keycloak#kimi-01": {
+  "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+  "issue": {
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#kimi-01",
+   "comentarios": [
+    {
+     "gid": "kimi-kimi:S1",
+     "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+     "lines": [
+      139,
+      145
+     ],
+     "texto": "WHAT: The HTML tag detector and anchor matcher use case-sensitive regular expressions (`<[a-z]+[^>]*>` and `</?a[^>]*>`) even though HTML element names are case-insensitive. WHY: The OWASP sanitizer canonicalizes tag names to lowercase, so a translation with `<B>text</B>` or `<A href=\"...\">` is not matched by the anchor pre-check and is then normalized by the sanitizer to lowercase, making `sanitized != value` and causing a false-positive \"Illegal HTML\" build failure. HOW: Compile `HTML_TAGS` and `ANCHOR_PATTERN` with `Pattern.CASE_INSENSITIVE` (or add `A-Z` to the character classes for tags and `A` for anchors) so the verifier treats HTML case-insensitively."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "medium",
+    "text": "VerifyMessageProperties.java:139 and :145 compile HTML_TAGS `<[a-z]+[^>]*>` and ANCHOR_PATTERN `</?a[^>]*>` case-sensitively, so an uppercase <B>/<A> is not treated as HTML/anchor and the lowercasing sanitizer output differs, reporting 'Illegal HTML'. No message bundle at head uses uppercase tags, and the effect is a stricter build-time check, so it is a minor robustness point."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "VerifyMessageProperties.java:139-145 uses case-sensitive patterns, so uppercase anchors identical in English and translation bypass the preservation logic at lines 150-155. The sanitizer policy excludes anchors (lines 58-61), causing these valid anchors to be removed and reported as illegal HTML at line 111; ThemeVerifierMojo.java:54-55 then fails the build."
+   },
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "medium",
+    "text": "The behaviour is real, but it is a robustness point in a build-time verifier. The lowercase-only pattern is deliberate: the same file distinguishes uppercase pseudo-tags from HTML (`value.replaceAll(\"CLAIM\\\\.<[A-Z]*>\", \"\")` :120, `value.replaceAll(\"<Extensions>\", \"\")` :123), and `Pattern HTML_TAGS = Pattern.compile(\"<[a-z]+[^>]*>\");` (:139) relies on lowercase to tell markup apart from placeholders. No message bundle at head uses uppercase HTML tags, so nothing fails today. A hypothetical uppercase tag would be reported as 'Illegal HTML', which is the conservative direction for a sanitizer check, and the translator just lowercases the tag. That makes it a nit and not a defect that affects users.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "I retain TP: identical uppercase anchors in English and translation bypass santizeAnchors(), then are removed by the sanitizer because neither policy allows anchors. The resulting mismatch causes ThemeVerifierMojo to fail the build, so this affects behavior rather than style. The placeholder exceptions are key-specific preprocessing and do not establish an intentional lowercase-only HTML contract. Absence of uppercase tags in current bundles makes this an uncommon-input defect, not a nit."
+   },
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "Concede. Re-checked VerifyMessageProperties.java: ANCHOR_PATTERN `</?a[^>]*>` (:145) misses an identical uppercase `<A href=...>` in both English and translation, santizeAnchors() (:150-160) leaves it in, and POLICY_SOME_HTML (:58-61) allows only br/p/strong/b, so the sanitizer strips it and :111 reports 'Illegal HTML', failing the build. My 'deliberately lowercase' reading does not hold: the uppercase cases at :120/:123 are key-specific placeholder removals, not an HTML contract. A verifier this PR adds giving a false failure on valid input is wrong behaviour for uncommon input: TP (none), medium.",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "replays-self-serve-bulk-delete-system-sentry#kimi-01": {
+  "caseId": "replays-self-serve-bulk-delete-system-sentry",
+  "issue": {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#kimi-01",
+   "comentarios": [
+    {
+     "gid": "kimi-kimi:S4",
+     "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+     "lines": [
+      134,
+      139
+     ],
+     "texto": "WHAT: get_request_data sorts the error_events list in place. WHY: Callers that reuse the error_events list after calling get_request_data will see it reordered, which is an unexpected side effect and can break downstream logic. HOW: Sort a copy of the list instead of mutating the input."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "project_replay_summarize_breadcrumbs.py get_request_data calls error_events.sort(...) in place on the list passed through functools.partial. No caller reuses the list in an order-dependent way, so there is no user-visible effect."
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "The in-place sort exists at src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:138, but the caller at :177 never subsequently uses the list. The endpoint creates it specifically for this analysis at :91-100, so no existing downstream logic depends on preserving its original order."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "Concede. `error_events.sort(key=lambda x: x[\"timestamp\"])` (project_replay_summarize_breadcrumbs.py:138) mutates a list that the endpoint builds solely for this call (:91-94). Its only consumer is `get_request_data(iter_segment_data(segments), error_events)` (:177), and nothing reuses the list afterwards. The 'break downstream logic' harm does not exist, so the behaviour is correct and the label is FP (none) rather than a nit. I adopt your severity.",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "replays-self-serve-bulk-delete-system-sentry#kimi-03": {
+  "caseId": "replays-self-serve-bulk-delete-system-sentry",
+  "issue": {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#kimi-03",
+   "comentarios": [
+    {
+     "gid": "kimi-kimi:S8",
+     "file": "src/sentry/integrations/source_code_management/commit_context.py",
+     "lines": [
+      577,
+      583
+     ],
+     "texto": "`_truncate_title` returns `title[:max_length].rstrip() + \"...\"` when the title exceeds `max_length`. For a 51-character title this yields 50 characters plus 3 ellipsis characters (53 total), exceeding the intended `ISSUE_TITLE_MAX_LENGTH` of 50. Either reserve room for the ellipsis before slicing (e.g., slice to `max_length - 3`) or ensure the final string is clamped to `max_length`."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "commit_context.py _truncate_title returns title[:max_length].rstrip() + '...', so a long title becomes up to 53 characters. Other truncations in the repo (gitlab/issues.py:99, vsts/issues.py:226) reserve 3 chars; here it is only a display length in a PR comment with no real effect."
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "low",
+    "text": "src/sentry/integrations/source_code_management/commit_context.py:578-582 retains up to 50 title characters and then appends an ellipsis, as its docstring describes. The result is inserted into Markdown comment text at :600-605; no final-string limit or downstream contract requiring at most 50 characters is established."
+   },
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "The constant is a maximum: `ISSUE_TITLE_MAX_LENGTH = 50` (commit_context.py:142), and `_truncate_title(title, max_length=ISSUE_TITLE_MAX_LENGTH)` returns `title[:max_length].rstrip() + \"...\"` (:582). The output therefore exceeds max_length by 3. The repo's other truncators reserve room for the ellipsis: `title = title[: GITLAB_ISSUE_TITLE_MAX_LENGTH - 3] + \"...\"` (gitlab/issues.py:99, same in vsts/issues.py:226). The docstring only says 'add ellipsis' and gives no intended over-length, so the off-by-3 is real and new in this PR. It is only a display length in a PR comment with no functional effect, so it is a nit and not FP.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "low",
+    "text": "I retain FP: the helper keeps 50 title characters and appends an ellipsis for display in a Markdown PR comment; no caller requires the resulting text to fit within 50 characters. The GitLab and VSTS examples truncate titles submitted to issue-creation APIs, which is a different contract. The constant\u2019s name alone does not establish that this display truncation violates a requirement."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "low",
+    "text": "Concede. The docstring at commit_context.py:579 says 'Truncate title if it's too long and add ellipsis', and :580-582 do exactly that: keep max_length characters, then append '...'. The only consumer is get_merged_pr_single_issue_template, which drops it into a Markdown PR comment with no length limit. The GitLab/VSTS truncations I cited serve issue-creation API limits, a different contract. Without a 50-character requirement on the output, this is intended behaviour, so FP (none), low.",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "advanced-sql-analytics-framework-grafana-codex#kimi-01": {
+  "caseId": "advanced-sql-analytics-framework-grafana-codex",
+  "issue": {
+   "issueId": "advanced-sql-analytics-framework-grafana-codex#kimi-01",
+   "comentarios": [
+    {
+     "gid": "kimi-kimi:S3",
+     "file": "pkg/expr/sql_command.go",
+     "lines": [
+      30,
+      36
+     ],
+     "texto": "Replacing the real in-memory DB with a stub means `sql.TablesList(rawSQL)` always fails, so the existing `logger.Warn(\"invalid sql query\", \"sql\", rawSQL, \"error\", err)` at lines 32-35 now logs the full raw SQL for every SQL expression. User-supplied SQL can contain sensitive values or schema information and should not be logged verbatim. Avoid logging `rawSQL` or redact it before logging."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "The logger.Warn(\"invalid sql query\", \"sql\", rawSQL, ...) in sql_command.go NewSQLCommand is unchanged by this PR; logging the expression query on parse failure is pre-existing, intended diagnostic behaviour. The PR only swaps duck.NewInMemoryDB for a stub (pkg/expr/sql/db.go)."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "high",
+    "text": "The PR switches TablesList to the stub database in pkg/expr/sql/parser.go:23, whose RunCommands always returns an error at pkg/expr/sql/db.go:16-17. Consequently, every nonempty SQL expression reaches pkg/expr/sql_command.go:32 and logs the complete raw SQL at warning level, potentially exposing sensitive literals to log readers."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "The log line is not touched by the PR. The diff of sql_command.go only swaps `duck.NewInMemoryDB()` for `sql.NewInMemoryDB()` in Execute. `logger.Warn(\"invalid sql query\", \"sql\", rawSQL, \"error\", err)` in NewSQLCommand and `logger.Warn(\"no tables found in SQL query\", \"sql\", rawSQL)` already logged the expression text at base. Logging the user's SQL expression (a dashboard/query definition, not data or credentials) on a parse failure is the intended diagnostic behaviour that predates the PR. The real consequence of the stub is that SQL expressions stop working, but that is a different issue. On the claim made here (sensitive data in logs), no new defect exists.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "high",
+    "text": "The unchanged warning becomes reachable for every nonempty SQL expression passed to NewSQLCommand because this PR changes TablesList to use a stub whose RunCommands always fails. Previously, valid queries referencing tables logged their SQL only at debug level; they now expose it at warning level. The path remains reachable through buildCMDNode \u2192 UnmarshalSQLCommand when expressionParser is disabled. Thus the PR introduces broader raw-SQL logging despite leaving the logging statement unchanged; sensitive literals create a conditional security weakness."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "I correct one fact: the PR also changes parser.go:23 (`-duckDB := duck.NewInMemoryDB()` / `+duckDB := NewInMemoryDB()`), and the new stub's RunCommands always returns 'not implemented' (sql/db.go:16-17), so every SQL expression now reaches the warning at sql_command.go:32. But the expression text was already logged at base for valid queries too (`logger.Debug(\"REF tables\", \"tables\", tables, \"sql\", rawSQL)` :41, plus the warning at :38 for queries with no tables). The text is a Grafana SQL expression over other queries' refIDs in a dashboard definition, not credentials or tenant data, and server logs are read by operators. Moving it from debug to warn level is not a security defect. The real problem the stub causes is that SQL expressions stop working, which is a different issue. FP (none). Rated as stated (a conditional exposure to privileged log readers), medium.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "high",
+    "text": "The changed TablesList implementation invokes the new stub, whose RunCommands always fails, causing every nonempty SQL expression reaching NewSQLCommand to log rawSQL at warning level. With the default info logging threshold in conf/defaults.ini, valid table-referencing queries now enter logs where their previous debug messages were suppressed. Referencing dashboard query IDs does not prevent SQL from containing sensitive literals, and the code applies no redaction. The unchanged warning statement therefore gains new exposure through this PR\u2019s changed execution path; high matches the rubric\u2019s conditional security weakness."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "high",
+    "text": "Facts agreed: parser.go:23 now uses the stub, whose RunCommands always errors (sql/db.go:16-17), so sql_command.go:32 warns with rawSQL for every expression. Partial concession on severity only: rated as stated (sensitive literals in logs, conditional), the rubric's 'security weakness that needs specific conditions' is high. Class stays FP: the comment's defect is 'raw SQL is logged verbatim', and that design is unchanged and pre-existing: at base the same Warn (sql_command.go:32) logged rawSQL for any invalid query and :38 for queries without tables, and the PR does not touch those lines. The PR's real defect is that NewSQLCommand now rejects every SQL expression with BadRequest (feature broken), a different issue; the warn-level log is a by-product of that, and the expression text is a dashboard query definition already visible to anyone who can read the dashboard, not credentials or tenant data.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "high",
+    "text": "The PR changes parser.go to use the new stub, whose RunCommands always fails, making every nonempty query reaching NewSQLCommand emit rawSQL at warning level. Previously, valid table-referencing queries logged their SQL at debug level, suppressed by the default info threshold. The unchanged warning therefore gains exposure through changed execution logic; this is not merely a pre-existing logging defect. Dashboard expressions can contain sensitive literals, and dashboard visibility does not establish equivalent access to server logs. High follows the rubric for a security weakness requiring specific conditions."
+   }
+  ],
+  "fechado": "humano",
+  "decisaoHumana": {
+   "quem": "Junior",
+   "data": "2026-10-19",
+   "class": "FP",
+   "subclass": "none",
+   "nota": "o log do rawSQL ja existia; o PR nao criou esse vazamento (posicao do Opus)"
+  }
+ },
+ "authzservice-improve-authz-caching-grafana-codex#kimi-01": {
+  "caseId": "authzservice-improve-authz-caching-grafana-codex",
+  "issue": {
+   "issueId": "authzservice-improve-authz-caching-grafana-codex#kimi-01",
+   "comentarios": [
+    {
+     "gid": "kimi-kimi:S3",
+     "file": "pkg/services/authz/rbac/service.go",
+     "lines": [
+      123,
+      137
+     ],
+     "texto": "WHAT: When permissions are found in the permission cache but `checkPermission` returns false, the code increments `permissionCacheUsage` with label `false` as if the cache missed. WHY: This metric conflates actual cache misses with cache hits that did not grant access, making cache-hit observability inaccurate. HOW: Increment the cache-usage metric with `true` immediately after a successful `getCachedIdentityPermissions` return, before evaluating whether the permission grants access."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "service.go Check: when cached permissions do not grant access, the code falls through to getIdentityPermissions from the store and only then decides, so the cache did not serve the answer and labelling permissionCacheUsage 'false' is a consistent design choice. Facts are right but there is no defect."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "pkg/services/authz/rbac/service.go:361-362 returns cached permissions without error on a successful lookup. In the newly added Check logic, a cached result that denies access bypasses the true increment at service.go:131-134 and reaches the false increment at service.go:137. Because metrics.go:36 explicitly names this label cache_hit, this misreports successful lookups as misses and distorts cache-hit monitoring."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "The cache is trusted only for grants. When cached perms deny, Check does not answer from the cache: it falls through to `permissions, err := s.getIdentityPermissions(ctx, ...)` (service.go:139) and decides on fresh data. Labelling that request `permissionCacheUsage.WithLabelValues(\"false\", ...)` (:137) therefore correctly records that the cache could not serve the decision. The label being named cache_hit does not make a 'found but insufficient, refetched' lookup a hit, and the metric is consistent with the design. The facts are right but there is no defect, so it is FP (none).",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "I change my classification to FP. In service.go:123\u2013139, cached permissions that do not grant access trigger a fresh permission fetch; they cannot serve the authorization decision. Both cached grants and explicit cached denials increment true, consistently measuring decisions served by the cache. The cache_hit label alone does not establish that this metric must count every successful underlying lookup."
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#kimi-01": {
+  "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+  "issue": {
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#kimi-01",
+   "comentarios": [
+    {
+     "gid": "kimi-kimi:S1",
+     "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+     "lines": [
+      65,
+      74
+     ],
+     "texto": "WHAT: readInteger accepts constructed INTEGER tags (e.g., 0x22) because it only masks the low 5 bits of the tag byte. WHY: DER/BER requires INTEGER to be primitive; accepting constructed encodings silently parses malformed input as a valid integer, diverging from BouncyCastle's strict parser. HOW: Reject the constructed bit by checking `(tag & ASN1Encoder.CONSTRUCTED) == 0` before reading the value."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "medium",
+    "text": "ASN1Decoder.java:65-74 readInteger checks only readTagNumber(tag) (tag & 0x1f, line 94), so a constructed INTEGER (0x22) is accepted. The decoder only parses ECDSA signatures produced by the local JCA provider, so this leniency has no practical effect."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "ASN1Decoder.java:94 masks off the constructed bit, and readInteger at lines 65\u201373 checks only the resulting tag number, so malformed bytes 22 01 01 are accepted as integer 1. AuthzClientCryptoProvider.java:133\u2013134 uses this newly introduced decoder for DER signature integers, making this a real input-validation defect."
+   },
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "medium",
+    "text": "The leniency is real (tag & 0x1f), but no untrusted input reaches it. ASN1Decoder is package-private (`class ASN1Decoder {`, ASN1Decoder.java:33) and is used only in `asn1derToConcatenatedRS` (AuthzClientCryptoProvider.java:128-134), which converts the DER signature just produced by the local JCA Signature.sign() into JWS R||S format during signing. Verification uses the encoder direction (concatenatedRSToASN1DER). A constructed INTEGER can only come from a broken local JCA provider, so the missing strictness has no practical effect. That makes it a nit and not a real input-validation defect.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "medium",
+    "text": "I change my classification to TP/nit. The new decoder does accept 0x22 because readTagNumber masks off the constructed bit. However, ECDSASignatureSignerContext supplies the output of local Signature.sign(), while verification uses concatenatedRSToASN1DER and never invokes this decoder. The strictness gap is real, but the code shows no practical input-validation failure worth reporting; medium rates the malformed-input behavior as alleged."
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#kimi-02": {
+  "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+  "issue": {
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#kimi-02",
+   "comentarios": [
+    {
+     "gid": "kimi-kimi:S2",
+     "file": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+     "lines": [
+      64,
+      70
+     ],
+     "texto": "WHAT: The ignored-providers log calls `logger.debugf(builder.toString())`, but debugf expects a format string. WHY: A provider class name containing `%` (e.g., from a shaded/proxied jar) would cause `MissingFormatArgumentException` and abort detection; even without that, it is the wrong logging API. HOW: Use `logger.debug(builder.toString())` and avoid the trailing comma."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "CryptoIntegration.java detectProvider passes builder.toString() as the format string to logger.debugf and leaves a trailing ', '. Java class names cannot contain '%', so the claimed exception cannot happen; it is only wrong logging API usage."
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "medium",
+    "text": "CryptoIntegration.java:56 loads providers through ServiceLoader, and lines 65\u201369 build the message exclusively from their class names and fixed text. The claimed '%' provider name is not a valid provider name in this service-loading path, so the alleged formatting-triggered detection failure is unreachable; changing the logging method or trailing comma is cosmetic."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "medium",
+    "text": "Concede. The comment rests on 'a provider class name containing % ... would cause MissingFormatArgumentException and abort detection'. The providers come from `ServiceLoader.load(CryptoProvider.class, classLoader)` (CryptoIntegration.java:56), and ServiceLoader rejects any provider-configuration name that is not a valid Java identifier, which '%' is not. The described failure is impossible, and the rest (debugf vs debug, trailing comma) is cosmetic. The label is hallucination, and I adopt your severity.",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#kimi-01": {
+  "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+  "issue": {
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#kimi-01",
+   "comentarios": [
+    {
+     "gid": "kimi-kimi:S6",
+     "file": "",
+     "lines": [
+      null,
+      null
+     ],
+     "texto": "No validation that end_timestamp_precise is finite before using it as a Redis ZADD score; Redis rejects NaN, though the schema (sentry_kafka_schemas.schema_types.ingest_spans_v1.SpanEvent) and rapidjson are assumed to guarantee a valid number."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "The comment itself notes the Kafka schema guarantees end_timestamp_precise is a valid number; a NaN guard in buffer.py zadd (line 197-199) is for a state no ingestion path produces."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "src/sentry/spans/consumers/process/factory.py:134-141 uses rapidjson.loads with no NaN restriction and typing.cast, which performs no runtime validation. The newly added ZADD at src/sentry/spans/buffer.py:197-201 forwards that value directly as a score, so a NaN timestamp causes an unhandled Redis error."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "The comment itself says the schema and producer 'are assumed to guarantee a valid number'. The value is `end_timestamp_precise=val[\"end_timestamp_precise\"]` (factory.py:141), taken from Relay-produced JSON on ingest-spans. Standard JSON has no NaN token, and the serializer of the producer does not emit one. A NaN therefore never reaches `p.zadd(set_key, {span.payload: span.end_timestamp_precise ...})` (buffer.py:197-199) through any real path. A finiteness guard would only cover an unreachable state, so this is FP (none).",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "I change to FP. The new ZADD forwards end_timestamp_precise directly, and typing.cast provides no runtime validation, but those facts do not establish that NaN can reach this consumer through the Relay-produced ingest-spans stream. My earlier reasoning demonstrated a hypothetical malformed payload, without identifying a production path that generates it. The proposed finiteness check is therefore speculative hardening rather than an established defect."
+   }
+  ],
+  "fechado": "consenso"
+ }
+}

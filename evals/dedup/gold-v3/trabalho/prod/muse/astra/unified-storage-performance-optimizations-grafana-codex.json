@@ -1,0 +1,17 @@
+{
+ "caseId": "unified-storage-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes missed watch events because the broadcaster starts after index initialization. This is distinct from the known initialization-error cleanup leak and index-cache races."
+  },
+  {
+   "id": "S2",
+   "match": "unified-storage-performance-optimizations-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Describes concurrent builders creating indexes for the same key, causing file-directory conflicts and leaking the losing index, matching #01. It additionally mentions the TotalDocs race covered by #02."
+  }
+ ]
+}

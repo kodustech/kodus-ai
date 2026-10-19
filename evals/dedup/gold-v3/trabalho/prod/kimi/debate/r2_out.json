@@ -1,0 +1,9 @@
+{
+ "fix-proper-handling-of-group-memberships-discourse-cursor#kimip-01": {
+  "class": "TP",
+  "subclass": "nit",
+  "severity": "low",
+  "concede": false,
+  "text": "Keep TP/nit/low; the relocation ruling does not apply. At base the admin UI never called update_patch: discourse/models/group.js saveWithUsernames sent PUT group.usernames, and Group#usernames= (app/models/group.rb:244-264 at base) resolved all additions/deletions in ONE User.where(username: ...) query. The PR deletes that path (update_put, usernames=-based create) and routes UI bulk adds to the new add_members (groups_controller.rb:66-76, client addMembers PUT /admin/groups/:id/members.json), which splits the string and calls User.find_by_username per name. So the N+1 is introduced for the UI path, not moved logic (new endpoint, new input format, replaces a batched lookup) - I correct my round-1 claim that nothing regressed. Impact stays minor: admin-only action, hand-entered lists, and group.add still writes one row per user either way, so it is minor performance with no user-visible effect: nit, low."
+ }
+}

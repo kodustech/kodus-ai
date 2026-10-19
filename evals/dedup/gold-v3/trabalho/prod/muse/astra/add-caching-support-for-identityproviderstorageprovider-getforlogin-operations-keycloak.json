@@ -1,0 +1,23 @@
+{
+ "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This alleges a null-config dereference in getLoginPredicate. None of the golden issues describes missing null handling."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "This concerns returning effectively disabled providers after an organization is disabled. Issue #08 concerns skipped invalidation when a broker becomes private; fixing that update comparison would not fix this filtering problem."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "This concerns shared-cache growth and broad invalidation across organizations. Issue #05 concerns copying stale results across a concurrent invalidation, a separate correctness problem."
+  }
+ ]
+}

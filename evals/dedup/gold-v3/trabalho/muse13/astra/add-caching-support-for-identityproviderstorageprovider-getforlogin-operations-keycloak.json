@@ -1,0 +1,29 @@
+{
+ "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The alleged null-config dereference is distinct from every golden issue; guarding it would not fix the documented predicate behavior or invalidation problems."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "This concerns cache growth from accumulating organization search entries, whereas #05 concerns retaining stale entries across concurrent invalidation. Fixing cache growth would not necessarily fix that race."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "This alleges missing organization-aware wrapping, which getById already performs. It does not describe any golden issue, including #14's missing test assertions."
+  },
+  {
+   "id": "S4",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#13",
+   "newGroup": null,
+   "reason": "Both identify missing coverage for non-public organization-linked providers because every organization-linked provider in the fixture is public."
+  }
+ ]
+}

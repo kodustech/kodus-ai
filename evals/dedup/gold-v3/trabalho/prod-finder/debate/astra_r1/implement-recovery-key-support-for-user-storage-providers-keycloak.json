@@ -1,0 +1,12 @@
+{
+ "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+ "items": [
+  {
+   "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#pf-ds-C1",
+   "class": "TP",
+   "subclass": "nit",
+   "severity": "low",
+   "reply": "I change my classification to TP/nit. The added getCredentials() recreates the complete code list, and isValid() never consumes accepted codes, so the state limitation is real. However, this provider is a testsuite fixture, and testRecoveryKeysSetupAndLogin exercises only setup and the first recovery-code login, which this implementation supports. The reported limitation neither affects production users nor invalidates that test\u2019s assertions."
+  }
+ ]
+}

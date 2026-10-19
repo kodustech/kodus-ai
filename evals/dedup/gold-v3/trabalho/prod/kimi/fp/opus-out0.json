@@ -1,0 +1,218 @@
+{
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#musep-01",
+   "newGroup": null,
+   "reason": "Same claim: eager CryptoIntegration.init in AuthzClient.create pins the minimal provider so later full-provider operations fail."
+  },
+  {
+   "id": "S2",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: readLength returns -1 for 0x80, readInteger calls read(-1) and throws NegativeArraySizeException."
+  },
+  {
+   "id": "S3",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#06",
+   "newGroup": null,
+   "reason": "Same claim: readSequence is lenient and accepts malformed DER (oversized element/length mismatch) instead of rejecting it."
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "S2",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#12",
+   "newGroup": null,
+   "reason": "Same claim: under V2 the V1 management-permissions endpoint (and removal listener) call ClientPermissionsV2 overrides that throw UnsupportedOperationException."
+  }
+ ],
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "rejectedEmails array on the controller prototype shared across instances; no rejected issue covers shared state."
+  }
+ ],
+ "add-guest-management-functionality-to-existing-bookings-cal-com": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Swallowed sendAddGuestsEmails failure returns success; not among rejected claims."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Missing seatsPerTimeSlot capacity check when adding guests; not among rejected claims."
+  }
+ ],
+ "add-html-sanitizer-for-translated-message-resources-keycloak": [
+  {
+   "id": "S2",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#prod-01",
+   "newGroup": null,
+   "reason": "Same claim: PropertyResourceBundle(InputStream) decodes as ISO-8859-1, mangling translations and causing spurious HTML results."
+  },
+  {
+   "id": "S3",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#09",
+   "newGroup": null,
+   "reason": "Same claim: the English-file path rewrite is fragile (unanchored replacement)."
+  }
+ ],
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "NPE from Profile.isFeatureEnabled because profile is not initialized for UpdateCompatibility; not among rejected claims."
+  },
+  {
+   "id": "S2",
+   "match": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Same claim: null update strategy returns before enabling rolling-updates feature in UpgradeTest."
+  }
+ ],
+ "async-import-of-the-appstore-packages-cal-com": [
+  {
+   "id": "S2",
+   "match": "async-import-of-the-appstore-packages-cal-com#06",
+   "newGroup": null,
+   "reason": "Same claim: getVideoAdapters awaits app imports sequentially in the loop."
+  }
+ ],
+ "authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "authzservice-improve-authz-caching-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Same claim: cached denial checked first blocks access granted within the TTL window."
+  },
+  {
+   "id": "S2",
+   "match": "authzservice-improve-authz-caching-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Same claim: List serves stale cached permissions without re-querying the DB."
+  }
+ ],
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "SSRF via open-uri redirect bypassing host check; #20 is command execution/local file via Kernel#open, a different cause."
+  },
+  {
+   "id": "S3",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#23",
+   "newGroup": null,
+   "reason": "Same claim: `end if` in best.html.erb is invalid Ruby and raises SyntaxError."
+  }
+ ],
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": [
+  {
+   "id": "S3",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#03",
+   "newGroup": null,
+   "reason": "Same claim: prev-page trim check uses raw offset instead of start_offset."
+  }
+ ],
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "deleteCache restricted to userId rejects team/delegated credentials; kimi-04 reports no issue and prod-01 is about the UI offering delete for delegation credentials."
+  }
+ ],
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "O(N*M) allowlist list membership; not among rejected claims."
+  }
+ ],
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+  {
+   "id": "S1",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#prod-01",
+   "newGroup": null,
+   "reason": "Same claim: committable-offset scan iterates the whole numeric range up to max_offset."
+  },
+  {
+   "id": "S3",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#08",
+   "newGroup": null,
+   "reason": "Same claim: submit records offset before put, leaking an outstanding offset if put fails."
+  }
+ ],
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "S6",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Same claim: expandable_first_post? lacks the embeddable-hosts-exist guard."
+  }
+ ],
+ "feature-localization-fallbacks-server-side-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: ensure_loaded! reads/initializes @loaded_locales outside LOAD_MUTEX, racing."
+  }
+ ],
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": ".find deletes only one old calendar reference on reschedule; snapi-01 is about duplicate/wrong-target deletes for references without credentialId."
+  }
+ ],
+ "fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "One User query per username in add_members; not among rejected claims."
+  }
+ ],
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "S3",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#04",
+   "newGroup": null,
+   "reason": "Same claim: raw recovery codes persisted in cleartext in user storage instead of hashed."
+  }
+ ],
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": [
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "No schema validation of decrypted keys before storing; muse13-01 is about shared-secret authentication, a different cause."
+  }
+ ],
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "id": "S2",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#muse13-01",
+   "newGroup": null,
+   "reason": "Same claim: unvalidated end_timestamp_precise as ZSET score lets far-future spans evade eviction and evict legitimate ones."
+  }
+ ],
+ "replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "S4",
+   "match": "replays-self-serve-bulk-delete-system-sentry#prod-01",
+   "newGroup": null,
+   "reason": "Same claim: helper methods (_truncate_title etc.) live on CommitContextIntegration so PRCommentWorkflow calls raise AttributeError."
+  }
+ ]
+}

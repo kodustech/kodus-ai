@@ -1,0 +1,23 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "newGroup": null,
+   "reason": "Reports the same global canManage() check incorrectly accepting VIEW instead of requiring MANAGE."
+  },
+  {
+   "id": "S2",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "newGroup": null,
+   "reason": "Reports the same use of authorization resource IDs instead of resource names for permission checks and returned group IDs."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reports redundant per-subgroup permission evaluations in GroupResource listing when global view permission exists. The golden performance issue concerns getGroupIdsWithViewPermission during user searches and counts; fixing that would not fix this listing path."
+  }
+ ]
+}

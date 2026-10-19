@@ -1,0 +1,19 @@
+{
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "prOriginal": {
+  "numero": 14740,
+  "url": "https://github.com/calcom/cal.diy/pull/14740",
+  "mergedAt": "2024-08-20",
+  "nota": "Confirmed via gh pr view: merged 2024-08-20, headRefOid equals benchmark head 92f44dc. Repo calcom/cal.com redirects to calcom/cal.diy (default branch main)."
+ },
+ "tps": {
+  "add-guest-management-functionality-to-existing-bookings-cal-com#kimip-02": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 788,
+   "reason": "Today's packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts (main) refactored the handler into helpers (sanitizeAndFilterGuests, validateGuestsFieldEnabled, updateBookingAttendees) but none checks booking.eventType.seatsPerTimeSlot; seatsPerTimeSlot is still only forwarded into the CalendarEvent. BookingRepository.updateBookingAttendees does a plain createMany of attendees, and the tRPC route addGuests has no seated-event guard. 27 commits touched the handler since the merge; none adds a seat-capacity check.",
+   "astra": []
+  }
+ }
+}

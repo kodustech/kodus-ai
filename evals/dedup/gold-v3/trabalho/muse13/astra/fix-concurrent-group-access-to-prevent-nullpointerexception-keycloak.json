@@ -1,0 +1,47 @@
+{
+ "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#01",
+   "newGroup": null,
+   "reason": "Describes the same nullable getSubGroupsCount return that violates the non-null contract and risks caller NPEs."
+  },
+  {
+   "id": "S2",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "Describes the missing reader-thread join before the assertion, allowing in-flight failures to go undetected."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes excessive load from unthrottled full-group listings, a different problem from missing synchronization or failure to signal termination after a deletion error."
+  },
+  {
+   "id": "S4",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "Describes the same missing join that lets the assertion precede an in-flight reader failure."
+  },
+  {
+   "id": "S5",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "Describes the same premature assertion caused by not joining the reader thread."
+  },
+  {
+   "id": "S6",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "Describes the same missing reader-thread join, allowing exceptions to be recorded after the assertion passes."
+  },
+  {
+   "id": "S7",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "Describes the same missing join before asserting, which can miss failures from reads already in flight."
+  }
+ ]
+}

@@ -1,0 +1,12 @@
+{
+ "caseId": "advanced-sql-analytics-framework-grafana-codex",
+ "items": [
+  {
+   "issueId": "advanced-sql-analytics-framework-grafana-codex#kimi-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The PR switches TablesList to the stub database in pkg/expr/sql/parser.go:23, whose RunCommands always returns an error at pkg/expr/sql/db.go:16-17. Consequently, every nonempty SQL expression reaches pkg/expr/sql_command.go:32 and logs the complete raw SQL at warning level, potentially exposing sensitive literals to log readers.",
+   "severity": "high"
+  }
+ ]
+}

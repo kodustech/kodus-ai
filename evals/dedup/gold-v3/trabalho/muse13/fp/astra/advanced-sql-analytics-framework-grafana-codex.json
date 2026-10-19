@@ -1,0 +1,29 @@
+{
+ "caseId": "advanced-sql-analytics-framework-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "advanced-sql-analytics-framework-grafana-codex#02",
+   "newGroup": null,
+   "reason": "It asserts that replacing DuckDB with methods that always return 'not implemented' causes all SQL expression execution and table parsing to fail."
+  },
+  {
+   "id": "S3",
+   "match": "advanced-sql-analytics-framework-grafana-codex#02",
+   "newGroup": null,
+   "reason": "It describes the same unconditional failures caused by the replacement DB stub, with additional caller details."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "It reports misleading constructor naming and missing documentation of the intentional stub, rather than reporting SQL execution failures as the defect."
+  },
+  {
+   "id": "S6",
+   "match": "advanced-sql-analytics-framework-grafana-codex#02",
+   "newGroup": null,
+   "reason": "It focuses on QueryFramesInto but asserts the same execution failure caused by the unimplemented replacement DB."
+  }
+ ]
+}

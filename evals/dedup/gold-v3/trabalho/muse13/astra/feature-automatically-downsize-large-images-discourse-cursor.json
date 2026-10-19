@@ -1,0 +1,53 @@
+{
+ "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes the duplicate downsize definition overriding the legacy signature and breaking ResizeEmoji calls."
+  },
+  {
+   "id": "S2",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "Describes the same stale tempfile.size problem after conversion, causing incorrect retry and upload handling."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Challenges the server-side API URL download cap being changed to 10 MB. This is distinct from the client-side limit and synchronous conversion workload issues."
+  },
+  {
+   "id": "S4",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Describes synchronous image conversions blocking Rails workers and allowing CPU or worker exhaustion."
+  },
+  {
+   "id": "S5",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes the second downsize definition overriding the width/height signature and breaking existing callers."
+  },
+  {
+   "id": "S6",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes the same duplicate-method override, including incorrect argument binding for legacy width/height calls."
+  },
+  {
+   "id": "S7",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes the same overridden downsize signature causing legacy arguments to bind incorrectly."
+  },
+  {
+   "id": "S8",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Describes the same percentage-versus-WxH dimensions mismatch at the upload downsize call, although it frames the consumer restriction more broadly."
+  }
+ ]
+}

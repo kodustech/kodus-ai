@@ -1,0 +1,24 @@
+{
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "prTitle": "fix: handle collective multiple host on destinationCalendar",
+ "upstream": "calcom/cal.com",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/cal.com",
+ "base": "a308075bc39b77ed7059b0cae9d443d669a7bf98",
+ "head": "de628295646d0848226618108a52f2f1e5d04ac0",
+ "prOriginalConhecido": {
+  "numero": 10967,
+  "url": "https://github.com/calcom/cal.diy/pull/10967",
+  "mergedAt": "2023-08-31",
+  "nota": "Upstream calcom/cal.com now redirects to calcom/cal.diy. Found by head branch fix-collective-events-have-only-one-team-attendee-on-the-google-event-7754-cal-1267; benchmark head de62829 is the PR's last commit and squash c4e5d168 has the same 22-file diff (only unrelated main-merge drift in imports). Files later moved: EventManager -> packages/features/bookings/lib, CalendarManager -> packages/features/calendars/lib, handleNewBooking -> service/RegularBookingService + handleNewBooking/loadUsers."
+ },
+ "tps": [
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#kimip-01",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "When rescheduling merges into a new booking, only the first old `_calendar` reference is deleted via `.find()`, leaving stale events on other hosts' calendars for collective bookings; iterate all old calendar references.",
+   "evidenciaOpus": "The PR makes updateAllCalendarEvents handle multiple `_calendar` references (EventManager.ts:496-551, find->filter) for collective multi-host bookings, but the merge cleanup at EventManager.ts:553-564 still uses `.find()` and deletes only the first old calendar event, leaving stale events on the other hosts' calendars.",
+   "evidenciaAstra": "The PR creates events for multiple destination calendars in packages/core/EventManager.ts:338-377, but merge cleanup still selects just one old reference and deletes only its event at lines 553-563. Collective booking merges reach this branch through packages/features/bookings/lib/handleNewBooking.ts:1483-1486, leaving the other hosts’ old events behind. This affects rescheduling into an existing booking; ordinary rescheduling updates all references."
+  }
+ ]
+}

@@ -1,0 +1,53 @@
+{
+ "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes removal crashing because the listener invokes V2's unsupported setPermissionsEnabled method. Issue #01 instead concerns cleanup being skipped by the V1 feature gate, leaving orphaned permissions."
+  },
+  {
+   "id": "S2",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#04",
+   "newGroup": null,
+   "reason": "Describes the same missing null check on the all-clients resource before passing it to findByResource in hasPermission."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Describes missing MANAGE_CLIENTS role bypasses in the three role-mapping methods. No golden issue covers these authorization checks."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Alleges excessive policy evaluations in getClientsWithPermission. Issue #03 concerns selecting the wrong resources and returning names instead of client IDs; correcting the alleged performance problem would not fix that."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes the same removal-listener call to V2's unsupported setPermissionsEnabled method as S1, causing client deletion to fail."
+  },
+  {
+   "id": "S6",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#08",
+   "newGroup": null,
+   "reason": "Identifies the incorrect boolean-return Javadoc on void requireView(), which should document ForbiddenException."
+  },
+  {
+   "id": "S7",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#08",
+   "newGroup": null,
+   "reason": "Identifies the incorrect boolean-return Javadoc on void requireViewClientScopes(), which should document ForbiddenException."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes the same client-deletion failure caused by the removal listener invoking V2's unsupported setPermissionsEnabled method as S1 and S5."
+  }
+ ]
+}

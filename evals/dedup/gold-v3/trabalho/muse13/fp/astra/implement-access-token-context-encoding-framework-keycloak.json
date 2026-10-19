@@ -1,0 +1,17 @@
+{
+ "caseId": "implement-access-token-context-encoding-framework-keycloak",
+ "items": [
+  {
+   "id": "S4",
+   "match": "implement-access-token-context-encoding-framework-keycloak#07",
+   "newGroup": null,
+   "reason": "It repeats the rejected claim that setFormParams() leaves the cached grantType stale. The additional constructor null-handling concern does not change that matching claim."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "It claims token issuance fails when a grant string has no registered shortcut. Issue #08 instead concerns interface compatibility from adding getShortcut() without a default implementation, which is a different cause."
+  }
+ ]
+}

@@ -1,0 +1,23 @@
+{
+ "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Describes the same unchecked nil TopicUser lookup causing NoMethodError when unsubscribe reads notification_level."
+  },
+  {
+   "id": "S2",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes the same GET endpoint mutating notification preferences without CSRF protection, allowing cross-site requests to trigger unsubscribe."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes other email call sites missing the unsubscribe_url interpolation value. No golden issue covers this runtime failure or broken link; the missing email assertion is a separate problem."
+  }
+ ]
+}

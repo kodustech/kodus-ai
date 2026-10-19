@@ -1,0 +1,29 @@
+{
+ "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+ "items": [
+  {
+   "id": "S2",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#25",
+   "newGroup": null,
+   "reason": "The referer interpolation and JavaScript breakout claim matches #25. Its additional full-URL targetOrigin claim also repeats rejected issue #26."
+  },
+  {
+   "id": "S10",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#25",
+   "newGroup": null,
+   "reason": "Same claim that request.referer lacks JavaScript escaping in the embed layout, allowing quote-breakout XSS."
+  },
+  {
+   "id": "S12",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#26",
+   "newGroup": null,
+   "reason": "Same claim that using the full referer URL as postMessage targetOrigin drops resize messages and breaks iframe resizing."
+  },
+  {
+   "id": "S14",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Same claim that the controller spec fails because it expects synchronous TopicRetriever construction while the action only enqueues a job."
+  }
+ ]
+}

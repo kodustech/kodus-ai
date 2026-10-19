@@ -1,0 +1,23 @@
+{
+ "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "id": "S2",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+   "newGroup": null,
+   "reason": "Same cleanup-listener claim: enabling V1 and V2 routes client deletion to ClientPermissionsV2.setPermissionsEnabled, which throws. Mentioning role and group deletion extends the same asserted cause."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims an existing per-client resource prevents checking the global grant in hasPermission(ClientModel, String). This differs from #07, which claims the global resource lookup fails in hasPermission(String)."
+  },
+  {
+   "id": "S5",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#14",
+   "newGroup": null,
+   "reason": "Same claim that getClientsWithPermission evaluates policies separately for every client resource, causing linear listing cost."
+  }
+ ]
+}

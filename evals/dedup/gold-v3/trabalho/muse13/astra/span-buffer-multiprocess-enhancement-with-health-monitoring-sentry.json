@@ -1,0 +1,65 @@
+{
+ "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "Describes the same incorrect multiprocessing.Process type check that skips killing spawn-context workers before replacement."
+  },
+  {
+   "id": "S2",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#07",
+   "newGroup": null,
+   "reason": "Identifies the same unvalidated negative process limit and empty worker mapping. Its claimed consequence is inaccurate: construction raises KeyError for assigned shards, rather than continuing ingestion without flushers."
+  },
+  {
+   "id": "S3",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08",
+   "newGroup": null,
+   "reason": "Describes the same repeated cluster-wide Redis memory queries, once per flusher buffer on each submit."
+  },
+  {
+   "id": "S4",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#02",
+   "newGroup": null,
+   "reason": "Identifies the added sleep being neutralized by the test's time.sleep monkeypatch, providing no synchronization."
+  },
+  {
+   "id": "S5",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#05",
+   "newGroup": null,
+   "reason": "Describes the same incorrect one-process-per-shard docstring despite capped workers sharing shards."
+  },
+  {
+   "id": "S6",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#01",
+   "newGroup": null,
+   "reason": "Identifies the same shards versus shard metric-tag mismatch on wait_produce."
+  },
+  {
+   "id": "S7",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#02",
+   "newGroup": null,
+   "reason": "Describes the same ineffective sleep caused by the test's no-op monkeypatch."
+  },
+  {
+   "id": "S8",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#12",
+   "newGroup": null,
+   "reason": "The broader test-coverage complaint includes the same failure to verify actual shard assignments: checking only the total permits duplicated or missing shards."
+  },
+  {
+   "id": "S9",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "Identifies the same spawn-process type mismatch that prevents killing a hung worker before replacement."
+  },
+  {
+   "id": "S10",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "Describes the identical incorrect type check in join(), explicitly covered by issue #03's existing reports. This is separate from issue #04's deadline-based cleanup skip."
+  }
+ ]
+}

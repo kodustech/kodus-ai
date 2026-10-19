@@ -1,0 +1,32 @@
+{
+ "caseId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+ "prTitle": "Optimize header layout performance with flexbox mixins",
+ "upstream": "discourse/discourse",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/discourse",
+ "base": "98fa098e6fade3097a11fe7f99a98a4e6ffb4728",
+ "head": "5b229316ee4c661836ed1161139692a3e8527444",
+ "prOriginalConhecido": {
+  "numero": 3641,
+  "url": "https://github.com/discourse/discourse/pull/3641",
+  "mergedAt": "2015-08-04",
+  "nota": "Found via gh api commits/<head>/pulls; PR headRefOid equals the benchmark head 5b229316ee, merged as-is (commit is an ancestor of main). Reverted in full the same day by Jeff Atwood (2b2ae4bfe7)."
+ },
+ "tps": [
+  {
+   "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#pf-gpt-C1",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "Making .small-action a flex container leaves .small-action-desc content-sized (no flex:1), so the right-floated edit/delete buttons inside it sit right after short action descriptions instead of at the right edge of the row.",
+   "evidenciaOpus": "small-action.hbs places the floated-right delete/edit buttons inside .small-action-desc, and .small-action is now display:flex (topic-post.scss:264-265) while .small-action-desc gets no flex-grow (topic-post.scss:279-280). As a content-sized flex item it shrinks to its text, so the right-floated buttons end up next to short descriptions instead of at the row's right edge.",
+   "evidenciaAstra": "app/assets/stylesheets/common/base/topic-post.scss:264 makes the description a flex item, but its rule at line 279 supplies neither growth nor a width. The buttons are nested inside that description (app/assets/javascripts/discourse/templates/components/small-action.hbs:2-8) and float right at topic-post.scss:309, so short descriptions leave the controls short of the row’s right edge."
+  },
+  {
+   "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#pf-sonnet-C1",
+   "severity": "medium",
+   "category": "bug",
+   "bug": "On mobile the .small-action custom message keeps margin-left:-40px, tuned for the old 4em left padding; with the new flex layout and 1.5% padding it is pulled into the avatar column and overlaps the icon.",
+   "evidenciaOpus": "The PR replaces .small-action-desc's 4em left padding with 0 1.5% and puts it beside the avatar via flex (topic-post.scss:264,280), but mobile/topic-post.scss:520-522 still sets .custom-message { margin-left: -40px }, which only made sense when the description overlapped the floated avatar with a 4em gutter. Now the custom message is pulled ~40px left into the avatar column on mobile.",
+   "evidenciaAstra": "app/assets/stylesheets/mobile/topic-post.scss:520-521 still pulls custom messages 40px left, into the adjacent icon’s horizontal space. The new flex alignment centers that icon against the entire description, including its custom message (app/assets/stylesheets/common/base/topic-post.scss:264-265; app/assets/javascripts/discourse/templates/components/small-action.hbs:15-16), allowing longer messages to overlap the icon."
+  }
+ ]
+}

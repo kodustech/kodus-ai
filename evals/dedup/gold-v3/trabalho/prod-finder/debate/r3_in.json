@@ -1,0 +1,70 @@
+{
+ "add-guest-management-functionality-to-existing-bookings-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "b004587262e8221083bafbe9a0c515e7becaa7b3",
+  "head": "92f44dcea7ff19e9123a30c63c167a2938df5a55",
+  "issues": {
+   "add-guest-management-functionality-to-existing-bookings-cal-com#pf-muse-C1": {
+    "comentarios": [
+     {
+      "gid": "prodfinder-muse:C1",
+      "file": "packages/emails/templates/organizer-add-guests-email.ts",
+      "lines": [
+       26,
+       30
+      ],
+      "texto": "WHAT: Organizer subject uses attendees[0].name after nameless guests are added. WHY: New guests are created with name \"\" so the subject renders an empty or wrong booker name. HOW: Use the original booker/organizer name instead of attendees[0]."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "none",
+      "text": "organizer-add-guests-email.ts:28 uses attendees[0].name and addGuests.handler.ts:85 creates guests with name \"\", but attendees[0] is the original booker: the new guests are appended by createMany after the existing attendees (addGuests.handler.ts:92-106), the same attendees[0] convention as OrganizerScheduledEmail. The empty name only appears if a new guest were first, which this code does not do."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "New guests receive an empty name in packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:83-89, and the updated attendees are fetched without ordering at lines 92-108, so the original booker is not guaranteed to remain first. packages/emails/templates/organizer-add-guests-email.ts:26-29 directly interpolates attendees[0].name, allowing a nameless guest to produce a blank booker name in the subject."
+     },
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "none",
+      "text": "Guests are created with name \"\" (addGuests.handler.ts:83-90) and appended to the existing booking via createMany (:92-106), so the original booker row, inserted earlier, is attendees[0] in practice. organizer-add-guests-email.ts:28 follows the same attendees[0] convention as OrganizerScheduledEmail and the rest of cal.com's emails. The missing orderBy is a theoretical ordering guarantee shared by every booking email, not a defect this PR introduces. The comment's claim that adding nameless guests makes the subject render an empty name does not happen on the normal path.",
+      "concede": false
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "I retain TP: createMany inserts rows; it does not guarantee their position in the subsequently fetched attendees relation. The new handler fetches attendees without orderBy and passes that ordering directly to the new template, which interpolates attendees[0].name even though added guests have empty names. Neither mapping nor formatCalEvent restores the original booker to index zero. Also, OrganizerScheduledEmail actually uses calEvent.title for its subject, so the cited precedent does not establish correctness."
+     },
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "none",
+      "text": "I accept the correction that OrganizerScheduledEmail's subject uses calEvent.title (organizer-scheduled-email.ts:50), but attendees[0].name as the booker is the established cal.com convention (organizer-location-change-email.ts:28, attendee-request-email.ts:24, broken-integration-email.ts:32, organizer-payment-refund-failed-email.ts:15). The new guests are appended via createMany to an existing booking (addGuests.handler.ts:92-106), so the original booker row precedes them and is attendees[0] on the normal path. The missing orderBy is a theoretical guarantee shared by every one of those emails, not a defect introduced here, and the comment's claim that adding guests makes the subject blank does not follow from this code.",
+      "concede": false
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "I retain TP: createMany inserts related rows; it does not append them to an ordered attendee array. The new handler retrieves attendees without orderBy, and neither its mapping nor formatCalEvent establishes the original booker as index zero. Consequently, the new template can interpolate a nameless guest into the subject, although this need not happen on every execution. Existing templates sharing this assumption do not make the newly introduced handler and template pre-existing code."
+     }
+    ]
+   }
+  }
+ }
+}

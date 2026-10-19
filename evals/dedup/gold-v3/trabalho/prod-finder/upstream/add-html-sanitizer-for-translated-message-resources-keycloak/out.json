@@ -1,0 +1,19 @@
+{
+ "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+ "prOriginal": {
+  "numero": 37429,
+  "url": "https://github.com/keycloak/keycloak/pull/37429",
+  "mergedAt": "2025-02-20",
+  "nota": "Reused prOriginalConhecido; confirmed via gh pr view: MERGED 2025-02-20T11:18:45Z as 5d77e7ea, which carries the same ANCHOR_PATTERN/santizeAnchors code as benchmark head 02f48f77."
+ },
+ "tps": {
+  "add-html-sanitizer-for-translated-message-resources-keycloak#pf-kimi-C1": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 604,
+   "reason": "On keycloak/keycloak main today, VerifyMessageProperties.java still declares ANCHOR_PATTERN = Pattern.compile(\"</?a[^>]*>\") and santizeAnchors still strips matched tags (so <abbr>, <area>, etc. are treated as anchors) before the OWASP policy runs in verifySafeHtml. The 10 commits on this file since the merge (RTL autodetect, blanks, single quotes, placeholders, curly braces, range fix, import order, referrer-policy text, login escaping, whitelist wording) never touch the anchor regex or santizeAnchors; the only policy change added 'formattedLink' to the allowed elements.",
+   "astra": []
+  }
+ }
+}

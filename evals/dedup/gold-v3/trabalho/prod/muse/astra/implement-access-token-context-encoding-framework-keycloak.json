@@ -1,0 +1,23 @@
+{
+ "caseId": "implement-access-token-context-encoding-framework-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "implement-access-token-context-encoding-framework-keycloak#opa-01",
+   "newGroup": null,
+   "reason": "The comment includes the same compatibility break: adding abstract getShortcut() causes existing custom grant factories to throw AbstractMethodError. Providing a default implementation fixes that golden issue."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The comment describes grantType becoming stale when setFormParams changes the form parameters. No golden issue covers synchronizing grantType with updated form parameters."
+  },
+  {
+   "id": "S3",
+   "match": "implement-access-token-context-encoding-framework-keycloak#05",
+   "newGroup": null,
+   "reason": "The comment includes the same missing GRANT_TYPE assignment in client-credentials and UMA issuance, causing token IDs to encode the unknown grant na. Its additional V1 token-exchange case does not change that match."
+  }
+ ]
+}

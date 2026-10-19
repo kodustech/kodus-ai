@@ -1,0 +1,11 @@
+{
+ "caseId": "replays-self-serve-bulk-delete-system-sentry",
+ "items": [
+  {
+   "id": "S3",
+   "match": "replays-self-serve-bulk-delete-system-sentry#14",
+   "newGroup": null,
+   "reason": "Both claim the table column fallback crashes when tableData exists but meta is missing. The suggested optional-chaining guard addresses the same alleged defect."
+  }
+ ]
+}

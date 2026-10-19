@@ -1,0 +1,12 @@
+{
+ "caseId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+ "items": [
+  {
+   "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#kimi-01",
+   "class": "TP",
+   "subclass": "nit",
+   "reason": "The PR adds flexbox to `.small-action` at app/assets/stylesheets/common/base/topic-post.scss:264 while retaining `float: left` on `.topic-avatar` at line 270. The avatar is a direct child in app/assets/javascripts/discourse/templates/components/small-action.hbs:1, so its float has no effect as a flex item; removing it is dead-code cleanup with no user-visible impact.",
+   "severity": "low"
+  }
+ ]
+}

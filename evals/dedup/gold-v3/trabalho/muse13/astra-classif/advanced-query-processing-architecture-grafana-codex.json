@@ -1,0 +1,12 @@
+{
+ "caseId": "advanced-query-processing-architecture-grafana-codex",
+ "items": [
+  {
+   "issueId": "advanced-query-processing-architecture-grafana-codex#muse13-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "public/app/plugins/datasource/loki/datasource.ts:1135-1139 spreads ...target, preserving its datasource rather than returning only expr/step/legendFormat. Split requests call datasource.runQuery (querySplitting.ts:180), which delegates to super.query (datasource.ts:350-352); packages/grafana-runtime/src/utils/DataSourceWithBackend.ts:149-186 defaults missing datasource references to this.getRef(), resolves supplied references, and explicitly assigns the outgoing datasource, so the claimed routing failure is unsupported.",
+   "severity": "high"
+  }
+ ]
+}

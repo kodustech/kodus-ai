@@ -1,0 +1,11 @@
+{
+ "caseId": "frontend-asset-optimization-grafana-codex",
+ "items": [
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The comment claims consumers can mutate the shared cached assets through an aliased pointer, causing cache corruption and races. This differs from the rejected claims about failed loads overwriting the cache or locks serializing callers."
+  }
+ ]
+}

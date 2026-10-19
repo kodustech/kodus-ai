@@ -1,0 +1,35 @@
+{
+ "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reports missing database cleanup after immediate SendGrid cancellation. Issue #11 concerns misleading names, which is distinct from retaining stale reminder rows."
+  },
+  {
+   "id": "S2",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+   "newGroup": null,
+   "reason": "Reports the same batch-wide failure handling: a cancellation error skips queued database deletions and remaining cancellations."
+  },
+  {
+   "id": "S3",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#06",
+   "newGroup": null,
+   "reason": "Reports the same unbounded cancellation backlog processed through sequential SendGrid requests, delaying the cron."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Reports hard-coded English verification UI text instead of translated strings; no golden issue covers this."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reports the same missing database cleanup after immediate SendGrid cancellation as S1, distinct from issue #11's naming concern."
+  }
+ ]
+}

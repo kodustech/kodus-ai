@@ -1,0 +1,35 @@
+{
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Describes the same unguarded mainHostDestinationCalendar.integration access that throws when destinationCalendar is null or empty."
+  },
+  {
+   "id": "S2",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "newGroup": null,
+   "reason": "Describes the same optional push discarding other hosts\u2019 destination calendars when the organizer\u2019s destinationCalendar is null."
+  },
+  {
+   "id": "S3",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#04",
+   "newGroup": null,
+   "reason": "Identifies the same inverted billing condition for assigning the organization slug; restoring the negated guard fixes the listed issue."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes the catch block returning an empty result list when calendarReference remains undefined, hiding a failure. This differs from both the missing-credential issue and the unused error-message issue in that method."
+  },
+  {
+   "id": "S5",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Describes the same broken update/delete fallback that searches for an externalId matching an already-falsy externalCalendarId and loses the configured destination."
+  }
+ ]
+}

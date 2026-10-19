@@ -1,0 +1,12 @@
+{
+ "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+ "items": [
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#kimi-01",
+   "class": "FP",
+   "subclass": "none",
+   "severity": "medium",
+   "reply": "I change my classification to FP. The catch does count setup exceptions, but those exceptions prevent scheduling, so counting them is consistent with limiting failed scheduling attempts; nothing establishes a Twilio-only retry contract. My earlier reasoning demonstrated the retry limit\u2019s consequence, not a defect in applying it to setup failures."
+  }
+ ]
+}

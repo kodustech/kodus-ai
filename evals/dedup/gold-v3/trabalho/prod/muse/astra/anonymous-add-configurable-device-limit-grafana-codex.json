@@ -1,0 +1,35 @@
+{
+ "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Describes unauthenticated clients filling device slots with arbitrary header IDs, denying access to legitimate new devices."
+  },
+  {
+   "id": "S2",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Describes the non-atomic count-and-insert race that lets concurrent requests exceed the configured limit."
+  },
+  {
+   "id": "S3",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Describes rejected devices remaining cached, allowing subsequent requests to bypass enforcement for 29 minutes."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Challenges the expiration-window predicate rejecting returning expired devices, which is distinct from the listed documentation and retry bugs. Its premise is incorrect: refreshing an expired row would increase the active-device count."
+  },
+  {
+   "id": "S5",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#09",
+   "newGroup": null,
+   "reason": "Describes synchronous device tagging adding database round-trips and latency to uncached anonymous authentication."
+  }
+ ]
+}

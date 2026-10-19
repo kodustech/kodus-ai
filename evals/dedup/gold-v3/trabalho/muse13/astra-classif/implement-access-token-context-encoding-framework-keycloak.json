@@ -1,0 +1,12 @@
+{
+ "caseId": "implement-access-token-context-encoding-framework-keycloak",
+ "items": [
+  {
+   "issueId": "implement-access-token-context-encoding-framework-keycloak#muse13-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "The exception exists, but registered custom grants receive mappings automatically in services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java:70-79, with newly deployed grants resolved at lines 106-118. Unregistered grants are rejected before issuance in services/src/main/java/org/keycloak/protocol/oidc/endpoints/TokenEndpoint.java:194-202, and missing grant context becomes UNKNOWN in services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java:57-60. No code path establishes the claimed previously successful issuance with an unmapped grant.",
+   "severity": "high"
+  }
+ ]
+}

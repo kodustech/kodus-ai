@@ -1,0 +1,2181 @@
+{
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "9fde0e906897cc0f4f71793f647dd629faba3317",
+  "base": "bc89fe00ea84d20bedcec782f0701b9711dc8201",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     84,
+     96
+    ],
+    "texto": "WHAT: Google refresh path reads res?.data when sync mode returns a fetch Response which has no .data. WHY: token becomes undefined and token.access_token throws TypeError, crashing calendar refresh when sharing is enabled. HOW: Normalize sync response to token JSON before reading access_token/expiry_date."
+   },
+   {
+    "id": "S2",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     97,
+     100
+    ],
+    "texto": "WHAT: parseRefreshTokenResponse returns a SafeParse result {success,data} but Google stores the whole wrapper as credential.key. WHY: Stored key shape becomes {success,data} instead of tokens, so the next googleCredentialSchema.parse(credential.key) fails and calendar auth breaks. HOW: Unwrap .data after checking success like zoom/office365 callers do."
+   },
+   {
+    "id": "S3",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     85,
+     94
+    ],
+    "texto": "WHAT: Zoho Bigin passes credential.id (credentialId) as the userId argument to refreshOAuthTokens. WHY: Sync endpoint receives calcomUserId equal to a credential id, so it looks up the wrong user and returns another user's token or fails. HOW: Pass credential.userId like all other calendar services do."
+   },
+   {
+    "id": "S4",
+    "file": "packages/app-store/_utils/oauth/decodeOAuthState.ts",
+    "lines": [
+     5,
+     12
+    ],
+    "texto": "WHAT: JSON.parse on attacker-controlled req.query.state has no try/catch. WHY: A malformed state query value throws uncaught in every OAuth callback/add handler, turning it into a 500/DoS instead of a 400. HOW: Wrap parse in try/catch and return undefined on failure."
+   },
+   {
+    "id": "S5",
+    "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+    "lines": [
+     21,
+     27
+    ],
+    "texto": "WHAT: Missing refresh_token is replaced with literal string \"refresh_token\" and then persisted by callers. WHY: In sharing mode the sync response has no refresh_token, so the real stored refresh_token is overwritten with a dummy value and future direct refreshes fail. HOW: Do not mutate/inject a fake token; let callers merge with the previously stored refresh_token."
+   },
+   {
+    "id": "S6",
+    "file": "apps/web/pages/api/webhook/app-credential.ts",
+    "lines": [
+     24,
+     29
+    ],
+    "texto": "WHAT: Single static header comparison gates overwrite of any userId/appSlug credential keys with decrypted attacker-influenced JSON. WHY: Anyone holding the shared secret can overwrite any user's third-party OAuth keys, hijacking calendar/video access with no per-user auth, HMAC, replay protection, or rate limit. HOW: See improvedCode; at minimum require HMAC-signed body with timestamp."
+   },
+   {
+    "id": "S7",
+    "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+    "lines": [
+     75,
+     84
+    ],
+    "texto": "WHAT: getClient unconditionally POSTs to Salesforce token endpoint on every service construction. WHY: Every calendar operation pays an extra blocking outbound token refresh even when the access token is still valid, multiplying latency and rate-limit pressure. HOW: Check expiry before refreshing."
+   },
+   {
+    "id": "S8",
+    "file": "apps/web/pages/api/webhook/app-credential.ts",
+    "lines": [
+     23,
+     29
+    ],
+    "texto": "Direct !== comparison of webhook secret leaks timing information. Use crypto.timingSafeEqual with length check instead."
+   },
+   {
+    "id": "S9",
+    "file": "apps/web/pages/api/webhook/app-credential.ts",
+    "lines": [
+     56,
+     59
+    ],
+    "texto": "Falling back to empty string for CALCOM_APP_CREDENTIAL_ENCRYPTION_KEY allows weak/misconfigured decryption instead of fail-fast. Require env var and throw if missing."
+   },
+   {
+    "id": "S10",
+    "file": ".env.example",
+    "lines": [
+     241,
+     244
+    ],
+    "texto": "The comment requires 32 bytes for AES256 but the generation command `openssl rand -base64 24` produces only 24 bytes, so a user following the docs creates a key that disagrees with the documented requirement and will fail/shorten encryption. Change the command to `openssl rand -base64 32`."
+   },
+   {
+    "id": "S11",
+    "file": "packages/app-store/_utils/oauth/createOAuthAppCredential.ts",
+    "lines": [
+     13,
+     14
+    ],
+    "texto": "Both @param entries say 'the app slug' but code uses appData.type as Credential.type and appData.appId as appId/slug. The doc for type disagrees with the code and misleads callers. Document type as the credential type."
+   },
+   {
+    "id": "S12",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     94,
+     100
+    ],
+    "texto": "parseRefreshTokenResponse returns the safeParse result {success,data}, not the parsed tokens. Original code stored googleCredentialSchema.parse() output directly. Storing the wrapper changes credential.key shape to {success,data} which disagrees with googleCredentialSchema readers and with office365calendar which unwraps via tokenResponse.data. Unwrap to .data before persisting."
+   },
+   {
+    "id": "S13",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     86,
+     94
+    ],
+    "texto": "When APP_CREDENTIAL_SHARING_ENABLED the helper returns a fetch Response (no .data), otherwise it returns fetchTokens.res (Gaxios shape with .data). The caller unconditionally reads res?.data, so the sync path yields undefined and crashes on token.access_token. Writer and reader disagree on response shape \u2014 normalize both paths before reading."
+   },
+   {
+    "id": "S14",
+    "file": "packages/app-store/hubspot/lib/CalendarService.ts",
+    "lines": [
+     177,
+     189
+    ],
+    "texto": "refreshOAuthTokens returns a raw fetch Response when credential sync is enabled, but the caller assigns it to HubspotToken and uses it as tokens. The two sites disagree on type/shape: HubSpot SDK object vs Response. Parse response.json() on the sync path or make the helper return the token object in both branches."
+   },
+   {
+    "id": "S15",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     85,
+     94
+    ],
+    "texto": "refreshOAuthTokens(userId) sends calcomUserId to the sync endpoint, but this call passes credentialId (the credential row id, cf. credential.userId used by every other caller). Writer expects a user id, reader supplies a credential id \u2014 sync will look up the wrong user. Pass credential.userId like the other CalendarServices."
+   },
+   {
+    "id": "S16",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     83,
+     100
+    ],
+    "texto": "parseRefreshTokenResponse returns a safeParse result {success,data}, whereas the previous googleCredentialSchema.parse returned the parsed key directly. The caller still persists the whole wrapper as `key`, storing {success,data} in credential.key and breaking subsequent auth. Unwrap .data before persisting."
+   },
+   {
+    "id": "S17",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     94,
+     98
+    ],
+    "texto": "Producer parseRefreshTokenResponse returns Zod SafeParse result {success,data}, not parsed tokens. This consumer stores whole wrapper as credential key, while sibling consumers unwrap .data. Unwrap after success check."
+   },
+   {
+    "id": "S18",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     85,
+     94
+    ],
+    "texto": "Producer refreshOAuthTokens returns native fetch Response when sharing enabled, but consumer fallback returns axios response and reads tokenInfo.data.error. When sharing is on tokenInfo.data is undefined. Normalize shapes and pass userId."
+   },
+   {
+    "id": "S19",
+    "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+    "lines": [
+     21,
+     29
+    ],
+    "texto": "State corruption: returns SafeParse wrapper {success,data} instead of data, and injects literal \"refresh_token\" when missing. Google caller stores wrapper as credential.key, persisting wrong shape and destroying real refresh token."
+   },
+   {
+    "id": "S20",
+    "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+    "lines": [
+     8,
+     15
+    ],
+    "texto": "Execution break: sync branch returns raw fetch Response but callers expect provider shape (e.g. Google does res?.data.access_token). With sync enabled res.data is undefined so token.access_token throws TypeError."
+   },
+   {
+    "id": "S21",
+    "file": "apps/web/pages/api/webhook/app-credential.ts",
+    "lines": [
+     62,
+     92
+    ],
+    "texto": "Race condition: findFirst then update/create is non-atomic. Two concurrent deliveries for same userId+appId both miss and both create, violating one-credential-per-app invariant."
+   },
+   {
+    "id": "S22",
+    "file": "packages/app-store/_utils/oauth/decodeOAuthState.ts",
+    "lines": [
+     5,
+     11
+    ],
+    "texto": "Execution break: JSON.parse on attacker-controlled req.query.state throws unhandled SyntaxError on malformed input, crashing OAuth callback instead of returning undefined/400. Same pattern in encodeOAuthState."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01",
+    "descricao": "The new app-credential webhook checks its shared secret with a plain !== string comparison instead of a constant-time comparison, leaking timing information about the secret.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       23,
+       29
+      ],
+      "texto": "Direct !== comparison of webhook secret leaks via timing attack. Use constant-time comparison (e.g., crypto.timingSafeEqual on hashed/buffered values with length check) instead of `req.headers[...] !== process.env.CALCOM_WEBHOOK_SECRET`."
+     },
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       24,
+       27
+      ],
+      "texto": "The webhook authenticates a secret using direct string inequality, which is not constant-time and can leak information about the secret through comparison timing. Compare fixed-length representations using a constant-time primitive (such as crypto.timingSafeEqual), handling absent or malformed headers safely, instead of comparing the secret strings directly."
+     },
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       24,
+       29
+      ],
+      "texto": "The webhook secret is compared with the `!==` operator, which short-circuits on the first differing byte and leaks the secret via response timing (timing attack). An attacker can iteratively recover CALCOM_WEBHOOK_SECRET and then forge requests that create/update arbitrary user credential keys (decrypted with the AES key) via this endpoint. Use a constant-time comparison, e.g. crypto.timingSafeEqual on equal-length buffers, guarding for length mismatch first."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#02",
+    "descricao": "The webhook parses the body with zod .parse and decrypts/JSON-parses the keys without error handling, so invalid payloads produce 500 errors instead of 400 responses.",
+    "textoGolden": "The `appCredentialWebhookRequestBodySchema.parse` function can throw on invalid payloads, resulting in 500 Internal Server Errors instead of the expected 400 Bad Request responses. This can lead to confusion for clients and hinder proper error handling.",
+    "comentarios": [
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       31,
+       31
+      ],
+      "texto": "WHAT: zod parse, symmetricDecrypt and JSON.parse throw unhandled (no try/catch) with no method guard. WHY: Invalid body/keys or GET request crashes handler with 500 and leaks stack, instead of 400/405. HOW: Wrap parse/decrypt in try/catch returning 400 and restrict to POST."
+     },
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       31,
+       59
+      ],
+      "texto": "schema .parse plus symmetricDecrypt/JSON.parse throw unhandled (ZodError, decrypt error, SyntaxError) on invalid body or tampered keys, crashing webhook with 500. Use safeParse and try/catch with 400 responses."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#03",
+    "descricao": "The webhook's non-atomic findFirst-then-create lets concurrent deliveries for the same user and app insert duplicate credential rows.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       62,
+       70
+      ],
+      "texto": "The webhook performs a non-atomic findFirst followed by create when no credential exists. Concurrent deliveries for the same user and app can both observe no row and insert duplicates because Credential has no unique userId/appId constraint; subsequent findFirst updates only one duplicate, leaving competing credentials stale. Serialize the lookup/create operation for each user/app pair or introduce an appropriate uniqueness constraint and atomic upsert."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#07",
+    "descricao": "parseRefreshTokenResponse writes the hardcoded string 'refresh_token' when the refresh response omits a refresh token, so the stored credential gets an invalid refresh token and later refreshes fail.",
+    "textoGolden": "The parseRefreshTokenResponse function incorrectly sets refresh_token to the hardcoded string 'refresh_token' when it's missing from the OAuth refresh token response. This invalidates the token, breaking subsequent token refreshes and causing authentication failures.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       25,
+       26
+      ],
+      "texto": "The parser fabricates the literal refresh token \"refresh_token\" whenever a successful response omits refresh_token, including when synchronization is disabled. Office365's response schema explicitly permits that omission, and its caller merges parsed data over existing credentials, replacing the valid saved refresh token with this invalid value and breaking the next refresh. Leave the property absent so the existing token survives the merge."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       25,
+       26
+      ],
+      "texto": "When a refresh response omits refresh_token, this helper manufactures the hardcoded credential \"refresh_token\". Callers such as Office365 merge this into stored credentials, overwriting the valid existing refresh token and causing subsequent provider refreshes to use a predictable invalid token. Leave the field absent and preserve the existing credential when omission is allowed by the provider, or reject the response when a refresh token is required; do not substitute a literal authentication token."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       25,
+       27
+      ],
+      "texto": "WHAT: Missing refresh_token is replaced with literal string \"refresh_token\". WHY: Stores bogus refresh token in DB, breaking all future refreshes and masking provider errors. HOW: Preserve existing credential refresh_token or throw instead of injecting placeholder."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+    "descricao": "minimumTokenResponseSchema uses computed keys from z.string().toString(), which produce a literal key rather than a wildcard, so the sync-mode schema does not validate or keep expiry and other token fields as intended.",
+    "textoGolden": "The Zod schema in parseRefreshTokenResponse uses computed property keys [z.string().toString()] and [z.string().optional().toString()] in minimumTokenResponseSchema, which is invalid Zod syntax and will throw a runtime error.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       5,
+       11
+      ],
+      "texto": "`[z.string().toString()]` evaluates to a fixed string key such as \"ZodString\", so minimumTokenResponseSchema requires a literal numeric property with that name. Every synced token response fails validation and throws \"Invalid refreshed tokens were returned\". Use `z.object({access_token: z.string()}).passthrough()` instead."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       5,
+       11
+      ],
+      "texto": "The computed keys `[z.string().toString()]` evaluate to the literal string \"[object Object]\", not a wildcard. The schema therefore requires a numeric property named \"[object Object]\", so safeParse always fails in credential-sync mode and the function throws \"Invalid refreshed tokens were returned\". Use `.passthrough()` on an object with access_token and optional numeric expiry fields instead."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       5,
+       11
+      ],
+      "texto": "The computed keys `[z.string().toString()]` evaluate to a literal string like \"ZodString\" and not to a wildcard. The schema therefore requires a numeric property with that nonsense name and never matches real token responses. In sync mode every refresh throws \"Invalid refreshed tokens were returned\". Use `.passthrough()` and a real expiry check instead."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+    "descricao": "In sync mode refreshOAuthTokens returns a raw fetch Response, but callers expect their provider-specific shapes (res.data, axios .data, HubspotToken), so token refresh breaks for Google, Zoho and HubSpot when credential sharing is on.",
+    "textoGolden": "When APP_CREDENTIAL_SHARING_ENABLED and CALCOM_CREDENTIAL_SYNC_ENDPOINT are set, the refreshFunction helper returns the fetch Response, but several callers (for example GoogleCalendarService.refreshAccessToken expecting res.data, and HubspotCalendarService.refreshAccessToken expecting a HubspotToken) assume it returns the integration-specific token object. That mismatch will cause runtime errors in the sync-enabled path unless the return type or those call sites are adjusted.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+      "lines": [
+       8,
+       15
+      ],
+      "texto": "WHAT: In the credential-sharing branch `refreshOAuthTokens` returns the raw `fetch` `Response` object instead of a parsed token payload, yet several callers treat the result as an already-parsed token object.\nWHY: Callers such as hubspot (`hubspotRefreshToken.expiresIn`), zoho-bigin (`tokenInfo.data.error`), zohocrm (`zohoCrmTokenInfo.data.error`) and googlecalendar (`res?.data`) read `.data`/token fields off the return value; a `Response` has neither, so the sync path yields `undefined`/`NaN` or throws a TypeError \u2014 the feature's primary code path is broken for those apps.\nHOW: Parse the response (e.g. `const data = await response.json(); return data;`) before returning, or make every caller await the appropriate response handler."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+      "lines": [
+       8,
+       15
+      ],
+      "texto": "In sharing mode refreshOAuthTokens returns the raw fetch Response (no `.data`), but the google caller reads `res?.data` and then `token.access_token`, throwing a TypeError swallowed by the catch, so the token is never refreshed."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       94,
+       95
+      ],
+      "texto": "`res?.data` assumes the value returned by refreshOAuthTokens has a `.data` field (true for the `fetchTokens.res` branch), but when APP_CREDENTIAL_SHARING_ENABLED the helper returns a raw `fetch()` Response, which has no `.data`. Then `token.access_token` throws. Either parse the shared-mode Response here or have refreshOAuthTokens return a normalized `{ data }` shape."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+    "descricao": "Google Calendar persists the safeParse result object instead of its data as the credential key, corrupting the stored credential so later reads fail.",
+    "textoGolden": "parseRefreshTokenResponse returns a Zod safeParse result ({ success, data, error }), not the credential key object. Persisting that as key stores the wrapper instead of the token payload; we should store the parsed data or use schema parse.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       83,
+       100
+      ],
+      "texto": "parseRefreshTokenResponse returns a SafeParse result {success,data}, not the parsed key. Storing it directly as `key` writes the wrapper to the credential. Unwrap like other callers: check .success and use .data."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       83,
+       100
+      ],
+      "texto": "parseRefreshTokenResponse returns SafeParse result {success,data}, but call site stores that wrapper as credential `key` (previously googleCredentialSchema.parse() returned the plain object). Store `key.data` / handle wrapper, otherwise persisted credential becomes {success,data} shape and subsequent credential reads fail."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       83,
+       100
+      ],
+      "texto": "parseRefreshTokenResponse returns SafeParse wrapper {success,data} but code stores the whole wrapper as credential.key. Office365calendar in same PR unwraps via .data. Persisted credential will be {success,data} instead of tokens, so next load fails validation. Unwrap to .data after success check."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#11",
+    "descricao": "After switching to parseRefreshTokenResponse, the tokenResponse.success check in Office365 refreshAccessToken is dead code and the previous error logging was dropped.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+      "lines": [
+       263,
+       264
+      ],
+      "texto": "parseRefreshTokenResponse now throws when parsing fails, so the `tokenResponse.success` check on the next line is dead code and the previous error logging was removed. A failed refresh now throws out of refreshAccessToken instead of keeping the old credentials. Catch the error or restore the previous handling."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#13",
+    "descricao": "Salesforce getClient now refreshes the OAuth token and writes the credential on every service construction, adding a network round trip and DB write even when the access token is valid.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+      "lines": [
+       75,
+       84
+      ],
+      "texto": "getClient now unconditionally exchanges the Salesforce refresh token on every service construction, even when the saved access token is valid. Each constructor invocation adds a blocking OAuth network round trip and credential database write before any Salesforce operation, replacing jsforce's existing on-demand refresh behavior. Keep refresh on demand or guard the exchange with a token-expiration check."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#14",
+    "descricao": "The new Salesforce token refresh uses prisma without importing it, so the code fails type checking and throws a ReferenceError at runtime.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+      "lines": [
+       96,
+       99
+      ],
+      "texto": "The new credential update references prisma without importing or declaring it; searching this file finds only the new usage. This fails TypeScript checking and raises ReferenceError after a successful token exchange at runtime. Import prisma from @calcom/prisma before using it."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+    "descricao": "Zoho Bigin passes the credential id instead of the user id to refreshOAuthTokens, so the sync endpoint receives the wrong calcomUserId.",
+    "textoGolden": "The `refreshOAuthTokens` function is passed `credentialId` instead of `userId`, which breaks the credential sync functionality by causing incorrect user lookups. This issue can lead to failures in syncing user credentials, impacting user experience.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+      "lines": [
+       85,
+       94
+      ],
+      "texto": "WHAT: The 3rd argument to `refreshOAuthTokens` is `credentialId` (= `credential.id`, line 53), but the function's parameter is `userId` (`refreshOAuthTokens(refreshFunction, appSlug, userId)`).\nWHY: When APP_CREDENTIAL_SHARING_ENABLED, the sync endpoint is sent `calcomUserId: <credential id>` instead of the user id, so Bigin credentials are synced against the wrong/non-existent user (all other apps correctly pass `credential.userId`).\nHOW: Pass `credential.userId` instead of `credentialId` as the third argument."
+     },
+     {
+      "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+      "lines": [
+       85,
+       94
+      ],
+      "texto": "refreshOAuthTokens' third parameter is the Cal.com userId (used as `calcomUserId` in the sync request and to decide whether sharing runs), but this call passes `credentialId`. Every other caller passes `credential.userId`, so the credential-sync endpoint receives a credential row id as the user id and shared credentials are fetched/updated for the wrong identity. Pass `credential.userId` here."
+     },
+     {
+      "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+      "lines": [
+       85,
+       94
+      ],
+      "texto": "refreshOAuthTokens' third parameter is `userId` (declared in refreshOAuthTokens.ts line 3 and used as `calcomUserId: userId.toString()`), but this call passes `credentialId` (the Credential row id, line 53) instead of the user id. When credential sharing is enabled the customer's sync endpoint receives a credential id labelled as calcomUserId and cannot resolve the correct Cal.com user. Pass `credential.userId` (the BiginToken/credential payload carries it) or plumb the user id through refreshAccessToken."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#16",
+    "descricao": "Salesforce checks response.statusText !== 'OK' instead of response.ok when refreshing the token, which can misclassify successful responses, and then ignores the refreshed token.",
+    "textoGolden": "The Salesforce integration checks `response.statusText` instead of `response.ok` when handling OAuth token refresh responses. This can lead to unreliable behavior, as a successful response may not be correctly identified, resulting in the use of stale credentials and potential authentication failures.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+      "lines": [
+       86,
+       107
+      ],
+      "texto": "WHAT: Checks response.statusText !== \"OK\" instead of response.ok and builds jsforce.Connection from stale credentialKey.access_token/instance_url ignoring accessTokenParsed.data. WHY: Refresh never takes effect (old token reused) and valid refreshes can throw on runtimes where statusText is empty. HOW: Check !response.ok and use parsed access_token/instance_url for connection and DB update."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#17",
+    "descricao": "After refreshing the Salesforce token, jsforce.Connection is created with the stale access_token and instance_url instead of the newly refreshed values.",
+    "textoGolden": "The `jsforce.Connection` is created using stale `credentialKey.access_token` and `credentialKey.instance_url` after a token refresh, which can lead to authentication failures and incorrect data access. Ensure that the connection is established using the refreshed token values instead.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+      "lines": [
+       96,
+       106
+      ],
+      "texto": "WHAT: The new block fetches and persists a fresh access token (`accessTokenParsed.data`) but then creates the `jsforce.Connection` with the stale `credentialKey.access_token` (line 106) instead of the just-refreshed token.\nWHY: The refreshed token is written to the DB but never used for the connection; if the old token was expired, jsforce must refresh again (extra round trip) or fail, and the DB/connection state diverge.\nHOW: Pass the new access token (`accessTokenParsed.data.access_token`) to the `jsforce.Connection`."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#opa-01",
+    "descricao": "The app-credential webhook looks up appStoreMetadata by app.slug, but the map is keyed by dirName, so apps whose slug differs from their directory (e.g. google-calendar) always get a 404 and their credentials cannot be synced.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "replays-self-serve-bulk-delete-system-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "ea188e2d736fd6ed27c1dba8aae63b7268e2a7a9",
+  "base": "49a275847631e231672d01b5dcd66558c069d25b",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+    "lines": [
+     104,
+     120
+    ],
+    "texto": "WHAT: fetch_error_details pairs error_ids with events.values() via zip, but get_multi returns a dict keyed by node_id whose values() order need not match error_ids order. WHY: mismatched id/data pairs attach wrong title/message/timestamp to errors and corrupt chronological interleaving in get_request_data. HOW: look up each id by its node_id instead of zipping values()."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+    "lines": [
+     50,
+     60
+    ],
+    "texto": "WHAT: validate_timestamp/validate_age test mutual exclusion with truthiness (initial_data.get(...)) so age=0 or timestamp=0 bypasses the check. WHY: reports containing both fields with a zero value incorrectly pass validation, breaking the Working-Draft vs Editor-Draft exclusivity contract. HOW: test key presence (\"age\" in initial_data) instead of truthiness."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/workflow_engine/endpoints/validators/base/detector.py",
+    "lines": [
+     62,
+     65
+    ],
+    "texto": "WHAT: update() reads validated_data.get(\"detector_type\") but the serializer field is `type` (validated by validate_type) and create() uses validated_data[\"type\"]. WHY: the lookup always misses and falls back to instance.group_type, so detector type changes via PUT are silently ignored. HOW: read validated_data.get(\"type\", instance.group_type)."
+   },
+   {
+    "id": "S4",
+    "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+    "lines": [
+     164,
+     174
+    ],
+    "texto": "WHAT: the use-table-widget-visualization branch renders TableWidgetVisualization with hardcoded empty columns/data/meta instead of result.data, result.meta, fields and eventView. WHY: enabling the flag blanks every dashboard table widget, a user-visible data-loss regression. HOW: omit if speculative beyond wiring real result through."
+   },
+   {
+    "id": "S5",
+    "file": "static/app/views/dashboards/widgets/tableWidget/tableWidgetVisualization.tsx",
+    "lines": [
+     92,
+     99
+    ],
+    "texto": "WHAT: column fallback reads tableData?.meta.fields but only guards tableData, so meta===undefined throws TypeError while data uses tableData?.data ?? []. WHY: any empty/partial TabularData (e.g. the empty placeholder above) crashes render instead of showing an empty table. HOW: guard meta with tableData?.meta?.fields ?? {}."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/preprod/api/endpoints/organization_preprod_artifact_assemble.py",
+    "lines": [
+     81,
+     90
+    ],
+    "texto": "WHAT: analytics.record fires before the organizations:preprod-artifact-assemble feature check. WHY: disabled-flag and rejected requests pollute analytics and record user/project IDs for requests that should be no-ops. HOW: move the record call after the feature gate."
+   },
+   {
+    "id": "S7",
+    "file": "static/app/views/explore/hooks/useGetTraceItemAttributeValues.tsx",
+    "lines": [
+     68,
+     71
+    ],
+    "texto": "WHAT: tag.key (which can be tags[...,number] or contain slashes/spaces) is interpolated directly into the request path. WHY: keys with / break routing to a wrong endpoint and brackets/commas produce malformed URLs, letting crafted attribute names alter the request target. HOW: encode with encodeURIComponent(attributeKey)."
+   },
+   {
+    "id": "S8",
+    "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+    "lines": [
+     106,
+     128
+    ],
+    "texto": "WHAT: the endpoint loops over an attacker-controlled unauthenticated raw_data list with no size cap, validating each item and emitting metrics. WHY: a single request with a huge array burns CPU on DRF validation and fans out unbounded metrics.incr calls, enabling cheap request-amplification DoS. HOW: enforce a max batch size before the loop."
+   },
+   {
+    "id": "S9",
+    "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+    "lines": [
+     104,
+     120
+    ],
+    "texto": "get_multi returns dict keyed by node_id; zipping error_ids with events.values() assumes order and equal length. Missing keys shift pairs, attributing wrong title/message to wrong id. Look up each node_id via dict get instead."
+   },
+   {
+    "id": "S10",
+    "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+    "lines": [
+     50,
+     60
+    ],
+    "texto": "validate_timestamp uses `if self.initial_data.get(\"age\")` and validate_age uses `if self.initial_data.get(\"timestamp\")`. Falsy-but-present values (age=0, timestamp=0) are treated as absent, so mutually-exclusive check is bypassed. Use explicit existence check (`\"age\" in self.initial_data` / `is not None`) instead of truthiness."
+   },
+   {
+    "id": "S11",
+    "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+    "lines": [
+     104,
+     120
+    ],
+    "texto": "`events = nodestore.backend.get_multi(node_ids)` returns a dict with no order guarantee; `zip(error_ids, events.values())` assumes values() order equals error_ids order and stays aligned when an entry is missing (None values are filtered after zipping, shifting alignment). Look up per-id via node_id instead of zipping values()."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#01",
+    "descricao": "The age/timestamp mutual-exclusion validators check truthiness via initial_data.get(), so a zero value is treated as absent and a report carrying both fields passes validation.",
+    "textoGolden": "Validation logic incorrectly uses .get('timestamp'), which treats a timestamp of 0 as absent. It should directly check 'timestamp' in self.initial_data to ensure proper field presence detection, preventing both 'age=0' and 'timestamp' from passing mutual-exclusion validation.",
+    "comentarios": [
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       47,
+       59
+      ],
+      "texto": "The timestamp/age validators test truthiness and make both fields optional instead of enforcing exactly one field. Reports with both age=0 and timestamp=0, or with neither field, pass validation despite violating the stated mutually exclusive report formats. Enforce field presence and exclusivity in object-level validate using key membership rather than truthiness."
+     },
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       50,
+       59
+      ],
+      "texto": "Check key presence rather than truthiness when enforcing age/timestamp mutual exclusion. Both fields permit 0, so a report with age=0 and timestamp=0 passes both validators even though both fields are present; a zero-valued counterpart also bypasses the corresponding check. Use `\"age\" in self.initial_data` and `\"timestamp\" in self.initial_data` (or object-level validation) and add zero-value tests."
+     },
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       50,
+       59
+      ],
+      "texto": "Check field presence rather than truthiness when enforcing timestamp/age exclusivity. A report containing both `timestamp: 0` and `age: 0` passes both validators, despite the declared constraint that they must not coexist; with only one zero value, validation is also asymmetric. Use membership checks on initial_data (or object-level validation) and add zero-value mixed-field tests."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#02",
+    "descricao": "The validation-failure warning logs the entire raw, attacker-controlled browser report instead of a redacted subset.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       111,
+       114
+      ],
+      "texto": "The new validation-failure warning logs `raw_report`, the full unvalidated report object supplied by the caller. This endpoint is public and unauthenticated (permission_classes = (), @csrf_exempt), so the payload is attacker-controlled, and browser report bodies routinely carry sensitive values (CSP blocked-uri/document-uri/script-sample, sourceFile, plus the full user_agent). Logging the raw payload on every validation failure writes potentially sensitive data into application logs; log only the report `type` (or a sanitized/redacted subset) instead of the entire raw object."
+     },
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       111,
+       114
+      ],
+      "texto": "Do not attach the complete raw report to the validation warning. Browser reports contain page URLs (potentially including tokens or personal data in query strings) and arbitrary body contents. Any invalid field now causes that entire payload to be emitted at warning level, exposing it in operational logs even where the existing info-level request logging is filtered out. Log the failed field names/report type or a redacted diagnostic instead."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#06",
+    "descricao": "fetch_error_details pairs error_ids positionally with nodestore get_multi values, but get_multi does not preserve input order (cached items are appended last) and drops missing nodes, so error details get attached to the wrong error IDs.",
+    "textoGolden": "Using zip(error_ids, events.values()) assumes the get_multi result preserves the input order; dict value order is not guaranteed to match error_ids, so event data can be paired with the wrong ID (missing nodes also shift alignment).",
+    "comentarios": [
+     {
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       110,
+       120
+      ],
+      "texto": "WHAT: fetch_error_details zips error_ids with events.values() instead of mapping by node_id, misaligning ids to payloads and dropping/mismatching on missing keys. WHY: assigns wrong title/message/timestamp to wrong error id and yields incorrect Seer logs. HOW: look up each node_id in the get_multi dict (e.g. dict keyed by node_id) and preserve error_ids order."
+     },
+     {
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       104,
+       120
+      ],
+      "texto": "`zip(error_ids, events.values())` assumes `nodestore.backend.get_multi(node_ids)` values preserve input order and that all keys exist. Dict values give no such guarantee; missing keys shorten/misalign the zip, attaching the wrong event payload to the wrong error_id. Lookup per-id: iterate node_ids/error_ids and do `events.get(node_id)` instead of zipping with `.values()`."
+     },
+     {
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       104,
+       121
+      ],
+      "texto": "fetch_error_details pairs IDs to payloads with zip(error_ids, events.values()) where events is dict from nodestore get_multi. Values order need not match IDs and missing keys misalign, attaching wrong title/message to wrong error. Look up per node_id instead."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#07",
+    "descricao": "The Snuba replay lookup for error IDs runs even when enable_error_context=false, adding a needless query (and failure point) to opt-out requests.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       67,
+       77
+      ],
+      "texto": "The new Snuba replay lookup executes even when enable_error_context=false. Every opt-out summary request incurs an unnecessary database round trip and can now fail on Snuba availability even though it only needs recording storage. Evaluate the flag first and perform the replay lookup only when error context is enabled."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#12",
+    "descricao": "With the use-table-widget-visualization flag on, the widget renders TableWidgetVisualization with hardcoded empty columns and data instead of the query results, so every table widget shows an empty table.",
+    "textoGolden": "Hardcoded empty data passed to TableWidgetVisualization causes it to always render an empty table instead of displaying actual results when the feature flag is enabled.",
+    "comentarios": [
+     {
+      "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+      "lines": [
+       164,
+       174
+      ],
+      "texto": "WHAT: the `use-table-widget-visualization` branch renders `<TableWidgetVisualization columns={[]} tableData={{data: [], meta: {fields: {}, units: {}}}} />`, hardcoding empty rows and no columns instead of the actual query result. WHY: when the feature flag is enabled for an org, every table widget renders an empty table and silently drops `result.data`/`result.meta`/`columns`, a functional regression for all dashboard table widgets. HOW: build `columns`/`tableData` from the existing `result` (and `widget.queries[i].fields`/`fieldAliases`) rather than the empty placeholder objects."
+     },
+     {
+      "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+      "lines": [
+       164,
+       174
+      ],
+      "texto": "In the new feature-flagged branch, TableWidgetVisualization is rendered with hardcoded empty props: columns={[]} (an empty array, which is truthy for the `columns ?? fallback` logic, so no columns are derived) and tableData={data: [], meta: {fields: {}, units: {}}}. All the real result data computed above (result.data, result.meta, fields, fieldAliases, eventView) is discarded, so any organization with 'use-table-widget-visualization' enabled gets an empty table instead of the query results. Pass the actual result data/columns into the visualization (or keep the old StyledSimpleTableChart) until the widget is properly wired."
+     },
+     {
+      "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+      "lines": [
+       164,
+       174
+      ],
+      "texto": "With the 'use-table-widget-visualization' feature enabled, TableWidgetVisualization is rendered with columns=[] and empty data/meta instead of result.data and result.meta. Every table widget therefore renders empty for orgs with the flag. Fix: pass tableData={{data: result.data, meta: result.meta}} and build columns from the fields."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#13",
+    "descricao": "The custom cell renderers fall back to default rendering on any falsy return (0, '', null), not only undefined, so a renderer cannot render zero or an empty cell.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "static/app/views/dashboards/widgets/tableWidget/defaultTableCellRenderers.tsx",
+      "lines": [
+       70,
+       73
+      ],
+      "texto": "The documented custom-renderer contract says fallback runs when the callback returns undefined, but `if (cell)` also falls back for valid ReactNode results such as `0`, an empty string, or `null`. A caller trying to render zero or deliberately suppress a cell instead gets the default field rendering. Check `cell !== undefined` here and in the head-cell renderer so the implementation honors the advertised contract."
+     },
+     {
+      "file": "static/app/views/dashboards/widgets/tableWidget/defaultTableCellRenderers.tsx",
+      "lines": [
+       70,
+       72
+      ],
+      "texto": "Use `cell !== undefined` instead of `if (cell)` to select the custom renderer result, and apply the same correction to the header renderer. The API documents undefined as the fallback sentinel, but valid ReactNode results such as numeric 0, an empty string, or null are falsy. A custom renderer returning 0 or intentionally hiding a cell with null therefore unexpectedly renders the default value instead."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#19",
+    "descricao": "The attribute-keys query key no longer includes the organization slug, so two organizations with the same filters share a cache entry and switching orgs can show the previous org's attribute names.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+      "lines": [
+       39,
+       41
+      ],
+      "texto": "The new attribute query key omits the organization even though its query function fetches an organization-specific endpoint. Switching organizations with identical project selections such as all projects and the same date range reuses the singleton query client's prior organization's attribute metadata, including while the new request refetches. Include organization.slug or organization.id in the query key."
+     },
+     {
+      "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+      "lines": [
+       39,
+       42
+      ],
+      "texto": "Include the organization slug in this query key. The new useGetTraceItemAttributeKeys implementation fetches `/organizations/${organization.slug}/trace-items/attributes/`, but makeTraceItemAttributeKeysQueryOptions contains no organization identity. Two organizations with identical filters (particularly the default all-project selection) therefore share this cache entry. Switching organizations can display the previous organization's attribute names, and concurrently mounted consumers can reuse a request for the wrong organization. Preserve the organization-specific cache identity that the previous endpoint-based key provided."
+     },
+     {
+      "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+      "lines": [
+       39,
+       42
+      ],
+      "texto": "Include the organization slug or ID in this query key. The query function fetches `/organizations/${organization.slug}/trace-items/attributes/`, but the key contains only query options. Two organizations with the same project selection (especially the all-projects selection), date range and dataset therefore share a cache entry. Switching organizations can display the previous organization's attributes, and overlapping requests can populate the shared entry with the wrong organization's result."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#20",
+    "descricao": "The UseTraceItemAttributeBaseProps doc says only LOGS is supported, although the hooks are also used with SPANS.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "static/app/views/explore/types.tsx",
+      "lines": [
+       9,
+       12
+      ],
+      "texto": "The new shared prop documentation claims the endpoint currently supports only LOGS, but this PR also uses these hooks with TraceItemDataset.SPANS (for example in TransactionNameSearchBar). Update this comment to describe both supported datasets; as written it incorrectly tells callers that a supported and actively used input is unsupported."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#sncc-01",
+    "descricao": "Error event timestamps (seconds) are compared with replay recording event timestamps (milliseconds), so errors are not interleaved chronologically with breadcrumbs.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#sncc-03",
+    "descricao": "dedupedYAxes is now just [yAxis], so its name misdescribes the code.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-01",
+    "descricao": "Every paginated breadcrumb-summary request queries the replay and fetches all of its error events from nodestore with no cap, adding latency and memory proportional to the replay's error count on each page.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-02",
+    "descricao": "HIDDEN_ATTRIBUTES is applied only when a search query is present; the no-search early return shows all attributes, so the hidden attributes still appear in the default span attributes view.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-03",
+    "descricao": "The bulk delete test sets max_segment_id to None to cover the new guard in _make_recording_filenames, but it mocks delete_matched_rows, so the guard is never executed and removing it would not fail the test.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#snloop-01",
+    "descricao": "BrowserReportSerializer's validate_timestamp/validate_age docstrings claim one of age/timestamp must be present, but the code only enforces mutual exclusion, so reports with neither are accepted.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "ee38fd295fd294b9fc787eba482bde24bbfea69b",
+  "base": "93cb21f55a2a40d9116c014741f5679fbeff5fd9",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/trpc/server/routers/viewer/slots.ts",
+    "lines": [
+     114,
+     115
+    ],
+    "texto": "WHAT: Line 114 compares two Dayjs objects with === which is always false, so zero-length (unavailable-day) date overrides are never detected. WHY: The find callback falls through, dateOverrideExist stays true and the function returns true, marking slots on fully-blocked override days as available. HOW: Replace reference equality with value comparison, e.g. dayjs(date.start).add(utcOffset,'minutes').isSame(dayjs(date.end).add(utcOffset,'minutes'))."
+   },
+   {
+    "id": "S2",
+    "file": "packages/trpc/server/routers/viewer/slots.ts",
+    "lines": [
+     141,
+     143
+    ],
+    "texto": "WHAT: Working-hours check computes both start and end from slotStartTime, ignoring eventLength/slotEndTime. WHY: Slots whose end overflows workingHour.endTime are wrongly treated as inside working hours and returned as bookable past closing time. HOW: Compute end from slotEndTime, e.g. const end = slotEndTime.hour()*60+slotEndTime.minute()."
+   },
+   {
+    "id": "S3",
+    "file": "packages/trpc/server/routers/viewer/slots.ts",
+    "lines": [
+     140,
+     143
+    ],
+    "texto": "end is computed identically to start from slotStartTime, so computed slotEndTime is never used and overlong slots spilling past workingHour.endTime pass. Derive end from slotEndTime."
+   },
+   {
+    "id": "S4",
+    "file": "packages/trpc/server/routers/viewer/slots.ts",
+    "lines": [
+     114,
+     115
+    ],
+    "texto": "=== compares object identity, two fresh Dayjs instances are never ===, so this branch cannot execute. Use .isSame() for value comparison."
+   },
+   {
+    "id": "S5",
+    "file": "packages/trpc/server/routers/viewer/slots.ts",
+    "lines": [
+     133,
+     135
+    ],
+    "texto": "When slot falls inside a date override the function returns true immediately, skipping the busy.every check below, so bookings on override days appear available. Fall through to busy check instead."
+   },
+   {
+    "id": "S6",
+    "file": "packages/trpc/server/routers/viewer/slots.ts",
+    "lines": [
+     138,
+     151
+    ],
+    "texto": "find only returns true when a same-day entry exists and slot is outside it; if no entry covers slotStartTime.day() find is falsy and slot proceeds as available. Must require a covering entry."
+   },
+   {
+    "id": "S7",
+    "file": "packages/lib/slots.ts",
+    "lines": [
+     211,
+     214
+    ],
+    "texto": "Execution break: override.timeZone is optional and invitee timeZone is unvalidated user input, but both are passed directly to dayjs().tz() which throws RangeError on undefined/unknown zone. Previously getUTCHours() never threw. Validate zones and wrap tz()/utcOffset() in try/catch with UTC fallback so one bad override cannot crash getSlots/getSchedule."
+   },
+   {
+    "id": "S8",
+    "file": "packages/trpc/server/routers/viewer/slots.ts",
+    "lines": [
+     105,
+     108
+    ],
+    "texto": "Execution break: truthy check guards undefined but not an invalid/unknown organizerTimeZone string; dayjs.tz() throws on invalid zone inside dateOverrides.find(), aborting checkIfIsAvailable/getSchedule. Validate against known zones or try/catch with fallback to 0."
+   },
+   {
+    "id": "S9",
+    "file": "packages/trpc/server/routers/viewer/slots.ts",
+    "lines": [
+     139,
+     144
+    ],
+    "texto": "Upper-bound of slot range reuses slotStartTime instead of slotEndTime, so a slot starting inside workingHours but ending after workingHour.endTime is treated as available. Derive end from slotEndTime (slot start + eventLength)."
+   },
+   {
+    "id": "S10",
+    "file": "packages/trpc/server/routers/viewer/slots.ts",
+    "lines": [
+     99,
+     115
+    ],
+    "texto": "checkIfIsAvailable interprets every dateOverride with global organizerTimeZone while producer attaches per-override timeZone and lib/slots.ts consumes it per-override; use date.timeZone fallback to organizerTimeZone so both sides agree."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+    "descricao": "The working-hours check computes end from slotStartTime instead of slotEndTime, so slots that start within working hours but end after them are accepted.",
+    "textoGolden": "Incorrect end time calculation using slotStartTime instead of slotEndTime",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       141,
+       143
+      ],
+      "texto": "WHAT: `end` is computed as `slotStartTime.hour() * 60 + slotStartTime.minute()` \u2014 an exact duplicate of `start` \u2014 instead of using `slotEndTime`. WHY: the working-hours upper-bound test `end > workingHour.endTime` therefore compares the slot START against the working-day end, so a slot whose start is inside working hours but whose end (start + eventLength) overruns `workingHour.endTime` is never filtered and is reported as available, allowing bookings outside the host's working hours. HOW: compute `const end = slotEndTime.hour() * 60 + slotEndTime.minute();`."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       141,
+       142
+      ],
+      "texto": "`end` is computed from `slotStartTime` instead of `slotEndTime`, so it always equals `start`. The `end > workingHour.endTime` check is identical to the `start` check and never catches a slot that starts within working hours but ends past them. Use `slotEndTime.hour() * 60 + slotEndTime.minute()` for `end`."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       141,
+       143
+      ],
+      "texto": "`end` is computed identically to `start` (both from slotStartTime), so the check `start < workingHour.startTime || end > workingHour.endTime` can never reject a slot on the upper bound. A slot starting inside working hours but ending after workingHour.endTime is wrongly considered available; derive `end` from slotEndTime instead."
+     }
+    ]
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+    "descricao": "The date-override check compares two dayjs objects with ===, which is always false, so zero-length (day off) overrides are never detected.",
+    "textoGolden": "Using === for dayjs object comparison will always return false as it compares object references, not values. Use .isSame() method instead: dayjs(date.start).add(utcOffset, 'minutes').isSame(dayjs(date.end).add(utcOffset, minutes))",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       114,
+       114
+      ],
+      "texto": "This compares two separately constructed dayjs objects with `===` (reference equality), which is always false, so a zero-length override (start equal to end, whole day blocked) never returns true here. Compare timestamps, e.g. `dayjs(date.start).add(utcOffset, 'minutes').isSame(dayjs(date.end).add(utcOffset, 'minutes'))`."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       114,
+       116
+      ],
+      "texto": "`dayjs(date.start).add(utcOffset, \"minutes\") === dayjs(date.end).add(utcOffset, \"minutes\")` compares two separate dayjs object references, so `===` is always false. The zero-length date-override branch is dead code and such an override is never recognised as covering the day; compare values (e.g. .isSame() or .valueOf() === .valueOf()) instead."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       114,
+       115
+      ],
+      "texto": "The equality check compares two separately created Dayjs objects with ===, which is always false, even when the override start and end represent the same instant. The intended zero-length/closed-day rejection is unreachable, and a slot beginning exactly at that instant can reach the dateOverrideExist success return. Compare timestamps or use isSame instead."
+     }
+    ]
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03",
+    "descricao": "When a date override exists for the day, checkIfIsAvailable returns true before checking busy times, so slots overlapping existing bookings are reported available.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       133,
+       135
+      ],
+      "texto": "WHAT: when `dateOverrideExist` is true the function returns `true` before running the `busy.every(...)` check at the end. WHY: on any day that has a matching date override, a slot inside the override is reported available without checking the host's existing bookings (`busy` is spread via `...schedule`/`...userSchedule`), so a fixed/loose host who already has a booking during the override window is still shown as free \u2014 enabling double-booking. HOW: do not return early here; fall through so the override branch only decides whether the slot is inside the override window, and let the existing `busy` evaluation decide availability (e.g. `if (dateOverrideExist) { /* within override, still check busy */ } else { /* fall through to busy */ }`)."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       133,
+       135
+      ],
+      "texto": "The new `if (dateOverrideExist) return true;` short-circuits the `busy` conflict check (and the workingHours check) for any slot that falls inside a date override window. Every caller of `checkIfIsAvailable` previously counted on it returning false for a slot that overlaps an existing booking; on days covered by a date override that guarantee is gone, so slots conflicting with the user's real bookings are now reported as available and can be double-booked. The override branch should let control fall through to the `busy.every(...)` check (returning true only for the availability-window part) instead of returning early."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       133,
+       134
+      ],
+      "texto": "A matching date override returns true before checking busy periods. Both fixed-host and loose-host callers pass calendar and booking conflicts in busy, so a host with an override is offered even when an existing booking overlaps the slot. Continue to the busy checks after validating the override instead of returning true."
+     }
+    ]
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#04",
+    "descricao": "The working-hours check rejects a slot when any interval for the weekday excludes it, so split schedules (e.g. morning and afternoon) reject all slots.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       138,
+       147
+      ],
+      "texto": "The working-hours predicate rejects a slot if any interval on its weekday does not contain it. A split schedule of 09:00\u201312:00 and 13:00\u201317:00 therefore loses every slot, since each valid slot lies outside the other interval. Require at least one matching interval to contain the full event instead of finding an interval that excludes it."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       138,
+       150
+      ],
+      "texto": "This search rejects a slot if it falls outside any working-hours window on that weekday. With split hours of 09:00\u201312:00 and 13:00\u201317:00, a valid 10:00 slot is rejected because it is outside the afternoon window. Check for containment in at least one applicable window rather than finding any window that excludes the slot."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       138,
+       151
+      ],
+      "texto": "WHAT: Outside-working-hours test uses workingHours.find() returning true if ANY entry rejects the slot. WHY: With split schedules (two entries same weekday, e.g. morning+afternoon) a valid morning slot is outside the afternoon entry, find() matches and the slot is wrongly rejected as outside hours. HOW: Invert logic to accept if ANY entry contains the slot (e.g. !workingHours.some(entry contains slot) => outside)."
+     }
+    ]
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#05",
+    "descricao": "The date-override bound compares the slot start, not the slot end, with the override end, so slots extending past the override are accepted.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       117,
+       124
+      ],
+      "texto": "The override bounds reject only non-overlapping slots rather than requiring the entire event to fit inside an override. A fixed host with a 10:00\u201311:00 override accepts a 10:30\u201311:30 event generated from another host's availability, despite being unavailable for its final half hour. Accept only when at least one override contains both slotStartTime and slotEndTime; this also avoids rejecting a slot merely because another interval on the same date does not overlap it."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       123,
+       125
+      ],
+      "texto": "The upper bound checks whether slotStartTime is after the override end. A slot that starts before the override end but finishes after it is treated as available. Compare slotEndTime with the override end using isAfter, so the slot must fit entirely inside the override."
+     }
+    ]
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#06",
+    "descricao": "The override timezone conversion keeps only hour and minute, so overrides that cross midnight in the invitee timezone become inverted ranges or are applied to the wrong day.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/lib/slots.ts",
+      "lines": [
+       218,
+       223
+      ],
+      "texto": "Timezone conversion takes only hour and minute, discarding day rollover and turning intervals crossing attendee midnight into reversed ranges. A UTC organizer's 22:00\u201323:00 override viewed in UTC+01:30 becomes startTime 1410 and endTime 30, which buildSlots skips because start is greater than end, removing valid availability. Preserve the converted dates and split the interval across attendee-day boundaries before building slots."
+     },
+     {
+      "file": "packages/lib/slots.ts",
+      "lines": [
+       206,
+       224
+      ],
+      "texto": "WHAT: activeOverrides are filtered by UTC day (line 206-207) before the invitee/organizer offset is applied (lines 212-224), and shifted hours are not re-bucketed across midnight. WHY: An override that shifts to the previous/next calendar day in the invitee timezone is dropped from the wrong day or applied to the wrong day, so slots show open when the organizer is off (and vice versa). HOW: Filter/bucket overrides in the invitee-local date after applying the offset, or emit split entries spanning two invitee days."
+     }
+    ]
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#07",
+    "descricao": "The new working-hours check does not reject slots on weekdays that have no working-hours entry, so those slots are treated as available.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/slots.ts",
+      "lines": [
+       140,
+       146
+      ],
+      "texto": "A weekday with no matching working-hours entry falls through to the busy checks and is treated as available when there are no conflicts. In round-robin events, slots generated for a loose host can consequently include a fixed host whose schedule excludes that day. Reject slots unless a working-hours interval on the slot's weekday contains the event, when no date override applies."
+     }
+    ]
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-01",
+    "descricao": "checkIfIsAvailable's date-override check never rejects a slot that starts before the override start (only one that ends before it), so slots partly outside the override hours are treated as available.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-02",
+    "descricao": "The override day is computed with local-time dayjs(date.start) while the slot day is formatted in UTC, so on a server not running in UTC overrides near midnight are applied to the wrong day or skipped.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-03",
+    "descricao": "With several date-override ranges on the same day, a slot is rejected as soon as it falls outside any one of them, so slots inside the other ranges become unavailable.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "9501091c52ae94e8d916f79b35d21975b3f9cadb",
+  "base": "bb5a6837cb5b3d8d3b174e17d42ec14486ef8738",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/integrations/services/assignment_source.py",
+    "lines": [
+     14,
+     18
+    ],
+    "texto": "WHAT: `queued: datetime = timezone.now()` is evaluated once at import so every AssignmentSource shares the same timestamp. WHY: breaks any recency/ordering use of `queued` and makes to_dict/from_dict round-trips carry a stale time. HOW: use `field(default_factory=timezone.now)`."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/integrations/services/assignment_source.py",
+    "lines": [
+     27,
+     28
+    ],
+    "texto": "WHAT: `to_dict()` via `asdict` keeps `queued` as a raw datetime, which is passed as celery `apply_async` kwargs in `sync_group_assignee_outbound`. WHY: the datetime is not JSON-serializable so outbound assignee sync tasks fail to serialize/enqueue instead of syncing. HOW: serialize `queued` to isoformat string in `to_dict` and parse it back in `from_dict`."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/integrations/services/assignment_source.py",
+    "lines": [
+     30,
+     35
+    ],
+    "texto": "WHAT: `from_dict` passes a serialized `queued` string straight into a datetime field with no coercion, and returns None on any unexpected/missing key. WHY: a None source makes `should_sync(..., None)` return True, silently disabling the cycle guard the PR adds and resuming the loop. HOW: coerce/validate `queued`, `source_name`, and `integration_id` explicitly as above."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/integrations/mixins/issues.py",
+    "lines": [
+     411,
+     418
+    ],
+    "texto": "WHAT: base `sync_status_outbound` adds explicit `assignment_source` param but `ExampleIntegration.sync_status_outbound(self, external_issue, is_resolved, project_id)` accepts no **kwargs. WHY: any caller passing `assignment_source=` to that installation raises TypeError, breaking the override contract. HOW: keep the new param absorbed via **kwargs on the base or update all overrides to accept it."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/integrations/services/assignment_source.py",
+    "lines": [
+     14,
+     28
+    ],
+    "texto": "to_dict() returns raw datetime in queued via asdict, passed as assignment_source_dict to apply_async kwargs. Celery JSON encoder has no rule for datetime so enqueue raises. Serialize to ISO string and parse back in from_dict, use default_factory for queued."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/integrations/services/assignment_source.py",
+    "lines": [
+     14,
+     18
+    ],
+    "texto": "The default `timezone.now()` is evaluated once at class definition, so all AssignmentSource instances share the import-time timestamp instead of creation time. Use `field(default_factory=timezone.now)` so `queued` reflects actual creation/queue time."
+   },
+   {
+    "id": "S7",
+    "file": "src/sentry/integrations/services/assignment_source.py",
+    "lines": [
+     27,
+     28
+    ],
+    "texto": "to_dict() leaves queued as datetime but it is sent through Celery apply_async kwargs which must be JSON-serializable and read back by from_dict() with no ISO-string parsing. Serialize queued to isoformat (and parse back in from_dict) so outbound assignee sync does not fail serialization or round-trip as wrong type."
+   },
+   {
+    "id": "S8",
+    "file": "tests/sentry/integrations/services/test_assignment_source.py",
+    "lines": [
+     8,
+     11
+    ],
+    "texto": "Name claims empty_array but body passes empty dict {}; a regression handling list input would not fail this test. Rename and add real array case."
+   },
+   {
+    "id": "S9",
+    "file": "tests/sentry/integrations/services/test_assignment_source.py",
+    "lines": [
+     13,
+     19
+    ],
+    "texto": "Typo 'inalid' means -k invalid filtering misses this test, allowing invalid-payload regression to pass silently in filtered runs. Fix spelling."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+    "descricao": "AssignmentSource.queued defaults to timezone.now() evaluated at class definition, so all instances share the import-time timestamp instead of the time they were queued.",
+    "textoGolden": "The AssignmentSource dataclass uses queued: datetime = timezone.now() as a default field value, which evaluates timezone.now() once at class definition time and shares that single datetime instance across all objects.",
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/services/assignment_source.py",
+      "lines": [
+       14,
+       18
+      ],
+      "texto": "WHAT: `queued: datetime = timezone.now()` evaluates once at class-definition time so every AssignmentSource without explicit queued shares the same timestamp. WHY: queued time is wrong/stale for all later instances and defeats its purpose as a queue-time marker. HOW: use `field(default_factory=timezone.now)` (with `field` import)."
+     },
+     {
+      "file": "src/sentry/integrations/services/assignment_source.py",
+      "lines": [
+       14,
+       18
+      ],
+      "texto": "Field `queued: datetime = timezone.now()` is evaluated once at import so all AssignmentSources share the same timestamp. Use `field(default_factory=timezone.now)` so each instance measures its actual creation/queue time."
+     },
+     {
+      "file": "src/sentry/integrations/services/assignment_source.py",
+      "lines": [
+       18,
+       18
+      ],
+      "texto": "The dataclass field default `queued: datetime = timezone.now()` is evaluated a single time when the module is imported, so every AssignmentSource created without an explicit `queued` value (which is exactly what `from_integration` does, and what `from_dict` falls back to when the key is absent) shares the same frozen import-time timestamp instead of the moment the assignment was actually queued. This makes the `queued` timestamp semantically wrong/meaningless (it reflects process start, not assignment time) and would silently misreport the queue time anywhere this value is later inspected. Fix by defaulting in a factory/`__post_init__` or making the caller pass the timestamp, e.g. set `queued` inside `from_integration` (`queued=timezone.now()`), or use `field(default_factory=timezone.now)`."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#02",
+    "descricao": "The test method name test_from_dict_inalid_data has a typo; it should be test_from_dict_invalid_data.",
+    "textoGolden": "The method name has a typo: test_from_dict_inalid_data should be test_from_dict_invalid_data.",
+    "comentarios": [
+     {
+      "file": "tests/sentry/integrations/services/test_assignment_source.py",
+      "lines": [
+       13,
+       19
+      ],
+      "texto": "Typo in test name test_from_dict_inalid_data hides it from name-filtered runs (e.g. -k invalid_data): fix spelling to test_from_dict_invalid_data so the invalid-payload guard is actually selected and verified."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#03",
+    "descricao": "test_from_dict_empty_array actually passes an empty dict, so the name does not match what the test exercises.",
+    "textoGolden": "Method name says 'empty_array' but tests empty dict - consider renaming to 'test_from_dict_empty_dict' for clarity.",
+    "comentarios": [
+     {
+      "file": "tests/sentry/integrations/services/test_assignment_source.py",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "The test is named test_from_dict_empty_array but it passes an empty dict ({}), not an empty array; a caller reading the name will believe the empty-list/array input path is covered when it is not. Rename it to test_from_dict_empty_dict (or pass [] to actually cover the empty-array case) so the identifier agrees with the input it exercises."
+     },
+     {
+      "file": "tests/sentry/integrations/services/test_assignment_source.py",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "test_from_dict_empty_array names an empty array but constructs an empty dict (`data: dict[str, Any] = {}`), so it only re-exercises the empty/None path and never covers empty-array input; a regression specific to that input would pass unnoticed. Pass a real empty array or rename the test to match its body."
+     },
+     {
+      "file": "tests/sentry/integrations/services/test_assignment_source.py",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "test_from_dict_empty_array passes {} rather than an empty array. It therefore only tests missing required dictionary keys and would still pass if rejection of an array input were broken. Pass [] to exercise the named case (or rename this test to empty_dict if that is the intended contract)."
+     }
+    ]
+   }
+  ]
+ },
+ "sms-workflow-reminder-retry-count-tracking-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "c790227e0cda780e6fea9bb03af27948d9e286b9",
+  "base": "917c7b0764f4c6bfdca95db2c5f73dbfdbe11757",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     31,
+     43
+    ],
+    "texto": "WHAT: The second OR branch deletes any WorkflowReminder with retryCount gt 1 without a method: SMS filter. WHY: Once any non-SMS reminder ever has retryCount>1 it is wrongly deleted, broadening a previously SMS-only purge. HOW: Add method: WorkflowMethods.SMS to the retryCount branch."
+   },
+   {
+    "id": "S2",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     179,
+     186
+    ],
+    "texto": "WHAT: Both failure paths write retryCount from the stale in-memory reminder.retryCount + 1 instead of an atomic increment. WHY: Overlapping cron executions both read the same value and last-write-wins, losing a retry and delaying the gt:1 deletion so failing numbers are retried more than twice. HOW: Use data: { retryCount: { increment: 1 } }."
+   },
+   {
+    "id": "S3",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     189,
+     198
+    ],
+    "texto": "WHAT: The catch block performs an awaited prisma update that can itself throw (e.g. P2025 if a concurrent run already deleted the row) with no guard. WHY: A previously log-only error path now throws out of the loop, aborting remaining reminders and skipping the final response. HOW: Guard the cleanup update with its own try/catch or use updateMany."
+   },
+   {
+    "id": "S4",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     29,
+     44
+    ],
+    "texto": "WHAT: The added OR branch filters on retryCount which has no index (schema has indexes on bookingUid, workflowStepId, method/scheduled/scheduledDate only). WHY: Every cron tick now runs a deleteMany with an unindexed disjunct, forcing a full scan of WorkflowReminder instead of the prior indexed SMS+date purge. HOW: Add an index on retryCount (or scope the purge to indexed columns) if this cron runs frequently."
+   },
+   {
+    "id": "S5",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     28,
+     44
+    ],
+    "texto": "Comment at line 28 still describes only the old condition (past scheduledDate) while the code now deletes with OR: past SMS OR retryCount > 1. Update the comment to describe both branches so maintainers do not misread the deletion contract."
+   },
+   {
+    "id": "S6",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     29,
+     44
+    ],
+    "texto": "Second OR branch has no method filter so cron deletes EMAIL/WHATSAPP WorkflowReminders with retryCount>1. Scope both branches to method SMS."
+   },
+   {
+    "id": "S7",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     178,
+     197
+    ],
+    "texto": "Both else and catch paths do read-modify-write retryCount+1; concurrent runs read same value and overwrite, losing retries. Use atomic increment."
+   },
+   {
+    "id": "S8",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     28,
+     44
+    ],
+    "texto": "Second OR branch checks only retryCount gt 1 with no method constraint, while the first branch, the findMany below, and the comment all scope to method SMS. This deletes EMAIL/other WorkflowReminders with retryCount>1. Add method: WorkflowMethods.SMS to the retryCount branch so both disjuncts agree."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#01",
+    "descricao": "retryCount is set to reminder.retryCount + 1 from a value read at the start of the run instead of an atomic increment, so overlapping runs can lose increments.",
+    "textoGolden": "Using retryCount: reminder.retryCount + 1 reads a possibly stale value and can lose increments under concurrency; consider an atomic increment via Prisma (increment: 1) to avoid race conditions (also applies to the similar update in the catch block).",
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       179,
+       197
+      ],
+      "texto": "WHAT: retryCount is incremented with a read-value computed at the start of the run (`retryCount: reminder.retryCount + 1`) instead of an atomic increment. WHY: if two cron invocations overlap (or the same reminder is processed twice before the write commits), both read the same retryCount and both write N+1, so failures are undercounted and the reminder can loop forever without ever reaching the `retryCount > 1` deletion threshold. HOW: use `data: { retryCount: { increment: 1 } }` so the increment is atomic (the initial read value is then irrelevant)."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       190,
+       197
+      ],
+      "texto": "`retryCount: reminder.retryCount + 1` is a read-modify-write of the value fetched at the top of the handler, not an atomic increment. Two overlapping cron runs both read the same retryCount and both write the same +1, losing an update, so failed reminders can be retried indefinitely and never reach the `gt: 1` deletion threshold. Use Prisma's atomic `retryCount: { increment: 1 }` instead of computing from the stale in-memory value (same issue in the else branch at lines 179-186)."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       183,
+       185
+      ],
+      "texto": "Retry counts are assigned from the stale findMany snapshot instead of incremented atomically, both here and in the catch branch. Two overlapping cron requests can each fail scheduling the same reminder with retryCount zero and both write one, so two failed attempts do not reach the deletion threshold and additional attempts are scheduled. Use Prisma's atomic retryCount increment operation in both failure branches."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+    "descricao": "The deleteMany OR clause applies retryCount > 1 without the SMS method filter, so the SMS cron deletes any workflow reminder (email, WhatsApp) with retryCount above 1.",
+    "textoGolden": "The deletion logic in scheduleSMSReminders.ts incorrectly deletes non-SMS workflow reminders (e.g., Email, WhatsApp) that have retryCount > 1. This occurs because the retryCount condition within the OR clause for deletion lacks a method: WorkflowMethods.SMS filter, causing it to apply to all reminder types instead of only SMS reminders, which is the intended scope of this function.",
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       28,
+       43
+      ],
+      "texto": "The comment \"//delete all scheduled sms reminders where scheduled date is past current date\" no longer describes the deleteMany below it. After this change the query also deletes reminders with retryCount > 1, and that OR branch has no `method: WorkflowMethods.SMS` filter, so non-SMS (email) reminders with retryCount > 1 are now deleted too. Update the comment (or add the missing SMS filter to the retryCount branch) so the prose matches what the code actually deletes."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       53,
+       63
+      ],
+      "texto": "The deleteMany OR clause deletes any reminder with retryCount > 1 regardless of method."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       38,
+       43
+      ],
+      "texto": "The second OR branch `{ retryCount: { gt: 1 } }` has no `method` filter, unlike the first branch (`method: WorkflowMethods.SMS`). Because `retryCount` is a generic column on WorkflowReminder used by all reminder methods, this deleteMany now permanently deletes every reminder of ANY method (including EMAIL) whose retryCount exceeds 1, even though this cron is only supposed to clean up SMS reminders. Add `method: WorkflowMethods.SMS` to this branch (or scope the whole where to SMS) so non-SMS reminders are never destroyed."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#03",
+    "descricao": "The cleanup comment describes only past-date SMS deletion and omits the new retryCount > 1 deletion branch.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       38,
+       42
+      ],
+      "texto": "Update the cleanup comment to describe the new retry-exhaustion deletion branch. It currently says this deletes scheduled SMS reminders whose date has passed, but this OR branch also deletes any reminder with retryCount > 1, including future-dated reminders and without an SMS restriction. The comment now misrepresents the scope of this destructive operation."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       28,
+       44
+      ],
+      "texto": "Stale comment: line 28 says 'delete all scheduled sms reminders where scheduled date is past current date' but the new OR clause also deletes any reminder with retryCount > 1 regardless of method or date. Update the comment to describe both branches."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
+    "descricao": "The retry-count update inside the catch block is not guarded, so if it throws (for example the reminder was deleted concurrently) the error escapes the loop and the cron run fails, skipping the remaining reminders.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       189,
+       198
+      ],
+      "texto": "WHAT: the catch block performs an unguarded `prisma.workflowReminder.update` while handling the scheduling error. WHY: if this write itself rejects (e.g. the row was concurrently removed, or a transient DB error), the rejection is not caught and escapes the for-loop, aborting the whole cron run so all remaining reminders go unprocessed. HOW: wrap the retryCount update in its own try/catch (log and continue) so a failure to record the retry does not abort processing of the remaining reminders."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       190,
+       197
+      ],
+      "texto": "This new `prisma.workflowReminder.update` sits inside the catch block, which is NOT protected by any try/catch. If this update throws (e.g. the reminder was already removed by the `deleteMany` at the top of the file during a concurrent run -> Prisma P2025, or a transient DB error), the exception escapes the `for` loop and rejects the handler, so all remaining unscheduled reminders are skipped and the cron request fails. Previously the catch only did `console.log`, so a single bad reminder never aborted the batch and the endpoint always returned 200. Wrap this update in its own try/catch (or `updateMany`/catch-and-log) so a failed retry-count write cannot take down the whole scheduling run."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       190,
+       197
+      ],
+      "texto": "The new database update inside catch can itself throw when a reminder has been deleted during scheduling. Booking cancellation deletes reminders through handleCancelBooking and deleteScheduledSMSReminder, so a concurrent cancellation followed by a scheduling error now rejects the entire cron handler and prevents the remaining reminders from being processed. Use an updateMany filtered by the reminder ID to tolerate an already-deleted row, and guard errors from retry bookkeeping so they do not escape the per-reminder error handler."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#06",
+    "descricao": "Claims transient errors increment retryCount, so two runs during an outage delete the whole pending SMS reminder queue.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       190,
+       197
+      ],
+      "texto": "WHAT: The catch block unconditionally increments retryCount for any exception (profile/bookerUrl/templating/rate-limit/Twilio outage). WHY: Two consecutive cron runs with a transient global failure increment every pending SMS reminder to 2 and the startup deleteMany then wipes the entire future SMS queue, not just permanently-invalid numbers. HOW: Only increment on permanent scheduleSMS failure, or distinguish transient errors from terminal ones before counting toward deletion."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#07",
+    "descricao": "The new OR arm on retryCount has no supporting index, so the cleanup delete can no longer be fully served by the existing index and may scan the table.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       31,
+       43
+      ],
+      "texto": "WHAT: the deleteMany WHERE now uses `OR` between `(method = SMS AND scheduledDate <= now)` and `retryCount > 1`, but WorkflowReminder has no index on the newly added retryCount column. WHY: Postgres cannot satisfy a two-way OR using the existing (method, scheduled, scheduledDate) index and will fall back to a sequential scan of the entire WorkflowReminder table on every cron invocation, turning a previously indexed delete into a full table scan as the table grows. HOW: add an index on retryCount (or restructure so each branch is index-usable), then re-check the query plan."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#09",
+    "descricao": "The retryCount increment update is duplicated in the else branch and the catch block.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "scheduleSMSReminders.ts",
+      "lines": [
+       178,
+       197
+      ],
+      "texto": "The retryCount increment is duplicated in the else-branch and catch."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#e2b-01",
+    "descricao": "SMS-sending locks are counted as failed scheduling attempts: scheduleSMS returns undefined for locked users/teams, retryCount is incremented, and after two cron runs the retryCount > 1 cleanup deletes future reminders even if sending is later unlocked.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#sncc-01",
+    "descricao": "retryCount is not incremented when a reminder has no message or no sendTo number, so such reminders are reprocessed on every cron run until their scheduled date.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "4def149a50c4b9b2c24fbb753ac60fe4f4df0cac",
+  "base": "c834e7473c02f11451216b3fbf355f953cfd95e9",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+    "lines": [
+     271,
+     276
+    ],
+    "texto": "WHAT: Changed getSubGroupsCount returns null when the group was concurrently deleted. WHY: It violates GroupModel.getSubGroupsCount contract documented as Never returns null, shifting the NPE to any caller that unboxes or assumes non-null instead of fixing the race. HOW: Return a non-null fallback (e.g. 0L) or delegate to invalidation path consistent with getSubGroupsStream handling."
+   },
+   {
+    "id": "S2",
+    "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+    "lines": [
+     139,
+     157
+    ],
+    "texto": "WHAT: Reader thread is started but never joined before asserting caughtExceptions is empty. WHY: The assertion can run while requests are still in-flight (missed failures/flaky) and the spinning thread leaks past the test, hammering the server during subsequent tests. HOW: Keep the Thread reference, join it with a timeout after deletedAll.set(true) before asserting."
+   },
+   {
+    "id": "S3",
+    "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+    "lines": [
+     139,
+     148
+    ],
+    "texto": "WHAT: Reader thread busy-spins full listings with maxResults=Integer.MAX_VALUE and no throttle. WHY: Each iteration loads all groups with no pagination/backoff, creating unbounded request fanout and server load that can starve the deleter and destabilize the suite. HOW: Bound the page size and add backoff/yield between iterations."
+   },
+   {
+    "id": "S4",
+    "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+    "lines": [
+     139,
+     157
+    ],
+    "texto": "Race: the reader Thread is not retained/joined before asserting caughtExceptions is empty. deletedAll.set(true) does not wait for an in-flight groups() call, so an exception arriving after the assert is missed (false pass) and the thread can leak into the next test. Join the reader thread (with timeout) after setting deletedAll and before the assertion."
+   },
+   {
+    "id": "S5",
+    "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+    "lines": [
+     136,
+     157
+    ],
+    "texto": "The reader thread is started but never joined before assertThat(caughtExceptions, empty()). deletedAll.set(true) does not wait for an in-flight groups() call, so exceptions added after the assert are missed and the test can falsely pass. Keep the Thread reference and join it (with timeout) after setting deletedAll and before asserting."
+   },
+   {
+    "id": "S6",
+    "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+    "lines": [
+     136,
+     157
+    ],
+    "texto": "The reader thread is not joined before asserting caughtExceptions is empty: deletedAll is set then assertion runs while a groups() call may still be in flight, so an exception caused by the concurrent-delete bug would be added after the check and the test would still pass. Keep a Thread reference and join() it before asserting."
+   },
+   {
+    "id": "S7",
+    "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+    "lines": [
+     136,
+     158
+    ],
+    "texto": "Background reader Thread is started but never joined before assertThat(caughtExceptions, empty()). deletedAll only stops the next loop iteration; a read already in flight can add an exception after the assert, so the test can spuriously pass. Keep the Thread handle and join (with timeout) after deletedAll.set(true) before asserting."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#01",
+    "descricao": "The cached GroupAdapter.getSubGroupsCount returns null when the group was deleted concurrently, violating the GroupModel contract that it never returns null and risking NPEs in callers that unbox it.",
+    "textoGolden": "Returning null from getSubGroupsCount() violates the GroupModel contract (Javadoc says it never returns null) and may lead to NPEs in callers that expect a non-null count.",
+    "comentarios": [
+     {
+      "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+      "lines": [
+       274,
+       275
+      ],
+      "texto": "WHAT: `getSubGroupsCount()` now returns `null` when the delegate model is gone, violating the `GroupModel.getSubGroupsCount()` contract whose javadoc (GroupModel.java:296) states 'Never returns null'. WHY: In-repo callers happen to tolerate a Long null, but any caller that unboxes the result (`long c = group.getSubGroupsCount()`) or does arithmetic on it will NPE, converting the old NPE into a different one. HOW: return a non-null sentinel such as `0L` (and assert the empty/absent case explicitly), or update the interface contract to document a nullable return."
+     },
+     {
+      "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+      "lines": [
+       274,
+       275
+      ],
+      "texto": "getSubGroupsCount() now returns null when the cached delegate is gone (modelSupplier.get() == null), whereas before this change the method delegate-called getGroupModel().getSubGroupsCount(), which could not yield null (a missing delegate surfaced as an exception instead). The declared type Long is now genuinely nullable in a path that previously always produced a value or threw, so any caller that relies on the old contract \u2014 unboxing the result (e.g. `group.getSubGroupsCount() > 0`, `long n = group.getSubGroupsCount()`, or passing it to a primitive-typed parameter) \u2014 will now throw a NullPointerException instead of getting a value or the previous exception. Since consumers were not updated for the new nullable contract, either keep the non-null behavior for callers that cannot handle null or audit/update every caller of GroupModel.getSubGroupsCount() to null-check before use."
+     },
+     {
+      "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+      "lines": [
+       274,
+       275
+      ],
+      "texto": "getSubGroupsCount() now returns null when modelSupplier.get() is null, but the count is consumed as a number by brief-representation building; the sibling cache entity changed in this PR (CachedGroup) handles the same 'model unavailable' case by returning a non-null default (getRoleMappings returns Collections.emptySet(), and the subGroups/attributes loaders are built with non-null empty defaults). Returning null here breaks that convention and can surface as an unboxing/NPE on the consumer side of the read path. Return a non-null value (e.g., 0) or only null if the GroupModel contract explicitly declares it nullable."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+    "descricao": "The concurrency regression test never waits for the reader thread before asserting no exceptions, so it can pass even when the concurrent-deletion NPE still occurs.",
+    "textoGolden": "The reader thread isn\u2019t waited for; flipping deletedAll to true and asserting immediately can race and miss exceptions added just after the flag change, making this test flaky.",
+    "comentarios": [
+     {
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+      "lines": [
+       136,
+       157
+      ],
+      "texto": "The reader thread is started but never synchronized with: the test does not wait for it to complete a read before deleting, and does not join it before asserting caughtExceptions is empty. The deletes can finish before the reader reads at all, or a failing read can land after the assertion, so the test passes even with the bug present. Use a CountDownLatch counted down after the reader's first successful read, start deleting only after it fires, and join the thread (after setting deletedAll) before asserting."
+     },
+     {
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+      "lines": [
+       149,
+       157
+      ],
+      "texto": "WHAT: The reader thread started at line 139-149 is never joined before `assertThat(caughtExceptions, Matchers.empty())` runs. WHY: The reader can be mid-request when `deletedAll.set(true)` executes; if that request throws (e.g., reading a group deleted concurrently), the exception is appended to `caughtExceptions` AFTER the assertion has already evaluated, so the test can pass even when the NPE regression it targets is present (and is flaky). HOW: after `deletedAll.set(true)`, `thread.join(<timeout>)` (storing the Thread reference) before the assertion."
+     },
+     {
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+      "lines": [
+       139,
+       157
+      ],
+      "texto": "The reader Thread is started but never joined, so the assertion at line 157 can execute before the reader has completed a single groups() read (or while a read that would throw the NPE is still in flight). If the GroupAdapter.getSubGroupsCount null-model NullPointerException were reintroduced, this test could still pass because caughtExceptions is asserted empty before the racing reader thread has recorded anything. Capture the Thread, then join it (e.g. Thread reader = new Thread(...); reader.start(); ... deletions ...; deletedAll.set(true); reader.join();) before asserting so the test actually waits on the condition it verifies."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#03",
+    "descricao": "The reader thread's stop flag is set only after all deletions succeed, so a failing delete leaves a non-daemon thread polling indefinitely.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+      "lines": [
+       139,
+       155
+      ],
+      "texto": "WHAT: The reader loop `while (!deletedAll.get())` has no termination guarantee and `deletedAll.set(true)` at line 155 only runs after the delete loop at 152-154 completes. WHY: If any `group(groupUuid).remove()` throws, `deletedAll` is never set, so the non-daemon thread loops forever and the test JVM hangs. HOW: set the thread as daemon and/or wrap deletion in try/finally so `deletedAll.set(true)` always executes."
+     },
+     {
+      "file": "GroupTest.java",
+      "lines": [
+       117,
+       158
+      ],
+      "texto": "The test has a mid-loop abort hazard."
+     },
+     {
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+      "lines": [
+       152,
+       155
+      ],
+      "texto": "The reader's stop flag is set only after every deletion succeeds, with no finally block. If any remove() throws, the test exits with a live non-daemon thread that keeps issuing requests and collecting exceptions indefinitely, interfering with teardown and potentially preventing JVM termination. Put stop signaling and reader termination in a finally block around deletion."
+     }
+    ]
+   }
+  ]
+ },
+ "advanced-sql-analytics-framework-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "f3317b329b4eb8fd96f99dd86525bc4a22d20248",
+  "base": "cbe1e7d63f098e306058c0fbcab2f5c30602fa7d",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/expr/sql/db.go",
+    "lines": [
+     12,
+     22
+    ],
+    "texto": "DB stub changed behaviour contract: RunCommands/QueryFramesInto/TablesList previously executed real in-memory DuckDB work and callers (parser.go TablesList, sql_command.go NewSQLCommand/Execute) rely on success. Now every call returns 'not implemented', so all SQL expressions unconditionally fail. Either restore real implementation or update consumers to handle disabled state."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     194,
+     200
+    ],
+    "texto": "enableSqlExpressions always returns false: both the if branch and fallthrough return false, so `!enabled` in ReadQuery is always true and QueryTypeSQL always errors even when FlagSqlExpressions is enabled. The second return should reflect the flag being enabled."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/expr/sql/db.go",
+    "lines": [
+     12,
+     22
+    ],
+    "texto": "New pkg/expr/sql.DB stub returns 'not implemented' for TablesList/RunCommands/QueryFramesInto, but sql_command.go:100 and parser.go:26 call them expecting real results. After replacing duck.NewInMemoryDB, every SQL Execute/TablesList fails \u2014 output never matches expected behavior."
+   },
+   {
+    "id": "S4",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     194,
+     195
+    ],
+    "texto": "Variable named enabled is assigned the negation of FlagSqlExpressions, so it is true when the feature is disabled \u2014 the name states the opposite of what it controls and inverts the gate. Remove the ! so enabled means enabled."
+   },
+   {
+    "id": "S5",
+    "file": "pkg/expr/sql/db.go",
+    "lines": [
+     24,
+     26
+    ],
+    "texto": "Name NewInMemoryDB promises the working in-memory DB callers in parser.go and sql_command.go expect from duck.NewInMemoryDB, but the new type holds no state and every method returns 'not implemented'. Rename to reflect stub status (e.g. NewStubDB/NewDisabledDB) or document that it is intentionally unimplemented so callers are not misled."
+   },
+   {
+    "id": "S6",
+    "file": "pkg/expr/sql/db.go",
+    "lines": [
+     20,
+     22
+    ],
+    "texto": "pkg/expr/sql/db.go provides QueryFramesInto that unconditionally returns not implemented, while pkg/expr/sql_command.go now calls sql.NewInMemoryDB().QueryFramesInto expecting it to populate the result frame. Every SQLCommand.Execute therefore fails. Implement the DB methods (restore duck-backed logic) instead of stubbing."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "advanced-sql-analytics-framework-grafana-codex#06",
+    "descricao": "The variable in TablesList is still named duckDB although it no longer holds a DuckDB instance.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/expr/sql/parser.go",
+      "lines": [
+       22,
+       26
+      ],
+      "texto": "After replacing `duck.NewInMemoryDB()` with local `NewInMemoryDB()` and removing the duck import, the local `duckDB` still carries the old implementation name though it is no longer a duck DB. Rename to `db`/`sqlDB` (as done in sql_command.go) so identifier matches code."
+     }
+    ]
+   },
+   {
+    "issueId": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+    "descricao": "enableSqlExpressions returns false on both branches, so ReadQuery rejects every SQL expression query as not implemented even when the sqlExpressions feature flag is enabled.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "advanced-sql-analytics-framework-grafana-codex#oph-02",
+    "descricao": "The variable `enabled` in enableSqlExpressions holds the negated flag value, so it is true when SQL expressions are disabled and the name states the opposite of its value.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feature-localization-fallbacks-server-side-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "ecfa17b5a79dfdc91e7a4d50b42ae78a35d0a293",
+  "base": "728845d008f06828630a632e5c7d67e11bf15deb",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "config/initializers/i18n.rb",
+    "lines": [
+     13,
+     18
+    ],
+    "texto": "WHAT: SiteSetting.default_locale.to_sym is called before .uniq.compact, so a nil/blank default raises NoMethodError instead of being compacted away. WHY: During boot/DB outage default_locale is not guaranteed loaded (per PR description), so every fallback lookup and every request via ensure_loaded! crashes instead of falling back to :en. HOW: Compact/map safely, e.g. [locale, SiteSetting.default_locale, :en].map{|l| l.try(:to_sym)}.compact.uniq."
+   },
+   {
+    "id": "S2",
+    "file": "config/initializers/i18n.rb",
+    "lines": [
+     13,
+     18
+    ],
+    "texto": "WHAT: Raw request locale (user-controlled via User#effective_locale) is returned unsanitized in the fallback chain and interpolated into Regexp.new(\"\\\\.#{locale}\\\\.yml$\") in load_locale. WHY: An attacker who sets locale to a regex metachar string (e.g. \".*\") matches every file in I18n.load_path, forcing the server to load all locale files into memory on their request (resource exhaustion) and broadening the file-load surface. HOW: Normalize/allowlist the locale (to_sym + check against LocaleSiteSetting.supported_locales, fallback to :en) before returning it and before building the grep Regexp (use Regexp.escape)."
+   },
+   {
+    "id": "S3",
+    "file": "app/controllers/application_controller.rb",
+    "lines": [
+     159,
+     159
+    ],
+    "texto": "WHAT: set_locale now synchronously loads up to 3 locale YAML files via I18n.fallbacks.ensure_loaded! on every request, and FallbackLocaleList#[] hits SiteSetting.default_locale on every fallback-miss lookup. WHY: First requests after boot/change block the request path on file I/O under LOAD_MUTEX, and every missing translation pays a SiteSetting lookup plus up to 3 backend lookups, amplifying hot-path cost. HOW: Memoize the resolved default locale per request/boot and keep per-request ensure_loaded! cheap (rely on @loaded_locales check), or preload fallbacks outside the request path."
+   },
+   {
+    "id": "S4",
+    "file": "config/initializers/i18n.rb",
+    "lines": [
+     13,
+     18
+    ],
+    "texto": "SiteSetting.default_locale.to_sym is evaluated before .compact, so if default_locale is nil the fallback lookup raises NoMethodError instead of falling back to [:en]. Compact first, then convert to symbols."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#01",
+    "descricao": "Fallback locale catalogs are only loaded in the controller's set_locale filter, while translate loads just the current locale, so translations outside requests (jobs, mailers) cannot fall back to the site default or English.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/application_controller.rb",
+      "lines": [
+       159,
+       159
+      ],
+      "texto": "Fallback catalogs are ensured loaded only in the controller filter, leaving non-controller translation paths without the catalogs required by the newly enabled fallback backend. Jobs::Base sets I18n.locale directly and PostAlerter uses I18n.with_locale, while the accelerator loads only the current locale and backend fallback lookups bypass that loader; missing keys therefore still produce missing translations or skip the configured site fallback until another request happens to load those catalogs. Ensure the full fallback chain is loaded at the translation boundary, rather than relying solely on the controller filter."
+     },
+     {
+      "file": "lib/freedom_patches/translate_accelerator.rb",
+      "lines": [
+       62,
+       69
+      ],
+      "texto": "The new fallbacks contract requires the fallback locales (site default and :en, from FallbackLocaleList#[]) to be loaded before Backend::Simple#translate is asked for them \u2014 Backend::Simple only returns already-loaded translations. This PR added I18n.ensure_loaded!/I18n.fallbacks.ensure_loaded! but wired it only into ApplicationController#set_locale, and the loader that actually gates every translation, I18n.translate (line 68), still loads only `config.locale`. As a result, any I18n.t performed outside the request cycle (console, background jobs, mailers) or before set_locale runs will not load the fallback locales and will silently return 'translation missing' instead of the fallback the new I18n.fallbacks advertises. Fix: have translate ensure the fallback chain is loaded (e.g. call I18n.fallbacks.ensure_loaded! / load the fallback locales here), not rely on the controller hook."
+     },
+     {
+      "file": "lib/freedom_patches/translate_accelerator.rb",
+      "lines": [
+       67,
+       68
+      ],
+      "texto": "translate loads only config.locale, but the new fallback chain (default_locale, :en) is loaded only by the controller's I18n.fallbacks.ensure_loaded!. Outside controllers (jobs, mailers, rake), a key missing in the current locale falls back to a locale that is not loaded, so it returns 'translation missing', and the LRU cache then stores that result. Fix: in translate, call I18n.fallbacks.ensure_loaded! (or load each locale in fallbacks[config.locale]) before the lookup."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#06",
+    "descricao": "The translation cache key does not include the site or its default locale, but fallback results now depend on SiteSetting.default_locale, so multisite processes or a changed default locale serve stale fallback translations.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "config/initializers/i18n.rb",
+      "lines": [
+       17,
+       17
+      ],
+      "texto": "The new fallback order depends on SiteSetting.default_locale, but the accelerator's translation cache does not include that setting or the current site in its key. In a multisite process, two sites with the same user locale and different default locales reuse the first site's cached fallback translation; changing the default locale also leaves cached fallback results stale. Include the effective fallback chain or site/default-locale context in the translation cache key."
+     }
+    ]
+   }
+  ]
+ },
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "267d8be1f556ed59639ced396c885bb44586da19",
+  "base": "7a5fbae060bd0d3e29f3a4b5c6f2bfd8b2914dc7",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/serializers/user_serializer.rb",
+    "lines": [
+     153,
+     155
+    ],
+    "texto": "WHAT: The conditional is named include_website_name without the trailing ? required by ActiveModel::Serializer 0.8. WHY: The guard is never called so website_name is always serialized, breaking the intended website.present? contract. HOW: Rename to include_website_name? to match every other predicate in the same file (include_email?, include_stats?, etc.)."
+   },
+   {
+    "id": "S2",
+    "file": "app/serializers/user_serializer.rb",
+    "lines": [
+     137,
+     140
+    ],
+    "texto": "WHAT: URI without a scheme has nil host, so website_name returns nil even when website is present. WHY: The template gates on {{#if model.website_name}}, so a stored value like example.com/user disappears instead of showing fallback host text. HOW: Normalize by prepending a scheme before parsing when host is nil, or fall back to the raw website value."
+   },
+   {
+    "id": "S3",
+    "file": "app/serializers/user_serializer.rb",
+    "lines": [
+     141,
+     149
+    ],
+    "texto": "WHAT: Same-domain display concatenates only host + path, discarding query and fragment. WHY: A website like http://example.com/user?ref=x displays as example.com/user, losing distinguishing information and mismatching the href. HOW: Append query/fragment (e.g. use request_uri) when present."
+   },
+   {
+    "id": "S4",
+    "file": "app/serializers/user_serializer.rb",
+    "lines": [
+     153,
+     155
+    ],
+    "texto": "AMS checks include_<attr>? with trailing ?. include_website_name without ? is never invoked, so website_name is always serialized even when website is blank. Rename to include_website_name? to match :website_name and sibling hooks like include_card_image_badge_id?"
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#01",
+    "descricao": "website_name compares hostnames case-sensitively, so an uppercase website host matching the instance domain shows only the host instead of the full path.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       137,
+       151
+      ],
+      "texto": "The new `website_name` compares two domain names case-sensitively. `URI(website.to_s).host` preserves the letter case written by the user, whereas `Discourse.current_hostname` is the canonical lower-cased host, and no side is down-cased before the comparison at lines 141, 144-146 and 149 (including the `ends_with?` suffix check). Because DNS host names are case-insensitive identity values, `http://EXAMPLE.com/user` and `http://example.com/user` denote the same host but take different branches, so the same-site check is decided by letter case: the wrong arm is chosen and the full-path form is dropped. Normalise both sides before comparing, e.g. `website_host = URI(website.to_s).host&.downcase` (or use `URI(...).hostname`, which down-cases) and compare against `Discourse.current_hostname.to_s.downcase`."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       138,
+       141
+      ],
+      "texto": "Hostname comparisons are case-sensitive even though DNS hostnames are case-insensitive. With an instance hostname of example.com and a valid website of http://EXAMPLE.COM/user, neither the exact-host nor suffix comparison matches, so the profile displays only EXAMPLE.COM instead of the requested path. Normalize both hostnames to lowercase for comparison while preserving the desired display spelling."
+     }
+    ]
+   },
+   {
+    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#04",
+    "descricao": "website_name strips only the first label to decide same-domain, so unrelated hosts under multi-label public suffixes (co.uk, github.io) are treated as the instance domain and shown with full path.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       144,
+       146
+      ],
+      "texto": "WHAT: the `elsif` branch treats the last two dot-segments as the registrable domain, so multi-part public suffixes are mis-compared. WHY: for e.g. website_host='example.co.uk' and discourse_host='forum.co.uk' both have 3 segments, the branch compares `'co.uk' == 'co.uk'`, concludes the domains match, and returns `website_host + path`, even though example.co.uk and forum.co.uk are unrelated sites \u2014 the display then shows a path that does not belong to the instance domain, defeating the feature's purpose. HOW: compare against a public-suffix-aware registrable domain (e.g. use the PublicSuffix list) or require at least the full suffix before treating hosts as the same domain, instead of blindly taking `split('.')[1..-1]`."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       144,
+       146
+      ],
+      "texto": "Comparing all labels except the first incorrectly treats unrelated domains under multi-label public suffixes as the same domain. For example, with instance host `forum.co.uk` and website `https://unrelated.co.uk/user`, this returns `unrelated.co.uk/user` rather than the unrelated-site host-only label. Both hosts have three labels and their suffixes are `co.uk`, so this branch mistakes the public suffix for a shared site domain. Use registrable-domain-aware comparison (or a narrower explicit host relationship) before including the path."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       144,
+       146
+      ],
+      "texto": "The same-label-count branch treats two hosts as the same domain when everything after the first label matches. Unrelated hosts on shared suffixes, such as `a.github.io` and `b.github.io`, are treated as the same domain, so the full path is shown for an unrelated website. Compare against the registrable domain, for example with the PublicSuffix gem, or drop this heuristic branch."
+     }
+    ]
+   },
+   {
+    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#05",
+    "descricao": "Claims website_name should also show the full path when the website is a subdomain of the instance host.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       147,
+       150
+      ],
+      "texto": "WHAT: Else branch only tests `discourse_host.ends_with?('.'+website_host)` (discourse child of website) and misses the reverse (website subdomain of instance). WHY: With instance `example.com` and website `http://sub.example.com/page`, it returns `sub.example.com` instead of `sub.example.com/page`, contradicting the PR intent to show the full path for same-base-domain URLs. HOW: Also return host+path when `website_host` ends with `.`+discourse_host or shares the same registrable domain."
+     }
+    ]
+   },
+   {
+    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+    "descricao": "website_name is not marked untrusted, so the host/path of a TL0 user's website, which is hidden from anonymous viewers, is still exposed through the new field.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       153,
+       155
+      ],
+      "texto": "WHAT: website_name re-exposes the user's website for profiles where it is intentionally hidden \u2014 the attribute is added to the public `attributes` list (line 43) but not to `untrusted_attributes`, and `include_website_name` only checks `website.present?` instead of `scope.restrict_user_fields?(object)`. WHY: `website` is an untrusted attribute gated by `restrict_user_fields?` (lib/guardian/user_guardian.rb:58-60), which is true for a TL0 user viewed by an anonymous visitor; `website_name` derives `website_host + path` from the same `object.user_profile.website`, so the URL that `include_website?` suppresses is still disclosed through the new key (the existing spec at spec/serializers/user_serializer_spec.rb:11-14 only asserts the listed untrusted keys are absent, so this leak is not covered). HOW: add `:website_name` to the `untrusted_attributes` list (or have `include_website_name` return false when `scope.restrict_user_fields?(object)`), mirroring the `website` handling."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       137,
+       155
+      ],
+      "texto": "`website_name` is derived from the same `object.user_profile.website` value that `:website` protects via `untrusted_attributes` (lines 105-111), but it is only gated by `include_website_name` -> `website.present?`. Since the untrusted filter removes `website` for some viewers while `website_name` is still emitted, and in the same-domain / subdomain branches it returns host *plus* `URI(website).path` (lines 143/146/149), the user's full website URL still leaves in the response for viewers the filter was supposed to strip it from. Either add `:website_name` to `untrusted_attributes` or gate `include_website_name` with the same trust condition as `website`."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       153,
+       155
+      ],
+      "texto": "The new `website_name` field is gated only on `website.present?`, ignoring the visibility constraint this file declares for its source attribute: lines 105-111 put `:website` in `untrusted_attributes`, so `website` is omitted for viewers not allowed to see profile fields, but `website_name` is still serialized because `include_website_name` never consults that condition. Those viewers now receive the user's URL host, and when the host equals (lines 141-143) or is a parent of (144-149) the instance host they receive host + path, i.e. the complete URL that `website` was supposed to hide. Fix by adding `:website_name` to the `untrusted_attributes` list (105-111) \u2014 or make the guard reuse `website`'s own inclusion condition instead of a bare presence check."
+     }
+    ]
+   },
+   {
+    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07",
+    "descricao": "include_website_name lacks the '?' suffix that ActiveModelSerializers requires, so the conditional-inclusion guard is never called.",
+    "textoGolden": "The include_website_name method is missing the required ? suffix. Rails serializers expect include_ methods to end with ? for conditional attribute inclusion, a convention followed by other methods in this serializer. Without it, the website_name attribute may not be conditionally included as intended. Additionally, the '.' << website_host string concatenation should be replaced with '.' + website_host or '.#{website_host}' to avoid mutating string literals, which can lead to issues.",
+    "comentarios": [
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       153,
+       153
+      ],
+      "texto": "WHAT: `include_website_name` is missing the trailing `?` required by ActiveModelSerializers. WHY: every other conditional-inclusion guard in this file uses the `?` form (`define_method \"include_#{attr}?\"` at lines 9/18/27, `include_email?` at line 117), and AMS 0.8.3 resolves the guard as `include_<attr>?`; because this method lacks the `?` it is never invoked, so the intended `website.present?` condition is silently ignored and `website_name` is always serialized. HOW: rename to `def include_website_name?`."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       153,
+       155
+      ],
+      "texto": "The guard method is named `include_website_name`, but ActiveModelSerializers (and this file's own convention, e.g. `include_email?` at line 117) resolves per-attribute guards via `include_<attribute>?`. Because the name lacks the trailing `?`, the framework never invokes it: the `website.present?` guard is dead code and `website_name` is serialized unconditionally, emitting `website_name: null` for users without a website. Rename to `include_website_name?`."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       153,
+       155
+      ],
+      "texto": "The conditional-inclusion guard is named `include_website_name`, but ActiveModelSerializers resolves these guards as `include_<attribute>?` (the sibling in this very file is `include_email?` at line 117). As written the method is never called, so the guard is dead and the `:website_name` attribute declared at line 43 is serialized unconditionally. That defeats the intent of the guard (`website.present?`): the payload now always carries `website_name`, including for the scopes where `website` itself is withheld by the `untrusted_attributes` list (line 109), leaking the user's site host/path to viewers who were never meant to receive the website. Rename the method to `include_website_name?` so the serializer base class honors it."
+     }
+    ]
+   }
+  ]
+ },
+ "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "dcdcadb771128e79259cc9eff9c70c38fc597976",
+  "base": "0cfc28e76ddc986d2d89dd9b9f63ee916a18a5f9",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/monitors/logic/incident_occurrence.py",
+    "lines": [
+     159,
+     171
+    ],
+    "texto": "Dead computation: `config` is copied and `schedule_type` is converted to display value, but the return dict uses `monitor_environment.monitor.config` (untransformed) instead of `config`, so the transformation never takes effect."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#01",
+    "descricao": "get_failure_reason's docstring examples do not match the strings the function returns.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/monitors/logic/incident_occurrence.py",
+      "lines": [
+       130,
+       137
+      ],
+      "texto": "The `get_failure_reason` docstring describes output this function does not produce. The singular branch (line 146) returns a `SINGULAR_HUMAN_FAILURE_MAP` value such as \"A missed check-in was detected\", yet the docstring advertises \"A failed check-in was detected\"; the multi-check-in branch joins `\"%(count)d %(status)s\"` fragments with `get_text_list(..., last_word=_(\"and\"))` and appends \" check-ins detected\", yielding \"2 missed and 1 error check-ins detected\", not the docstring's \"2 missed check-ins, 1 timeout check-in and 1 error check-in were detected\". Update the examples (or the format string) so the documented contract matches the code."
+     },
+     {
+      "file": "src/sentry/monitors/logic/incident_occurrence.py",
+      "lines": [
+       131,
+       137
+      ],
+      "texto": "The get_failure_reason docstring examples don't match the output. It shows 'A failed check-in was detected' and '...were detected', but the code returns the per-status singular strings ('A missed check-in was detected') or '<list> check-ins detected'. Update the examples to the real output and fix the 'humam readible' typo."
+     }
+    ]
+   },
+   {
+    "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02",
+    "descricao": "get_monitor_environment_context builds a config copy with the human-readable schedule_type but returns the original monitor.config, so the conversion is lost and the context shows the raw value.",
+    "textoGolden": "The function modifies the config variable to include display values but then returns the original monitor.config instead of the modified version.",
+    "comentarios": [
+     {
+      "file": "src/sentry/monitors/logic/incident_occurrence.py",
+      "lines": [
+       159,
+       171
+      ],
+      "texto": "WHAT: get_monitor_environment_context copies monitor.config to `config` and converts schedule_type display, but returns the original monitor_environment.monitor.config instead of `config`. WHY: the display conversion never takes effect so the occurrence context carries the raw schedule_type value, producing wrong output vs the function's evident intent. HOW: return `\"config\": config` instead of `\"config\": monitor_environment.monitor.config`."
+     },
+     {
+      "file": "src/sentry/monitors/logic/incident_occurrence.py",
+      "lines": [
+       159,
+       171
+      ],
+      "texto": "Dead computation: `config` is copied and `config['schedule_type']` transformed to display value, but return uses `monitor_environment.monitor.config` (original) instead of `config`. Change to `\"config\": config` so transformation is used."
+     },
+     {
+      "file": "src/sentry/monitors/logic/incident_occurrence.py",
+      "lines": [
+       160,
+       168
+      ],
+      "texto": "WHAT: In get_monitor_environment_context the code copies config and replaces config['schedule_type'] with the human-readable get_schedule_type_display(), but the returned context dict uses the original `monitor_environment.monitor.config` instead of the modified local `config`, so the mutation is dead. WHY: The occurrence's monitor context always reports the raw schedule_type value rather than the display string the code intended to substitute, producing incorrect evidence data in the emitted occurrence. HOW: return the local variable, i.e. use \"config\": config in the returned dict."
+     }
+    ]
+   },
+   {
+    "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#snloop-02",
+    "descricao": "The newly added incidents.py and incident_occurrence.py define module loggers that are never used.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ }
+}

@@ -1,0 +1,12 @@
+{
+ "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+ "items": [
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#kimip-01",
+   "class": "FP",
+   "subclass": "none",
+   "severity": "medium",
+   "reply": "Changed to FP/none: the userId filter is accurately described, but widening authorization is not justified by this flow. getConnectedDestinationCalendars.ts:282-290 already limits database credentials to the session user, and credential.ts:226 assigns userId to persisted delegation credentials. The code therefore does not establish a legitimate team-owned credential rejected by this action; the issue draws an unsupported defect conclusion from a real filter."
+  }
+ ]
+}

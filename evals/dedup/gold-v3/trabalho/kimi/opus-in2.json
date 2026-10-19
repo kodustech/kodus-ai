@@ -1,0 +1,2368 @@
+{
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "4f8aed295a29954023b2849c060ef4fb299d1b5d",
+  "base": "62db063e1e1abe691313ab42682a68f796d63769",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/models/topic_embed.rb",
+    "lines": [
+     62,
+     73
+    ],
+    "texto": "WHAT: Protocol-relative URLs such as '//cdn.example.com/foo' are rewritten to 'http://eviltrout.com/cdn.example.com/foo'. WHY: The code strips all leading slashes from any href/src starting with '/' and then prefixes the base host, so protocol-relative links break and point at the wrong host. HOW: Skip or separately handle protocol-relative URLs; only rewrite single-slash relative paths."
+   },
+   {
+    "id": "S2",
+    "file": "app/jobs/scheduled/poll_feed.rb",
+    "lines": [
+     31,
+     36
+    ],
+    "texto": "WHAT: The scheduled job calls i.content.scrub without checking whether i.content exists. WHY: Many RSS/Atom feeds provide only a description or summary, so i.content is nil and the job raises NoMethodError, aborting the entire feed import. HOW: Guard against nil content, falling back to an empty string or the item's description/summary."
+   },
+   {
+    "id": "S3",
+    "file": "app/assets/javascripts/embed.js",
+    "lines": [
+     5,
+     12
+    ],
+    "texto": "WHAT: The script immediately calls comments.appendChild(iframe) without verifying that document.getElementById('discourse-comments') returned an element. WHY: If the host page omits the container or loads the script before the element exists, comments is null and appendChild throws, breaking other scripts on the page. HOW: Guard the appendChild call with an if (comments) check."
+   },
+   {
+    "id": "S4",
+    "file": "app/models/topic_embed.rb",
+    "lines": [
+     13,
+     13
+    ],
+    "texto": "WHAT: TopicEmbed.import appends the 'Imported from' footer to the input contents string using <<, mutating the caller's object. WHY: In-place mutation can corrupt reused strings and raises RuntimeError when the caller passes a frozen string; it also makes the function's side effects unpredictable. HOW: Build a new string instead of mutating the parameter."
+   },
+   {
+    "id": "S5",
+    "file": "lib/topic_retriever.rb",
+    "lines": [
+     48,
+     50
+    ],
+    "texto": "WHAT: fetch_http calls SiteSetting.embed_by_username.downcase without verifying the setting is present. WHY: If feed polling is disabled and embed_by_username is blank, the retrieve job raises NoMethodError on nil.downcase instead of failing gracefully. HOW: Return early when the username setting is blank, matching the guard in PollFeed."
+   },
+   {
+    "id": "S6",
+    "file": "lib/topic_retriever.rb",
+    "lines": [
+     39,
+     45
+    ],
+    "texto": "WHAT: perform_retrieve invokes Jobs::PollFeed.new.execute({}) synchronously inside the current job. WHY: This blocks the Sidekiq worker while the entire feed is fetched and every item is imported, even though only the requested embed_url is needed. HOW: Either look up only the specific embed_url in the feed, or enqueue PollFeed asynchronously and let the loading page continue polling."
+   },
+   {
+    "id": "S7",
+    "file": "app/jobs/scheduled/poll_feed.rb",
+    "lines": [
+     28,
+     37
+    ],
+    "texto": "WHAT: poll_feed calls open(feed_url).read without a timeout and iterates rss.items without any limit. WHY: A slow or unresponsive feed can hold a worker indefinitely, and a very large feed can consume excessive memory and time importing every item. HOW: Add a read timeout to open and cap the number of items processed per run."
+   },
+   {
+    "id": "S8",
+    "file": "app/controllers/embed_controller.rb",
+    "lines": [
+     24,
+     31
+    ],
+    "texto": "Compare `URI(request.referer || '').host` with `SiteSetting.embeddable_host` case-insensitively, e.g. by downcasing both sides. DNS host names are case-insensitive, so a referer with uppercase letters (or an uppercase configured host) will incorrectly fail the embedding allow-list check."
+   },
+   {
+    "id": "S9",
+    "file": "lib/topic_retriever.rb",
+    "lines": [
+     14,
+     19
+    ],
+    "texto": "Downcase both `SiteSetting.embeddable_host` and `URI(@embed_url).host` before comparing them. Host names are case-insensitive, so mixed-case or uppercase URLs may bypass or incorrectly fail the host allow-list check."
+   },
+   {
+    "id": "S10",
+    "file": "spec/components/topic_retriever_spec.rb",
+    "lines": [
+     9,
+     44
+    ],
+    "texto": "The tests 'does not call perform_retrieve when embeddable_host is not set', 'different than the host of the URL', and 'embed url is not a url' stub SiteSetting.embeddable_host and assert that perform_retrieve is never called. But they also stub retrieve_recently? implicitly only in later tests. The implementation's invalid_host? raises URI::InvalidURIError; if invalid_host? were removed or always returned false, retrieve_recently? would still gate perform_retrieve. Because perform_retrieve is the actual private method being mocked, a bug in invalid_host? does not cause these tests to fail; the tests exercise the mock, not the real host-matching logic. Replace the mock of perform_retrieve with direct assertion about the side effect (e.g. no HTTP fetch, no TopicEmbed import) or call invalid_host? directly and assert its result."
+   },
+   {
+    "id": "S11",
+    "file": "spec/controllers/embed_controller_spec.rb",
+    "lines": [
+     40,
+     52
+    ],
+    "texto": "The 'tells the topic retriever to work' and 'creates a topic view' tests stub TopicEmbed.topic_id_for_embed, TopicRetriever.new, TopicView.new, and the retriever's retrieve method. They therefore pass even if the controller action's real logic for calling TopicRetriever, TopicView, or rendering 'loading' is removed or inverted. These tests assert only that mocks are called with the expected arguments, which by construction matches the test setup; they do not verify the actual response body, template, or that an embed record is created. Add expectations on response.body/rendered_template (e.g. assert the loading partial is rendered when no topic exists and the topic view partial is rendered when one exists) and use real collaborators or at least assert the side effects."
+   },
+   {
+    "id": "S12",
+    "file": "spec/jobs/poll_feed_spec.rb",
+    "lines": [
+     12,
+     37
+    ],
+    "texto": "The execute tests stub all three SiteSetting predicates and assert that poll_feed is or is not called. If the execute method's guard condition were changed to ignore any of those settings (e.g. always call poll_feed), the tests using stubs with expects(:poll_feed).never would still catch it, but the 'delegates to poll_feed' test only verifies that poll_feed is called once when all settings are stubbed true; it does not verify that poll_feed actually opens the configured URL, parses it, or calls TopicEmbed.import. The poll_feed method itself has no dedicated test. Add a test that stubs an RSS response and asserts TopicEmbed.import is called with the expected arguments, otherwise a broken parser or wrong argument order could go undetected."
+   },
+   {
+    "id": "S13",
+    "file": "db/migrate/20131219203905_add_cook_method_to_posts.rb",
+    "lines": [
+     1,
+     5
+    ],
+    "texto": "The migration adds cook_method with default: 1, but Post.cook_methods is Enum.new(:regular, :raw_html), which maps :regular => 0 and :raw_html => 1. Therefore every existing post and any new post created without an explicit cook_method will be treated as raw_html; Post#cook will return raw instead of cooked HTML, breaking topic rendering across the site. The default should be 0 so the regular cooking pipeline remains the default."
+   },
+   {
+    "id": "S14",
+    "file": "app/jobs/scheduled/poll_feed.rb",
+    "lines": [
+     31,
+     36
+    ],
+    "texto": "The line `content = CGI.unescapeHTML(i.content.scrub)` calls `.scrub` directly on `i.content`. If a feed item has no content element (for example a summary-only Atom entry or an empty RSS item), `i.content` is nil and the job raises NoMethodError, aborting the whole poll. Guard against nil content before scrubbing/unescaping, e.g. `content = CGI.unescapeHTML((i.content || '').scrub)`."
+   },
+   {
+    "id": "S15",
+    "file": "db/migrate/20131219203905_add_cook_method_to_posts.rb",
+    "lines": [
+     1,
+     5
+    ],
+    "texto": "The migration adds `cook_method` with `default: 1`, but `Post.cook_methods` defines `:regular` as 0 and `:raw_html` as 1. This causes all existing posts to default to `raw_html` and skip cooking, returning raw markdown instead of rendered HTML. Change the default to `0` so existing posts keep the regular cooked behavior."
+   },
+   {
+    "id": "S16",
+    "file": "db/migrate/20131219203905_add_cook_method_to_posts.rb",
+    "lines": [
+     1,
+     5
+    ],
+    "texto": "Post.cook_methods maps :regular to 0 and :raw_html to 1, but the migration defaults cook_method to 1. Existing posts will therefore be treated as raw_html and skip the cooking pipeline, rendering raw content instead of cooked HTML."
+   },
+   {
+    "id": "S17",
+    "file": "app/views/embed/best.html.erb",
+    "lines": [
+     2,
+     6
+    ],
+    "texto": "The if/else block is closed with `<%- end if %>`. ERB emits `end if` verbatim into the generated Ruby source, which is invalid syntax after a multi-line if/else block and will cause the template to raise a syntax error when rendered."
+   },
+   {
+    "id": "S18",
+    "file": "app/jobs/scheduled/poll_feed.rb",
+    "lines": [
+     20,
+     22
+    ],
+    "texto": "The feed_key helper builds a cache key, but neither execute nor poll_feed calls it, so the computation is dead code. Remove it or wire it into feed polling (for example, to skip unchanged feeds via Redis)."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#01",
+    "descricao": "The postMessage handler in embed.js checks the sender with discourseUrl.indexOf(e.origin), a substring test instead of exact origin equality, so a page on an origin that is a substring of the Discourse URL can send forged discourse-resize messages to the embedding page.",
+    "textoGolden": "The current origin validation using indexOf is insufficient and can be bypassed. An attacker could use a malicious domain like evil-discourseUrl.com to pass this check.",
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/embed.js",
+      "lines": [
+       15,
+       17
+      ],
+      "texto": "The message-origin check uses substring matching: `discourseUrl.indexOf(e.origin) === -1`. Any origin that is a substring of discourseUrl is accepted (e.g. discourseUrl `https://discourse.example.com` accepts origin `https://discourse`), so a malicious page can post `discourse-resize` messages into the embed. Compare against the iframe's actual origin exactly (`e.origin !== expectedOrigin`) instead of a substring test."
+     },
+     {
+      "file": "embed.js",
+      "lines": [
+       17,
+       17
+      ],
+      "texto": "Uses indexOf containment instead of origin equality, but it cannot be bypassed."
+     },
+     {
+      "file": "app/assets/javascripts/embed.js",
+      "lines": [
+       15,
+       17
+      ],
+      "texto": "WHAT: postMessage origin check is reversed (`discourseUrl.indexOf(e.origin)===-1`) instead of strict origin equality. WHY: any e.origin that is a substring of discourseUrl passes, letting a foreign iframe drive `iframe.height` handling and future message branches."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#04",
+    "descricao": "The referer and embed_url host checks compare against SiteSetting.embeddable_host case-sensitively, so a host differing only in case is rejected even though hostnames are case-insensitive.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/embed_controller.rb",
+      "lines": [
+       26,
+       26
+      ],
+      "texto": "Host identity is compared case-sensitively: `URI(request.referer).host != SiteSetting.embeddable_host`. Hostnames are case-insensitive, so a referer such as `http://EVILTROUT.COM/...` never matches the configured `eviltrout.com` (and the same flaw exists in lib/topic_retriever.rb:15 for `URI(@embed_url).host`). Normalize both sides with downcase before comparing so case variations of the same host are treated identically."
+     },
+     {
+      "file": "embed_controller.rb",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The referer/host comparison does not lowercase either side, so a mixed-case host is wrongly rejected. The reviewer notes this fails closed and is not a bypass. Normalize case on both sides of the host comparison (e.g. downcase both) to avoid false rejections. The same issue applies to topic_retriever.rb."
+     },
+     {
+      "file": "topic_retriever.rb",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The host comparison does not lowercase either side, so a mixed-case host is wrongly rejected. This fails closed and is not a bypass. Normalize case on both sides of the comparison (e.g. downcase both) to avoid false rejections."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+    "descricao": "PollFeed reads i.content.scrub for every feed item, so items without a content element (common in RSS feeds that only have description) raise NoMethodError and abort the import of the remaining items.",
+    "textoGolden": "Calling `i.content.scrub` assumes that `i.content` is always populated. However, many RSS feeds do not provide a `content` field, leading to a potential nil pointer exception when `i.content` is nil. A fallback to `description` should be implemented to prevent crashes.",
+    "comentarios": [
+     {
+      "file": "app/jobs/scheduled/poll_feed.rb",
+      "lines": [
+       35,
+       35
+      ],
+      "texto": "WHAT: `CGI.unescapeHTML(i.content.scrub)` assumes every feed item has a `content` element. WHY: many RSS 2.0 items expose only `<description>` (simple-rss returns nil for `content`), so `nil.scrub` raises NoMethodError and, because the job is `sidekiq_options retry: false`, the entire hourly feed import for all items is aborted. HOW: fall back to the available field, e.g. `(i.content || i.description || i.summary).to_s.scrub`, and skip items whose body is blank."
+     },
+     {
+      "file": "app/jobs/scheduled/poll_feed.rb",
+      "lines": [
+       31,
+       36
+      ],
+      "texto": "The feed item is consumed unconditionally: url = i.link, then i.title, and content = CGI.unescapeHTML(i.content.scrub). SimpleRSS item accessors raise NoMethodError when the element is absent (RSS 2.0 feeds frequently carry only <description>, no <content>, and some items have no <link>/<title>), so a single malformed or content-less item aborts the whole hourly job with an unhandled exception instead of skipping it. The code already anticipates a blank link (line 33 fallback) but reads i.content/i.title without a nil guard; use i.content.to_s (or fall back to i.description/summary) and skip items whose content is blank."
+     },
+     {
+      "file": "app/jobs/scheduled/poll_feed.rb",
+      "lines": [
+       31,
+       37
+      ],
+      "texto": "`i.content.scrub` raises NoMethodError when a feed item has no content (only a description). The exception aborts the whole poll, so every item after it is never imported. Fall back to `i.content || i.description`, skip items with blank content, and rescue per item."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#08",
+    "descricao": "Posts imported from RSS or remote pages use cook_method raw_html, which makes Post#cook return the raw HTML without sanitization, and the embed view outputs it with raw post.cooked, allowing stored XSS from imported content.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/post.rb",
+      "lines": [
+       130,
+       136
+      ],
+      "texto": "WHAT: the new `return raw if cook_method == Post.cook_methods[:raw_html]` makes `Post#cook` return completely unsanitized HTML, and Jobs::PollFeed stores untrusted feed content this way (poll_feed.rb:35-36 \u2192 TopicEmbed.import, unlike import_remote which sanitizes via Readability's tag/attribute whitelist). WHY: the stored `cooked` value is then emitted with `<%= raw post.cooked %>` in app/views/embed/best.html.erb:19, and that page is served from the forum's own origin \u2014 so a malicious/compromised RSS feed item containing `<script>` or `onerror=` runs attacker JavaScript in the forum origin and can read cookies/session and perform authenticated actions (stored XSS). HOW: sanitize the raw HTML before persisting it (e.g. run the feed content through the same HTML sanitizer used for regular posts, or restrict the raw_html cook path to trusted, pre-sanitized sources only)."
+     },
+     {
+      "file": "app/models/post.rb",
+      "lines": [
+       130,
+       133
+      ],
+      "texto": "WHAT: Post#cook returns raw verbatim for cook_method raw_html, skipping the cooking/sanitization pipeline and plugin filters. WHY: any RSS/readability HTML imported via TopicEmbed is rendered unsanitized in embed/best.html.erb, executing attacker script in the Discourse origin."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       22,
+       22
+      ],
+      "texto": "Feed-provided HTML is persisted with raw_html cooking after only Nokogiri parsing and URL rewriting, which do not sanitize scripts or event-handler attributes. A malicious feed entry containing executable HTML is stored as post.cooked and executed under the forum origin when rendered, including through the new raw cooked embed view. Sanitize imported HTML with an explicit safe tag, attribute and URL-scheme allowlist before storing it or returning it from the raw_html cooking path."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
+    "descricao": "TopicEmbed.import appends a footer that interpolates the URL unescaped into an <a href='...'> tag in raw HTML that is later rendered unsanitized, so a crafted URL can inject markup; it also appends to contents with << without handling nil.",
+    "textoGolden": "The TopicEmbed.import method is susceptible to a NoMethodError if the contents parameter is nil when attempting to append a string, and an XSS vulnerability due to unescaped url interpolation in the generated HTML.",
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       10,
+       13
+      ],
+      "texto": "WHAT: TopicEmbed.import interpolates feed-controlled url unescaped into raw HTML (`<a href='#{url}'>#{url}</a>`) and stores feed HTML as raw_html. WHY: url passing /^https?\\:\\/\\// can still contain `'`, `>` or script, and RSS content is never sanitized, giving stored XSS when rendered via `raw post.cooked`. HOW: HTML-escape url and sanitize content instead of raw_html passthrough."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       10,
+       14
+      ],
+      "texto": "TopicEmbed.import interpolates feed-controlled url unescaped into HTML link stored with cook_method raw_html (Post#cook returns raw, bypassing pipeline) and rendered with raw post.cooked: XSS via quote/script break-out. Escape url for text and attribute contexts before storing."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       13,
+       13
+      ],
+      "texto": "The url is interpolated unescaped into `<a href='#{url}'>#{url}</a>`. The post is stored with cook_method raw_html and rendered with `raw post.cooked`, so a url containing a quote or markup is output as live HTML. Escape it with ERB::Util.html_escape (or CGI.escapeHTML) for both the href and the link text."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#16",
+    "descricao": "TopicEmbed.import appends the footer with contents <<, mutating the caller's string in place instead of building a new string.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       13,
+       13
+      ],
+      "texto": "`contents <<` mutates the caller's string in place. This raises FrozenError for frozen strings and appends the footer twice if the same string is imported again. Use `contents = contents + ...` instead."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#17",
+    "descricao": "TopicEmbed.import checks for an existing embed and then creates the post and TopicEmbed without handling the unique-index conflict, so two concurrent imports of the same URL make one job fail with RecordNotUnique.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       15,
+       30
+      ],
+      "texto": "TopicEmbed.import does a check-then-insert on embed_url (where(...).first, then TopicEmbed.create!) with no rescue for the unique index declared on topic_embeds.embed_url. The only guard against concurrent intake is the Redis throttle in TopicRetriever, which is bypassed for staff (retrieve_topic.rb:17 passes no_throttle: user.try(:staff?)) and can expire while a slow retrieval (which may synchronously run a full PollFeed, topic_retriever.rb:41) is still running. Two interleaved retrievals for the same URL both see embed.blank? and both attempt creation; the loser raises ActiveRecord::RecordNotUnique, which is unhandled anywhere in the job path, breaking execution. Guard the create against the race (rescue/retry on RecordNotUnique, or use find_or_create_by on embed_url inside the transaction) so concurrent retrievals cannot raise."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       20,
+       28
+      ],
+      "texto": "Make creation idempotent under concurrent imports. Two workers can both read no embed at line 15 and create posts before attempting the same unique embed_url insert. The unique index correctly rolls back the losing transaction, but its unhandled uniqueness exception aborts that job (and potentially the rest of a feed polling run). This is reachable when scheduled polling overlaps retrieval-triggered polling; the per-URL retrieval throttle does not serialize those paths. Handle the conflict outside the transaction and return the winning embed/post, or serialize imports for the URL."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       20,
+       30
+      ],
+      "texto": "Race on check-then-create: two concurrent imports both see TopicEmbed.where(embed_url:url).first blank, both create Post + TopicEmbed.create!. Unique index on embed_url then raises RecordNotUnique (unhandled) or creates duplicates. Need atomic find-or-create / rescue unique violation."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#18",
+    "descricao": "When the embedded post has been deleted, TopicEmbed.import's update path passes a nil embed.post to PostRevisor and crashes on every later import of that URL.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       31,
+       39
+      ],
+      "texto": "On the update path `embed.post` can be nil if the post was deleted. `PostRevisor.new(nil)` then raises NoMethodError, and every later import of that URL fails the same way. Guard against a nil post, for example by skipping the revision or recreating the topic."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       32,
+       37
+      ],
+      "texto": "WHAT: update path uses `embed.post` without nil guard then `PostRevisor.new(post)`. WHY: if the first post was deleted, post is nil and revise! dereferences nil, crashing feed-poll updates instead of recreating/skipping."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       31,
+       37
+      ],
+      "texto": "Orphan-post crash on update path: post = embed.post can be nil if the post/topic was deleted, then PostRevisor.new(nil).revise! raises NoMethodError. Must handle missing post (recreate or skip) instead of assuming present."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#19",
+    "descricao": "Claims import_remote crashes on unparseable pages (nil content) and dead URLs because it does no nil check or network error handling around open(url).read.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       44,
+       52
+      ],
+      "texto": "WHAT: import_remote passes `doc.content` (and title) directly to import where `contents <<` assumes a String, with no nil check or network-error handling around `open(url).read`. WHY: unparseable pages (nil content) raise NoMethodError and dead URLs raise OpenURI errors, crashing RetrieveTopic/Disqus imports with no topic created."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+    "descricao": "absolutize_urls only handles root-relative paths: protocol-relative URLs like //cdn.example.com/x.png are rewritten to http://host/cdn.example.com/x.png and path-relative links are left unresolved, breaking links and images in imported posts.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       64,
+       71
+      ],
+      "texto": "The URL rewrite treats protocol-relative URLs such as `//cdn.example.com/image.jpg` as paths on the article host, producing `http://article-host/cdn.example.com/image.jpg`. Imported images and links using protocol-relative external URLs therefore point to the wrong server. Resolve both href and src using URI joining against the article URL, which also handles ordinary relative paths correctly."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       62,
+       72
+      ],
+      "texto": "Resolve relative href/src references with URI joining rather than handling only leading slashes. For an article at http://example.com/blog/article, href='next' and src='images/photo.jpg' remain relative and resolve against the forum instead of the imported article. Moreover, '//cdn.example.com/photo.jpg' is rewritten to 'http://example.com/cdn.example.com/photo.jpg'. Both yield incorrect links/images in imported posts; apply proper URI resolution to both anchors and images."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       62,
+       73
+      ],
+      "texto": "absolutize_urls treats any href or src starting with '/' as site-relative and strips all leading slashes. Protocol-relative URLs like '//cdn.example.com/a.png' are rewritten to 'http://site/cdn.example.com/a.png', which is broken. Skip values starting with '//' (or prefix them with the scheme) and only rewrite single-slash paths."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#24",
+    "descricao": "The embed view formats post dates with a hard-coded strftime pattern, so users in non-English locales see English month names and a fixed order while the rest of the view is translated.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/views/embed/best.html.erb",
+      "lines": [
+       14,
+       14
+      ],
+      "texto": "The post date uses a hard-coded strftime format `\"%e %b %Y\"`. `%b` emits English month abbreviations (Jan, Feb, ...) no matter what locale the viewer is in, so the date is frozen to en-US while the surrounding strings in this same view are localized via I18n.t. This is a locale-pinned user-facing format; it should be localized (e.g. via the app's localized date helper / l( ) rather than a literal strftime pattern)."
+     },
+     {
+      "file": "app/views/embed/best.html.erb",
+      "lines": [
+       14,
+       14
+      ],
+      "texto": "Use a localized date formatter rather than strftime(\"%e %b %Y\"). %b produces English month abbreviations and the fixed day-month-year order ignores the selected locale, although the neighbouring header and footer labels are translated. Embedded comments therefore show English-formatted dates for users of other locales."
+     },
+     {
+      "file": "app/views/embed/best.html.erb",
+      "lines": [
+       14,
+       14
+      ],
+      "texto": "Date uses strftime(\"%e %b %Y\") hard-coding one locale's month names/order while neighbouring strings go through I18n.t. Use I18n.l with a locale date format so non-English users see localized dates."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#29",
+    "descricao": "The Disqus importer now creates topics through TopicEmbed.import_remote, dropping the thread's created_at and the category option and requiring a live HTTP fetch per thread, so imported topics get wrong dates/categories and a dead link aborts the import.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "lib/tasks/disqus.thor",
+      "lines": [
+       143,
+       149
+      ],
+      "texto": "WHAT: Disqus import replaced PostCreator (title/raw/created_at/category) with `TopicEmbed.import_remote` per thread, dropping category_id, created_at, and strip handling. WHY: imported topics lose categories/timestamps and now require a live HTTP fetch per thread, failing when links are dead."
+     },
+     {
+      "file": "lib/tasks/disqus.thor",
+      "lines": [
+       148,
+       148
+      ],
+      "texto": "Preserve the Disqus thread creation timestamp when switching to TopicEmbed.import_remote. The previous PostCreator call passed `created_at: Date.parse(t[:created_at])`, but this replacement passes only the title, and TopicEmbed.import_remote/import never forward a timestamp to PostCreator. Imported historical topics now get the migration time as their initial post creation date while their replies retain historical dates, losing the importer's chronological fidelity. Extend the import options to forward created_at and pass the thread timestamp here."
+     },
+     {
+      "file": "lib/tasks/disqus.thor",
+      "lines": [
+       148,
+       148
+      ],
+      "texto": "The Disqus import now calls TopicEmbed.import_remote instead of PostCreator. This silently drops the `--category` option and the `created_at` from the Disqus thread, and the `--category` method_option was removed from the CLI. It also now makes a live HTTP fetch of every thread link, and `open(url)` raises on a failure that previously could not happen, aborting the whole import. Keep the category and date handling, and rescue fetch errors per thread."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#30",
+    "descricao": "Every retrieval of an article not yet embedded synchronously polls and imports the entire RSS feed, and since throttling is per URL, many different article requests repeat the full feed download and processing.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "lib/topic_retriever.rb",
+      "lines": [
+       40,
+       42
+      ],
+      "texto": "Every uncached article retrieval synchronously downloads and processes the complete configured feed before fetching the article. Because the retrieval throttle is keyed by individual embed URL, simultaneous requests for different articles each repeat the feed download and all per-item database lookups/imports, multiplying worker load by the number of requests times feed size. Coalesce feed polling with a feed-wide throttle or lock and reuse its recent results instead of executing a full poll per article."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#32",
+    "descricao": "The 'is 404 without an embed_url' spec never sets an embeddable host, so the request is rejected by ensure_embeddable before the embed_url check runs, and the test would pass even without that check.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "spec/controllers/embed_controller_spec.rb",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "The test is named 'is 404 without an embed_url' but passes for the wrong reason: it never sets embeddable_host, which defaults to '' so the before_filter `ensure_embeddable` raises at the blank-host check before `params.require(:embed_url)` is reached. The request is rejected regardless of whether the embed_url requirement exists, so the test would still pass if that requirement were removed. Stub a valid embeddable_host here so the failure is actually attributable to the missing embed_url."
+     },
+     {
+      "file": "spec/controllers/embed_controller_spec.rb",
+      "lines": [
+       8,
+       10
+      ],
+      "texto": "The missing-embed_url test does not establish a valid embeddable host and referer, so ensure_embeddable rejects this request before best reaches params.require(:embed_url). It also only checks non-success despite claiming a 404. Removing the required-parameter check would therefore leave this test green. Configure an allowed host/referer for this case and assert the intended missing-parameter response."
+     },
+     {
+      "file": "spec/controllers/embed_controller_spec.rb",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "The 'is 404 without an embed_url' test never sets embeddable_host, so ensure_embeddable rejects the request before params.require(:embed_url) runs. It passes without the embed_url check. Stub embeddable_host and the referer so the missing param is the only failure cause."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#33",
+    "descricao": "The 'requires feed_polling_url' and 'requires embed_by_username' specs leave feed_polling_enabled at its false default, so they never reach the condition they name and would pass with those checks deleted.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "spec/jobs/poll_feed_spec.rb",
+      "lines": [
+       12,
+       28
+      ],
+      "texto": "The three 'requires ...' tests do not isolate the guard they name: each stubs only one setting to falsy while the other two remain falsy by default, so poll_feed is never called even if the named check were deleted. Stub the other two settings to truthy values in each test so removing the named guard would cause poll_feed to run and fail the test."
+     },
+     {
+      "file": "spec/jobs/poll_feed_spec.rb",
+      "lines": [
+       18,
+       28
+      ],
+      "texto": "These two tests do not verify the conditions they name. `execute` is guarded by `feed_polling_enabled? && feed_polling_url.present? && embed_by_username.present?`, and feed_polling_enabled defaults to false. Neither test stubs feed_polling_enabled? to true, so the guard short-circuits at the first clause and poll_feed is never called no matter what feed_polling_url/embed_by_username are. Both would still pass if the URL/username checks were deleted entirely. Stub `SiteSetting.stubs(:feed_polling_enabled?).returns(true)` in each so the specific condition under test is actually reached."
+     },
+     {
+      "file": "spec/jobs/poll_feed_spec.rb",
+      "lines": [
+       18,
+       27
+      ],
+      "texto": "The URL and username prerequisite tests never enable feed polling (whose configured default is false) or supply the other required setting. execute consequently short-circuits at feed_polling_enabled? and never evaluates the prerequisite each test claims to cover. Both tests still pass if their corresponding presence checks are removed. Set all other prerequisites to valid values before making only the setting under test absent, so the poll_feed.never expectation actually detects removal of that guard."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-02",
+    "descricao": "PollFeed.feed_key computes a per-feed cache key that is never used, so the feed is re-fetched and re-processed every hour without a modified-since check.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-03",
+    "descricao": "The embed layout references the 'embed' stylesheet and embed.js, but neither is in config.assets.precompile, so with precompiled assets in production the embed page fails to load them.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-01",
+    "descricao": "The retrieve throttle is keyed by the full embed URL, so an anonymous client can vary the query string on the embeddable host to bypass it and make the server create an unbounded number of topics.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-04",
+    "descricao": "The \"requires feed_polling_enabled?\" spec leaves feed_polling_url and embed_by_username at their blank defaults, so poll_feed is skipped regardless and the test would pass even without the enabled check.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#musep-01",
+    "descricao": "TopicEmbed.import_remote fetches the embed URL with open(url).read and no timeout or size limit, so a slow or huge remote page can block the background job and exhaust memory.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#musep-02",
+    "descricao": "The retrieve throttle sets the Redis key with setnx and sets its TTL in a separate expire call, so a crash between the two leaves a key without expiry that blocks retrieval of that URL forever.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feature-automatically-downsize-large-images-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "ffbaf8c54269df2ce510de91245760fddce09896",
+  "base": "3f71fa15c93bb0b751bb92abae1b5dc9a21bd4ca",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     145,
+     151
+    ],
+    "texto": "WHAT: A second `downsize` class method with a different arity overrides the first, because Ruby redefines singleton methods rather than overloading by arity. WHY: The existing caller `app/jobs/regular/resize_emoji.rb:14` passes `(path, path, 100, 100, opts)`, which the surviving signature maps as `dimensions=100` and `opts=100`, causing `NoMethodError: undefined method '[]' for 100:Integer` when `downsize_instructions` reads `opts[:force_aspect_ratio]`. HOW: Remove the duplicate and keep a single `downsize(from, to, dimensions, opts={})` method; update `resize_emoji.rb` to call `OptimizedImage.downsize(path, path, '100x100', opts)`."
+   },
+   {
+    "id": "S2",
+    "file": "app/controllers/uploads_controller.rb",
+    "lines": [
+     65,
+     69
+    ],
+    "texto": "WHAT: The new downsize loop calls `OptimizedImage.downsize` but discards its return value. WHY: `OptimizedImage.convert_with` returns `false` when ImageMagick fails or raises an exception, so a failed resize leaves the original oversized tempfile intact and `Upload.create_for` still stores it, allowing uploads that exceed `SiteSetting.max_image_size_kb`. HOW: Check the return value and abort or skip the upload when downsizing fails, e.g. `break unless OptimizedImage.downsize(...)` inside the loop and validate the final size before creating the upload."
+   },
+   {
+    "id": "S3",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     141,
+     158
+    ],
+    "texto": "The diff adds a second `def self.downsize(from, to, dimensions, opts={})` at line 149, which overrides the first `def self.downsize(from, to, max_width, max_height, opts={})` at line 145. Ruby method definitions with the same name shadow earlier ones, so the 4-argument version is never callable. Existing callers that pass width and height separately will invoke the 3-argument version, binding the width to `dimensions` and the height to `opts`, producing wrong arguments for `optimize`. Rename the new method (e.g., `downsize_by_dimensions`) or keep a single `downsize` implementation that handles both calling conventions correctly."
+   },
+   {
+    "id": "S4",
+    "file": "optimized_image.rb",
+    "lines": [
+     145,
+     151
+    ],
+    "texto": "Duplicate `downsize` method definition: the definition at lines 145-147 is immediately overridden by the definition at lines 149-151. This is an implementation issue (not a test defect) and falls outside the assigned defect class, but it is the only concrete issue described in the diff."
+   },
+   {
+    "id": "S5",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     145,
+     151
+    ],
+    "texto": "The PR redefines OptimizedImage.downsize to accept a dimensions string (e.g., '80%') instead of separate width/height arguments, but leaves the old four-argument wrapper at lines 145-147. Ruby method definitions override rather than overload, so the new three-argument definition at lines 149-151 silently replaces the old one. Any caller still using the previous four-argument contract (from, to, max_width, max_height) will have max_width treated as the dimensions string and max_height treated as opts, producing incorrect image geometry or an error. Remove the shadowed four-argument downsize definition so only the intended contract remains."
+   },
+   {
+    "id": "S6",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     145,
+     151
+    ],
+    "texto": "The file now defines OptimizedImage.downsize twice: first with signature (from, to, max_width, max_height, opts={}) and then with (from, to, dimensions, opts={}). Ruby silently uses the last definition, so the 4-argument version is dead code and any existing caller that passes separate width/height values will raise ArgumentError. Remove the first (4-argument) definition, or if backwards compatibility is required keep only one method and make the second form a wrapper."
+   },
+   {
+    "id": "S7",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     141,
+     158
+    ],
+    "texto": "The duplicate downsize() method definition is a Ruby method-redefinition concern (a later definition silently overrides the earlier one). This is outside the assigned defect class but worth verifying that the redefinition is intentional and that the earlier definition is removed."
+   },
+   {
+    "id": "S8",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     145,
+     151
+    ],
+    "texto": "The PR adds a second `downsize` class method with a different signature right after the first one. Ruby has no method overloading by arity, so the second definition replaces the first, making the `max_width`/`max_height` signature unreachable. Any caller that still passes separate width/height arguments will now hit the wrong method body and likely raise an ArgumentError. Remove the now-dead first definition (or merge both signatures into a single method that detects whether it received a dimensions string or width/height pair)."
+   },
+   {
+    "id": "S9",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     145,
+     151
+    ],
+    "texto": "The model declares `downsize` with both a 4-argument `(from, to, max_width, max_height, opts)` signature and a 3-argument `(from, to, dimensions, opts)` signature. Ruby silently shadows the first with the second, so the controller's new call at uploads_controller.rb:67 (passing a percentage string) only matches the second definition and any existing caller using the old width/height form will raise ArgumentError. Remove the stale 4-argument definition so the contract matches the controller's usage."
+   },
+   {
+    "id": "S10",
+    "file": "app/controllers/uploads_controller.rb",
+    "lines": [
+     67,
+     67
+    ],
+    "texto": "`OptimizedImage.downsize(tempfile.path, tempfile.path, \"80%\", ...)` asks ImageMagick to read from and write to the same file. The model's `convert_with` builds a `convert <from> ... <to>` shell command and assumes distinct paths; overwriting the source during conversion can corrupt or truncate the upload. Downsize to a temporary path and then replace the original."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#01",
+    "descricao": "downsize is defined twice in OptimizedImage; the new (from, to, dimensions, opts) version overrides the (max_width, max_height) one, so existing callers such as ResizeEmoji that pass width and height now raise ArgumentError.",
+    "textoGolden": "The downsize method is defined twice. The second definition, which expects a single dimensions string parameter, overrides the first, which expected separate max_width and max_height parameters. This makes the original method unreachable and breaks existing code that calls it with separate width and height arguments.",
+    "comentarios": [
+     {
+      "file": "app/models/optimized_image.rb",
+      "lines": [
+       149,
+       151
+      ],
+      "texto": "WHAT: A second `def self.downsize(from, to, dimensions, opts={})` is defined that overrides the existing `downsize(from, to, max_width, max_height, opts={})` at lines 145-147. WHY: Ruby uses the last definition, so the effective downsize now only accepts 3-4 args, and the existing caller app/jobs/regular/resize_emoji.rb:14 (`OptimizedImage.downsize(path, path, 100, 100, opts)`) passes 5 args and raises ArgumentError (wrong number of arguments, given 5, expected 3..4), breaking emoji resizing. HOW: Remove the duplicate; keep a single downsize method whose signature matches all callers (the 4-arg uploads_controller call `downsize(path, path, \"80%\", allow_animation: ...)` and the 5-arg ResizeEmoji call), or rename one of them."
+     },
+     {
+      "file": "app/models/optimized_image.rb",
+      "lines": [
+       145,
+       151
+      ],
+      "texto": "`downsize` is defined twice: the original 5-param form `downsize(from, to, max_width, max_height, opts)` at lines 145-147 and the new 4-param form `downsize(from, to, dimensions, opts)` at lines 149-151. Ruby keeps only the last definition, so the effective signature is now 4 params and the 5-param version is dead code. The pre-existing consumer app/jobs/regular/resize_emoji.rb:14 still calls `OptimizedImage.downsize(path, path, 100, 100, opts)` with 5 positional args, which now raises ArgumentError on every emoji resize. Either update that caller to the new `dimensions` form or remove the redundant override so the old signature keeps working."
+     },
+     {
+      "file": "app/models/optimized_image.rb",
+      "lines": [
+       145,
+       151
+      ],
+      "texto": "`self.downsize` is defined twice in the same class scope (line 145 `(from, to, max_width, max_height, opts={})` and the new line 149 `(from, to, dimensions, opts={})`). Ruby keeps only the last definition, so the 4-argument version is dead and unreachable. The existing caller `OptimizedImage.downsize(path, path, 100, 100, opts)` in app/jobs/regular/resize_emoji.rb:14 passes 5 arguments and will now raise ArgumentError (expected 3..4). Remove the duplicate definition (keep only the `dimensions`-based one, or convert resize_emoji's call), otherwise emoji resizing breaks."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#02",
+    "descricao": "The client-side upload size check hardcodes 10 MB instead of the per-type max_<type>_size_kb setting, so attachment limits diverge from the server: larger allowed attachments are blocked and smaller limits are only enforced server-side.",
+    "textoGolden": "Hardcoding maxSizeKB = 10 * 1024 ignores Discourse.SiteSettings['max_' + type + '_size_kb'], so the client-side limit can diverge from server-side and per-type settings (also applies to the 413 handler below).",
+    "comentarios": [
+     {
+      "file": "utilities.js",
+      "lines": [
+       179,
+       249
+      ],
+      "texto": "Hardcoded max size literal 10 * 1024 replaces site-setting-derived max size. Behavioral concern outside assigned class."
+     },
+     {
+      "file": "app/assets/javascripts/discourse/lib/utilities.js",
+      "lines": [
+       182,
+       182
+      ],
+      "texto": "The fixed 10 MB client limit is applied to attachments as well as images, replacing max_attachment_size_kb. Sites configured to allow attachments larger than 10 MB can no longer upload those valid files through the composer, although UploadValidator still permits them. Apply the new input ceiling only to images and retain the configured attachment limit."
+     },
+     {
+      "file": "app/assets/javascripts/discourse/lib/utilities.js",
+      "lines": [
+       180,
+       184
+      ],
+      "texto": "WHAT: Client check hardcodes maxSizeKB to 10*1024 instead of Discourse.SiteSettings['max_'+type+'_size_kb'], losing image vs attachment distinction. WHY: Sites with smaller max_attachment_size_kb pass client validation then fail server-side, and sites with limits >10MB incorrectly block valid uploads with wrong max_size_kb message. HOW: Restore per-type SiteSetting lookup (keep 10MB only as image downsize ceiling)."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#03",
+    "descricao": "The upload downsizing passes a percentage ('80%') as dimensions, but for animated GIFs the gifsicle path uses --resize-fit, which expects WxH geometry, so downsizing silently fails.",
+    "textoGolden": "Passing 80% as the dimensions can fail for animated GIFs when allow_animated_thumbnails is true, since the animated path uses gifsicle --resize-fit which expects WxH geometry, not a percentage; downsizing would then silently fail.",
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       67,
+       67
+      ],
+      "texto": "The controller passes the percentage string `\"80%\"` as the dimensions argument to `OptimizedImage.downsize`, but the consumer requires explicit `WxH` geometry: the code this PR deleted built exactly `\"#{width}x#{height}\"`, and the animated path runs `gifsicle --resize-fit #{dimensions}`, which rejects a percentage. Pass an explicit size (e.g. a computed `\"WxH\"` from the max KB target) so the auto-downsize actually reduces the file, rather than silently no-oping and leaving oversized uploads."
+     },
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       63,
+       70
+      ],
+      "texto": "Caller passes \"80%\" as dimensions to OptimizedImage.downsize, but the downsize/optimize instruction builders in optimized_image.rb expect explicit \"WxH\" geometry (interpolated as -resize #{dimensions}\\>). A bare percentage does not satisfy that contract and will produce a malformed geometry. Fix the caller to supply WxH dimensions or add explicit percentage handling to the callee."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#04",
+    "descricao": "Auto-downsizing passes the upload tempfile path, which lacks a .gif extension, so the animated branch is never chosen and convert keeps only the first frame, flattening oversized animated GIFs.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       64,
+       70
+      ],
+      "texto": "WHAT: The new auto-downsize call passes a tempfile path whose name has no `.GIF` extension, so `optimize` never selects the animated branch (`method_name += \"_animated\" if opts[:allow_animation] && from =~ /\\.GIF$/i`) and uses `downsize_instructions`, which runs `convert from[0]` and keeps only the first frame. WHY: Animated GIFs larger than max_image_size_kb that are uploaded through this path have their animation flattened to a single frame even though SiteSetting.allow_animated_thumbnails is enabled. HOW: Detect the image type from the original filename/content-type rather than the tempfile path (or pass a flag) so the gifsicle animated downsize path is used for GIF inputs."
+     },
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       67,
+       67
+      ],
+      "texto": "Passing the multipart tempfile path to downsize prevents animation detection when that path does not end in .gif, even when allow_animated_thumbnails is enabled. OptimizedImage.optimize checks the path suffix and otherwise uses convert with input[0], so oversized animated GIF uploads are permanently flattened to their first frame. Preserve the original image extension in the processing path or pass the image format explicitly to select animated processing."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#05",
+    "descricao": "The comment promises images are reduced to the allowed size, but the loop only tries five 80% reductions with no guarantee of reaching the limit.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       63,
+       70
+      ],
+      "texto": "The comment says large images are \"automatically reduced to allowed size\", but the loop only resizes by 80% up to 5 attempts (\u22480.33\u00d7 of the original in the best case) and then stops without any check that the result actually meets `max_image_size_kb`. The prose promises a guarantee the code does not provide; either make the loop actually converge to the allowed size or reword the comment to state that the image is only attempted to be reduced."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#06",
+    "descricao": "The downsize retry loop ignores the false return of a failed conversion and repeats the same failing ImageMagick call up to five times.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       66,
+       68
+      ],
+      "texto": "The retry loop ignores downsize's false return value and retries failed conversions while the file remains oversized. convert_with returns false on converter failure, so an unsupported or malformed oversized image launches the same failing external conversion up to five times per upload without any changed input. Break on a failed downsize result and return an upload error rather than repeating the conversion."
+     },
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       64,
+       69
+      ],
+      "texto": "WHAT: Downsize loop ignores OptimizedImage.downsize return value and retries up to 5 times unconditionally while checking tempfile.size. WHY: Failed converts (e.g. SVG, invalid 80%> geometry, corrupt image) burn 5 ImageMagick runs then Upload.create_for still runs with oversized/unmodified file and fails validation, wasting CPU and breaking the feature. HOW: Break on false return and handle failure."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#08",
+    "descricao": "Claims up to five synchronous ImageMagick runs per oversized upload block request threads and enable DoS.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       63,
+       69
+      ],
+      "texto": "WHAT: Up to 5 synchronous OptimizedImage.downsize + ImageOptim convert runs execute inline in create_upload request cycle for every oversized image. WHY: Blocks the Rails request thread with CPU-intensive shell-outs per upload, enabling easy request-thread exhaustion/DoS with large images. HOW: Move downsizing to background job or enforce single-pass/timeout."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#09",
+    "descricao": "Claims the downsize loop checking tempfile.size may never terminate because of a stale cached size, causing infinite loops.",
+    "textoGolden": "The loop checking `tempfile.size` may never terminate correctly due to stale cached size, leading to potential infinite loops or incorrect file handling after modifications.",
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#sncc-01",
+    "descricao": "The 413 upload error message states a hard-coded 10 MB maximum that may not match the limit the server or web server actually enforces.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#opa-01",
+    "descricao": "The upload tempfile path, which for API URL uploads embeds the request-controlled type param, is now passed to OptimizedImage.downsize and run unescaped in a shell via backticks, allowing command injection through type.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#musep-01",
+    "descricao": "Oversized SVG uploads go through the new ImageMagick downsize loop because SVG counts as an image, so the vector file is rasterized or corrupted in place before Upload.create_for parses it as SVG.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "eb9623b4e787303a3bd15e10bbbdb78d59875ac6",
+  "base": "28e3db2520d4ea28c57b08da57b83917ba7b2e15",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/spans/consumers/process/factory.py",
+    "lines": [
+     134,
+     143
+    ],
+    "texto": "WHAT: `process_batch` reads `val['end_timestamp_precise']` from a raw `ingest_spans_v1.SpanEvent`, but that Kafka schema only guarantees `end_timestamp`. WHY: Every real span message will raise `KeyError`, crashing the consumer batch. HOW: Construct `Span` using the actual schema field `val['end_timestamp']` (converted to the precise float representation the buffer expects)."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/scripts/spans/add-buffer.lua",
+    "lines": [
+     62,
+     64
+    ],
+    "texto": "WHAT: The Lua cap evicts with `zpopmin` on a sorted set scored solely by `end_timestamp_precise`, so older ancestor spans can be removed while their newer descendants remain. WHY: This produces incomplete segments, breaks root-span detection in `flush_segments` (so root timeout is not applied), and contradicts the stated goal of prioritizing spans higher in the hierarchy. HOW: Make the eviction score hierarchy-aware, e.g. by giving each ancestor level a large score bonus so descendants are evicted before their parents."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/spans/buffer.py",
+    "lines": [
+     439,
+     449
+    ],
+    "texto": "WHAT: `SpansBuffer.max_segment_spans` is no longer enforced: `_load_segment_data` dropped the span-count guard and `add-buffer.lua` hard-codes 1000. WHY: Changing the `max_segment_spans` constructor option has no effect, and the cap is now controlled by an undocumented magic number that diverges from the default (1001). HOW: Pass `max_segment_spans` into the Lua script as an argument and evict to that limit, or remove the option if it is intentionally deprecated."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/spans/buffer.py",
+    "lines": [
+     142,
+     158
+    ],
+    "texto": "SpansBuffer.__init__ still exposes max_segment_spans=1001, but load_segments no longer checks segment span count against it. Instead, add-buffer.lua hardcodes a 1000-span cap. The configured limit (1001) and the enforced limit (1000) disagree, and the Python config is effectively ignored. Either remove max_segment_spans and document the Lua limit as the source of truth, or pass the configured value into the Lua script and restore/align the Python-side guard so both sites agree."
+   },
+   {
+    "id": "S5",
+    "file": "",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "max_segment_spans = 1001 is still declared and accepted as configuration in SpansBuffer.__init__, but the flush_segments path that previously enforced it was removed; the effective cap is now 1000 enforced by the Lua script via zpopmin, making the config unused."
+   },
+   {
+    "id": "S6",
+    "file": "",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "No validation that end_timestamp_precise is finite before using it as a Redis ZADD score; Redis rejects NaN, though the schema (sentry_kafka_schemas.schema_types.ingest_spans_v1.SpanEvent) and rapidjson are assumed to guarantee a valid number."
+   },
+   {
+    "id": "S7",
+    "file": "src/sentry/spans/buffer.py",
+    "lines": [
+     194,
+     199
+    ],
+    "texto": "`set_key` was accurate when this key held a Redis Set, but the PR now writes it with `zadd` and reads it with `zscan`. The identifier implies plain set semantics while the implementation depends on sorted-set behavior (ordering, zpopmin trimming). Rename it to `zset_key` or `segment_key` so the code contract matches the Redis data type."
+   },
+   {
+    "id": "S8",
+    "file": "tests/sentry/spans/test_buffer.py",
+    "lines": [
+     123,
+     152
+    ],
+    "texto": "Every Span fixture added by the PR in test_buffer.py uses the same end_timestamp_precise value, so the new Redis sorted-set score is never actually exercised. Vary the timestamps across spans and assert that flushed segments are ordered by end_timestamp_precise and that the 1000-span cap drops the oldest spans."
+   },
+   {
+    "id": "S9",
+    "file": "tests/sentry/spans/consumers/process/test_flusher.py",
+    "lines": [
+     44,
+     73
+    ],
+    "texto": "test_backpressure constructs all spans with the same end_timestamp_precise, so it cannot catch a regression where the buffer ignores or misuses the timestamp score. Use distinct timestamps and assert that the sorted-set ordering and eviction logic are honored when backpressure limits are applied."
+   },
+   {
+    "id": "S10",
+    "file": "src/sentry/spans/buffer.py",
+    "lines": [
+     150,
+     150
+    ],
+    "texto": "The max_segment_spans parameter is no longer used in Python flush logic because this PR moved span-count capping into add-buffer.lua, which hardcodes 1000. This creates a cross-file disagreement: buffer.py says the limit is 1001, while the Lua script enforces 1000. Either remove the dead config or pass its value into the Lua script so both sides enforce the same limit."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#03",
+    "descricao": "ZUNIONSTORE merges sorted sets with the default SUM aggregate, so a span payload present in both keys gets a doubled end-timestamp score and is wrongly kept by the oldest-first eviction.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       46,
+       53
+      ],
+      "texto": "ZUNIONSTORE uses AGGREGATE SUM by default, so when the same span payload is present in both `set_key` and the merged `span_key`/`parent_key` (duplicate delivery is anticipated by this buffer's own comments), its score is added instead of being kept equal to `end_timestamp_precise`. Because eviction at line 63 (`zpopmin` by score) compares scores across all members of `set_key`, a summed score makes the duplicated span appear far newer than its real end timestamp and biases eviction away from legitimately-old spans, breaking the stated 'evict oldest end timestamps' contract. Use ZUNIONSTORE ... AGGREGATE MIN (or MAX) so a duplicate keeps a single end timestamp score rather than doubling it."
+     },
+     {
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       53,
+       53
+      ],
+      "texto": "ZUNIONSTORE uses its default SUM aggregation, so replayed payloads present in both the temporary parent_key and the resolved set_key receive the sum of their end timestamps. Replaying a child whose parent already redirects to an ancestor therefore makes that old span score roughly twice its actual timestamp, protecting it from eviction over genuinely newer spans. Use AGGREGATE MAX (or MIN for identical timestamp scores) on both union operations to preserve timestamp scores when members overlap."
+     },
+     {
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       47,
+       47
+      ],
+      "texto": "ZUNIONSTORE defaults to AGGREGATE SUM, so a payload present in both the destination and source has its timestamp doubled rather than preserved. This can happen when a previously merged span is replayed into its original subtree key. The duplicated span then sorts after genuinely newer spans and survives ZPOPMIN eviction incorrectly. Specify AGGREGATE MAX (or MIN, since identical payloads should have identical timestamps) on both union calls so merging remains idempotent and scores remain end timestamps."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#04",
+    "descricao": "Segment keys change from Redis sets to sorted sets under the same key names, so keys left by the previous release make ZADD, ZCARD and ZSCAN fail with WRONGTYPE during rollout, crashing span processing and flushing.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       46,
+       54
+      ],
+      "texto": "WHAT: Changed SET ops (scard/sunionstore) to ZSET ops (zcard/zunionstore/zpopmin) with no migration breaks in-flight segments. WHY: Old keys of type SET still live up to TTL; ZCARD/ZUNIONSTORE/ZSCAN/ZADD on the opposite type raises WRONGTYPE and fails inserts/flushes during rollout."
+     },
+     {
+      "file": "src/sentry/spans/buffer.py",
+      "lines": [
+       197,
+       199
+      ],
+      "texto": "The segment keys were migrated from Redis SETs to SORTED SETs (ZADD/ZSCAN/ZCARD/ZUNIONSTORE/ZPOPMIN), but nothing handles the keys written by the currently deployed release. During a rolling deploy, an existing `span-buf:s:{...}:{id}` key is still a SET, so this `p.zadd(...)` (and the flusher's `p.zscan(...)`, and the Lua `zcard`/`zunionstore`) raises WRONGTYPE 'Operation against a key holding the wrong kind of value'. That exception is unhandled: it aborts the whole pipeline/Lua invocation and crashes the consumer batch. Add a key-schema version to the key name (or a migration/fallback) so old SET-typed keys cannot be touched as sorted sets."
+     },
+     {
+      "file": "src/sentry/spans/buffer.py",
+      "lines": [
+       197,
+       199
+      ],
+      "texto": "The new ZADD writes sorted sets into the same span-buf:s namespace previously populated by SADD, without migrating existing set keys. During deployment, inserting into an existing buffered segment fails with WRONGTYPE, and the new ZSCAN reader likewise fails on pending old-format segments instead of flushing them. Introduce a coordinated migration/drain or a versioned namespace with compatible handling of pending old-format buffers."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#05",
+    "descricao": "Claims zpopmin eviction can drop the root span while the has-root flag stays set, flushing a segment without its root.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       62,
+       64
+      ],
+      "texto": "WHAT: zpopmin eviction by lowest end_timestamp has no protection for the segment/root span. WHY: Root with smallest or tied timestamp (tests use identical timestamps, ties break lexicographically) is evicted while hrs flag stays 1, flushing a root-marked segment missing its root."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+    "descricao": "max_segment_spans is still a constructor parameter but is no longer enforced; the segment cap is now hardcoded to 1000 in the Lua script, so the configured value is ignored.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/buffer.py",
+      "lines": [
+       439,
+       449
+      ],
+      "texto": "This hunk removes the only load-time span-count cap (`self.max_segment_spans`): previously a segment exceeding 1001 spans was logged, deleted from `payloads`/`cursors`, and skipped, but now every scanned span is unconditionally appended via `payloads[key].extend(...)`. The new bound relies entirely on insert-time eviction in the Lua script; if that eviction fails to bound a key (e.g. duplicated/scored members or the concurrent-writer case the code itself warns about at lines 457-461), this method will now materialize an unbounded number of spans into memory and emit them, whereas before it was safely skipped. Re-introduce a span-count guard (or verify the invite-time eviction strictly caps cardinality) to keep memory bounded."
+     },
+     {
+      "file": "src/sentry/spans/buffer.py",
+      "lines": [
+       446,
+       449
+      ],
+      "texto": "buffer.py declares the segment span limit as the configurable `max_segment_spans` (default 1001, line 150) and this hunk removed the `len(payloads[key]) > self.max_segment_spans` size guard from the flush path, while the other changed file (add-buffer.lua line 62) now enforces a hardcoded cap of 1000 spans. The two changed files disagree on what the segment span limit is: the Lua cap (1000) is not the declared `max_segment_spans`, and the buffer no longer applies the declared limit at all. If `max_segment_spans` is configured below 1000 (or below the Lua cap), oversized segments that this code used to skip will now be flushed. Reconcile the constant: either keep/restore the buffer-side guard against `self.max_segment_spans`, or make the Lua cap derive from the same limit instead of hardcoding 1000."
+     },
+     {
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       62,
+       63
+      ],
+      "texto": "The segment size cap is hardcoded as 1000 here, but SpansBuffer still declares max_segment_spans = 1001 in src/sentry/spans/buffer.py, and this PR deleted the flush-time guard that used that constant. The declared limit and the actually-enforced limit now disagree (and the Python constant is no longer honored anywhere). Make the Lua cap and the Python constant agree \u2014 either pass max_segment_spans in as an ARGV instead of the literal 1000, or update the declared constant to 1000 \u2014 so the buffer's enforced bound matches the value it declares."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#08",
+    "descricao": "Tests give every span the same end timestamp and never exceed 1000 spans, so the new score ordering and oldest-first eviction are not tested.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/spans/test_buffer.py",
+      "lines": [
+       120,
+       152
+      ],
+      "texto": "All spans in the fixture use identical end_timestamp_precise=1700000000.0, so the ZSET score-dependent behavior (ordering by end time, zunionstore score merge, and Lua zpopmin keeping newest 1000) is neutralised \u2014 tests pass even if scores are wrong or eviction keeps the wrong end. Use distinct timestamps and add a >1000-span trimming test asserting oldest evicted."
+     },
+     {
+      "file": "tests/sentry/spans/test_buffer.py",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The missing test for the new trim path (zset ordering/trim by end_timestamp_precise, the >1000-span zpopmin path) is a coverage gap. Add a test that verifies the new trim behavior."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01",
+    "descricao": "The span redirect-walk limit was cut from 10000 to 1000 iterations, so trees deeper than 1000 may not resolve to the correct segment root.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#snloop-01",
+    "descricao": "The spans buffer module docstring still describes span-buf:s:* keys as plain sets, though they are now sorted sets scored by end_timestamp_precise and trimmed to 1000 spans by add-buffer.lua.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "6669a2d94d76eea3b99b8c476d12b1eb66726b07",
+  "base": "56abd247e1829cb6de82dfcc8ce04deb5f0d1e91",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/controllers/topics_controller.rb",
+    "lines": [
+     105,
+     113
+    ],
+    "texto": "WHAT: TopicUser.find_by returns nil when the user has never viewed the topic, and the code immediately calls tu.notification_level. WHY: A logged-in user with no topic_user row (e.g., a category watcher clicking the email unsubscribe link) triggers a NoMethodError instead of being unsubscribed. HOW: Use TopicUser.change(current_user.id, params[:topic_id], notification_level: new_level) instead of find_by/save!, which creates the row when absent and keeps notification reason/MessageBus behavior consistent."
+   },
+   {
+    "id": "S2",
+    "file": "app/controllers/topics_controller.rb",
+    "lines": [
+     98,
+     115
+    ],
+    "texto": "WHAT: @topic_view is instantiated before TopicUser is modified, and TopicView.topic_user is memoized, so perform_show_response serializes the old notification_level. WHY: The user sees the pre-unsubscribe notification state on the page after clicking unsubscribe, making the action appear to have failed. HOW: Re-instantiate @topic_view after updating the notification level (or clear its @topic_user cache) before calling perform_show_response."
+   },
+   {
+    "id": "S3",
+    "file": "app/controllers/topics_controller.rb",
+    "lines": [
+     98,
+     116
+    ],
+    "texto": "`TopicUser.find_by(user_id: current_user.id, topic_id: params[:topic_id])` can return `nil` (e.g. a user who has never viewed the topic follows the email unsubscribe link). The code then calls `tu.notification_level` unconditionally, which will raise `NoMethodError: undefined method 'notification_level' for nil:NilClass`, resulting in a 500 error instead of a useful unsubscribe page. Either create a TopicUser record when missing, or guard against nil and render an appropriate message."
+   },
+   {
+    "id": "S4",
+    "file": "app/controllers/topics_controller.rb",
+    "lines": [
+     105,
+     113
+    ],
+    "texto": "TopicUser.find_by can return nil if the user has no existing TopicUser record for the topic. The code then calls tu.notification_level unconditionally, which will raise NoMethodError. Add a guard or create a TopicUser before reading notification_level."
+   },
+   {
+    "id": "S5",
+    "file": "app/controllers/topics_controller.rb",
+    "lines": [
+     98,
+     116
+    ],
+    "texto": "TopicsController#unsubscribe dereferences TopicUser.find_by result without checking for nil. If the user has no TopicUser record for the topic, the action crashes with NoMethodError on tu.notification_level instead of creating a muted record or downgrading the level. Add a guard to create or handle a nil TopicUser before reading notification_level."
+   },
+   {
+    "id": "S6",
+    "file": "app/models/topic.rb",
+    "lines": [
+     719,
+     721
+    ],
+    "texto": "`Topic#unsubscribe_url` returns `#{url}/unsubscribe`, a public URL path with no sensitive token or secret. Because visiting this URL automatically changes the recipient's notification level without requiring any authentication token, the URL acts as a capability-bearing link: if forwarded or logged, anyone with the link can alter the user's notification state. The reviewer classifies this as an authorization/CSRF-like issue rather than data exposure, so it is noted but not reported under the data-exposure class."
+   },
+   {
+    "id": "S7",
+    "file": "spec/components/email/message_builder_spec.rb",
+    "lines": [
+     167,
+     180
+    ],
+    "texto": "The PR adds topic-specific unsubscribe_url support and updates the builder spec to pass unsubscribe_url, but the tests in the 'with add_unsubscribe_link true' context only check the List-Unsubscribe header and the user_preferences_url in the body. They do not verify that unsubscribe_url is interpolated into the unsubscribe link or body. Add an assertion that message_with_unsubscribe.body contains the provided unsubscribe_url (or that the cooked unsubscribe_link includes it), otherwise the new behavior is untested and could be broken without failing the suite."
+   },
+   {
+    "id": "S8",
+    "file": "app/assets/javascripts/discourse/controllers/topic-unsubscribe.js.es6",
+    "lines": [
+     1,
+     9
+    ],
+    "texto": "The stopNotificiationsText property interpolates model.fancyTitle directly into an I18n string and the unsubscribe.hbs template renders it with triple braces ({{{...}}}). The locale string wraps the title in <strong>, but because triple braces bypass Ember HTML escaping, any HTML/JS in the topic title will be executed in the user's browser. If fancyTitle is not guaranteed to be escaped server-side, this is an XSS vulnerability. Either escape the title before interpolation (e.g. Handlebars.Utils.escapeExpression) or render the locale HTML wrapper around an escaped {{title}} instead of using triple braces for the whole sentence."
+   },
+   {
+    "id": "S9",
+    "file": "app/mailers/user_notifications.rb",
+    "lines": [
+     292,
+     296
+    ],
+    "texto": "`post.topic.unsubscribe_url` is a relative path, but it is passed to the email builder where it becomes a link in an email. Email links must be absolute. Prepend `Discourse.base_url` here (consistent with how `user_preferences_url` is built and how `post.url` is used in the same template), e.g. `unsubscribe_url: \"#{Discourse.base_url}#{post.topic.unsubscribe_url}\"`."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
+    "descricao": "The new unsubscribe endpoint changes the user's topic notification level on a plain GET request, so a third-party page can trigger it for a logged-in user without any CSRF token.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/topics_controller.rb",
+      "lines": [
+       98,
+       115
+      ],
+      "texto": "The unsubscribe endpoint mutates notification_level (tu.save!) via a plain GET route (config/routes.rb:440-441) with skip_before_filter :check_xhr, authenticating only through the session cookie. There is no CSRF token (Rails forgery protection does not cover GET) and no capability token, unlike EmailController#unsubscribe which authorizes via DigestUnsubscribeKey. Any third-party page can embed <img src=\"https://forum/t/<id>/unsubscribe\"> and, when a logged-in user loads it, silently change that user's notification_level for the topic. Require a per-user capability token (like the digest unsubscribe key) in the URL, or perform the state change from an authenticated non-GET request that carries the CSRF token."
+     },
+     {
+      "file": "config/routes.rb",
+      "lines": [
+       440,
+       441
+      ],
+      "texto": "The new GET routes mutate the authenticated user's notification preferences without CSRF verification. An attacker can navigate a logged-in user's browser to a known topic unsubscribe URL and reduce or mute its notifications, because Rails excludes GET from forgery-token checks and unsubscribe explicitly skips check_xhr. Make GET render a confirmation page and perform the preference change through a CSRF-protected POST or PUT."
+     },
+     {
+      "file": "app/controllers/topics_controller.rb",
+      "lines": [
+       98,
+       113
+      ],
+      "texto": "WHAT: The unsubscribe state change (lowering/muting notification_level + save!) runs on a GET route (config/routes.rb GET t/:slug/:topic_id/unsubscribe). WHY: An attacker can forge the URL as an image/prefetch/link to silently change a victim's notification state with no CSRF token since GETs are not CSRF-protected. HOW: Make the mutation a PUT/POST with CSRF protection or require an explicit confirmation parameter/token instead of mutating on page view."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+    "descricao": "TopicsController#unsubscribe dereferences TopicUser.find_by without handling a missing row, so users with no topic_users record get a NoMethodError/500 instead of being unsubscribed.",
+    "textoGolden": "logic: Potential nil pointer exception - if no TopicUser record exists, tu will be nil and calling methods on it will crash",
+    "comentarios": [
+     {
+      "file": "app/controllers/topics_controller.rb",
+      "lines": [
+       105,
+       107
+      ],
+      "texto": "tu is not checked for nil before use. TopicUser.find_by(user_id: current_user.id, topic_id: params[:topic_id]) returns nil whenever the logged-in user has no topic_users row for that topic (the same lookup TopicUser.get performs), and the next line dereferences tu.notification_level, raising NoMethodError and returning a 500. Because the route is only gated by ensure_logged_in, any logged-in user can hit /t/:topic_id/unsubscribe(.json) for a topic they never opened and trigger the crash. Guard the lookup, e.g. `tu = TopicUser.find_by(...); return render json: {success: false} unless tu` (or build/return early) before reading notification_level."
+     },
+     {
+      "file": "app/controllers/topics_controller.rb",
+      "lines": [
+       105,
+       113
+      ],
+      "texto": "`TopicUser.find_by(...)` can return nil (e.g. the user clicks the emailed unsubscribe link for a topic for which no TopicUser row was ever created), and the very next line dereferences it (`tu.notification_level > ...`, then `tu.save!`). This raises NoMethodError on nil and the unsubscribe request 500s. Guard the nil case (e.g. return early or use `TopicUser.change`/`find_or_create_by`) before reading/writing notification_level."
+     },
+     {
+      "file": "app/controllers/topics_controller.rb",
+      "lines": [
+       105,
+       113
+      ],
+      "texto": "`tu = TopicUser.find_by(user_id: current_user.id, topic_id: params[:topic_id])` can return nil (find_by yields nil when no row exists), but the next lines dereference it unconditionally (`tu.notification_level`, `tu.save!`). Since the new unsubscribe routes are public GET endpoints, any logged-in user visiting /t/:slug/:topic_id/unsubscribe for a topic they have never tracked will trigger a NoMethodError and a 500 instead of a sane response. Guard the nil case (e.g. create/skip or redirect) before reading notification_level."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#03",
+    "descricao": "The message builder spec passes unsubscribe_url in the fixture but never asserts the per-topic unsubscribe link appears in the email.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "spec/components/email/message_builder_spec.rb",
+      "lines": [
+       169,
+       180
+      ],
+      "texto": "The `unsubscribe_url` added to the `message_with_unsubscribe` fixture is never asserted. The two tests only check that the List-Unsubscribe header `be_present` and that the body matches `user_preferences_url`; neither references `unsubscribe_url`. So they would still pass if the topic-specific unsubscribe URL this PR introduces were dropped or wired to the wrong value. Add an assertion (e.g. that `message_with_unsubscribe.body` matches `/t/1234/unsubscribe`, and that the List-Unsubscribe header points at the topic unsubscribe URL) so the new behaviour is actually covered."
+     },
+     {
+      "file": "spec/components/email/message_builder_spec.rb",
+      "lines": [
+       169,
+       172
+      ],
+      "texto": "The fixture now passes unsubscribe_url, but no assertion reads it. The tests only check that the List-Unsubscribe header is present and that the body contains user_preferences_url, so they pass if the topic unsubscribe link is removed or broken. Add an assertion that the body includes \"/t/1234/unsubscribe\"."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#08",
+    "descricao": "The unsubscribe confirmation says the user will stop receiving notifications for the topic, but watching/tracking users are only moved to regular, which still sends mention/reply notifications.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "config/locales/client.en.yml",
+      "lines": [
+       985,
+       985
+      ],
+      "texto": "The confirmation promises that the user will stop receiving notifications for this topic, but TopicsController#unsubscribe sets watching/tracking users to regular, not muted. Regular still allows mention/reply notifications, so this confirmation (and the corresponding promise in the new email link text) overstates what clicking the link accomplished. Describe stopping notifications for every new post, or make the confirmation conditional on the resulting notification level so only muted users are told that all topic notifications have stopped."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#09",
+    "descricao": "Unsubscribe saves the new notification level without setting notifications_reason_id, so auto-tracked topics are promoted back to tracking on the next read, undoing the unsubscribe.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/topics_controller.rb",
+      "lines": [
+       113,
+       113
+      ],
+      "texto": "Saving the notification level directly leaves notifications_reason_id unchanged instead of recording an explicit user choice. For automatically tracked topics with a null reason, TopicUser.update_last_read promotes the row back to tracking when the reading threshold is exceeded, undoing the unsubscribe on the next read. Persist the change through TopicUser.change so notifications_reason_id and notifications_changed_at are set consistently with set_notifications."
+     },
+     {
+      "file": "app/controllers/topics_controller.rb",
+      "lines": [
+       113,
+       113
+      ],
+      "texto": "Saving the notification level directly bypasses the explicit-user-change metadata set by TopicUser.change. In particular, a topic_user with notifications_reason_id == nil remains eligible for TopicUser.auto_track, which checks that field and can promote the topic back to tracking after the user unsubscribes. Use the notification-change helper (or set its user-change reason and timestamp consistently) so the unsubscribe is retained as an explicit user preference."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#10",
+    "descricao": "Claims the client unsubscribe route never performs the unsubscribe when entered through an in-app transition.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/discourse/routes/topic-unsubscribe.js.es6",
+      "lines": [
+       5,
+       8
+      ],
+      "texto": "The client unsubscribe route only loads the ordinary topic view and never performs the unsubscribe operation. When entered through an in-app transition rather than a full server navigation, PostStream.loadTopicView requests /t/:id.json (or consumes preload data), so the page claims notifications will stop while the persisted notification level remains unchanged. Ensure this entry path executes the unsubscribe operation before showing confirmation."
+     },
+     {
+      "file": "app/assets/javascripts/discourse/routes/topic-unsubscribe.js.es6",
+      "lines": [
+       4,
+       9
+      ],
+      "texto": "The client route loads the topic but never invokes the unsubscribe action. Notification levels are changed only by TopicsController#unsubscribe, so navigating to this route inside the Ember application can display \u201cYou will stop receiving notifications\u201d without changing the subscription. Explicitly perform the unsubscribe operation on client-side entry rather than relying on the initial HTML request to have done it."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#11",
+    "descricao": "The property name stopNotificiationsText is misspelled (should be stopNotificationsText).",
+    "textoGolden": "Typo in property name: 'stopNotificiationsText' should be 'stopNotificationsText' (missing 'n' in 'Notifications')",
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#oph-01",
+    "descricao": "The topic unsubscribe GET endpoint is not idempotent: each visit steps the notification level down again, so reloading the link moves a topic from regular to muted.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "3162ad68a5c87666788b27a44eb31235025091a9",
+  "base": "de11fb0166a7244115bb066edd65ec0d6b7e365c",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     297,
+     305
+    ],
+    "texto": "WHAT: submit() sums Redis cluster memory info once per flusher process. WHY: iter_cluster_memory_usage returns per-master-node usage for the shared Redis cluster, so summing across N buffers inflates used/available by N and can falsely trigger the hard backpressure pause. HOW: collect memory_info from a single buffer (e.g. next(iter(self.buffers.values())).get_memory_info()) instead of extending across all buffers."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     253,
+     257
+    ],
+    "texto": "WHAT: _ensure_processes_alive() checks isinstance(process, multiprocessing.Process) before killing a process. WHY: the flusher uses multiprocessing.get_context(\"spawn\"), whose Process class is multiprocessing.context.SpawnProcess, not multiprocessing.Process (fork on Linux), so the guard is False and dead/hung child processes are never killed before a replacement is spawned, leaking processes. HOW: kill any non-thread process, e.g. check not isinstance(process, threading.Thread) or use hasattr(process, \"kill\")."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     336,
+     347
+    ],
+    "texto": "WHAT: join() breaks out of the per-process loop as soon as the deadline expires for one process. WHY: remaining later processes are not waited for or terminated, so they can keep running past the shutdown timeout and leak. HOW: continue to the next process instead of break, or at least terminate each process before moving on."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     29,
+     37
+    ],
+    "texto": "The class docstring says \"Creates one process per shard for parallel processing,\" but the implementation on lines 60-66 creates `min(max_processes, len(assigned_shards))` processes and assigns multiple shards to each process via modulo. When `max_processes` is less than the shard count, shards share processes, which the new test verifies (4 shards, 2 processes). The docstring should be updated to describe the actual process-per-shard-group behavior, e.g. \"Creates up to `max_processes` processes and distributes shards across them.\""
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     43,
+     52
+    ],
+    "texto": "At line 51, `self.max_processes = max_processes or len(buffer.assigned_shards)` uses truthiness to decide whether a value was supplied. A caller can explicitly pass `flusher_processes=0`, but it will be ignored and replaced with the shard count. Use an explicit None check: `self.max_processes = max_processes if max_processes is not None else len(buffer.assigned_shards)`."
+   },
+   {
+    "id": "S6",
+    "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+    "lines": [
+     60,
+     62
+    ],
+    "texto": "The newly added `time.sleep(0.1)` at line 62 is meant to give flusher threads/processes time to process after advancing the drift, but `time.sleep` is monkeypatched to a no-op at line 15. The call returns immediately, so the test does not actually wait for the condition it claims to synchronize on. Replace the fixed sleep with a proper condition (e.g., wait on the flusher state, or use a short polling loop with a real timeout) and only patch `time.sleep` inside the flusher code if you need to speed up its internal loop."
+   },
+   {
+    "id": "S7",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     250,
+     260
+    ],
+    "texto": "The flusher explicitly uses spawn context (`multiprocessing.get_context(\"spawn\")`) and annotates processes as `multiprocessing.context.SpawnProcess`, but the kill guard checks `isinstance(process, multiprocessing.Process)`. On Linux `multiprocessing.Process` is `ForkProcess`, so the check is False for `SpawnProcess`, and `_ensure_processes_alive` will not kill a hung flusher before creating a replacement. Use a check that covers the actual process type, e.g. `not isinstance(process, threading.Thread)` or `isinstance(process, multiprocessing.context.BaseProcess)`."
+   },
+   {
+    "id": "S8",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     183,
+     201
+    ],
+    "texto": "`spans.buffer.flusher.produce` and `spans.buffer.segment_size_bytes` tag the shard list with key `\"shard\"`, but `spans.buffer.flusher.wait_produce` tags the same `shard_tag` value with key `\"shards\"`. Queries and dashboards will not see all three metrics for the same shard filter. Pick one key (e.g. `\"shard\"`) and use it consistently."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#01",
+    "descricao": "The wait_produce timer is tagged with 'shards' while sibling flusher metrics use 'shard' for the same value, so per-shard dashboards miss it.",
+    "textoGolden": "In the SpanFlusher flush loop, metric tags inconsistently use 'shard' (e.g., in spans.buffer.flusher.produce and spans.buffer.segment_size_bytes) and 'shards' (in spans.buffer.flusher.wait_produce) for the same shard identifier value. This prevents correct metric aggregation across flush stages \u2014 dashboards and alerts filtering by tag 'shard' will miss data tagged as 'shards' and vice versa.",
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       199,
+       199
+      ],
+      "texto": "The `spans.buffer.flusher.wait_produce` timer is tagged with the key `\"shards\"`, while the other two metrics emitted in this same loop (`spans.buffer.flusher.produce` at line 185 and `spans.buffer.segment_size_bytes` at line 195) use the key `\"shard\"`. All three carry the same `shard_tag` value, so this is a pure key-name disagreement: any dashboard or alert that groups/filters by the `shard` tag will silently receive no data from `wait_produce`. Rename the tag key to `\"shard\"` so all flusher metrics share one tag."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       199,
+       199
+      ],
+      "texto": "The `spans.buffer.flusher.wait_produce` timer is tagged with key `shards` while every sibling metric introduced/updated in the same method (`spans.buffer.flusher.produce`, `spans.buffer.segment_size_bytes`) uses the singular key `shard`. Anything consuming this metric family by the `shard` tag (dashboards, alerts, tag-based aggregation) will silently receive no data for `wait_produce`, and per-shard breakdowns of produce latency will be incomplete. Change the tag to `tags={\"shard\": shard_tag}` so the tag contract matches the other flusher metrics."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       199,
+       199
+      ],
+      "texto": "The wait_produce timer tags with \"shards\", while the sibling metrics in the same loop use \"shard\" for the same value (shard_tag). Use one tag key, \"shard\", so queries and dashboards that group by it cover all of these metrics."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#02",
+    "descricao": "The time.sleep(0.1) added to test_basic to let flusher threads process is a no-op because the test monkeypatches time.sleep.",
+    "textoGolden": "The test_basic function in test_consumer.py uses a monkeypatched time.sleep that returns immediately, but then calls time.sleep(0.1) expecting it to actually wait.",
+    "comentarios": [
+     {
+      "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+      "lines": [
+       60,
+       62
+      ],
+      "texto": "WHAT: The added synchronization point `time.sleep(0.1)` added after the second `step.poll()` is neutralized by the test's own `monkeypatch.setattr(\"time.sleep\", lambda _: None)` at line 15 (same `time` module), so it does not actually wait. WHY: The comment says it 'Give[s] flusher threads time to process after drift change', but the call is a no-op, so the test still races the background flusher thread before `step.join()` and is liable to be flaky / to not exercise the intended post-drift flush path. HOW: Use a non-monkeypatched wait (e.g. capture the real sleep before patching, or use the flusher's thread/process join, or poll until `messages` is non-empty with a real timeout)."
+     },
+     {
+      "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+      "lines": [
+       60,
+       62
+      ],
+      "texto": "The added `time.sleep(0.1)` does not wait: line 15 of the same test does `monkeypatch.setattr(\"time.sleep\", lambda _: None)`, which replaces `sleep` on the global `time` module, so this call (and the flusher's own `time.sleep`) is a no-op. The comment 'Give flusher threads time to process after drift change' is therefore false \u2014 the call returns instantly and provides no synchronisation, so the test does not actually wait for the flusher to process after the drift change. Either synchronise on a real condition (e.g. wait until the expected message is produced) or, if the original `time.sleep` is needed here, patch a module-scoped reference instead of the global `time.sleep`."
+     },
+     {
+      "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+      "lines": [
+       60,
+       62
+      ],
+      "texto": "The added `time.sleep(0.1)` is a no-op because the test patches `time.sleep` to `lambda _: None`, so nothing waits for the flusher threads before `step.join()` and the `messages` assertion. Replace it with a condition-based wait, such as polling until `messages` is non-empty with a deadline. Use the real sleep saved before patching if a delay is needed."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+    "descricao": "The restart path only kills a hung flusher if it is a multiprocessing.Process, but spawn-context workers are SpawnProcess, so hung processes are never killed and a duplicate flusher is started for the same shards.",
+    "textoGolden": "Because flusher processes are created via multiprocessing.get_context('spawn').Process, they are instances of multiprocessing.context.SpawnProcess, which on POSIX is not a subclass of multiprocessing.Process, so this isinstance check will always be false and hung processes won't be killed here.",
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       253,
+       255
+      ],
+      "texto": "The new isinstance(process, multiprocessing.Process) guard does not match the SpawnProcess instances created by self.mp_context.Process. When a worker hangs, the guard skips kill() and the replacement starts while the original worker remains alive, allowing overlapping flushing of the same shards if the original resumes and leaking hung workers. Check against multiprocessing.process.BaseProcess or self.mp_context.Process, and kill and join the old worker before replacing it."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       253,
+       255
+      ],
+      "texto": "The workers are created with get_context(\"spawn\").Process, which produces SpawnProcess instances; these are not instances of multiprocessing.Process (the default-context Process class). Consequently this guard skips kill() for actual production workers. When a worker hangs, the replacement starts while the original remains alive and can resume flushing the same shards. Use multiprocessing.process.BaseProcess or the spawn-context Process class for the check, and fix the identical check in join() so shutdown also terminates surviving workers."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       254,
+       255
+      ],
+      "texto": "Workers created by multiprocessing.get_context(\"spawn\").Process are SpawnProcess instances, not instances of the separate multiprocessing.Process class. Consequently this guard skips kill() for production workers. When a live worker exceeds max-unhealthy-seconds, the code starts a replacement and overwrites its handle while the original is still running. If the original resumes, both workers flush the same shards, and repeated hangs can exceed the configured process limit. Check against multiprocessing.process.BaseProcess (or explicitly distinguish threads) and stop the old worker before replacing it."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+    "descricao": "join() breaks out of the per-process loop when the shared deadline expires, skipping termination of the remaining flusher processes and leaving them running after shutdown.",
+    "textoGolden": "Breaking out of the loop when the deadline has elapsed can skip terminating remaining flusher processes, potentially leaving them running after shutdown; consider ensuring termination is attempted even if the deadline is exceeded.",
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       338,
+       341
+      ],
+      "texto": "join() breaks out of the worker loop when the shared deadline expires, skipping cleanup for every remaining worker. If next_step.join consumes the timeout or an earlier worker exhausts it, remaining flushers can continue running after shutdown or partition reassignment. Use the deadline only to limit waiting and still terminate and reap every remaining process."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       337,
+       341
+      ],
+      "texto": "Do not break out of worker cleanup when the join deadline expires. If the first worker consumes the timeout, the next iteration breaks before terminating that worker or any subsequent workers. They may still be blocked in Redis or producer calls despite the shared stopped flag, leaving old workers running after strategy shutdown/reassignment. Apply the deadline only to waiting, and perform termination cleanup for every worker regardless of remaining time (using a type check that recognizes spawn-context workers)."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       337,
+       344
+      ],
+      "texto": "join() waits for processes sequentially against a single shared deadline and breaks without terminating remaining processes once it expires, leaking them."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#05",
+    "descricao": "The SpanFlusher docstring says it creates one process per shard, but shards are distributed across at most max_processes processes.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       30,
+       32
+      ],
+      "texto": "The docstring says the flusher \"Creates one process per shard for parallel processing,\" but the code at lines 60-66 shares shards across a capped number of processes (num_processes = min(self.max_processes, len(buffer.assigned_shards)); each shard assigned via i % self.num_processes). With the new --flusher-processes default of 1, a single process handles every shard, so the documented contract is the opposite of the behaviour this PR introduces (confirmed by test_flusher_processes_limit, which asserts 4 shards served by 2 processes). Update the docstring to say shards are distributed across up to max_processes flusher processes."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       31,
+       32
+      ],
+      "texto": "The new docstring says this creates one process per shard, but workers are capped by max_processes and shards are distributed among them. In particular, the CLI default of 1 means all assigned shards share one process. Describe capped workers with potentially multiple shards per worker so callers do not rely on per-shard process isolation."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       31,
+       32
+      ],
+      "texto": "The docstring says the flusher 'Creates one process per shard', but the number of processes is capped by max_processes (--flusher-processes), and shards are shared across processes via i % num_processes. Reword it to say that shards are distributed across at most max_processes processes."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#06",
+    "descricao": "max_processes uses a truthiness fallback, so --flusher-processes 0 silently becomes one process per shard instead of being rejected.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       51,
+       51
+      ],
+      "texto": "`max_processes or len(buffer.assigned_shards)` treats a falsy value as 'not provided'. The new `--flusher-processes` click option is `type=int`, so a user can pass `0`; that legitimate-but-falsy value is discarded and the flusher silently spawns one process per shard instead of honoring the requested limit. Use an explicit None check, e.g. `self.max_processes = max_processes if max_processes is not None else len(buffer.assigned_shards)` (and validate/reject 0 upstream)."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       51,
+       51
+      ],
+      "texto": "An explicit max_processes=0 is treated as an omitted limit by `or`, so passing `--flusher-processes 0` starts one process per assigned shard instead of respecting or rejecting the supplied zero limit. The CLI accepts zero as an integer and the factory forwards it unchanged. Default only when max_processes is None, and explicitly validate that supplied process limits are positive so zero cannot silently enable potentially many workers."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       51,
+       51
+      ],
+      "texto": "`max_processes or len(buffer.assigned_shards)` uses a truthiness test, so an explicit 0 is treated as 'unset' and silently expands to one process per shard. Use `max_processes if max_processes is not None else len(buffer.assigned_shards)` and reject values below 1."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#07",
+    "descricao": "A negative --flusher-processes value is not validated and makes SpanFlusher construction fail with KeyError.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       60,
+       66
+      ],
+      "texto": "`flusher_processes` is not validated to be >= 1. `self.max_processes = max_processes or len(buffer.assigned_shards)` lets a negative value through (it is truthy), so `self.num_processes = min(self.max_processes, len(...))` becomes negative and `range(self.num_processes)` is empty, leaving `process_to_shards_map` as `{}`. The following loop computes `process_index = i % self.num_processes`, which for any negative divisor is 0, so `self.process_to_shards_map[0].append(shard)` raises KeyError and the consumer fails to construct. Since `flusher_processes` is exposed as an int CLI option (`--flusher-processes`), a negative value is reachable from configuration. Guard with `max(1, self.num_processes)` / validate the input."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       60,
+       66
+      ],
+      "texto": "negative max_processes flows through `or` guard into min() -> empty map -> KeyError on i % num_processes; empty assigned_shards yields zero processes."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08",
+    "descricao": "submit() queries cluster-wide Redis memory once per flusher buffer, repeating identical INFO calls per process on every submit.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       299,
+       301
+      ],
+      "texto": "The new loop calls get_memory_info() once per flusher buffer even though SpansBuffer.get_memory_info delegates to iter_cluster_memory_usage(self.client), which fetches INFO for the entire Redis cluster regardless of assigned_shards. With P flusher processes and memory backpressure enabled, each submitted batch now performs P identical cluster-wide memory queries on the consumer thread instead of one, increasing Redis traffic and blocking ingestion. Fetch cluster memory information once from a single buffer."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       299,
+       301
+      ],
+      "texto": "submit() loop calls buffer.get_memory_info() per flusher but each call is cluster-wide from same client, repeating identical INFO N\u00d7 per submit."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#10",
+    "descricao": "_create_process_for_shard is added but never called.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       127,
+       132
+      ],
+      "texto": "WHAT: `_create_process_for_shard(self, shard)` is newly added but has no caller anywhere (grep for `_create_process_for_shard(` finds only its definition); the restart path actually used is `_create_process_for_shards(process_index, shards)`. WHY: This is dead code that indicates the intended per-shard restart wiring was left incomplete \u2014 any future caller relying on restarting only the process owning a given shard will silently do nothing, and it is confusing which restart path is authoritative. HOW: Remove `_create_process_for_shard`, or wire it into `_ensure_processes_alive` if per-shard restart was intended."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#12",
+    "descricao": "test_flusher_processes_limit counts assigned shards instead of checking that each shard is assigned exactly once.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+      "lines": [
+       119,
+       121
+      ],
+      "texto": "The assertion counts shard entries rather than verifying shard assignment. A broken distribution such as {0: [0, 1], 1: [0, 1]} still passes all assertions in this test while shards 2 and 3 are never flushed. Assert that the flattened mapping contains exactly the expected assigned shards, with no duplicates (and verify each worker's shard buffer uses that mapping), rather than only asserting a total of four."
+     }
+    ]
+   }
+  ]
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "7355f05e6aafe2a7acc6434fb40c686665416606",
+  "base": "7ea067aae9be56cb2622bce6563864817c3dfeaf",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+    "lines": [
+     121,
+     125
+    ],
+    "texto": "WHAT: getGroupIdsWithViewPermission passes Resource.getId() (the authorization resource UUID) to hasPermission and adds it to the returned set, but group-specific resources are looked up by name and their name is the group id. WHY: This causes user/group filtering to use authorization UUIDs instead of real group ids, breaking the UserModel.GROUPS filter, and group-specific view-members permissions are never evaluated because findByName fails on UUIDs. HOW: Use groupResource.getName() in both places, matching AdminPermissionsSchema.getOrCreateResource which creates resources named after the group id."
+   },
+   {
+    "id": "S2",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+    "lines": [
+     65,
+     71
+    ],
+    "texto": "WHAT: The no-arg canManage() returns true if the caller has either VIEW or MANAGE scope on the global Groups resource. WHY: This violates the GroupPermissionEvaluator contract (manage should require MANAGE), so a view-only administrator is treated as having global group management rights and can pass requireManage() checks such as group creation. HOW: Evaluate only AdminPermissionsSchema.MANAGE for the global canManage() check."
+   },
+   {
+    "id": "S3",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+    "lines": [
+     64,
+     71
+    ],
+    "texto": "GroupPermissionsV2.canManage() calls hasPermission(null, AdminPermissionsSchema.VIEW, AdminPermissionsSchema.MANAGE), so any caller with only the 'view' scope on groups is treated as having global group management rights. This contradicts the GroupPermissionEvaluator interface contract, which limits canManage() to callers with the MANAGE_USERS role or permission to MANAGE groups. Because GroupResource/GroupsResource creation paths use requireManage() -> canManage(), a VIEW-only grantee could create groups. Remove AdminPermissionsSchema.VIEW from the scopes checked in canManage() so it only requires AdminPermissionsSchema.MANAGE."
+   },
+   {
+    "id": "S4",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+    "lines": [
+     65,
+     71
+    ],
+    "texto": "The GroupPermissionEvaluator Javadoc for canManage() says access requires AdminRoles.MANAGE_USERS or permission to MANAGE groups. The V2 implementation also accepts the VIEW scope, so a policy that only grants group view access would incorrectly allow group creation, update and deletion. Restrict the check to AdminPermissionsSchema.MANAGE."
+   },
+   {
+    "id": "S5",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+    "lines": [
+     132,
+     135
+    ],
+    "texto": "The comment on requireManageMembers references the wrong method (canManageMembership), which misleads callers about which capability is being enforced."
+   },
+   {
+    "id": "S6",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+    "lines": [
+     142,
+     147
+    ],
+    "texto": "The @return tag says Stream, but the method signature returns Set<String>; update the prose so callers read the correct contract."
+   },
+   {
+    "id": "S7",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+    "lines": [
+     85,
+     92
+    ],
+    "texto": "The interface Javadoc says VIEW/MANAGE permissions grant canView(), but the legacy GroupPermissions implementation only checks admin roles. Either implement the permission check in V1 or qualify the permission path as V2-only (as was done for canList) so the contract matches all implementations."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+    "descricao": "GroupPermissionsV2.canManage() accepts the VIEW scope as well as MANAGE, so an admin with only view permission on all groups passes manage checks such as group creation.",
+    "textoGolden": "In GroupPermissionsV2.canManage(), the permission fallback checks for both VIEW and MANAGE scopes (hasPermission(null, AdminPermissionsSchema.VIEW, AdminPermissionsSchema.MANAGE)), but canManage() should only grant access for MANAGE scope, not VIEW. This means users with only VIEW permission on groups can pass the canManage() check, granting them write access they should not have. The canView() method correctly checks both VIEW and MANAGE, but canManage() should only check MANAGE.",
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       64,
+       71
+      ],
+      "texto": "The no-arg canManage() returns true when the caller holds only an all-groups VIEW permission (`hasPermission(null, VIEW, MANAGE)`), whereas the per-group canManage(GroupModel) (line 79) requires MANAGE. WHAT: a caller with only the view scope on all groups is treated as having manage rights. WHY: canManage()/requireManage() gate group creation and other manage operations (e.g. GroupsResource.addGroup -> auth.groups().requireManage()), so a read-only viewer of all groups can create/manage groups \u2014 privilege escalation. HOW: drop VIEW from the scope list so canManage() only returns true for MANAGE, aligning it with canManage(GroupModel): `return hasPermission(null, AdminPermissionsSchema.MANAGE);`"
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       65,
+       71
+      ],
+      "texto": "GroupPermissionsV2.canManage() (line 70) evaluates hasPermission(null, AdminPermissionsSchema.VIEW, AdminPermissionsSchema.MANAGE), identical to canView() at line 52, so a caller granted only the VIEW scope on the all-groups resource is treated as a group manager. The per-group overload canManage(GroupModel) (line 79) correctly requires only MANAGE, and AdminPermissionsSchema defines MANAGE as the manage scope for GROUPS_RESOURCE_TYPE, so the two checks disagree. requireManage() therefore succeeds for read-only administrators, letting them create/update/delete groups, add subgroups and map group roles. Drop VIEW from the scope list so canManage() checks MANAGE only."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       64,
+       71
+      ],
+      "texto": "WHAT: GroupPermissionsV2.canManage() grants global manage on VIEW scope (hasPermission(null, VIEW, MANAGE)). WHY: A caller with only view-all-groups permission passes the manage check, allowing group creation/management reserved for manage. HOW: Check only MANAGE, e.g. hasPermission(null, AdminPermissionsSchema.MANAGE)."
+     }
+    ]
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+    "descricao": "getGroupIdsWithViewPermission uses the authorization resource id instead of the resource name (the group id) for both the permission check and the returned set, so per-group view-members grants are not resolved and user filtering gets wrong ids.",
+    "textoGolden": "In getGroupIdsWithViewPermission, hasPermission is called with groupResource.getId() and the same groupResource.getId() is added to granted, but hasPermission resolves resources by name (treating the argument as a group id) and the GroupPermissionEvaluator contract says this method returns group IDs that are later used as UserModel.GROUPS and in getUsersCount group filters. This mismatch means per-group VIEW_MEMBERS/MANAGE_MEMBERS permissions may not yield the expected group IDs for filtering and counts, and evaluation may effectively only look at the type-level 'all-groups' resource; consider revisiting whether this should operate on the underlying group ids (resource names) instead so it aligns with the JPA queries and the interface contract.",
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       119,
+       125
+      ],
+      "texto": "WHAT: getGroupIdsWithViewPermission() uses authz resource IDs (groupResource.getId()) as group IDs and looks them up via findByName. WHY: Resource names equal group IDs (AdminPermissionsSchema.resolveGroup returns group.getId()), so findByName(resourceId) misses and the returned set contains unusable IDs, breaking user search/count filtering by group. HOW: Use groupResource.getName() like V1 does (resource.getName().substring prefix / name) for both the hasPermission lookup and the granted set."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       119,
+       125
+      ],
+      "texto": "findByType callback passes groupResource.getId() to hasPermission() and granted set, but AdminPermissionsSchema.resolveGroup defines resource name (not UUID) as groupId and hasPermission looks up via findByName(server, groupId). Use groupResource.getName() for both check and granted set, otherwise lookups miss to all-groups fallback and callers receive authz UUIDs instead of group IDs."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       119,
+       125
+      ],
+      "texto": "getGroupIdsWithViewPermission uses groupResource.getId() for lookup and result collection, but V2 group resources are named with the group ID (resolveGroup returns group.getId()) and hasPermission does findByName. Use groupResource.getName() in both places to evaluate the correct per-group resource and to return actual group IDs."
+     }
+    ]
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+    "descricao": "Per-group resources are created without the Groups type, so getGroupIdsWithViewPermission's findByType never sees specific group grants.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       121,
+       121
+      ],
+      "texto": "findByType(GROUPS_RESOURCE_TYPE) does not enumerate the specific group resources created by AdminPermissionsSchema.getOrCreateResource, because that method creates them without setting their type. Consequently, specific VIEW_MEMBERS or MANAGE_MEMBERS grants are omitted from the group IDs used for user counts and database filtering. Assign the Groups type to specific group resources and ensure the all-Groups resource is not treated as a model group."
+     }
+    ]
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#04",
+    "descricao": "The user search filter still requires legacy 'group.resource.<id>' resources, so with V2 group permissions the members of authorized groups are excluded from user searches.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/UsersResource.java",
+      "lines": [
+       448,
+       450
+      ],
+      "texto": "The new V2 group permission IDs are passed into a JPA filter that still requires a legacy group.resource.<groupId> authorization resource. JpaUserProvider.groupsWithPermissionsSubquery checks for that prefixed name, whereas AdminPermissionsSchema creates V2 group resources named only with the group ID, so authorized group members are excluded from user searches even with valid group IDs. Update the database filtering path to support V2 resource naming rather than requiring a legacy V1 resource."
+     }
+    ]
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+    "descricao": "The new Javadoc for requireManageMembers points to canManageMembership instead of canManageMembers.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+      "lines": [
+       132,
+       135
+      ],
+      "texto": "The javadoc for requireManageMembers says it throws ForbiddenException if canManageMembership(GroupModel) returns false, but this method is the require-variant of canManageMembers, not canManageMembership. The text was copied from requireManageMembership above it. It should reference canManageMembers so the documented contract matches the method name and behavior."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+      "lines": [
+       132,
+       135
+      ],
+      "texto": "The Javadoc for requireManageMembers says it throws if canManageMembership(GroupModel) returns false. It should refer to canManageMembers(GroupModel), which is a different check, so the doc misdescribes the method."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+      "lines": [
+       132,
+       135
+      ],
+      "texto": "Javadoc for requireManageMembers references canManageMembership instead of canManageMembers (copy-paste). Fix link to {@link #canManageMembers(GroupModel)} so the contract describes the method it guards."
+     }
+    ]
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#07",
+    "descricao": "The Javadoc of getGroupIdsWithViewPermission says it returns a Stream though the method returns a Set.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+      "lines": [
+       142,
+       147
+      ],
+      "texto": "The Javadoc for getGroupIdsWithViewPermission says it returns a 'Stream of IDs', but the method returns Set<String>. Change the @return text to describe a Set of group IDs."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+      "lines": [
+       142,
+       147
+      ],
+      "texto": "@return says 'Stream of IDs' but method returns Set<String> getGroupIdsWithViewPermission. Fix doc to 'Set of IDs' to match the signature."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+      "lines": [
+       145,
+       147
+      ],
+      "texto": "The new @return documentation promises a Stream of IDs, but the method declares Set<String> and both implementations return sets. Describe a set of IDs instead, so the documented return contract matches what callers actually receive."
+     }
+    ]
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02",
+    "descricao": "GroupPermissionsV2.getGroupIdsWithViewPermission runs a full permission evaluation for every group resource on each user search and count, costing O(groups) policy evaluations per request.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#snloop-01",
+    "descricao": "GroupPermissionsV2.hasPermission passes getResourceTypeResource's result to policyStore.findByResource without a null check, causing an NPE and 500 on group listing and user search when the Groups type resource is missing.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01",
+    "descricao": "Removing the canViewGlobal short-circuit from the subgroup and group listings makes an admin with an all-groups V2 grant run one full authorization evaluation per group in the listing instead of a single check.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "dcdcadb771128e79259cc9eff9c70c38fc597976",
+  "base": "0cfc28e76ddc986d2d89dd9b9f63ee916a18a5f9",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/monitors/logic/incidents.py",
+    "lines": [
+     50,
+     52
+    ],
+    "texto": "The comment says 'within the threshold of commits' but the surrounding code filters MonitorCheckIns. The word 'commits' is a leftover/copy-paste error and disagrees with the code; it should say 'check-ins'."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/monitors/logic/incident_occurrence.py",
+    "lines": [
+     57,
+     74
+    ],
+    "texto": "The issue_title, subtitle, evidence display names ('Failure reason', 'Environment', 'Last successful check-in'), and the fallback value 'Never' are hard-coded English strings that reach the user. Other strings in this file use gettext_lazy (`_()`). Wrap these UI strings with `_()` so they can be localized consistently with the rest of the failure evidence."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/monitors/logic/incident_occurrence.py",
+    "lines": [
+     130,
+     137
+    ],
+    "texto": "The docstring examples include 'A failed check-in was detected', but the function returns status-specific singular messages such as 'An error check-in was detected' and there is no CheckInStatus.FAILED. Update the example to match the actual SINGULAR_HUMAN_FAILURE_MAP output."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/monitors/logic/incident_occurrence.py",
+    "lines": [
+     159,
+     171
+    ],
+    "texto": "`get_monitor_environment_context` copies `monitor_environment.monitor.config` and replaces `schedule_type` with its display name, but then returns the original `monitor_environment.monitor.config` instead of the modified `config` copy. This means the event payload sent to Kafka contains the raw `schedule_type` value rather than the intended human-readable display value, corrupting the monitor context data. Return `config` instead of `monitor_environment.monitor.config`."
+   },
+   {
+    "id": "S5",
+    "file": "incident_occurrence.py",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "`get_monitor_environment_context` returns `monitor_environment.monitor.config` after computing an unused local `config` with the display value of `schedule_type`. The local `config` is computed but never used, and the returned value does not reflect the `schedule_type` display value. This defect is pre-existing (moved from the deleted `mark_failed.py` code) and is not newly reachable because of this PR, so it falls outside the assigned cross-file class."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/monitors/logic/incident_occurrence.py",
+    "lines": [
+     159,
+     171
+    ],
+    "texto": "In get_monitor_environment_context a copy of monitor.config is made and schedule_type is replaced with its display value, but the returned dict uses monitor_environment.monitor.config (the original). The local config variable is never used, so the event context sent to the issue platform contains the raw schedule_type instead of the intended human-readable display value."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#01",
+    "descricao": "get_failure_reason's docstring examples do not match the strings the function returns.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/monitors/logic/incident_occurrence.py",
+      "lines": [
+       130,
+       137
+      ],
+      "texto": "The `get_failure_reason` docstring describes output this function does not produce. The singular branch (line 146) returns a `SINGULAR_HUMAN_FAILURE_MAP` value such as \"A missed check-in was detected\", yet the docstring advertises \"A failed check-in was detected\"; the multi-check-in branch joins `\"%(count)d %(status)s\"` fragments with `get_text_list(..., last_word=_(\"and\"))` and appends \" check-ins detected\", yielding \"2 missed and 1 error check-ins detected\", not the docstring's \"2 missed check-ins, 1 timeout check-in and 1 error check-in were detected\". Update the examples (or the format string) so the documented contract matches the code."
+     },
+     {
+      "file": "src/sentry/monitors/logic/incident_occurrence.py",
+      "lines": [
+       131,
+       137
+      ],
+      "texto": "The get_failure_reason docstring examples don't match the output. It shows 'A failed check-in was detected' and '...were detected', but the code returns the per-status singular strings ('A missed check-in was detected') or '<list> check-ins detected'. Update the examples to the real output and fix the 'humam readible' typo."
+     }
+    ]
+   },
+   {
+    "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02",
+    "descricao": "get_monitor_environment_context builds a config copy with the human-readable schedule_type but returns the original monitor.config, so the conversion is lost and the context shows the raw value.",
+    "textoGolden": "The function modifies the config variable to include display values but then returns the original monitor.config instead of the modified version.",
+    "comentarios": [
+     {
+      "file": "src/sentry/monitors/logic/incident_occurrence.py",
+      "lines": [
+       159,
+       171
+      ],
+      "texto": "WHAT: get_monitor_environment_context copies monitor.config to `config` and converts schedule_type display, but returns the original monitor_environment.monitor.config instead of `config`. WHY: the display conversion never takes effect so the occurrence context carries the raw schedule_type value, producing wrong output vs the function's evident intent. HOW: return `\"config\": config` instead of `\"config\": monitor_environment.monitor.config`."
+     },
+     {
+      "file": "src/sentry/monitors/logic/incident_occurrence.py",
+      "lines": [
+       159,
+       171
+      ],
+      "texto": "Dead computation: `config` is copied and `config['schedule_type']` transformed to display value, but return uses `monitor_environment.monitor.config` (original) instead of `config`. Change to `\"config\": config` so transformation is used."
+     },
+     {
+      "file": "src/sentry/monitors/logic/incident_occurrence.py",
+      "lines": [
+       160,
+       168
+      ],
+      "texto": "WHAT: In get_monitor_environment_context the code copies config and replaces config['schedule_type'] with the human-readable get_schedule_type_display(), but the returned context dict uses the original `monitor_environment.monitor.config` instead of the modified local `config`, so the mutation is dead. WHY: The occurrence's monitor context always reports the raw schedule_type value rather than the display string the code intended to substitute, producing incorrect evidence data in the emitted occurrence. HOW: return the local variable, i.e. use \"config\": config in the returned dict."
+     }
+    ]
+   },
+   {
+    "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#snloop-02",
+    "descricao": "The newly added incidents.py and incident_occurrence.py define module loggers that are never used.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "303cdc2caf256aa5df660611120c2e3f7392365d",
+  "base": "58ba11ecbd60863e2bfc6e32f0399ed4feb3927a",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+    "lines": [
+     75,
+     82
+    ],
+    "texto": "WHAT: NewMetricsMiddleware returns a middleware closure that reuses the same *MetricsMiddleware instance and mutates its `next` field. WHY: Decorating more than one client with the returned middleware overwrites the chain and, because the metrics are already registered on the same registerer, a second factory use can panic with duplicate metric registration. HOW: Inside the closure create a new *MetricsMiddleware (or a shallow copy of the registered metrics struct) with its own `next` pointer, registering the metrics only once at factory construction time."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+    "lines": [
+     144,
+     167
+    ],
+    "texto": "WHAT: QueryData and CallResource look up the plugin target from the registry twice per request (once for size and once for duration). WHY: The duplicated registry lookup doubles the work on every plugin request for the two instrumented endpoints. HOW: Resolve the target once per method and pass it into both instrumentPluginRequestSize and instrumentPluginRequest, or add a helper that records size and duration with a single lookup."
+   },
+   {
+    "id": "S3",
+    "file": "metrics_middleware_test.go",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "The test function name `TestInstrumentationMiddleware` still uses the old 'Instrumentation' name while the middleware is now called `MetricsMiddleware`. This is a minor naming inconsistency but not user-facing and only affects test naming."
+   },
+   {
+    "id": "S4",
+    "file": "",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "The doc comment for `pluginRequestSize` says 'returned' which appears inaccurate (it tracks outgoing request sizes), but this is in internal metric help text."
+   },
+   {
+    "id": "S5",
+    "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+    "lines": [
+     21,
+     21
+    ],
+    "texto": "The test function is named `TestInstrumentationMiddleware`, but the PR renamed the middleware to `MetricsMiddleware` (the file is `metrics_middleware_test.go` and the type is `MetricsMiddleware`). Rename the test to `TestMetricsMiddleware` so it matches the implementation and is discovered by name-filtered test runs such as `go test -run TestMetricsMiddleware`."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#03",
+    "descricao": "TestLogger.FromContext returns a fresh TestLogger instead of the receiver, so logs written via the contextual logger are lost to assertions on the original fake.",
+    "textoGolden": "The `TestLogger.FromContext` method returns a new `TestLogger` instance via `NewTestLogger()` instead of returning the receiver (f). This causes logs to be recorded on an un-referenced instance, leading to broken test assertions that expect logs to be recorded on the original logger.",
+    "comentarios": [
+     {
+      "file": "pkg/plugins/log/fake.go",
+      "lines": [
+       46,
+       48
+      ],
+      "texto": "WHAT: TestLogger.FromContext returns a fresh NewTestLogger instead of the receiver. WHY: LoggerMiddleware calls m.logger.FromContext(ctx).Info so the write goes to a throwaway instance and assertions on the original TestLogger Calls/Message never observe it, diverging from real wrapper that preserves logger context. HOW: Return f (or a child sharing f) instead of NewTestLogger."
+     }
+    ]
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#06",
+    "descricao": "The test function is still named TestInstrumentationMiddleware after the middleware was renamed to MetricsMiddleware.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+      "lines": [
+       21,
+       21
+      ],
+      "texto": "TestInstrumentationMiddleware still carries the old name even though this PR renamed the middleware under test to MetricsMiddleware (newMetricsMiddleware/NewMetricsMiddleware) and the file to metrics_middleware_test.go. The identifier advertises the superseded \"InstrumentationMiddleware\" name; rename it (e.g. TestMetricsMiddleware) so the test name matches the code it exercises."
+     },
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+      "lines": [
+       21,
+       21
+      ],
+      "texto": "Test function still named TestInstrumentationMiddleware but it constructs and asserts MetricsMiddleware (newMetricsMiddleware). Rename to TestMetricsMiddleware to match the renamed middleware."
+     }
+    ]
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#sncc-02",
+    "descricao": "The FromContext doc comment is copied from New() and misdescribes the method, which attaches attributes stored in the context.Context.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "5b229316ee4c661836ed1161139692a3e8527444",
+  "base": "98fa098e6fade3097a11fe7f99a98a4e6ffb4728",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/assets/stylesheets/common/foundation/mixins.scss",
+    "lines": [
+     117,
+     123
+    ],
+    "texto": "WHAT: The `align-items` mixin emits `-ms-align-items: $alignment`, which is not a valid CSS property. WHY: IE10/11 ignore this declaration; while the correct `-ms-flex-align` is also present, the invalid line is dead code that contradicts the mixin's intent of covering all prefixes and may mislead future maintainers. HOW: Remove the invalid `-ms-align-items: $alignment;` line."
+   },
+   {
+    "id": "S2",
+    "file": "app/assets/stylesheets/common/foundation/mixins.scss",
+    "lines": [
+     117,
+     123
+    ],
+    "texto": "The `align-items` mixin outputs `-ms-align-items`, which is not a real CSS property and will be ignored by browsers. The correct Microsoft-prefixed property is `-ms-flex-align`, which is already included on the previous line. Remove the invalid `-ms-align-items: $alignment;` declaration to avoid dead/wrong CSS output."
+   },
+   {
+    "id": "S3",
+    "file": "app/assets/stylesheets/common/base/topic-post.scss",
+    "lines": [
+     264,
+     270
+    ],
+    "texto": "`.small-action` is now a flex container, so `.topic-avatar` is a flex item and its `float: left` declaration is ignored by the flex layout algorithm. Remove the dead `float: left` from `.topic-avatar` since the horizontal placement is now handled by flexbox."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#01",
+    "descricao": "The flex-item styles target the inner .extra-info-wrapper instead of the component's root div, so in the flexbox header a long topic title keeps its full width and pushes the navigation panel out instead of being truncated.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/base/topic.scss",
+      "lines": [
+       29,
+       30
+      ],
+      "texto": "The flex-item styling targets the inner .extra-info-wrapper rather than the outer div generated by header-extra-info's Ember.Component. With .contents now using flexbox, that outer div retains its automatic minimum width, so a long nowrap topic title cannot shrink to the available space and pushes the navigation panel outside the header instead of being ellipsized by the existing desktop truncation rules. Move the extra-info-wrapper class onto the component's root element and set min-width: 0 on that flex item so ordering and truncation apply to the actual header child."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#02",
+    "descricao": "The align-items mixin emits no -moz-box-align, so on old Firefox versions using the display:-moz-box fallback the advertised vertical centering is not applied.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/foundation/mixins.scss",
+      "lines": [
+       117,
+       122
+      ],
+      "texto": "The alignment mixin does not match the Mozilla fallback emitted by flexbox(): when display: -moz-box is selected, neither align-items nor the WebKit/MS declarations control its cross-axis alignment. Consequently @include align-items(center) in the header and small-action leaves those children at the legacy default instead of vertically centering them. Emit -moz-box-align: $alignment alongside -webkit-box-align so the advertised fallback produces the same alignment."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#03",
+    "descricao": "The align-items mixin emits -ms-align-items, which never existed in IE/Edge; the legacy property is -ms-flex-align, so the declaration is dead.",
+    "textoGolden": "-ms-align-items never existed in any version of IE/Edge; the correct legacy property is -ms-flex-align.",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/foundation/mixins.scss",
+      "lines": [
+       117,
+       123
+      ],
+      "texto": "WHAT: align-items() mixin emits -ms-align-items: $alignment which is not a valid IE10/11 property (only -ms-flex-align exists). WHY: dead declaration shows wrong contract and leaves IE alignment dependent solely on -ms-flex-align, which also breaks for flex-start/flex-end values. HOW: remove the -ms-align-items line and map flex-start/flex-end to start/end for -ms-flex-align/-webkit-box-align."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#05",
+    "descricao": "Removing the float-based right alignment of .d-header .panel leaves the server-rendered (no-JS) header's login panel, which sits inside .row and is not a flex item, no longer right-aligned next to the title.",
+    "textoGolden": "Mixing float: left with flexbox causes layout issues. Further this PR removes the float-based right alignment for .d-header .panel, which may cause the login panel in the non-Ember/noscript header (where .panel is nested inside .row and not a flex item) to stack under the title instead of remaining right-aligned.",
+    "comentarios": []
+   }
+  ]
+ },
+ "advanced-query-processing-architecture-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "1cab4143d443c33079566f6ca36931eb8468159f",
+  "base": "d9a8253640464014aa3662c91131278990cfb828",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "public/app/plugins/datasource/loki/querySplitting.ts",
+    "lines": [
+     296,
+     299
+    ],
+    "texto": "WHAT: `applyTemplateVariables` does not inject `datasource: this.getRef()` onto each query, while the previous `interpolateVariablesInQueries` did. WHY: Downstream consumers of `runSplitQuery` that expect each target to carry its `datasource` reference may receive queries without it, breaking mixed-datasource requests or any code that reads `target.datasource`. HOW: Either call `datasource.interpolateVariablesInQueries(...)` which preserves the reference, or map the result of `applyTemplateVariables` to add `datasource: datasource.getRef()`."
+   },
+   {
+    "id": "S2",
+    "file": "public/app/plugins/datasource/loki/shardQuerySplitting.ts",
+    "lines": [
+     49,
+     52
+    ],
+    "texto": "WHAT: The new code filters hidden targets and empty expressions before applying template variables, while the old `interpolateVariablesInQueries` call interpolated the entire target list first. WHY: Hidden targets that contain template variables are no longer expanded, which can change side effects (e.g., variable dependency tracking, ad-hoc filter application) and may leave variables unexpanded if a target is later un-hidden or inspected. HOW: Interpolate variables before filtering, or keep the same order as the old implementation: `datasource.interpolateVariablesInQueries(request.targets, request.scopedVars, request.filters).filter(...)`."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "advanced-query-processing-architecture-grafana-codex#01",
+    "descricao": "Loki split/shard queries are now interpolated with applyTemplateVariables before splitting and again on execution, so ad hoc filters are applied twice and already-substituted values are re-interpolated.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/plugins/datasource/loki/shardQuerySplitting.ts",
+      "lines": [
+       52,
+       52
+      ],
+      "texto": "WHAT: runShardSplitQuery now interpolates every target via datasource.applyTemplateVariables (line 52), but it then delegates each sub-request to runSplitQuery (line 163), which this PR also changed to call datasource.applyTemplateVariables again (querySplitting.ts:299), so each target is interpolated (and ad hoc filters applied) twice. WHY: double interpolation re-runs addAdHocFilters on an already-filtered expression; the stream-selector path masks the duplicate via labelExists() dedup in addFilterToStreamSelector (modifyQuery.ts:494), but parsed/structured-metadata labels use addFilterAsLabelFilter which does not dedup, producing duplicated label filters, and any interpolated value containing '$' can be re-interpolated. This is confirmed by the updated test expecting applyTemplateVariables toHaveBeenCalledTimes(5) for a single target (1 call here + 4 sub-requests through runSplitQuery) instead of 1. HOW: interpolate only once \u2014 either remove the interpolation added to runShardSplitQuery and let runSplitQuery do it, or have splitQueriesByStreamShard pass the already-interpolated targets without re-interpolating in runSplitQuery."
+     },
+     {
+      "file": "public/app/plugins/datasource/loki/querySplitting.ts",
+      "lines": [
+       299,
+       299
+      ],
+      "texto": "The newly interpolated targets are interpolated again by DataSourceWithBackend.query when runQuery executes each split request. TemplateSrv.replace scans the resulting string again, so a variable whose literal value contains another defined variable token (for example, a log-search value containing `$other`) is expanded a second time and produces a different query from the non-splitting path; shard splitting also passes through this additional interpolation. Preserve the early interpolation needed for partitioning while ensuring already-interpolated targets are not interpolated again on execution, and test through the real backend query preparation rather than mocking runQuery."
+     },
+     {
+      "file": "public/app/plugins/datasource/loki/querySplitting.ts",
+      "lines": [
+       299,
+       299
+      ],
+      "texto": "Targets are interpolated here with `applyTemplateVariables`, including ad hoc filters, and then sent to `datasource.runQuery`, which interpolates them again through the backend path (datasource.ts:324/377). The ad hoc filters may be injected twice, and already-substituted values are re-interpolated, which can produce wrong or invalid LogQL. Interpolate only once. Either clear `scopedVars` and `filters` on the sub-requests after the first pass, or skip interpolation in `runQuery` for already-interpolated requests. The same issue applies to shardQuerySplitting.ts:52."
+     }
+    ]
+   },
+   {
+    "issueId": "advanced-query-processing-architecture-grafana-codex#05",
+    "descricao": "runShardSplitQuery now filters empty/hidden targets before interpolation, so an expr that interpolates to an empty string is no longer dropped.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/plugins/datasource/loki/shardQuerySplitting.ts",
+      "lines": [
+       49,
+       52
+      ],
+      "texto": "The order of operations was inverted relative to the previous contract: interpolation used to run before the `expr`/`hide` filters (interpolateVariablesInQueries(targets).filter(...)), and now the filters run on the *raw* targets before `applyTemplateVariables` is applied. Filtering on the un-interpolated `query.expr` means the previous fallback that dropped a target once variable substitution had emptied its expression no longer exists: a target like `{ expr: '$myVar' }` whose variable resolves to '' is truthy at filter time, survives, is then interpolated to `''`, and is passed into the shard splitting/execution loop as a blank query. To preserve the old contract the filters should run on the interpolated result (or the interpolated expr should be re-checked for emptiness)."
+     }
+    ]
+   }
+  ]
+ }
+}

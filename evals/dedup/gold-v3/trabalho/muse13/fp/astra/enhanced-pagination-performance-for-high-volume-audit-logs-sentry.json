@@ -1,0 +1,17 @@
+{
+ "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
+ "items": [
+  {
+   "id": "S9",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#03",
+   "newGroup": null,
+   "reason": "Asserts the same raw-offset versus clamped start_offset mismatch in the prev-page trimming check, causing incorrect trimming for negative offsets."
+  },
+  {
+   "id": "S10",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#03",
+   "newGroup": null,
+   "reason": "Asserts the same prev-page boundary defect: the length comparison uses raw offset instead of clamped start_offset, producing incorrect trimming when they differ."
+  }
+ ]
+}

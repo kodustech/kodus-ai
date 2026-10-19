@@ -1,0 +1,169 @@
+{
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#kimip-01": {
+  "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
+  "issue": {
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#kimip-01",
+   "comentarios": [
+    {
+     "gid": "kimi-kimip:S2",
+     "file": "app/assets/javascripts/discourse/controllers/create_account_controller.js",
+     "lines": [
+      17,
+      17
+     ],
+     "texto": "Because `rejectedEmails` is a mutable array on the controller prototype, every instance and modal session shares the same array, so a blocked email from one signup leaks into later attempts and shows an invalid error for unrelated users or after reopening. Move the array creation into `init` so each instance gets its own `Em.A([])`."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "create_account_controller.js:17 adds `rejectedEmails: Em.A([])` as a class property in `extend`, so the array lives on the prototype and is shared by every instance; the PR pushes rejected emails into it (line ~275) and never resets it, so rejections persist across modal sessions."
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "The prototype array exists, but emailValidation rejects only the exact previously rejected address (app/assets/javascripts/discourse/controllers/create_account_controller.js:69), populated from server email errors at lines 274\u2013275; unrelated addresses are unaffected. Modal reopening reuses controllerFor(name) (app/assets/javascripts/discourse/routes/discourse_route.js:56), so moving initialization into init would not reset this state between openings, and remembering a blocked address does not establish incorrect behavior."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "Concede. The prototype array is real (create_account_controller.js:17) but Ember controllers are singletons resolved via controllerFor, so there is only one instance per browser session; emailValidation (line 69) only fails the exact address the server already rejected (pushed at 274-275), so unrelated addresses are never affected. Remembering a server-rejected address across modal reopenings is consistent with the feature's intent, not a defect.",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com#kimip-01": {
+  "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+  "issue": {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#kimip-01",
+   "comentarios": [
+    {
+     "gid": "kimi-kimip:S2",
+     "file": "packages/trpc/server/routers/viewer/calendars/deleteCache.handler.ts",
+     "lines": [
+      17,
+      22
+     ],
+     "texto": "Restricting the lookup to `userId: user.id` rejects team-owned or delegated Google Calendar credentials and does not enforce the same ownership boundary used elsewhere. Allow credentials where `userId` matches the user or the credential's team has a member with that user ID, or reuse the existing credential authorization helper."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "deleteCache.handler.ts:17-22 restricts deletion to credentials owned by the session user, a correct and stricter ownership check; the comment does not show a reachable flow where a team-owned credential's cache must be cleared by this endpoint. It is a 'consider widening' request, not a defect."
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "hallucination",
+    "severity": "medium",
+    "text": "The calendar list already restricts database credentials to userId: user.id (packages/lib/getConnectedDestinationCalendars.ts:282-290), so team-owned credentials are not exposed through this flow. Persisted delegation credentials also carry the user's ID (packages/lib/server/repository/credential.ts:226), satisfying the new check. In-memory delegation credentials use id: -1 and teamId: null (packages/lib/delegationCredential/server.ts:86-97), so adding team membership authorization would not address those either."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "Keep FP/none. The central fact is true: deleteCache.handler.ts:17-22 filters findFirst by userId: user.id, which does reject credentials without the user's id. What is wrong is the conclusion that this is a defect. As astra shows, the calendar list feeding this action is itself restricted to userId: user.id (getConnectedDestinationCalendars.ts:282-290), so no team-owned credential reaches this endpoint. The secondary 'boundary used elsewhere' remark is inaccurate, but the core factual claim about the filter holds, so this is a no-defect request, not a hallucination.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "Changed to FP/none: the userId filter is accurately described, but widening authorization is not justified by this flow. getConnectedDestinationCalendars.ts:282-290 already limits database credentials to the session user, and credential.ts:226 assigns userId to persisted delegation credentials. The code therefore does not establish a legitimate team-owned credential rejected by this action; the issue draws an unsupported defect conclusion from a real filter."
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "fix-proper-handling-of-group-memberships-discourse-cursor#kimip-01": {
+  "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+  "issue": {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#kimip-01",
+   "comentarios": [
+    {
+     "gid": "kimi-kimip:S3",
+     "file": "app/controllers/admin/groups_controller.rb",
+     "lines": [
+      71,
+      75
+     ],
+     "texto": "Adding members performs one `User` query per username, so bulk additions slow linearly with the count. Load all matching users in one query with `User.where(username: usernames.split(\",\"))` before adding them to the group."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "groups_controller.rb:71-75 in the new add_members action calls User.find_by_username per username (N+1); this is an admin-only action with small inputs, so batching is a minor optimization."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "The added add_members action loops over every supplied username and calls User.find_by_username separately (app/controllers/admin/groups_controller.rb:71-74); that method executes find_by(username_lower: ...) (app/models/user.rb:175-176). Consequently, large bulk additions incur one database lookup per username, creating avoidable database round trips and latency. Batching should preserve the existing case-insensitive lookup semantics."
+   },
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "Keep TP/nit, low. The N+1 is real in the new add_members (groups_controller.rb:71-75), but it is an admin-only action fed by a hand-typed comma-separated list, and the removed update_patch at base did the same per-username User.find_by_username loop, so the PR does not regress anything. group.add(user) still issues one write per user, so batching the lookup saves little. Minor performance with no user-visible effect = nit/low per the severity rubric.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "low",
+    "text": "The per-username query exists, but base update_patch already performed the same User.find_by_username and group.add loop. The new add_members action retains that lookup logic while changing the request format to comma-separated usernames, so the reported performance issue is pre-existing under the relocation ruling. I change my classification to FP; the minor admin-path optimization warrants low severity."
+   },
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "Keep TP/nit/low; the relocation ruling does not apply. At base the admin UI never called update_patch: discourse/models/group.js saveWithUsernames sent PUT group.usernames, and Group#usernames= (app/models/group.rb:244-264 at base) resolved all additions/deletions in ONE User.where(username: ...) query. The PR deletes that path (update_put, usernames=-based create) and routes UI bulk adds to the new add_members (groups_controller.rb:66-76, client addMembers PUT /admin/groups/:id/members.json), which splits the string and calls User.find_by_username per name. So the N+1 is introduced for the UI path, not moved logic (new endpoint, new input format, replaces a batched lookup) - I correct my round-1 claim that nothing regressed. Impact stays minor: admin-only action, hand-entered lists, and group.add still writes one row per user either way, so it is minor performance with no user-visible effect: nit, low.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "I change my classification to TP/nit. The base UI called saveWithUsernames \u2192 update_put \u2192 Group#usernames=, which batched user lookups with User.where; the new UI calls add_members, which executes User.find_by_username for every supplied username. This changes the active UI path, so the relocation ruling does not apply despite the similar old update_patch loop. The extra lookups are a minor optimization opportunity in this admin-only action, with no demonstrated meaningful performance impact, warranting low severity."
+   }
+  ],
+  "fechado": "consenso"
+ }
+}

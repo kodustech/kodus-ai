@@ -1,0 +1,30 @@
+{
+ "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+ "prOriginal": {
+  "numero": null,
+  "url": "https://github.com/discourse/discourse/commit/060cda77729cb1c4a827560e09e89a7b22078ba9",
+  "mergedAt": "2015-01-05",
+  "nota": "From prOriginalConhecido, reconfirmed: compare 060cda77...main = ahead, direct commit by Régis Hanol 2015-01-05, no PR."
+ },
+ "tps": {
+  "fix-proper-handling-of-group-memberships-discourse-cursor#musep-01": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2016-12-12",
+    "pr": 4592,
+    "commit": "05f55dbc1001227261c24d055e8b37a685fa9625",
+    "url": "https://github.com/discourse/discourse/commit/05f55dbc1001227261c24d055e8b37a685fa9625"
+   },
+   "removidoEm": null,
+   "diasNoAr": 707,
+   "reason": "remove_member moved to GroupsController in 2015-11 (6dd4bc7d) still using group.users.delete. 79639e2d (2016-04-04) only added a daily Group.reset_all_counters job and resets in other admin actions, not in remove_member. Commit 05f55dbc ('FEATURE: Group logs', in PR #4592 'FEATURE: Public groups', 2016-12-12) replaced group.users.delete(user.id) with group.remove(user), which destroys GroupUser rows with callbacks so user_count is decremented; today removal goes through GroupManager.",
+   "astra": [
+    {
+     "pergunta": "Confirmado or descontinuado, and which change: 79639e2d (daily counter resync) or 05f55dbc (switch to group.remove)?",
+     "resposta": "79639e2d only reconciles periodically, the wrong count persists between runs; 05f55dbc destroys GroupUser with callbacks and effectively fixes the behaviour even though it shipped inside a feature.",
+     "veredito": "confirmado / 05f55dbc"
+    }
+   ]
+  }
+ }
+}

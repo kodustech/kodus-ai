@@ -1,0 +1,29 @@
+{
+ "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes a possible nil default locale causing .to_sym to raise before compact runs. Neither golden issue concerns nil handling."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Describes unsanitized locale values entering a regular expression and causing excessive catalog loading. This differs from missing fallback catalogs outside requests and incorrect cache isolation."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Describes request latency from synchronous catalog loading and repeated fallback-setting lookups. Fixing those performance concerns would not fix either golden issue."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes the same nil-default-locale .to_sym failure as S1, at the same fallback-chain construction."
+  }
+ ]
+}

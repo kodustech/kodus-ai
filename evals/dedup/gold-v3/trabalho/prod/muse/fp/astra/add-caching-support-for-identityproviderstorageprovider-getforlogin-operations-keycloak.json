@@ -1,0 +1,23 @@
+{
+ "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#10",
+   "newGroup": null,
+   "reason": "It asserts the same null-config NPE in getLoginPredicate. Listing additional affected operations does not change the claimed cause."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "It claims organization enable/disable leaves cached login membership stale without filtering effective isEnabled. This differs from missing organization-aware wrappers (#03) and missing invalidation on linking/unlinking (#04)."
+  },
+  {
+   "id": "S3",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#opa-02",
+   "newGroup": null,
+   "reason": "It identifies the same shared realm/mode cache entry accumulating organization-specific searches. Memory churn and broad invalidation are additional consequences of the same cache-key design."
+  }
+ ]
+}

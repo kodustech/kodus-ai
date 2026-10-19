@@ -1,0 +1,95 @@
+{
+ "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "Describes the same unescaped URL interpolation into the imported footer link, enabling stored markup injection through raw HTML rendering."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims unsafe Referer interpolation into the layout's JavaScript string, which no golden issue covers. It additionally alleges a targetOrigin problem."
+  },
+  {
+   "id": "S3",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Describes the same unconditional i.content.scrub call crashing feed processing when content is absent."
+  },
+  {
+   "id": "S4",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#19",
+   "newGroup": null,
+   "reason": "Describes the same missing network-error and nil-content handling in import_remote."
+  },
+  {
+   "id": "S5",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-02",
+   "newGroup": null,
+   "reason": "Explicitly identifies the unused feed_key and missing conditional fetching that cause unchanged feeds to be downloaded and processed again."
+  },
+  {
+   "id": "S6",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Describes the same missing-content failure at i.content.scrub that aborts the hourly poll."
+  },
+  {
+   "id": "S7",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#17",
+   "newGroup": null,
+   "reason": "Describes the same concurrent check-then-create race on embed_url and unhandled unique-index violation."
+  },
+  {
+   "id": "S8",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "Describes the same URL quote/markup injection into the raw HTML footer link."
+  },
+  {
+   "id": "S9",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Describes the same unsanitized imported HTML passing through raw_html cooking and raw post.cooked rendering."
+  },
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Shares S2's claimed JavaScript-string injection through request.referer in the embed layout; no golden issue describes this interpolation."
+  },
+  {
+   "id": "S11",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#24",
+   "newGroup": null,
+   "reason": "Describes the same hard-coded strftime date format bypassing localized month names and date ordering."
+  },
+  {
+   "id": "S12",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Claims full-URL targetOrigin breaks resize delivery. This concerns the sender's targetOrigin argument, distinct from the golden receiver-side substring validation issue and from Referer injection."
+  },
+  {
+   "id": "S13",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes the same substring-based message-origin validation accepting origins without exact equality."
+  },
+  {
+   "id": "S14",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Claims the controller spec's retriever expectations became invalid after enqueueing was introduced; no golden issue covers this. Jobs.enqueue can execute synchronously when queue_jobs is false, so enqueueing alone does not establish the claimed failure."
+  },
+  {
+   "id": "S15",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#33",
+   "newGroup": null,
+   "reason": "Includes the same URL and username prerequisite tests passing because other prerequisites remain false or blank. Its additional enabled-guard observation broadens the comment without changing that match."
+  }
+ ]
+}

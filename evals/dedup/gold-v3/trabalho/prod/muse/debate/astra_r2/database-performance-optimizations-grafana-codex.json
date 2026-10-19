@@ -1,0 +1,12 @@
+{
+ "caseId": "database-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "issueId": "database-performance-optimizations-grafana-codex#musep-01",
+   "class": "TP",
+   "subclass": "none",
+   "severity": "medium",
+   "reply": "I retain TP/medium: the new SELECT/DELETE split returns RowsAffected, and xorm_store.go:656 stops cleanup when that value is zero despite potentially remaining eligible rows. The bulk deletion path can remove every fetched ID between those statements. The concurrent-insert comment does not establish that abandoning an existing cleanup backlog is harmless; this race delays enforcement of configured retention limits. Recovery on the next cycle limits the impact, but this remains incorrect behavior under uncommon concurrency, matching medium rather than a nit."
+  }
+ ]
+}

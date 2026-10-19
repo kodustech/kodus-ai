@@ -1,0 +1,11 @@
+{
+ "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+ "items": [
+  {
+   "id": "S3",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#07",
+   "newGroup": null,
+   "reason": "Both claims concern calling get() on the recovery-credential Optional without checking presence, causing NoSuchElementException when no credential exists. The storage-provider scenario adds detail but does not change the underlying defect."
+  }
+ ]
+}

@@ -1,0 +1,19 @@
+{
+  "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+  "prOriginal": {
+    "numero": 22532,
+    "url": "https://github.com/calcom/cal.diy/pull/22532",
+    "mergedAt": "2025-07-22",
+    "nota": "Reused prOriginalConhecido (calcom/cal.com renamed to calcom/cal.diy). Squash commit cb786923 on main is the only commit touching scripts/test-gcal-webhooks.sh; its content equals the benchmark head."
+  },
+  "tps": {
+    "feat-add-calendar-cache-status-and-actions-22532-cal-com#pf-opus-C2": {
+      "status": "pendente",
+      "corrigidoEm": null,
+      "removidoEm": null,
+      "diasNoAr": 452,
+      "reason": "scripts/test-gcal-webhooks.sh on calcom/cal.diy main today is byte-identical to the benchmark head, still with ENV_FILE=\"../.env\" and no cd to the script directory. The file history since the merge has only the original squash commit cb786923, and no package.json script or other file invokes it from a subdirectory, so running it from the repo root still writes to a .env outside the repo.",
+      "astra": []
+    }
+  }
+}

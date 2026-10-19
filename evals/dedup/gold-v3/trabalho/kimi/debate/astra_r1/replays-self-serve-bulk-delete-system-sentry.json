@@ -1,0 +1,12 @@
+{
+ "caseId": "replays-self-serve-bulk-delete-system-sentry",
+ "items": [
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#kimi-03",
+   "class": "FP",
+   "subclass": "none",
+   "severity": "low",
+   "reply": "I retain FP: the helper keeps 50 title characters and appends an ellipsis for display in a Markdown PR comment; no caller requires the resulting text to fit within 50 characters. The GitLab and VSTS examples truncate titles submitted to issue-creation APIs, which is a different contract. The constant\u2019s name alone does not establish that this display truncation violates a requirement."
+  }
+ ]
+}

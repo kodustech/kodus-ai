@@ -1,0 +1,12 @@
+{
+ "caseId": "dual-storage-architecture-grafana-codex",
+ "items": [
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#kimi-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The PR replaces synchronous legacy writes with unrestricted goroutine launches in pkg/apiserver/rest/dualwriter_mode3.go:50, :108, :134 and :161, returning without waiting for completion. The ten-second contexts limit cooperative execution time, not concurrency; slow legacy operations can accumulate goroutines and retained request objects as successful primary writes continue. Parent cancellation may shorten their lifetime, but no worker limit or backpressure bounds outstanding legacy writes.",
+   "severity": "medium"
+  }
+ ]
+}

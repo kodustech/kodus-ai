@@ -1,0 +1,484 @@
+{
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "update/destroy nil host from where().first -> 500"
+  },
+  {
+   "id": "S2",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "migration interpolates legacy host values into INSERT SQL"
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "missing index on host for lookup; no golden issue"
+  },
+  {
+   "id": "S4",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "fabricator file contents swapped"
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "TopicEmbed.import nil category when no host matches; not in golden"
+  },
+  {
+   "id": "S6",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "uri.host not downcased against lower(host)"
+  },
+  {
+   "id": "S7",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "migration bypasses scheme/path stripping of legacy hosts"
+  },
+  {
+   "id": "S8",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "uri.host not downcased against lower(host)"
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "blank? vs nil? for category_id; not in golden"
+  },
+  {
+   "id": "S10",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "update/destroy nil host -> NoMethodError"
+  },
+  {
+   "id": "S11",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "describe block names wrong method"
+  },
+  {
+   "id": "S12",
+   "match": "new",
+   "newGroup": "N5",
+   "reason": "hardcoded placeholder not localized"
+  },
+  {
+   "id": "S13",
+   "match": "new",
+   "newGroup": "N6",
+   "reason": "EmbeddableHostsController spec only checks inheritance"
+  },
+  {
+   "id": "S14",
+   "match": "new",
+   "newGroup": "N7",
+   "reason": "EmbeddingController spec only checks inheritance"
+  },
+  {
+   "id": "S15",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "spec name no longer matches what it tests"
+  },
+  {
+   "id": "S16",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "update/destroy nil host -> 500 not 404"
+  },
+  {
+   "id": "S17",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "migration execute(...)[0] without empty-result check"
+  },
+  {
+   "id": "S18",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "fabricator file contents swapped"
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "newGroup": null,
+   "reason": "removal listener guarded only by V1 flag; V2-only deployments orphan permissions"
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "permission resourceId not checked (over-grant); different from musep-01 denial"
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "O(N) per-client evaluation performance; issue 03 is about wrong returned ids"
+  },
+  {
+   "id": "S4",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#08",
+   "newGroup": null,
+   "reason": "requireView Javadoc says returns true"
+  },
+  {
+   "id": "S5",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#08",
+   "newGroup": null,
+   "reason": "requireViewClientScopes Javadoc says returns true"
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "canView(client) Javadoc mentions VIEW_SCOPE; doc mismatch not in golden"
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "ClientPermissionsV2 setPermissionsEnabled/isPermissionsEnabled throw UnsupportedOperationException"
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N5",
+   "reason": "test indexes default scopes without size check; issue 11 is about where ForbiddenException comes from"
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "client removal cleanup calls V2 setPermissionsEnabled which throws"
+  },
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "V2 setPermissionsEnabled throws on client delete; make no-op"
+  }
+ ],
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "id": "S1",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "mainHostDestinationCalendar.integration without optional chaining"
+  },
+  {
+   "id": "S2",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "fallback looks for externalId equal to absent externalCalendarId"
+  },
+  {
+   "id": "S3",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05",
+   "newGroup": null,
+   "reason": "Office365 createEvent ignores credentialId"
+  },
+  {
+   "id": "S4",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05",
+   "newGroup": null,
+   "reason": "Lark createEvent ignores credentialId"
+  },
+  {
+   "id": "S5",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#04",
+   "newGroup": null,
+   "reason": "inverted IS_TEAM_BILLING_ENABLED slug condition"
+  },
+  {
+   "id": "S6",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "recurring deletion over all credentials repeated per reference -> duplicate deletes"
+  },
+  {
+   "id": "S7",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "mainHostDestinationCalendar.integration without optional chaining"
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "hardcoded notes-hidden string not localized"
+  },
+  {
+   "id": "S9",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "mainHostDestinationCalendar.integration without guard"
+  }
+ ],
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": [
+  {
+   "id": "S1",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03",
+   "newGroup": null,
+   "reason": "returns true on override before checking busy times"
+  },
+  {
+   "id": "S2",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "working-hours end computed from slotStartTime"
+  },
+  {
+   "id": "S3",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "newGroup": null,
+   "reason": "dayjs objects compared with ==="
+  },
+  {
+   "id": "S4",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-02",
+   "newGroup": null,
+   "reason": "override dates formatted in server local time vs UTC slot day"
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "test compares UTC slots to themselves; not in golden"
+  },
+  {
+   "id": "S6",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "newGroup": null,
+   "reason": "dayjs objects compared with ==="
+  },
+  {
+   "id": "S7",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "end computed from slotStartTime"
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "selectedSlots call skips dateOverrides/workingHours"
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "ignores per-override timeZone; issue 06 is about hour/minute crossing midnight"
+  }
+ ],
+ "replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "S1",
+   "match": "replays-self-serve-bulk-delete-system-sentry#12",
+   "newGroup": null,
+   "reason": "TableWidgetVisualization with empty columns/data"
+  },
+  {
+   "id": "S2",
+   "match": "replays-self-serve-bulk-delete-system-sentry#snloop-01",
+   "newGroup": null,
+   "reason": "neither age nor timestamp required although claimed; enforcing one fixes the mismatch"
+  },
+  {
+   "id": "S3",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "error_ids zipped positionally with nodestore results"
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "in-place sort side effect"
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "broad except in get_environment_info"
+  },
+  {
+   "id": "S6",
+   "match": "replays-self-serve-bulk-delete-system-sentry#02",
+   "newGroup": null,
+   "reason": "logs raw browser report/request body"
+  },
+  {
+   "id": "S7",
+   "match": "replays-self-serve-bulk-delete-system-sentry#01",
+   "newGroup": null,
+   "reason": "truthiness check treats 0 as absent"
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "truncated title exceeds max length with ellipsis"
+  }
+ ],
+ "sms-workflow-reminder-retry-count-tracking-cal-com": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "retryCount incremented for non-SMS setup errors; not the transient-error or lock issue"
+  },
+  {
+   "id": "S2",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "retryCount>1 delete branch lacks SMS method filter"
+  },
+  {
+   "id": "S3",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#07",
+   "newGroup": null,
+   "reason": "no index for retryCount OR branch"
+  },
+  {
+   "id": "S4",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#03",
+   "newGroup": null,
+   "reason": "cleanup comment omits retryCount deletion"
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "raw provider error logged with PII"
+  },
+  {
+   "id": "S6",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "retryCount>1 delete branch lacks SMS method filter"
+  },
+  {
+   "id": "S7",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "retryCount>1 delete branch lacks SMS method filter"
+  }
+ ],
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "cleanup uses literal alias \"alias\""
+  },
+  {
+   "id": "S2",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "cleanup uses literal alias \"alias\""
+  },
+  {
+   "id": "S3",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#snapi-01",
+   "newGroup": null,
+   "reason": "remove() always calls getByAlias"
+  },
+  {
+   "id": "S4",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#14",
+   "newGroup": null,
+   "reason": "test asserts cache keys instead of getForLogin results"
+  },
+  {
+   "id": "S5",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "cleanup uses literal alias \"alias\""
+  },
+  {
+   "id": "S6",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "cleanup uses literal alias \"alias\""
+  }
+ ],
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "tests compare flat vs nested Prisma.sql objects"
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "truthiness check drops id 0 filter"
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "empty teamIds array in ANY()"
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "public options type makes teamId optional for team scope"
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "public options type makes teamId optional for team scope"
+  }
+ ],
+ "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": [
+  {
+   "id": "S1",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "abstract methods unimplemented -> TypeError on instantiation"
+  },
+  {
+   "id": "S2",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "abstract methods unimplemented"
+  },
+  {
+   "id": "S3",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#04",
+   "newGroup": null,
+   "reason": "mock builder ignores value; group_2 6 vs 10"
+  },
+  {
+   "id": "S4",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "abstract methods unimplemented"
+  }
+ ],
+ "feature-localization-fallbacks-server-side-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "FallbackLocaleList Hash contract empty storage; not in golden"
+  }
+ ]
+}

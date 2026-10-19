@@ -1,0 +1,35 @@
+{
+ "caseId": "authzservice-improve-authz-caching-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes stale denial entries blocking newly granted access until TTL expiry. No golden issue covers denial-cache invalidation or this short-circuit behavior."
+  },
+  {
+   "id": "S2",
+   "match": "authzservice-improve-authz-caching-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Includes the same ambiguous underscore-separated denial-cache key collisions. The additional IdentityType concern does not change that match."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Describes potential denial-cache memory growth from unbounded resource-specific entries. This differs from the golden issue about repeated database reloads for inaccessible resources."
+  },
+  {
+   "id": "S4",
+   "match": "authzservice-improve-authz-caching-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Identifies the false permission fixture that prevents the test from proving denial-cache precedence; seeding true fixes the same test defect."
+  },
+  {
+   "id": "S5",
+   "match": "authzservice-improve-authz-caching-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Identifies the same vacuous denial-cache test: its denying fixture lets the assertion pass even without the denial-cache short-circuit."
+  }
+ ]
+}

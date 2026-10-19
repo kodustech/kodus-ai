@@ -1,0 +1,12 @@
+{
+ "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+ "items": [
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#musep-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The new removal path calls `group.users.delete(user_id)` at app/controllers/admin/groups_controller.rb:90, bypassing the destruction callback for the custom `user_count` counter in app/models/group_user.rb:2. The associations at app/models/group.rb:5-8 do not configure that custom counter, so [Rails 4.1.8's association counter handling](https://raw.githubusercontent.com/rails/rails/v4.1.8/activerecord/lib/active_record/associations/has_many_association.rb) does not decrement it. This leaves the count serialized at app/serializers/basic_group_serializer.rb:2 inflated, although member pagination independently obtains the actual count at app/controllers/groups_controller.rb:25.",
+   "severity": "medium"
+  }
+ ]
+}

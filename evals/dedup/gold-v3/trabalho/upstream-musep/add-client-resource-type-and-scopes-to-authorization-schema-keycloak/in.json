@@ -1,0 +1,24 @@
+{
+ "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "prTitle": "Add Client resource type and scopes to authorization schema",
+ "upstream": "keycloak/keycloak",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/keycloak",
+ "base": "b8c1cd410f4499c77a8b372decfe1718b80ccfd2",
+ "head": "1950a511026d520a7329c7b6b9ee60a4af8f8b55",
+ "prOriginalConhecido": {
+  "numero": 36880,
+  "url": "https://github.com/keycloak/keycloak/pull/36880",
+  "mergedAt": "2025-02-11",
+  "nota": "Found via gh pr list search on the title (branch 35564-client-authz-schema). Its single commit is the benchmark head 1950a511026d; merged as 7e5540896b (rebase), so merged code equals the benchmark head. Files later moved to admin/fgap/ and authorization/fgap/ (May 2025)."
+ },
+ "tps": [
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01",
+   "severity": "high",
+   "category": "bug",
+   "bug": "In ClientPermissionsV2.hasPermission, an admin granted a permission on all clients is denied on any client that also has its own per-client permission resource, because only the per-client resource is evaluated.",
+   "evidenciaOpus": "ClientPermissionsV2.hasPermission (ClientPermissionsV2.java:214-222) only falls back to the all-clients type resource when no per-client resource exists. Per-client resources are created without a type (AdminPermissionsSchema.java:104), so DefaultPolicyEvaluator.java:71-80 evaluates only that resource's policies and the all-clients grant is never consulted once a per-client permission exists.",
+   "evidenciaAstra": "The newly added ClientPermissionsV2.java:214-224 selects the all-clients resource only when the target client's resource is absent; otherwise it evaluates only that client's resource and returns false without a global fallback (line 234). AdminPermissionsSchema.java:103-110 creates individual resources without a type, so DefaultPolicyEvaluator.java:70-87 does not automatically include the all-clients resource's policies. Consequently, a legitimate global manage/configure grant can stop working when a separate permission creates a resource for that client."
+  }
+ ]
+}
