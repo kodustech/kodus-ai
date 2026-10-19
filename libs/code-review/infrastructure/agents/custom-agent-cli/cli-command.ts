@@ -238,8 +238,9 @@ export const CLI_BINARY_MARKER = 'KODUS_CLI_BINARY=';
 /**
  * Create the CLI user (idempotent, so a warm-resumed sandbox re-runs it) and
  * run the pinned install as that user, with every package manager pointed at
- * the user's home. Prints the resolved absolute binary path after the marker.
- * No secret exists in the sandbox at this point.
+ * the user's home, then kill whatever the install left running as that user.
+ * Prints the resolved absolute binary path after the marker. No secret
+ * exists in the sandbox at this point.
  */
 /**
  * A `set -e` script run in a subshell, so its `exit` code is what the
@@ -284,6 +285,10 @@ export function buildInstallScript(params: {
         `id -u ${shSingleQuote(identity.user)} >/dev/null 2>&1 || sudo -n useradd --create-home --home-dir ${shSingleQuote(h)} --shell /usr/sbin/nologin ${shSingleQuote(identity.user)}`,
         `sudo -n chmod 700 ${shSingleQuote(h)}`,
         `sudo -n -u ${shSingleQuote(identity.user)} -- /usr/bin/env -C ${shSingleQuote(h)} -i ${shellJoin(env)} /usr/bin/timeout -k 5 ${CLI_INSTALL_TIMEOUT_SEC} ${shellJoin(argv)}`,
+        // Nothing the install started (a lifecycle script's background
+        // process) may live on as the CLI user into the calls that carry
+        // its secrets.
+        `sudo -n pkill -KILL -u ${shSingleQuote(identity.user)} >/dev/null 2>&1 || true`,
         `for d in ${candidates}; do`,
         `  if sudo -n -u ${shSingleQuote(identity.user)} test -x "$d"/${shSingleQuote(binary)}; then echo "${CLI_BINARY_MARKER}$d/"${shSingleQuote(binary)}; exit 0; fi`,
         'done',

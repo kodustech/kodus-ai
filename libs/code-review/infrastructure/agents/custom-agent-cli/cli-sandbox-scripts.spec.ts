@@ -193,6 +193,39 @@ describe('runCli command', () => {
     });
 });
 
+describe('install script', () => {
+    const identity = cliSandboxIdentity('agent-1', 'semver');
+
+    it('kills what the install left running as the CLI user', () => {
+        withStubs(
+            {
+                chmod: 'exit 0',
+                useradd: 'exit 0',
+                env: 'exit 0',
+                test: 'exit 0',
+            },
+            (dir, log) => {
+                const result = runBash(
+                    dir,
+                    buildInstallScript({
+                        identity,
+                        argv: ['npm', 'i', '-g', 'semver@7.6.3'],
+                        binary: 'semver',
+                    }),
+                );
+                expect(result.status).toBe(0);
+                const calls = log();
+                const install = calls.findIndex((c) => c.startsWith('env '));
+                const kill = calls.findIndex(
+                    (c) => c === `pkill -KILL -u ${identity.user}`,
+                );
+                expect(install).toBeGreaterThanOrEqual(0);
+                expect(kill).toBeGreaterThan(install);
+            },
+        );
+    });
+});
+
 describe('runCli command with secrets', () => {
     const identity = cliSandboxIdentity('agent-1', 'lintkit');
     const command = buildRunCommand({
