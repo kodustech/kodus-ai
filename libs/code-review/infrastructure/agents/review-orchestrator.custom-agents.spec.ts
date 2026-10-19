@@ -228,6 +228,51 @@ describe('ReviewOrchestratorService — custom agents', () => {
         expect((customCalls.get('agent-1') as any).callGraph).toBe('');
     });
 
+    it('shows a custom agent only the earlier decisions on its own findings', async () => {
+        const { service, generalist, customCalls } = setup();
+        const previousDecisions = [
+            {
+                suggestionId: 'g1',
+                label: 'bug',
+                suggestionContent: 'native',
+                outcome: 'pending',
+                decidedAt: '',
+            },
+            {
+                suggestionId: 'c1',
+                label: 'custom_agent',
+                customAgentId: 'agent-1',
+                suggestionContent: 'mine',
+                outcome: 'pending',
+                decidedAt: '',
+            },
+            {
+                suggestionId: 'c2',
+                label: 'custom_agent',
+                customAgentId: 'agent-2',
+                suggestionContent: 'other agent',
+                outcome: 'pending',
+                decidedAt: '',
+            },
+        ];
+
+        await service.execute(
+            inputFor({
+                previousDecisions,
+                customAgents: [agentConfig({ scope: {} })],
+            }),
+        );
+
+        expect(
+            (customCalls.get('agent-1') as any).previousDecisions.map(
+                (d: any) => d.suggestionId,
+            ),
+        ).toEqual(['c1']);
+        expect(
+            (generalist.execute.mock.calls[0] as any[])[0].previousDecisions,
+        ).toBe(previousDecisions);
+    });
+
     it('skips an agent whose globs match no changed file and records it', async () => {
         const { service, factory } = setup();
 

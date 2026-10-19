@@ -348,10 +348,23 @@ export class ReviewOrchestratorService {
                               ),
                       }
                     : {};
+                // A custom agent weighs only the decisions on its own
+                // findings; the built-in agents' verdicts read to it as
+                // "already decided" and it reported nothing.
+                const ownDecisions = task.customAgent
+                    ? {
+                          previousDecisions:
+                              agentInputWithoutContent.previousDecisions?.filter(
+                                  (d) =>
+                                      d.customAgentId === task.customAgent!.id,
+                              ),
+                      }
+                    : {};
                 return await task.provider.execute({
                     ...agentInputWithoutContent,
                     changedFiles,
                     ...scopedContext,
+                    ...ownDecisions,
                     knowledge: task.knowledge,
                     maxSteps: this.getMaxStepsForAgent(
                         task.budgetKey ?? task.name,

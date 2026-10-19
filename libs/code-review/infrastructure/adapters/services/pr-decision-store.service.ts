@@ -51,6 +51,9 @@ export function toRecord(suggestion: ISuggestion): PrDecisionRecord {
         label: suggestion.label,
         brokenKodyRulesIds: suggestion.brokenKodyRulesIds,
         existingCode: suggestion.existingCode || undefined,
+        ...(suggestion.customAgent?.id && {
+            customAgentId: suggestion.customAgent.id,
+        }),
         outcome: toOutcome(suggestion.implementationStatus),
         decidedAt: suggestion.createdAt,
     };
@@ -84,6 +87,9 @@ export function toRecordFromPrLevel(
             suggestion.fullExplanation || suggestion.suggestionContent,
         label: suggestion.label,
         brokenKodyRulesIds: suggestion.brokenKodyRulesIds,
+        ...(suggestion.customAgent?.id && {
+            customAgentId: suggestion.customAgent.id,
+        }),
         outcome: 'pending',
         decidedAt: suggestion.createdAt ?? '',
     };

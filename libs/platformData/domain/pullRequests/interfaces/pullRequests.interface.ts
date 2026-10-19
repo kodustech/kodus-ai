@@ -155,6 +155,12 @@ export interface ISuggestion {
     prUrl?: string;
     repositoryId?: string;
     repositoryFullName?: string;
+    /** The custom agent that made this finding (#2172), as stored with it. */
+    customAgent?: {
+        id: string;
+        name: string;
+        color?: string;
+    };
 }
 
 export interface ISuggestionToEmbed {
