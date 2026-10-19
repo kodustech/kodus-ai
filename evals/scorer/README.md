@@ -82,7 +82,7 @@ how two incomparable runs end up compared.
 | `harness.name` | yes | `kodus`, `claude-code`, `codex`, `greptile`… The harness is a first-class dimension: the same model under different engines is a different entry. |
 | `model` | no | `null` when the harness does not let you pick a model (closed product). |
 | `model.id` | if `model` is an object | a string, or the submission is rejected. |
-| `model.accessPath` | no | `api` \| `subscription` \| `local` \| `unknown`. Different billing and rate-limit regimes are not comparable on latency — declare it. |
+| `model.accessPath` | no | `api` \| `subscription` \| `local` \| `unknown` \| `byok` \| `managed` (the finder eval's production routes). Different billing and rate-limit regimes are not comparable on latency — declare it. |
 | `executionMode` | yes | `replay` (recorded tool outputs, deterministic) or `live` (ran against the real repo). **Only compare within the same mode.** |
 | `reasoning` | no | `{config, effortRequested}`. `config` ∈ `vendor-default` \| `explicit` \| `disabled`. `effortRequested` is required when `config` is `explicit` — otherwise `explicit` says nothing. See below — it is a real confounder. |
 | `runAt` | yes | ISO-8601. |
@@ -139,9 +139,8 @@ The benchmark site links to this file, so this section is the whole contribution
 Three parts of it are not guessable from the schema above.
 
 **Get the cases.** The datasets are not in the benchmark repo: they are versioned here,
-one JSON file per case under `evals/investigation/datasets/`, carrying the `toolReplay`
-and `goldenComments` the scorer reads. That directory also holds `smoke` and
-`trace-context` fixtures for other evals, which carry no goldens. Clone this repository;
+one JSON file per case under `evals/investigation/datasets/`, carrying the `goldenComments`
+the scorer reads (and the old `toolReplay`, read only for a submission made on it). Clone this repository;
 there is no separate download.
 
 **Run the set the leaderboard is built from.** The comparable set is the 30-case `light`

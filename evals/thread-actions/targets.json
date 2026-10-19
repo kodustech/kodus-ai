@@ -1,0 +1,71 @@
+{
+    "__doc": [
+        "Floors per model and per --kind for the share of write checks right (run.js --gate), as ratios: the memory or rule lands when the developer asks for it and nothing else does, and nothing is written in any other thread. Offers are reported beside it and have no floor (README).",
+        "eval-fake (the wiring smoke, every PR): the scripted model never writes, so only the threads that call for nothing pass: rule 8 of 12, memory 5 of 7. Deterministic. floor = observed rounded down to 3 decimals.",
+        "deepseek-v4-flash@fireworks (the nightly model): calibrated 2026-10-16 from 2 local runs, judge gpt-5.6-luna low. Rule 12 and 12 of 12, memory 7 and 7 of 7. Floors leave room for 2 failed checks of 12 (rule, 0.83) and 1 of 7 (memory, 0.85): 2 of 7 would equal a model that never writes (5 of 7). With the write gate never granting (grantIfAuthorized), rule 8 of 12 and memory 5 of 7, below both. Offers, not gated: rule 6 and 6 of 8, memory 3 and 4 of 5; every offer case offered, the misses were offers in control threads. A first run before the controls were reworded (they claimed a fix the PR head does not have, and the rule offer case said 'we want that enforced', which the agent took as a request and created the rule) is not counted.",
+        "2026-10-16, cloud route: the model now comes from the org's cloud route (evals/shared/model-route.js) instead of the self-hosted env route (applyModelEnv); on deepseek the request bodies are identical but for reasoning_effort, which the env route sent as high and the managed route leaves unset. Two runs on it, judge gpt-5.6-luna low: rule 12 and 12 of 12, memory 7 and 7 of 7 (offers 7 of 8 and 3 of 5 each). The floors stand.",
+        "[rule] gpt-6-sol: 10/12 and 10/12 (mean 0.833) in 2 local runs on a725253d6; the floor those give (0.61) is not above what the scripted model scores (0.6667), so it could not tell a broken stage from this model: no floor. Asked to narrow a rule (rule-update-act), it wrote nothing in both runs. A fix to the model's behaviour recalibrates here.",
+        "[memory] gpt-6-sol: 5/7 and 5/7 (mean 0.714) in 2 local runs on a725253d6; the floor those give (0.37) is not above what the scripted model scores (0.7143), so it could not tell a broken stage from this model: no floor. Asked to save a memory (memory-act), it wrote nothing in both runs. A fix to the model's behaviour recalibrates here.",
+        "[rule] claude-sonnet-5-5: calibrated 2026-10-17 from 2 local runs on a725253d6: 12/12 and 10/12, mean 0.917. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 12, rounded down: 0.75.",
+        "[memory] claude-sonnet-5-5: calibrated 2026-10-17 from 2 local runs on a725253d6: 7/7 and 7/7, mean 1. floor = min(mean - 2 binomial SE, (n - 1) / n) over n = 7, rounded down: 0.85.",
+        "[rule] kimi-k2.7-code@openrouter: calibrated 2026-10-17 from 2 local runs on a725253d6 and 8971e8fb3: 11/12 and 11/12, mean 0.917. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 12, rounded down: 0.75.",
+        "[memory] kimi-k2.7-code@openrouter: calibrated 2026-10-17 from 2 local runs on a725253d6 and 8971e8fb3: 7/7 and 7/7, mean 1. floor = min(mean - 2 binomial SE, (n - 1) / n) over n = 7, rounded down: 0.85.",
+        "[rule] deepseek-v4-flash@fireworks: calibrated 2026-10-17 from 2 local runs on 641fb1999 (BYOK route): 12/12 and 10/12, mean 0.917. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 12, rounded down: 0.75.",
+        "[memory] deepseek-v4-flash@fireworks: calibrated 2026-10-17 from 2 local runs on 641fb1999 (BYOK route): 7/7 and 7/7, mean 1. floor = min(mean - 2 binomial SE, (n - 1) / n) over n = 7, rounded down: 0.85.",
+        "RATCHET: a PR that adds cases, changes the judge or moves the value on purpose recalibrates here in the same PR, with its runs as evidence."
+    ],
+    "models": {
+        "eval-fake": {
+            "rule": {
+                "floor": 0.666,
+                "observed": 0.6667
+            },
+            "memory": {
+                "floor": 0.714,
+                "observed": 0.7143
+            }
+        },
+        "deepseek-v4-flash@fireworks": {
+            "rule": {
+                "floor": 0.75,
+                "observed": 0.917
+            },
+            "memory": {
+                "floor": 0.85,
+                "observed": 1
+            }
+        },
+        "claude-sonnet-5-5": {
+            "rule": {
+                "floor": 0.75,
+                "observed": 0.917
+            },
+            "memory": {
+                "floor": 0.85,
+                "observed": 1
+            }
+        },
+        "gpt-6-sol": {
+            "rule": {
+                "floor": null,
+                "observed": 0.833,
+                "noFloor": "Asked to narrow a rule, it wrote nothing in both runs; a floor would not be above what a model that never writes scores."
+            },
+            "memory": {
+                "floor": null,
+                "observed": 0.714,
+                "noFloor": "Asked to save a memory, it wrote nothing in both runs: it scores what a model that never writes scores."
+            }
+        },
+        "kimi-k2.7-code@openrouter": {
+            "rule": {
+                "floor": 0.75,
+                "observed": 0.917
+            },
+            "memory": {
+                "floor": 0.85,
+                "observed": 1
+            }
+        }
+    }
+}

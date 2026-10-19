@@ -7,7 +7,7 @@ This measures **prevalence**, not capability. It runs each tool's real
 the tool would fire at all. No analyzer executes, no model is called, no ground
 truth is needed — only filenames and patches, so a run is cheap.
 
-It exists because capability is worthless without it. `evals/security-analyzers/`
+It exists because capability is worthless without it. `scripts/security-benchmark/stage/`
 showed the rule pack detects real vulnerabilities and the reviewer already
 catches **every one** of them; the remaining case for the conditional analyzers
 rests entirely on how often the file types they cover actually show up.

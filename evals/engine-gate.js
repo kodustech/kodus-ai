@@ -1,68 +1,29 @@
 #!/usr/bin/env node
-// Single entrypoint for code-review engine evals.
+// The eval harness preflight: no model, no network. Checks that the files the
+// evals load exist, that each eval's README carries the standard header and
+// that its pointers resolve, and that the committed datasets are there. The
+// wiring smoke (evals/wiring-smoke.js) runs it on every engine PR.
 //
-// Profiles:
-//   harness  → no model/network; validates eval wiring and committed datasets.
-//   local    → cheap model-backed gate for a developer branch.
-//   branch   → downstream canary for a PR branch (finder matrix is separate).
-//   ci       → post-merge suite profile; larger sample.
+//   node evals/engine-gate.js [--profile=harness] [--strict-coverage]
 //
-// This wrapper is intentionally thin. The per-eval runners keep their own
-// metrics; this script gives local + CI one command and separates harness drift
-// from quality failures.
+// --strict-coverage  every warning fails too.
+//
+// Exit: 0 pass, 2 the harness is broken (fix it before trusting any number).
 const fs = require('fs');
 const path = require('path');
-const { spawnSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
 
 function parseArgs(argv) {
-    const out = {
-        profile: process.env.EVAL_PROFILE || 'harness',
-        model: process.env.EVAL_MODEL || 'gpt-5.4',
-        prs: null,
-        runs: null,
-        enforce: null,
-        strictCoverage: false,
-        extraSuiteArgs: [],
-    };
-
-    for (let i = 2; i < argv.length; i += 1) {
-        const arg = argv[i];
-        const m = arg.match(/^--([^=]+)(?:=(.*))?$/);
-        if (!m) {
-            out.extraSuiteArgs.push(arg);
-            continue;
-        }
-
-        const key = m[1];
-        const inlineValue = m[2];
-        const value = inlineValue ?? argv[i + 1];
-        const consumesNext = inlineValue === undefined && value && !String(value).startsWith('--');
-
-        if (key === 'profile') {
-            out.profile = value || out.profile;
-            if (consumesNext) i += 1;
-        } else if (key === 'model') {
-            out.model = value || out.model;
-            if (consumesNext) i += 1;
-        } else if (key === 'prs') {
-            out.prs = Number(value);
-            if (consumesNext) i += 1;
-        } else if (key === 'runs') {
-            out.runs = Number(value);
-            if (consumesNext) i += 1;
-        } else if (key === 'enforce') {
-            out.enforce = true;
-        } else if (key === 'no-enforce') {
-            out.enforce = false;
-        } else if (key === 'strict-coverage') {
-            out.strictCoverage = true;
-        } else {
-            out.extraSuiteArgs.push(arg);
+    const out = { strictCoverage: false };
+    for (const arg of argv.slice(2)) {
+        if (arg === '--strict-coverage') out.strictCoverage = true;
+        else if (arg === '--profile=harness') continue;
+        else {
+            console.error(`unknown argument '${arg}' (the preflight takes --profile=harness and --strict-coverage)`);
+            process.exit(2);
         }
     }
-
     return out;
 }
 
@@ -120,9 +81,9 @@ function preflight({ strictCoverage }) {
     const ok = [];
 
     const requiredFiles = [
-        'evals/run-suite.js',
         'evals/wiring-smoke.js',
-        'evals/tier0-smoke.js',
+        'evals/weekly.js',
+        'evals/stage-tests.js',
         'evals/ci-report.js',
         'evals/shared/fake-llm-server.js',
         'evals/shared/trace-loaded.js',
@@ -135,17 +96,12 @@ function preflight({ strictCoverage }) {
         'evals/investigation/investigate-prompt.md',
         'evals/investigation/extract-investigation.js',
         'evals/shared/tier0-models.js',
-        'evals/investigation/run-eval.js',
         'evals/investigation/run-recall.js',
         'evals/investigation/agent-provider.js',
-        'evals/promotion/run-eval.js',
         'evals/kody-rules/real-agent.js',
         'evals/kody-rules/github-cases.json',
-        'evals/anchoring/anchor-eval.js',
         'evals/pr-summary/run.js',
         'evals/pr-summary/datasets/cases.json',
-        'evals/dedup/run.js',
-        'evals/dedup/dedup-runner.js',
         'libs/code-review/infrastructure/agents/providers/generalist-agent.provider.ts',
         'libs/code-review/infrastructure/agents/providers/kody-rules-agent.provider.ts',
         'libs/code-review/infrastructure/agents/core/core-agent-loop.adapter.ts',
@@ -187,17 +143,9 @@ function preflight({ strictCoverage }) {
     if (!docProblems) ok.push(`eval docs: ${entryPoints.length + readmes.length} checked, every pointer resolves`);
 
     const investigationCases = countJsonFiles(path.join(ROOT, 'evals/investigation/datasets'));
-    const promotionCases = countJsonFiles(path.join(ROOT, 'evals/promotion/datasets'));
-    const dedupCases = countJsonFiles(path.join(ROOT, 'evals/dedup/datasets'));
 
     if (investigationCases > 1) ok.push(`investigation datasets=${investigationCases}`);
     else fatal.push(`investigation dataset count too low (${investigationCases})`);
-
-    if (promotionCases > 0) ok.push(`promotion datasets=${promotionCases}`);
-    else fatal.push('promotion datasets missing');
-
-    if (dedupCases > 0) ok.push(`dedup datasets=${dedupCases}`);
-    else warnings.push('dedup datasets missing; dedup is not reproducible from a clean checkout');
 
     const kodyCasesFile = path.join(ROOT, 'evals/kody-rules/github-cases.json');
     if (fs.existsSync(kodyCasesFile)) {
@@ -244,61 +192,15 @@ function printPreflight(result) {
     for (const item of result.fatal) console.log(`  FAIL  ${item}`);
 }
 
-function suiteDefaults(profile) {
-    if (profile === 'ci') return { prs: 5, runs: 3, enforce: true };
-    if (profile === 'branch') return { prs: 3, runs: 1, enforce: true };
-    if (profile === 'local') return { prs: 1, runs: 1, enforce: true };
-    return { prs: 1, runs: 1, enforce: false };
-}
-
 function main() {
     const args = parseArgs(process.argv);
-    const defaults = suiteDefaults(args.profile);
-    const prs = Number.isFinite(args.prs) ? args.prs : defaults.prs;
-    const runs = Number.isFinite(args.runs) ? args.runs : defaults.runs;
-    const enforce = args.enforce === null ? defaults.enforce : args.enforce;
-    const harnessOnly = args.profile === 'harness';
-
-    const preflightResult = preflight({
-        strictCoverage: args.strictCoverage,
-    });
-    printPreflight(preflightResult);
-
-    if (preflightResult.fatal.length > 0) {
+    const result = preflight({ strictCoverage: args.strictCoverage });
+    printPreflight(result);
+    if (result.fatal.length > 0) {
         console.error('\nEval harness preflight failed. Fix these before trusting quality numbers.');
         process.exit(2);
     }
-
-    if (harnessOnly) {
-        console.log('\nHarness preflight passed. No model-backed evals were run.');
-        process.exit(0);
-    }
-
-    const suiteArgs = [
-        'evals/run-suite.js',
-        `--model=${args.model}`,
-        `--prs=${prs}`,
-        `--runs=${runs}`,
-        ...(enforce ? ['--enforce'] : []),
-        ...args.extraSuiteArgs,
-    ];
-
-    console.log(
-        `\n════ running engine suite · profile=${args.profile} · model=${args.model} · prs=${prs} · runs=${runs} · enforce=${enforce} ════`,
-    );
-
-    const result = spawnSync(process.execPath, suiteArgs, {
-        cwd: ROOT,
-        stdio: 'inherit',
-        env: process.env,
-    });
-
-    if (result.error) {
-        console.error(result.error);
-        process.exit(2);
-    }
-
-    process.exit(result.status || 0);
+    console.log('\nHarness preflight passed. No model-backed evals were run.');
 }
 
 main();

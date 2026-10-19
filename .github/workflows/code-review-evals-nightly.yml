@@ -1,14 +1,13 @@
-name: "Evals: nightly quality (DeepSeek, 30 PRs)"
+name: "Evals: nightly quality (DeepSeek, controlled set)"
 
 # Did the review engine get worse? Answered once a night, only when it changed.
 #
-# One model, thirty PRs. An engine regression — a prompt, a stage, a parser —
-# shows up on any model, so measuring six models per merge (the old suite) paid
-# six times for the same answer. DeepSeek V4 Flash on Fireworks is the model the
-# trial runs in production, is cheap (~$0.10/PR), and its runs are steady.
-# Thirty PRs because per-PR recall swings run to run: calibrated in CI, a night's
-# 30-PR mean moves ~5pp, so the floor catches a ~11pp drop (8 PRs could not tell
-# a drop twice that size from noise).
+# One model, the controlled set (evals/README.md, "When it runs"): an engine
+# regression — a prompt, a stage, a parser — shows up on any model. DeepSeek V4
+# Flash on Fireworks is the model the trial runs in production, and its runs are
+# steady. The finder's controlled set is 15 PRs (evals/investigation/recall-tests.js);
+# the drop its floor catches, and the noise behind it, are in targets.json
+# sets.controlled. Every tier-0 model runs weekly (code-review-evals-weekly.yml).
 #
 # Measures only when a file finder-recall actually loads changed since the last
 # successful night (or the lockfile, or the floors). The list is not written by
@@ -18,7 +17,7 @@ name: "Evals: nightly quality (DeepSeek, 30 PRs)"
 # again. A night that measured all but a few PRs (within run-recall's 5%
 # budget) is a baseline: the comparison uses the PRs both nights measured.
 #
-# Gate: finder-recall run mean vs evals/investigation/targets.json → sets.light.
+# Gate: finder-recall run mean vs evals/investigation/targets.json → sets.controlled.
 # RATCHET: when a PR intentionally moves recall, update that floor in the same PR.
 #
 # Judge: gpt-5.6-luna at reasoning effort low, on BYOK_OPENAI_API_KEY (both
@@ -82,7 +81,7 @@ concurrency:
 
 env:
     MODEL: deepseek-v4-flash@fireworks
-    CASE_SET: light
+    CASE_SET: controlled
     JUDGE_MODEL: gpt-5.6-luna
     JUDGE_REASONING_EFFORT: low
 
@@ -90,7 +89,7 @@ jobs:
     changed:
         name: "engine changed since last measured night?"
         runs-on: ubuntu-latest
-        timeout-minutes: 20
+        timeout-minutes: 40
         outputs:
             run: ${{ steps.diff.outputs.run }}
             kody_rules_run: ${{ steps.diff.outputs.kody_rules_run }}
@@ -118,15 +117,21 @@ jobs:
             # night's budget measuring nothing. Also records the files finder-recall
             # loads — the only changes this night can measure — and those the
             # kody-rules eval loads.
+            - uses: ./.github/actions/eval-sandbox
             - name: Wiring smoke + files finder-recall loads
               run: node evals/wiring-smoke.js --engine-files=engine-files.txt --kody-rules-files=kody-rules-files.txt --eval-files-dir=eval-files --results=wiring-results.json
-            # One row per review stage (evals/stages.js) from tonight's wiring
-            # smoke: which stages have an eval, and whether it still runs. Every
-            # night, measured or not; the finder's row comes from the measure job.
-            - name: Stage signals (wiring)
+            # Every stage's unit tests (evals/stages.js), for the panel: which
+            # tests each stage has and whether they pass on main tonight.
+            - name: Stage unit tests
               if: always()
-              run: node evals/stage-signals.js --wiring=wiring-results.json --out=stage-rows.json
-            - name: Report stage signals (wiring)
+              run: node evals/stage-tests.js --out=stage-jest.json
+            # One row per review stage (evals/stages.js) from tonight's unit run and
+            # wiring smoke: what the stage is, its tests and how each came out. Every
+            # night, measured or not; the eval rows come from the measure jobs.
+            - name: Stage signals (tests)
+              if: always()
+              run: node evals/stage-signals.js --tests --wiring=wiring-results.json --jest=stage-jest.json --out=stage-rows.json
+            - name: Report stage signals (tests)
               if: always() && github.ref == 'refs/heads/main'
               uses: ./.github/actions/report-signal
               with:
@@ -350,8 +355,10 @@ jobs:
                   cache: "pnpm"
             - name: Install deps
               run: pnpm install --frozen-lockfile
-            - name: Install ripgrep (the local sandbox's grep, for cases that bring their repository)
-              run: command -v rg >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep)
+            # The funnel's stages review real PRs' repositories (verify reads them).
+            - uses: ./.github/actions/eval-sandbox
+              with:
+                  repositories: ${{ startsWith(matrix.eval, 'funnel') }}
             - name: Create environment.ts (gitignored EE config)
               run: |
                   cat <<'EOF' > libs/ee/configs/environment/environment.ts
@@ -380,8 +387,11 @@ jobs:
                   BYOK_GOOGLE_API_KEY: ${{ secrets.BYOK_GOOGLE_API_KEY }}
                   # The judge, for the evals that read replies (evals/conversation).
                   JUDGE_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
+                  # The platform's OpenAI key, under production's name: the
+                  # review's embedder (the dedup's semantic tier) reads it.
+                  API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
               run: |
-                  read -r -a cmd <<< "$(node -e 'console.log(require("./evals/nightly-evals").byId(process.env.EVAL).run.join(" "))')"
+                  read -r -a cmd <<< "$(node -e 'const n = require("./evals/nightly-evals"); console.log(n.nightlyCommand(n.byId(process.env.EVAL)).join(" "))')"
                   measure() { node "${cmd[@]}" --model="$MODEL" --gate --output="$1"; }
                   mkdir -p report
                   code=0; measure report/first.json || code=$?
@@ -427,7 +437,8 @@ jobs:
                   nodetail: "true"
                   content: ${{ steps.run.outputs.mention == 'true' && '@here' || '' }}
             - name: Not measured
-              if: always() && steps.run.outputs.verdict != 'pass' && steps.run.outputs.verdict != 'oscillation' && steps.run.outputs.verdict != 'regression' && steps.run.outputs.verdict != 'still-red'
+              # ungated is measured: no floor to compare with yet (evals/funnel), not an error.
+              if: always() && steps.run.outputs.verdict != 'pass' && steps.run.outputs.verdict != 'oscillation' && steps.run.outputs.verdict != 'regression' && steps.run.outputs.verdict != 'still-red' && steps.run.outputs.verdict != 'ungated'
               env:
                   VERDICT: ${{ steps.run.outputs.verdict }}
               run: |
@@ -435,7 +446,7 @@ jobs:
                   exit 1
 
     measure:
-        name: "finder recall · DeepSeek · 30 PRs"
+        name: "finder recall · DeepSeek · controlled set"
         needs: changed
         if: needs.changed.outputs.run == 'true'
         runs-on: ubuntu-latest
@@ -453,6 +464,9 @@ jobs:
                   cache: "pnpm"
             - name: Install deps
               run: pnpm install --frozen-lockfile
+            - uses: ./.github/actions/eval-sandbox
+              with:
+                  repositories: "true"
             - name: Create environment.ts (gitignored EE config)
               run: |
                   cat <<'EOF' > libs/ee/configs/environment/environment.ts
@@ -464,6 +478,9 @@ jobs:
               env:
                   BYOK_FIREWORKS_API_KEY: ${{ secrets.BYOK_FIREWORKS_API_KEY }}
                   JUDGE_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
+                  # The platform's OpenAI key, under production's name: the
+                  # review's embedder (the dedup's semantic tier) reads it.
+                  API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
               # exit 1 = confirmed below the floor, 2 = infra or gate not evaluated
               # (wrong judge, no floor). Both fail the job;
               # the report says which. A first run below the floor that the second

@@ -26,7 +26,7 @@ const { STAGES } = require('../stages');
 const { byId } = require('../nightly-evals');
 
 const WORSE = 0.04;
-const INFRA_BUDGET = 0.05; // evals/AGENTS.md: up to 5% of cases may go unmeasured
+const INFRA_BUDGET = 0.05; // evals/README.md: up to 5% of cases may go unmeasured
 
 function measured(result) {
     const infra = result?.infra || {};

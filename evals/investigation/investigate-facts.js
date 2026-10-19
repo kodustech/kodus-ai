@@ -60,7 +60,7 @@ function renderFindings(findings) {
 
 function buildFacts({ tonight, tonightSubmission, lastGreen, lastGreenSubmission, commits, engineChanges, targets }) {
     const comparison = lastGreen ? compareNights(tonight, lastGreen) : null;
-    const noise = nightNoise(targets, 'light', tonight.model);
+    const noise = nightNoise(targets, 'controlled', tonight.model);
     const gate = tonight.gate || {};
     const rowsNow = new Map((tonight.rows || []).map((r) => [r.caseId, r]));
     const rowsBefore = new Map((lastGreen?.rows || []).map((r) => [r.caseId, r]));
@@ -78,7 +78,7 @@ function buildFacts({ tonight, tonightSubmission, lastGreen, lastGreenSubmission
         out.push('No last green night to compare with; only the floor.');
     }
     if (noise) {
-        out.push(`Noise: one night's 30-PR mean moves about ±${Math.round(noise * 100)}pp (1σ) with no code change, from two calibration runs. A single PR can swing 50pp+ on its own; judge causes by patterns across PRs, not one PR.`);
+        out.push(`Noise: one night's mean over the controlled set moves about ±${Math.round(noise * 100)}pp (1σ) with no code change, from two calibration runs. A single PR can swing 50pp+ on its own; judge causes by patterns across PRs, not one PR.`);
     }
     const nowRows = [...rowsNow.values()].filter((r) => r.metadata);
     const beforeRows = [...rowsBefore.values()].filter((r) => r.metadata);
@@ -90,7 +90,7 @@ function buildFacts({ tonight, tonightSubmission, lastGreen, lastGreenSubmission
     };
     const oneDecimal = (v) => (typeof v === 'number' && Number.isFinite(v) ? v.toFixed(1) : 'n/a');
     const collapse = (key) => `${oneDecimal(avg(nowRows.map(pick(key))))} vs ${oneDecimal(avg(beforeRows.map(pick(key))))}`;
-    out.push(`Mean findings per PR: ${collapse('findings')} · mean tool calls: ${collapse('totalCalls')} · replay fidelity: ${collapse('hitRate')}`);
+    out.push(`Mean findings per PR: ${collapse('findings')} · mean tool calls: ${collapse('toolCalls')}`);
     out.push('');
 
     out.push('## Commits measured (engine files changed since the last green night)', '');
@@ -105,7 +105,7 @@ function buildFacts({ tonight, tonightSubmission, lastGreen, lastGreenSubmission
         for (const c of comparison.perCase) {
             const n = rowsNow.get(c.caseId)?.metadata || {};
             const b = rowsBefore.get(c.caseId)?.metadata || {};
-            out.push(`| ${c.caseId} | ${pct(c.recallBefore)} → ${pct(c.recall)} | ${(b.tpFindings ?? 0) + (b.fpFindings ?? 0)} → ${(n.tpFindings ?? 0) + (n.fpFindings ?? 0)} | ${b.totalCalls ?? '?'} → ${n.totalCalls ?? '?'} | ${c.lost ? c.lost.length : 'n/a'} | ${c.gained ? c.gained.length : 'n/a'} |`);
+            out.push(`| ${c.caseId} | ${pct(c.recallBefore)} → ${pct(c.recall)} | ${(b.tpFindings ?? 0) + (b.fpFindings ?? 0)} → ${(n.tpFindings ?? 0) + (n.fpFindings ?? 0)} | ${b.toolCalls ?? '?'} → ${n.toolCalls ?? '?'} | ${c.lost ? c.lost.length : 'n/a'} | ${c.gained ? c.gained.length : 'n/a'} |`);
         }
         out.push('');
 

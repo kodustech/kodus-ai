@@ -1,7 +1,7 @@
 # memories
 
 > - **Answers:** When a team has a memory, does the review follow it — quiet where the memory says the code is intended, a finding where it says the code is wrong — without silencing a real bug the memory does not cover?
-> - **Runs:** nightly when the finder or its cases change (`evals/nightly-evals.js`), Friday on every tier-0 model, and on every PR in `evals/wiring-smoke.js` against the scripted model.
+> - **Runs:** nightly when the finder or its cases change (`evals/nightly-evals.js`), weekly on every tier-0 model against its floor (`evals/weekly.js`), and on every PR in `evals/wiring-smoke.js` against the scripted model.
 > - **Run it:** `node evals/memories/run.js --model=<id>` · `--no-memories` runs the same cases with none
 > - **Gate:** `--gate` fails below the model's floor in `evals/memories/targets.json`.
 > - **Cost:** one finder run (finder and verify) per case, 10 cases.

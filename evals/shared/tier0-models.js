@@ -20,11 +20,9 @@
 // does, tier-0 is declared here, once, instead of copy-pasted into a workflow
 // where it drifted unnoticed.
 //
-// Routing recap (buildModelFromSlot, no BYOK config → self-hosted path):
-//   API_LLM_PROVIDER_MODEL = <id>   picks the model + provider by name prefix
-//   gemini-*  → Google AI Studio   key in API_GOOGLE_AI_API_KEY
-//   claude-*  → Anthropic native   key in API_OPEN_AI_API_KEY (no force base url)
-//   anything  → OpenAI-compatible  key in API_OPEN_AI_API_KEY (+ API_OPENAI_FORCE_BASE_URL)
+// An eval reaches these models the way a cloud org does (evals/shared/
+// model-route.js): through a stored BYOK config holding its key from `keyEnvs`.
+// `kodus-managed` alone has no stored config: an org with no model of its own.
 
 // id → { provider, keyEnvs (first present wins), baseURL? }
 // keyEnvs mirror the benchmark's secret names so the same CI secrets work.
@@ -59,9 +57,9 @@ const TIER0 = {
     // V4-Pro saiu de preview em 2026-08 (build 0813). Mesmo endpoint do flash.
     'deepseek-v4-pro': { provider: 'openai_compatible', keyEnvs: ['BYOK_DEEPSEEK_API_KEY', 'API_DEEPSEEK_API_KEY'], baseURL: 'https://api.deepseek.com' },
     'deepseek-v4-flash': { provider: 'openai_compatible', keyEnvs: ['BYOK_DEEPSEEK_API_KEY', 'API_DEEPSEEK_API_KEY'], baseURL: 'https://api.deepseek.com/v1' },
-    // Mirrors the PROD trial/managed default (KODUS_DEFAULT_MODEL): DeepSeek
-    // served via FIREWORKS, not DeepSeek-native — different transport + the
-    // `-0731` build. Use this to eval what the trial actually runs.
+    // The trial/managed default's model (KODUS_TRIAL_MODEL): DeepSeek served via
+    // FIREWORKS, not DeepSeek-native — different transport + build. Measured as an
+    // org's BYOK model, like every other; the managed route is `kodus-managed`.
     'deepseek-v4-flash@fireworks': { tier0: true, provider: 'openai_compatible', doModel: 'accounts/fireworks/models/deepseek-v4p1-flash', keyEnvs: ['API_FIREWORKS_API_KEY', 'FIREWORKS_API_KEY', 'BYOK_FIREWORKS_API_KEY'], baseURL: 'https://api.fireworks.ai/inference/v1' },
     // K3 usa chave própria (KIMI_NEW) — crédito limitado, ver custo antes de
     // disparar passada cheia: $3/$15 por milhão, ~3x o k2.7.
@@ -114,8 +112,20 @@ const TIER0 = {
     'gpt-6-sol@openrouter': { provider: 'openai_compatible', doModel: 'openai/gpt-6-sol', openrouterProviderOrder: ['openai'], keyEnvs: ['BYOK_OPENROUTER_API_KEY', 'OPENROUTER_API_KEY'], baseURL: 'https://openrouter.ai/api/v1' },
     'claude-sonnet-5-5@openrouter': { provider: 'openai_compatible', doModel: 'anthropic/claude-sonnet-5.5', openrouterProviderOrder: ['anthropic'], keyEnvs: ['BYOK_OPENROUTER_API_KEY', 'OPENROUTER_API_KEY'], baseURL: 'https://openrouter.ai/api/v1' },
 
+    // Not a model to pick: what an org with no model config gets, Kodus's default
+    // model (libs/llm/byok-defaults.ts KODUS_TRIAL_MODEL) on Kodus's own key, the
+    // managed route (libs/llm/managed-slot.ts). Every eval measures the models on
+    // BYOK (model-route.js); this one runs only in the managed route's contract
+    // test (evals/wiring-smoke.js `managed-route`).
+    'kodus-managed': {
+        managed: true,
+        provider: 'openai_compatible',
+        keyEnvs: ['API_FIREWORKS_API_KEY', 'FIREWORKS_API_KEY', 'BYOK_FIREWORKS_API_KEY'],
+        baseURL: 'https://api.fireworks.ai/inference/v1',
+    },
+
     // Scripted local model (evals/shared/fake-llm-server.js) for the wiring
-    // smoke: the real self-hosted openai_compatible route, pointed at 127.0.0.1.
+    // smoke: an org's BYOK openai_compatible endpoint at 127.0.0.1.
     // Measures nothing — it proves the harness still drives the engine.
     'eval-fake': {
         provider: 'openai_compatible',
@@ -144,17 +154,21 @@ function tier0() {
 // Every routable id minus the ones the benchmark skips by default (cost). NOT
 // the gate set — that is tier0(). Read by `run-recall --list-models`.
 function defaultMatrix() {
-    return Object.keys(TIER0).filter((id) => id !== 'gpt-5.4-mini' && !EXCLUDED_BY_DEFAULT.has(id) && !LOCAL_ONLY.has(id));
+    return Object.keys(TIER0).filter((id) => id !== 'gpt-5.4-mini' && !EXCLUDED_BY_DEFAULT.has(id) && !LOCAL_ONLY.has(id) && !TIER0[id].managed);
 }
 
-// Point the env at `modelId` so buildModelFromSlot(undefined, ...) builds it.
+// The self-hosted env route: points the env at `modelId` so
+// buildModelFromSlot(undefined, ...) builds it. Not for an eval, which reaches
+// its model the way a cloud org does (evals/shared/model-route.js, rule 5 of
+// evals/README.md); kept for scripts/analysis. It writes the model's key over
+// API_OPEN_AI_API_KEY, the platform key the dedup's embedder reads.
 // Returns the spec; throws a clear error when the model is unknown or its key is
 // absent (so a CI matrix leg fails loudly instead of silently picking a default).
 function applyModelEnv(modelId, env = process.env) {
     const spec = TIER0[modelId];
     if (!spec) throw new Error(`unknown tier-0 model '${modelId}' (known: ${Object.keys(TIER0).join(', ')})`);
-    // Assinatura nao usa env var: credencial em ~/.codex/auth.json, modelo
-    // construido direto em createModel (agent-provider.js).
+    // A subscription takes no env var: its credential is ~/.codex/auth.json
+    // (libs/llm/codex-subscription-model.ts).
     if (spec.provider === 'codex_subscription') return spec;
     const key = spec.keyEnvs.map((e) => env[e]).find(Boolean);
     if (!key) throw new Error(`no API key for ${modelId} — set one of ${spec.keyEnvs.join('/')}`);
@@ -176,23 +190,25 @@ function applyModelEnv(modelId, env = process.env) {
     return spec;
 }
 
-// Flags for the promptfoo evals (investigation, promotion) that accept explicit
-// --provider/--model/--base-url/--api-key-env — lets them run the SAME tier-0
-// model without depending on their own (stale) preset registries. The key is
-// read from the env var applyModelEnv populated.
-const PROMPTFOO_PROVIDER = {
-    openai: 'openai', anthropic: 'anthropic', google: 'google', openai_compatible: 'openai-compatible',
+// The cloud platform's own keys, under the variables production reads them
+// from, for an eval that runs the review the way a cloud org gets it: the
+// OpenAI key the platform embedder uses (buildPlatformEmbedder: the dedup's
+// semantic tier), and the Fireworks key of the managed default model
+// (resolveManagedSlot). No org's model is configured here: the cloud has no
+// self-hosted env model (API_LLM_PROVIDER_MODEL), so a model either comes from
+// the org's stored BYOK config or, with none (`kodus-managed`), is the managed default.
+const PLATFORM_KEYS = {
+    API_OPEN_AI_API_KEY: ['API_OPEN_AI_API_KEY', 'BYOK_OPENAI_API_KEY'],
+    API_FIREWORKS_API_KEY: ['API_FIREWORKS_API_KEY', 'FIREWORKS_API_KEY', 'BYOK_FIREWORKS_API_KEY'],
 };
-function promptfooFlags(modelId) {
-    const spec = TIER0[modelId];
-    if (!spec) throw new Error(`unknown tier-0 model '${modelId}'`);
-    const apiKeyEnv = spec.provider === 'google' ? 'API_GOOGLE_AI_API_KEY' : 'API_OPEN_AI_API_KEY';
-    return [
-        '--provider', PROMPTFOO_PROVIDER[spec.provider],
-        '--model', modelId,
-        '--api-key-env', apiKeyEnv,
-        ...(spec.baseURL ? ['--base-url', spec.baseURL] : []),
-    ];
+function applyPlatformEnv(env = process.env) {
+    delete env.API_LLM_PROVIDER_MODEL;
+    delete env.API_OPENAI_FORCE_BASE_URL;
+    for (const [name, sources] of Object.entries(PLATFORM_KEYS)) {
+        const key = sources.map((e) => env[e]).find(Boolean);
+        if (key) env[name] = key;
+        else delete env[name];
+    }
 }
 
-module.exports = { TIER0, EXCLUDED_BY_DEFAULT, tier0, defaultMatrix, applyModelEnv, promptfooFlags };
+module.exports = { TIER0, EXCLUDED_BY_DEFAULT, tier0, defaultMatrix, applyModelEnv, applyPlatformEnv };

@@ -273,7 +273,7 @@ const KEEP_FALSE =
         String(T.none).padEnd(5),
         T.refutations,
     );
-    // observed.json OWNS these numbers: evals/AGENTS.md forbids copying them into
+    // observed.json OWNS these numbers: evals/README.md forbids copying them into
     // prose, and there is no other file that could own them — the corpus itself
     // is customer source and never lands in a public repo. Counts only.
     if (process.argv.includes('--write-observed')) {
