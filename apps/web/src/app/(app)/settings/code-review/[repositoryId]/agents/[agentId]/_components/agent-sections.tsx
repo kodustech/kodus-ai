@@ -263,7 +263,13 @@ export const CommentsAndModel = ({
             </Field>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <Field label="Format">
+                <Field
+                    label="Format"
+                    hint={
+                        presentation.format === "inline"
+                            ? "A comment on each line the agent flags."
+                            : "All the agent's findings in one comment on the pull request."
+                    }>
                     <Choice
                         value={presentation.format}
                         disabled={!canEdit}
@@ -277,7 +283,9 @@ export const CommentsAndModel = ({
                         ]}
                     />
                 </Field>
-                <Field label="Minimum severity">
+                <Field
+                    label="Minimum severity"
+                    hint="Findings below it are not posted. Team minimum follows What to review.">
                     <Select
                         value={presentation.minSeverity ?? "any"}
                         disabled={!canEdit}
@@ -306,7 +314,7 @@ export const CommentsAndModel = ({
                 <Field
                     label="Max comments per pull request"
                     htmlFor="agent-max-comments"
-                    hint="Empty for no limit">
+                    hint="Posts the most severe ones. Empty for no limit.">
                     <Input
                         id="agent-max-comments"
                         size="md"
@@ -325,7 +333,9 @@ export const CommentsAndModel = ({
                         }}
                     />
                 </Field>
-                <Field label="Suggested fix">
+                <Field
+                    label="Suggested fix"
+                    hint="Code the comment proposes, when the agent is sure of the change. Never: it only describes the problem.">
                     <Choice
                         value={presentation.suggestedFix}
                         disabled={!canEdit}
@@ -342,9 +352,9 @@ export const CommentsAndModel = ({
             </div>
 
             <Field
-                label="Writing"
+                label="How it writes"
                 htmlFor="agent-writing"
-                hint="Tone, length, language, what every comment must say. Optional.">
+                hint="Tone, length, language and what every comment must say. Empty: the team's writing settings.">
                 <Textarea
                     id="agent-writing"
                     className="min-h-20 text-sm"

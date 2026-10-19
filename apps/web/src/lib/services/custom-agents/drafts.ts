@@ -528,7 +528,8 @@ export const agentStatusLine = (
     isGlobal = false,
 ): string => {
     const where = `Runs on ${scopeLabel(agent)}`;
-    if (isGlobal) return `${where} · usage shows per repository`;
+    // Usage is counted per repository.
+    if (isGlobal) return where;
     if (!status || status.pullRequests === 0) {
         return `${where} · no findings in ${windowDays} days`;
     }

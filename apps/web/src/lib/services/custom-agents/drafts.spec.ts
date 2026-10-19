@@ -668,7 +668,7 @@ describe("custom agent drafts", () => {
                 "Runs on all files · no findings in 30 days",
             );
             expect(agentStatusLine(base(), undefined, 30, true)).toBe(
-                "Runs on all files · usage shows per repository",
+                "Runs on all files",
             );
         });
 

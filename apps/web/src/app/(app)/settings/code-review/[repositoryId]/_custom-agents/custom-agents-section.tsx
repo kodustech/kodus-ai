@@ -89,7 +89,7 @@ const AgentRow = ({
     agent: CustomAgent;
     href: string;
     chips: string[];
-    usage: string;
+    usage?: string;
     canEdit: boolean;
     busy: boolean;
     onToggle: (enabled: boolean) => void;
@@ -139,9 +139,11 @@ const AgentRow = ({
                     </ul>
                 )}
             </div>
-            <span className="text-text-tertiary hidden shrink-0 text-xs sm:block">
-                {usage}
-            </span>
+            {usage && (
+                <span className="text-text-tertiary hidden shrink-0 text-xs sm:block">
+                    {usage}
+                </span>
+            )}
             <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
                     <Button
@@ -282,8 +284,9 @@ export const CustomAgentsList = ({ canEdit }: { canEdit: boolean }) => {
                             )}
                             chips={agentChips(agent, knowledge)}
                             usage={
+                                // Usage is counted per repository.
                                 isGlobal
-                                    ? "Usage shows per repository"
+                                    ? undefined
                                     : agentUsageLine(
                                           status.data?.agents.find(
                                               (entry) =>
