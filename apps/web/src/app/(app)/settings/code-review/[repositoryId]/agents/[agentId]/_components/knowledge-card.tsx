@@ -60,6 +60,34 @@ export const KnowledgeStatusChips = ({
 };
 
 /**
+ * What each warning or error says. The chips only count them, which left a
+ * "1 warning" badge with nothing to read (a truncated skill, for one).
+ */
+export const KnowledgeIssues = ({
+    report,
+}: {
+    report?: KnowledgeItemReport;
+}) => {
+    if (!report?.issues.length) return null;
+    return (
+        <ul className="flex flex-col gap-0.5">
+            {report.issues.map((issue) => (
+                <li
+                    key={`${issue.severity}:${issue.message}`}
+                    className={cn(
+                        "text-xs",
+                        issue.severity === "error"
+                            ? "text-danger"
+                            : "text-warning",
+                    )}>
+                    {issue.message}
+                </li>
+            ))}
+        </ul>
+    );
+};
+
+/**
  * The skills and docs one agent follows: only what it follows, each with a
  * way to stop, and a picker to add what the branch offers or a path typed
  * by hand. Skills open on demand; docs load whole.
@@ -140,6 +168,7 @@ export const AgentKnowledgeField = ({
                                         report={reportOf(skill)}
                                     />
                                 </span>
+                                <KnowledgeIssues report={reportOf(skill)} />
                             </span>
                             <StopFollowing
                                 name={skill.name}
@@ -156,8 +185,11 @@ export const AgentKnowledgeField = ({
                                 aria-hidden
                                 className="text-text-tertiary size-4 shrink-0"
                             />
-                            <span className="text-text-primary min-w-0 flex-1 truncate font-mono text-xs">
-                                {doc.path}
+                            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                                <span className="text-text-primary truncate font-mono text-xs">
+                                    {doc.path}
+                                </span>
+                                <KnowledgeIssues report={reportOf(doc)} />
                             </span>
                             <span className="flex shrink-0 flex-wrap gap-1">
                                 <KnowledgeStatusChips report={reportOf(doc)} />
