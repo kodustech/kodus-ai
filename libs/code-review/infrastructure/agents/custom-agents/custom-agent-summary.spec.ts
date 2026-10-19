@@ -3,6 +3,7 @@ import {
     summarizeCustomAgentRuns,
     withDeliveredCounts,
 } from './custom-agent-summary';
+import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 
 const run = (status: any = 'no-matching-files') => ({
     id: 'tf',
@@ -64,6 +65,42 @@ describe('summarizeCustomAgentRuns — ignored paths', () => {
             ignoredFiles: ['infra/envs/prod/main.tf'],
         });
         expect(summary.status).toBe('ran');
+    });
+});
+
+describe('summarizeCustomAgentRuns — findings under the minimum severity', () => {
+    const low = (id: string, status = PriorityStatus.DISCARDED_BY_SEVERITY) =>
+        ({ customAgent: { id }, priorityStatus: status }) as any;
+
+    it('counts what the severity filter held back, and shows it in the table', () => {
+        // A kept low finding under a Medium minimum read "0 posted, 0
+        // dropped" next to "No issues were found", as if it never existed.
+        const summaries = summarizeCustomAgentRuns(
+            [run('ran')],
+            [],
+            undefined,
+            [
+                low('tf'),
+                low('tf', PriorityStatus.DISCARDED_BY_SAFEGUARD),
+                low('other'),
+            ],
+        );
+        expect(summaries[0].belowSeverity).toBe(1);
+        const markdown = formatCustomAgentsSummary(summaries);
+        expect(markdown).toContain(
+            '| Agent | Status | Posted | Dropped by verification | Below minimum severity |',
+        );
+        expect(markdown).toContain('| Terraform | ran | 0 | 0 | 1 |');
+    });
+
+    it('keeps the usual table when nothing was held back', () => {
+        const markdown = formatCustomAgentsSummary(
+            summarizeCustomAgentRuns([run('ran')], [], undefined, []),
+        );
+        expect(markdown).toContain(
+            '| Agent | Status | Posted | Dropped by verification |\n| --- | --- | --- | --- |',
+        );
+        expect(markdown).not.toContain('Below minimum severity');
     });
 });
 

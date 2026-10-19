@@ -1524,6 +1524,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             ),
                     ),
                 },
+                allDiscarded,
             );
             const prLevelSuggestions = deduped.filter(isPrLevelSuggestion);
             const fileLevelSuggestions = deduped.filter(

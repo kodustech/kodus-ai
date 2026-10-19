@@ -4,6 +4,7 @@ import type {
     CustomAgentConfig,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
+import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 
 import { filesInAgentScope } from './custom-agent-scope';
 
@@ -28,6 +29,9 @@ export interface CustomAgentRun {
 
 export interface CustomAgentRunSummary extends CustomAgentRun {
     posted: number;
+    /** Kept findings under the review's minimum severity: not posted, and
+     *  without this count the agent read "0 posted, 0 dropped". */
+    belowSeverity?: number;
 }
 
 /** Joins the orchestrator's runs with the findings the review kept for each agent. */
@@ -43,12 +47,22 @@ export function summarizeCustomAgentRuns(
         /** Deleted files, which the review sets aside with the ignored ones. */
         removedFiles?: readonly string[];
     },
+    /** Findings the review set aside, the severity filter's among them. */
+    discarded: ReadonlyArray<Partial<CodeSuggestion>> = [],
 ): CustomAgentRunSummary[] {
-    return (runs ?? []).map((run) => ({
-        ...run,
-        status: notRunReason(run, ignored),
-        posted: posted.filter((s) => s.customAgent?.id === run.id).length,
-    }));
+    return (runs ?? []).map((run) => {
+        const belowSeverity = discarded.filter(
+            (s) =>
+                s.customAgent?.id === run.id &&
+                s.priorityStatus === PriorityStatus.DISCARDED_BY_SEVERITY,
+        ).length;
+        return {
+            ...run,
+            status: notRunReason(run, ignored),
+            posted: posted.filter((s) => s.customAgent?.id === run.id).length,
+            ...(belowSeverity > 0 && { belowSeverity }),
+        };
+    });
 }
 
 /**
@@ -152,11 +166,14 @@ export function formatCustomAgentsSummary(
     if (!runs?.length) {
         return '';
     }
+    // The column shows only when a finding was held back by severity, so the
+    // usual table stays as it was.
+    const withSeverity = runs.some((r) => (r.belowSeverity ?? 0) > 0);
     const rows = runs
         .filter((r) => !NOT_RUN_REASON[r.status])
         .map(
             (r) =>
-                `| ${escapeCell(r.name)} | ${STATUS_TEXT[r.status]} | ${r.posted} | ${r.droppedByVerify} |`,
+                `| ${escapeCell(r.name)} | ${STATUS_TEXT[r.status]} | ${r.posted} | ${r.droppedByVerify} |${withSeverity ? ` ${r.belowSeverity ?? 0} |` : ''}`,
         );
     const notRun = new Map<string, string[]>();
     for (const r of runs) {
@@ -171,8 +188,12 @@ export function formatCustomAgentsSummary(
     );
     const table = rows.length
         ? [
-              '| Agent | Status | Posted | Dropped by verification |',
-              '| --- | --- | --- | --- |',
+              withSeverity
+                  ? '| Agent | Status | Posted | Dropped by verification | Below minimum severity |'
+                  : '| Agent | Status | Posted | Dropped by verification |',
+              withSeverity
+                  ? '| --- | --- | --- | --- | --- |'
+                  : '| --- | --- | --- | --- |',
               ...rows,
           ]
         : [];
