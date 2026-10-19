@@ -193,6 +193,41 @@ describe('runCli command', () => {
     });
 });
 
+describe('runCli command with secrets', () => {
+    const identity = cliSandboxIdentity('agent-1', 'lintkit');
+    const command = buildRunCommand({
+        identity,
+        binaryPath: `${identity.home}/.local/bin/lintkit`,
+        args: ['check'],
+        secretEnvNames: ['LINTKIT_TOKEN'],
+        timeoutSec: 5,
+    });
+
+    // The sandbox starts the command in a shell of the review user with the
+    // secret in its env; that shell must be replaced by sudo, not wait for
+    // the CLI while other review-user commands could read its /proc env.
+    it('replaces the review user shell holding the secret with sudo', () => {
+        withStubs(
+            {
+                sh: 'echo "sh-parent $PPID"; exec /bin/sh "$@"',
+                env: 'echo "cli-token $LINTKIT_TOKEN"',
+            },
+            (dir) => {
+                const result = runBash(
+                    dir,
+                    `export LINTKIT_TOKEN=s3cret; echo "outer $$"; ${command}`,
+                );
+                const outer = /outer (\d+)/.exec(result.stdout)?.[1];
+                const parent = /sh-parent (\d+)/.exec(result.stdout)?.[1];
+                expect(outer).toBeDefined();
+                expect(parent).toBe(outer);
+                expect(result.stdout).toContain('cli-token s3cret');
+                expect(result.status).toBe(0);
+            },
+        );
+    });
+});
+
 describe('scripts on a sandbox shell whose exit hook fails (E2B)', () => {
     // E2B runs commands in a bash whose exit hook returns non-zero; under
     // `set -e` that turned the script's own `exit 0` into exit 1.

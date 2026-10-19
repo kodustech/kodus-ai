@@ -46,10 +46,12 @@ describe('normalizeCliArgs', () => {
 describe('matchesAllowedPrefix', () => {
     it('lets a prefix ending in "/" cover any path under it', () => {
         const scoped = cli({ allowedPrefixes: ['scan scripts/'] });
-        expect(matchesAllowedPrefix(['scan', 'scripts/deploy.sh'], scoped)).toBe(
-            true,
+        expect(
+            matchesAllowedPrefix(['scan', 'scripts/deploy.sh'], scoped),
+        ).toBe(true);
+        expect(matchesAllowedPrefix(['scan', 'src/app.ts'], scoped)).toBe(
+            false,
         );
-        expect(matchesAllowedPrefix(['scan', 'src/app.ts'], scoped)).toBe(false);
         expect(
             matchesAllowedPrefix(['scan', 'scripts/../etc/passwd'], scoped),
         ).toBe(false);
@@ -266,8 +268,14 @@ describe('buildRunCommand', () => {
             secretEnvNames: [],
             timeoutSec: 120,
         });
-        expect(command).toContain(shellJoin(hostile));
-        expect(command).toContain(`-u '${identity.user}'`);
+        // The call runs in a root shell: the argv survives both quotings.
+        const inner = execFileSync(
+            '/bin/sh',
+            ['-c', `printf %s ${command.split(' -- /bin/sh -c ')[1]}`],
+            { encoding: 'utf8' },
+        );
+        expect(inner).toContain(shellJoin(hostile));
+        expect(inner).toContain(`-u '${identity.user}'`);
         expect(command).toContain('/usr/bin/timeout -k 5 120');
         expect(command).not.toContain('--preserve-env');
     });

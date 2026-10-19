@@ -128,8 +128,12 @@ describe('runCli execute', () => {
         });
         expect(out).not.toMatch(/not allowed/);
         const [command] = sb.run.mock.calls[0];
+        // Quoted once more for the root shell the call runs in.
         expect(command).toContain(
-            `${installed().binaryPath}' 'check' '--format' 'json' 'src/a.ts'`,
+            `${installed().binaryPath}' 'check' '--format' 'json' 'src/a.ts'`.replace(
+                /'/g,
+                "'\\''",
+            ),
         );
     });
 

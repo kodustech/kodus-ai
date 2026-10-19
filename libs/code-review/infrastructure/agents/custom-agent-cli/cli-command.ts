@@ -390,9 +390,13 @@ export function buildNetworkScript(params: {
 /**
  * The single line that runs one CLI call. Secrets are named in
  * `--preserve-env` and arrive through the sandbox process env, so their
- * values are never part of this string. After the call, timed out or not,
- * every process the CLI user still owns is killed, so nothing it started
- * (a daemon, a forked child) outlives the call; the call's exit code is kept.
+ * values are never part of this string. The shell the sandbox starts holds
+ * that env and runs as the review user, whose other commands could read a
+ * process's env under /proc: it `exec`s into sudo at once, so the env lives
+ * only in root's shell and the CLI user's processes from then on. After the
+ * call, timed out or not, every process the CLI user still owns is killed,
+ * so nothing it started (a daemon, a forked child) outlives the call; the
+ * call's exit code is kept.
  */
 export function buildRunCommand(params: {
     identity: CliSandboxIdentity;
@@ -406,7 +410,8 @@ export function buildRunCommand(params: {
         ? ` --preserve-env=${secretEnvNames.join(',')}`
         : '';
     const user = shSingleQuote(identity.user);
-    return `sudo -n -u ${user} -H${preserve} -- /usr/bin/env -C ${shSingleQuote(CLI_REPO_DIR)} /usr/bin/timeout -k 5 ${timeoutSec} ${shellJoin([binaryPath, ...args])}; rc=$?; sudo -n pkill -KILL -u ${user} >/dev/null 2>&1; exit $rc`;
+    const asRoot = `sudo -n -u ${user} -H${preserve} -- /usr/bin/env -C ${shSingleQuote(CLI_REPO_DIR)} /usr/bin/timeout -k 5 ${timeoutSec} ${shellJoin([binaryPath, ...args])}; rc=$?; pkill -KILL -u ${user} >/dev/null 2>&1; exit $rc`;
+    return `exec sudo -n${preserve} -- /bin/sh -c ${shSingleQuote(asRoot)}`;
 }
 
 export function resolveCliTimeoutSec(cli: Pick<CliToolConfig, 'timeoutSec'>) {
