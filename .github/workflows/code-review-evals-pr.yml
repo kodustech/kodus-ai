@@ -157,6 +157,12 @@ jobs:
 
                   export const environment = devEnvironment;
                   EOF
+            # Base-side runs another experiment on the same base code already paid for (evals/README.md).
+            - uses: actions/cache/restore@v4
+              with:
+                  path: ~/.cache/kodus-evals/experiment-base
+                  key: experiment-base-${{ matrix.step }}-${{ github.run_id }}
+                  restore-keys: experiment-base-${{ matrix.step }}-
             - name: Run the experiment
               id: run
               env:
@@ -184,6 +190,11 @@ jobs:
                   echo "code=$code" >> "$GITHUB_OUTPUT"
                   [ "$code" = "2" ] && echo "::warning::the experiment did not measure (a key, a quota or a crash); not a quality result"
                   exit 0
+            - uses: actions/cache/save@v4
+              if: always()
+              with:
+                  path: ~/.cache/kodus-evals/experiment-base
+                  key: experiment-base-${{ matrix.step }}-${{ github.run_id }}
             - name: Job summary
               if: always() && hashFiles('experiment/summary.md') != ''
               run: cat experiment/summary.md >> "$GITHUB_STEP_SUMMARY"

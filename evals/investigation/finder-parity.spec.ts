@@ -168,6 +168,14 @@ describe('finder input data', () => {
         ]);
     });
 
+    it("saves a run's --team-config over the case's own keys, as a team saving them would", () => {
+        delete process.env.RECALL_CATEGORIES;
+        delete process.env.RECALL_HEAVY;
+        const team = internals.teamOf({ reviewMode: 'light', v2PromptOverrides: { generation: { main: 'x' } } }, { reviewMode: 'heavy', newKey: true });
+        expect(team.codeReviewConfig.configs).toEqual({ v2PromptOverrides: { generation: { main: 'x' } }, reviewMode: 'heavy', newKey: true });
+        expect(internals.teamOf({}, { newKey: true }).codeReviewConfig.configs).toEqual({ newKey: true });
+    });
+
     it('refuses a mode production gates behind a release the eval has no org for', () => {
         process.env.RECALL_HEAVY = '1';
         expect(() => internals.teamOf({})).toThrow(internals.NotAProductionRoute);
@@ -219,4 +227,50 @@ describe('the observed review (funnel snapshot)', () => {
         const r = spawnSync(process.execPath, [path.join(__dirname, '../funnel/observe-check.js')], { encoding: 'utf8', env: { PATH: process.env.PATH, HOME: process.env.HOME } });
         expect({ status: r.status, out: r.stdout.split('\n').filter((l: string) => l.startsWith('{"shipped')).pop() }).toMatchObject({ status: 0 });
     }, 120_000);
+});
+
+describe('finder control cases and sets', () => {
+    it('scores a case with no known bug as a control: every finding shipped is noise', async () => {
+        const quiet = await recallAssertion(JSON.stringify({ findings: [], trace: {} }), { vars: { goldenComments: [] } });
+        expect(quiet).toMatchObject({ pass: true, metadata: { control: true, recall: null, goldens: 0, fpFindings: 0 } });
+        const noisy = await recallAssertion(JSON.stringify({ findings: [finding('f1'), finding('f2')], trace: {} }), { vars: { goldenComments: [] } });
+        expect(noisy).toMatchObject({ pass: false, metadata: { control: true, fpFindings: 2, findings: 2 } });
+    });
+
+    it('reads a control as a case with no recall and its findings as noise, and every case with its unmatched findings', () => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { finderCases } = require('../stage-signals');
+        const [control, pr] = finderCases([
+            { caseId: 'c', metadata: { control: true, goldens: 0, matched: 0, fpFindings: 3, goldenResults: [] } },
+            { caseId: 'p', metadata: { goldens: 2, matched: 1, fpFindings: 4, goldenResults: [{ golden: 'a', found: true }, { golden: 'b', found: false }] } },
+        ]);
+        expect(control).toMatchObject({ id: 'c', hits: 0, total: 0, control: true, fpFindings: 3, checks: expect.stringContaining('control: nothing to find') });
+        expect(pr).toMatchObject({ id: 'p', hits: 1, total: 2, fpFindings: 4 });
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { setFiles, namedSets } = require('./recall-tests');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const os = require('os');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const fsx = require('fs');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const px = require('path');
+
+    it('takes every dataset of a set of its own, or of a private folder, and refuses an unknown name', () => {
+        const dir = fsx.mkdtempSync(px.join(os.tmpdir(), 'sets-'));
+        try {
+            fsx.mkdirSync(px.join(dir, 'deps'));
+            fsx.writeFileSync(px.join(dir, 'deps', 'a.json'), '{}');
+            fsx.mkdirSync(px.join(dir, 'empty'));
+            expect(namedSets(dir)).toEqual(['deps']);
+            expect(setFiles('deps', dir)).toEqual({ files: [px.join(dir, 'deps', 'a.json')], ids: null });
+            expect(setFiles(px.join(dir, 'deps'), dir)).toEqual({ files: [px.join(dir, 'deps', 'a.json')], ids: null });
+            expect(setFiles('controlled', dir).ids).toHaveLength(15);
+            expect(() => setFiles('empty', dir)).toThrow(/unknown set 'empty'/);
+            expect(() => setFiles('contolled', dir)).toThrow(/unknown set 'contolled'/);
+        } finally {
+            fsx.rmSync(dir, { recursive: true, force: true });
+        }
+    });
 });

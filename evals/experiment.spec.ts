@@ -1,5 +1,18 @@
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { compare, comparisonOf, decide, phaseVerdict, affectedSteps } = require('./experiment');
+
+// Every temporary folder a test makes, removed when the file is done.
+const made: string[] = [];
+const tmpDir = (prefix: string): string => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+    made.push(dir);
+    return dir;
+};
+afterAll(() => made.forEach((dir) => fs.rmSync(dir, { recursive: true, force: true })));
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { pairsOf, scoreCase } = require('./dedup-groups/run');
 
@@ -129,6 +142,153 @@ describe('evals/experiment.js main refuses what it cannot compare', () => {
     it('the decision phase without the regression phase', async () => {
         expect(await run(['--step=dedup', '--phases=decision'])).toMatchObject({ code: 2, said: expect.stringContaining('needs regression') });
     });
+
+    it('one model and several at once, or a list with a model outside tier0-models.js', async () => {
+        expect(await run(['--step=finder', '--model=deepseek-v4-flash@fireworks', '--models=deepseek-v4-flash@fireworks'])).toMatchObject({ code: 2, said: expect.stringContaining('not both') });
+        expect(await run(['--step=finder', '--models=deepseek-v4-flash@fireworks,gpt-unknown'])).toMatchObject({ code: 2, said: expect.stringContaining('gpt-unknown') });
+    });
+
+    it('a set the step does not have, or the regression phase\'s own', async () => {
+        expect(await run(['--step=dedup', '--set=dependencies'])).toMatchObject({ code: 2, said: expect.stringContaining('no sets of its own') });
+        expect(await run(['--step=finder', '--set=no-such-set'])).toMatchObject({ code: 2, said: expect.stringContaining("no set 'no-such-set'") });
+        expect(await run(['--step=finder', '--set=controlled'])).toMatchObject({ code: 2, said: expect.stringContaining("regression phase's own set") });
+    });
+
+    it('a team config an eval of the step does not take, or a file that is not one', async () => {
+        const file = path.join(tmpDir('team-'), 'config.json');
+        fs.writeFileSync(file, JSON.stringify({ reviewMode: 'heavy' }));
+        expect(await run(['--step=dedup', `--team-config=${file}`])).toMatchObject({ code: 2, said: expect.stringContaining('does not take a team config') });
+        expect(await run(['--step=finder', '--team-config=/nonexistent/config.json'])).toMatchObject({ code: 2, said: expect.stringContaining('not a readable JSON') });
+    });
+});
+
+describe('evals/experiment.js sets', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { setOf, STEP_EVALS } = require('./experiment');
+
+    it('runs "is it better?" on the extended set unless told otherwise', () => {
+        expect(setOf(STEP_EVALS.dedup, undefined)).toEqual({ id: 'full', args: ['--set=full'] });
+        expect(setOf(STEP_EVALS.finder, 'full')).toEqual({ id: 'full', args: ['--set=full'] });
+    });
+
+    it('records a private set by its content, never by where it sits', () => {
+        const dir = tmpDir('verify-prod-');
+        fs.writeFileSync(path.join(dir, 'a.json'), '{"x":1}');
+        const first = setOf(STEP_EVALS.finder, dir);
+        expect(first).toMatchObject({ id: `private:${path.basename(dir).toLowerCase()}`, args: [`--set=${dir}`], private: true });
+        fs.writeFileSync(path.join(dir, 'a.json'), '{"x":2}');
+        expect(setOf(STEP_EVALS.finder, dir).hash).not.toBe(first.hash);
+    });
+});
+
+describe('evals/experiment.js the finder', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { finderResult, deriveRuns, STEP_EVALS } = require('./experiment');
+    const raw = {
+        judge: 'gpt-x',
+        metrics: { recall_mean: 0.5 },
+        usage: { in: 10, out: 2, cacheRead: 0, cacheWrite: 0, calls: 1, ms: 5, callMs: [5] },
+        teamConfig: { hash: 'h', configs: { k: 1 } },
+        rows: [
+            { caseId: 'p', metadata: { goldens: 2, matched: 1, fpFindings: 3, goldenResults: [{ golden: 'a', found: true }, { golden: 'b', found: false }] } },
+            { caseId: 'c', metadata: { control: true, goldens: 0, matched: 0, fpFindings: 1, goldenResults: [] } },
+            { caseId: 'x', metadata: {} },
+        ],
+    };
+
+    it("reads run-recall's result as cases of known bugs shipped, with the judge and team config it ran", () => {
+        const r = finderResult(raw);
+        expect(r).toMatchObject({ metric: { value: 0.5 }, tokens: raw.usage, environment: { judge: 'gpt-x' }, teamConfig: raw.teamConfig });
+        expect(r.cases.map((c: Case) => [c.id, c.hits, c.total, Boolean(c.unmeasured)])).toEqual([['p', 1, 2, false], ['c', 0, 0, false], ['x', 0, 0, true]]);
+        expect(finderResult({ rows: [] })).toBeNull();
+    });
+
+    it('measures what it shipped right: known bugs over everything shipped, a control counting only noise', () => {
+        const [precision] = STEP_EVALS.finder.primary.derived;
+        const [run] = deriveRuns([finderResult(raw)], precision);
+        expect(run.cases.map((c: Case) => [c.id, c.hits, c.total])).toEqual([['p', 1, 4], ['c', 0, 1]]);
+    });
+
+    it('never runs on a PR check: every case is a full review', () => {
+        expect(STEP_EVALS.finder.smoke).toEqual([]);
+    });
+});
+
+describe('evals/experiment.js team config and several models', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { decideAcrossModels, measureEach } = require('./experiment');
+    const m = (model: string, regression: string, decision: string | null, ships: string, worse?: boolean) => ({ model, verdicts: decision ? { regression, decision } : { regression }, decision: { decision: ships, reason: '', ...(worse === undefined ? {} : { worse }) } });
+
+    it('compares one commit with the team config off and on: an unchanged step is the point', () => {
+        const same = { base: { step: 'x' }, candidate: { step: 'x' } };
+        const primary = { id: 'p', role: 'primary', comparison: { verdict: 'better', worse: [] }, sides: { base: { usage: {} }, candidate: { usage: {} } } };
+        const phases = { regression: { verdict: 'no regression', evals: [primary] }, decision: { verdict: 'better', evals: [primary] } };
+        expect(decide(phases, same).decision).toBe('no change in this step');
+        expect(decide(phases, same, { sameCode: true }).decision).toBe('ships');
+    });
+
+    it('ships across models only when none got worse and one is better', () => {
+        expect(decideAcrossModels([m('a', 'no regression', 'better', 'ships'), m('b', 'no regression', 'tie', 'does not ship')])).toMatchObject({ decision: 'ships', reason: 'better on a, no worse on b' });
+        expect(decideAcrossModels([m('a', 'no regression', 'better', 'ships'), m('b', 'regression', 'tie', 'does not ship')])).toMatchObject({ decision: 'does not ship', reason: 'worse on b' });
+        expect(decideAcrossModels([m('a', 'no regression', 'better', 'ships'), m('b', 'no regression', 'worse', 'does not ship')]).decision).toBe('does not ship');
+        // better, but a guard of the decision phase got worse
+        expect(decideAcrossModels([m('a', 'no regression', 'better', 'does not ship')]).decision).toBe('does not ship');
+        expect(decideAcrossModels([m('a', 'no regression', 'tie', 'does not ship'), m('b', 'no regression', 'tie', 'does not ship')])).toMatchObject({ decision: 'does not ship', reason: 'better on no model' });
+        expect(decideAcrossModels([m('a', 'no regression', null, 'no regression'), m('b', 'no regression', null, 'no regression')]).decision).toBe('no regression');
+        expect(decideAcrossModels([m('a', 'not measured', null, 'not measured'), m('b', 'regression', null, 'does not ship')]).decision).toBe('not measured');
+    });
+
+    it('vetoes a model whose guard got worse while its main eval tied', () => {
+        // decide() says so with `worse`; "tie and not cheaper" alone is not worse
+        expect(decideAcrossModels([m('a', 'no regression', 'tie', 'does not ship', true), m('b', 'no regression', 'better', 'ships', false)])).toMatchObject({ decision: 'does not ship', reason: 'worse on a' });
+        expect(decideAcrossModels([m('a', 'no regression', 'tie', 'does not ship', false), m('b', 'no regression', 'better', 'ships', false)]).decision).toBe('ships');
+    });
+
+    it('measures each model on its own: one that fails is not measured, the others still count', async () => {
+        const error = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            const done = await measureEach(['a', 'b', 'c'], async (model: string) => {
+                if (model === 'b') throw new Error('quota');
+                return m(model, 'no regression', 'better', 'ships', false);
+            }, { step: 'finder', nameOf: (model: string) => `run-${model}` });
+            expect(done.map((d: { model: string; decision: { decision: string } }) => [d.model, d.decision.decision])).toEqual([['a', 'ships'], ['b', 'not measured'], ['c', 'ships']]);
+            expect(decideAcrossModels(done)).toMatchObject({ decision: 'not measured', reason: 'not measured on b' });
+        } finally {
+            error.mockRestore();
+        }
+    });
+});
+
+describe('evals/experiment.js base-side reuse', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { reusableBase, keepBase, reviewEnv, BASE_REUSE_DAYS } = require('./experiment');
+
+    it('keys a run on the environment that changes what it measures, never on keys or URLs', () => {
+        expect(reviewEnv({ RECALL_CATEGORIES: 'bug', JUDGE_MODEL: 'j', JUDGE_REASONING_EFFORT: 'low', JUDGE_API_KEY: 'secret', JUDGE_BASE_URL: 'http://x', RECALL_DUMP: '1', PATH: '/bin' })).toEqual({
+            JUDGE_MODEL: 'j',
+            JUDGE_REASONING_EFFORT: 'low',
+            RECALL_CATEGORIES: 'bug',
+        });
+    });
+    const parts = { eval: 'finder-recall', args: ['--set=controlled'], model: 'm', round: 1, evals: 't', lock: 'l', set: null };
+    const rec = { savedAt: '2026-10-10T00:00:00.000Z', baseSha: 'b', traced: ['libs/a.ts', 'evals/x.js'], prodBlobs: { 'libs/a.ts': 'a1' }, result: { cases: [] } };
+    const at = (iso: string) => Date.parse(iso);
+
+    it('reuses a base run on the same code, eval, arguments, model, round, evals and lockfile', () => {
+        const dir = tmpDir('base-');
+        keepBase(dir, parts, rec);
+        expect(reusableBase(dir, parts, () => ({ 'libs/a.ts': 'a1' }), at('2026-10-12T00:00:00Z'))).toEqual(rec);
+        expect(reusableBase(dir, { ...parts, round: 2 }, () => ({ 'libs/a.ts': 'a1' }), at('2026-10-12T00:00:00Z'))).toBeNull();
+        expect(reusableBase(dir, { ...parts, lock: 'l2' }, () => ({ 'libs/a.ts': 'a1' }), at('2026-10-12T00:00:00Z'))).toBeNull();
+    });
+
+    it('runs it again when a production file it loaded changed, or after the reuse window', () => {
+        const dir = tmpDir('base-');
+        keepBase(dir, parts, rec);
+        expect(reusableBase(dir, parts, () => ({ 'libs/a.ts': 'a2' }), at('2026-10-12T00:00:00Z'))).toBeNull();
+        const late = at(rec.savedAt) + (BASE_REUSE_DAYS + 1) * 86_400_000;
+        expect(reusableBase(dir, parts, () => ({ 'libs/a.ts': 'a1' }), late)).toBeNull();
+    });
 });
 
 describe('evals/experiment.js comparisonOf', () => {
@@ -187,6 +347,25 @@ describe('evals/experiment.js measuredAlready', () => {
         expect(measuredAlready([{ ...record, evals_tree: null }], ask, same)).toBeNull();
     });
 
+    it('matches the set and team config it recorded; a record from before them measured the extended set with none', () => {
+        const recorded = { ...record, reuse: { model: 'm', runs: 2, evals_tree: 't1', set: 'dependencies', team_config_hash: 'h1' } };
+        expect(measuredAlready([recorded], { ...ask, set: 'dependencies', teamConfigHash: 'h1' }, same)).toBe(recorded);
+        expect(measuredAlready([recorded], { ...ask, set: 'dependencies', teamConfigHash: null }, same)).toBeNull();
+        expect(measuredAlready([recorded], ask, same)).toBeNull();
+        expect(measuredAlready([record], { ...ask, set: 'dependencies' }, same)).toBeNull();
+        expect(measuredAlready([record], { ...ask, teamConfigHash: 'h1' }, same)).toBeNull();
+    });
+
+    it('matches a private set by its content and the review environment it ran in', () => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { setIdentity, envHashOf } = require('./experiment');
+        const cases = setIdentity({ id: 'private:verify-prod', private: true, hash: 'c1' });
+        const recorded = { ...record, reuse: { model: 'm', runs: 2, evals_tree: 't1', set: cases, team_config_hash: null, env: envHashOf({ JUDGE_MODEL: 'j1' }) } };
+        expect(measuredAlready([recorded], { ...ask, set: cases, env: envHashOf({ JUDGE_MODEL: 'j1' }) }, same)).toBe(recorded);
+        expect(measuredAlready([recorded], { ...ask, set: setIdentity({ id: 'private:verify-prod', private: true, hash: 'c2' }), env: envHashOf({ JUDGE_MODEL: 'j1' }) }, same)).toBeNull();
+        expect(measuredAlready([recorded], { ...ask, set: cases, env: envHashOf({ JUDGE_MODEL: 'j2' }) }, same)).toBeNull();
+    });
+
     it('never reuses a phase that was not asked, not answered or not measured', () => {
         expect(measuredAlready([{ ...record, phases: ['regression'] }], { ...ask, phaseIds: ['regression', 'decision'] }, same)).toBeNull();
         expect(measuredAlready([{ ...record, phase_verdicts: { regression: 'not measured' } }], ask, same)).toBeNull();
@@ -242,5 +421,23 @@ describe('evals/shared/quality-client.js', () => {
         delete process.env.KODUS_QUALITY_URL;
         jest.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('offline'));
         expect(await client.recordedExperiments('dedup', 'feat/x')).toBeNull();
+    });
+});
+
+describe('evals/experiment.js run names', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { runName } = require('./experiment');
+
+    const at = new Date('2026-10-17T21:46:33.120Z');
+
+    it('names a run after its branch, candidate commit and start, so two runs never share rows', () => {
+        expect(runName('feat/dedup-v2', '896fa156c1234', at, 'a1b2c3')).toBe('feat-dedup-v2-896fa156c-20261017214633-a1b2c3');
+        expect(runName('feat/dedup-v2', '27c191cd7aaaa', at, 'a1b2c3')).not.toBe(runName('feat/dedup-v2', '896fa156c1234', at, 'a1b2c3'));
+    });
+
+    it('keeps two runs at the same commit apart, even when they start in the same second', () => {
+        const later = new Date(at.getTime() + 60_000);
+        expect(runName('feat/dedup-v2', '896fa156c1234', later)).not.toBe(runName('feat/dedup-v2', '896fa156c1234', at));
+        expect(runName('feat/dedup-v2', '896fa156c1234', at)).not.toBe(runName('feat/dedup-v2', '896fa156c1234', at));
     });
 });
