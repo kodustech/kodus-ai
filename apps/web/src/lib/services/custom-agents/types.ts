@@ -108,6 +108,7 @@ export type KnowledgeCandidate = {
 };
 
 export type KnowledgeTargetBudget = {
+    /** `main-review` or `agent:<id>` (see `knowledgeTargetKey`). */
     target: string;
     skills: number;
     docs: number;

@@ -50,6 +50,7 @@ export const NewAgentDialog = ({
         repositoryId,
         directoryId,
         agents,
+        linkableAgents,
         knowledge,
         otherFieldsDirty,
         save,
@@ -102,10 +103,13 @@ export const NewAgentDialog = ({
         }
     };
 
+    // Ids and names are taken from every agent a review here runs: at a
+    // directory an own agent with an inherited id replaces that agent, which
+    // only "Override at this directory" means to do.
     const fromTemplate = (id: CustomAgentTemplateId) =>
-        create(createAgentFromTemplate(id, agents));
+        create(createAgentFromTemplate(id, linkableAgents));
     const fromSkill = (candidate: KnowledgeCandidate) => {
-        const { agent, link } = agentFromSkill(candidate, agents);
+        const { agent, link } = agentFromSkill(candidate, linkableAgents);
         return create(agent, link);
     };
 

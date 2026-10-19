@@ -354,6 +354,56 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — custom agents', () => {
         });
     });
 
+    describe('agent names at a directory', () => {
+        it("refuses a directory agent named like a repository agent it runs next to", async () => {
+            // Both run at the directory; `@kody -v ledger-reviewer` and the
+            // run names could no longer tell them apart.
+            const { save, createOrUpdateParametersUseCase } = buildUseCase(
+                { customAgents: [ledgerAgent([])] },
+                { directoryConfigs: {} },
+            );
+
+            const attempt = save(
+                {
+                    customAgents: [
+                        {
+                            ...ledgerAgent([]),
+                            id: 'zone-agent',
+                            name: 'Ledger Reviewer',
+                        },
+                    ],
+                    knowledge: [],
+                },
+                { directoryId: 'dir-1' },
+            );
+
+            await expect(attempt).rejects.toBeInstanceOf(BadRequestException);
+            await expect(attempt).rejects.toThrow(
+                'share the command name "ledger-reviewer"',
+            );
+            expect(
+                createOrUpdateParametersUseCase.execute,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('lets a directory agent override a repository agent with its id and name', async () => {
+            const configs = await buildUseCase(
+                { customAgents: [ledgerAgent([])] },
+                { directoryConfigs: {} },
+            ).save(
+                {
+                    customAgents: [{ ...ledgerAgent([]), enabled: false }],
+                    knowledge: [],
+                },
+                { directoryId: 'dir-1' },
+            );
+
+            expect(configs.customAgents).toEqual([
+                expect.objectContaining({ id: 'ledger-agent', enabled: false }),
+            ]);
+        });
+    });
+
     describe('a save made from a stale copy of the lists', () => {
         const loadedFrom = (repositoryConfigs: Record<string, unknown>) =>
             customAgentsRevisionsAtLevel(

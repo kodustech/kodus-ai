@@ -1,6 +1,7 @@
 /** @jest-environment jsdom */
 import "@testing-library/jest-dom";
 
+import { toast } from "@components/ui/toaster/use-toast";
 import type { CustomAgent, KnowledgeItem } from "@services/custom-agents/types";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
@@ -33,6 +34,7 @@ const formAt = (overrides = {}) => ({
     repositoryId: "repo-1",
     directoryId: undefined as string | undefined,
     agents: [agent],
+    linkableAgents: [agent],
     knowledge: [] as KnowledgeItem[],
     reviewKnowledge: [] as KnowledgeItem[],
     inheritedAgents: [] as CustomAgent[],
@@ -46,6 +48,7 @@ const formAt = (overrides = {}) => ({
     ...overrides,
 });
 let mockForm = formAt();
+let mockResolve: unknown;
 
 jest.mock("next/navigation", () => ({
     useParams: () => ({ agentId: "ledger" }),
@@ -81,7 +84,7 @@ jest.mock("@services/custom-agents/hooks", () => ({
             ],
         },
     }),
-    useResolveCustomAgent: () => ({ isLoading: false, data: undefined }),
+    useResolveCustomAgent: () => ({ isLoading: false, data: mockResolve }),
     useSettled: (value: unknown) => value,
     useTryCustomAgent: () => ({
         mutate: jest.fn(),
@@ -263,6 +266,22 @@ describe("Custom agent page", () => {
             expect(setKnowledge).toHaveBeenCalledWith([]);
         });
 
+        it("refuses a name a repository agent it runs next to answers to", async () => {
+            const drip = { ...agent, id: "drip", name: "Drip reviewer" };
+            const ledger = { ...agent, name: "Drip Reviewer" };
+            mockForm = formAt({
+                directoryId: "dir-1",
+                agents: [ledger],
+                linkableAgents: [drip, ledger],
+                inheritedAgents: [drip],
+            });
+            await renderPage();
+
+            expect(
+                screen.getByText(/already answers to @kody -v drip-reviewer/),
+            ).toBeInTheDocument();
+        });
+
         it("overrides a repository agent with a copy in the directory's list", async () => {
             const drip = { ...agent, id: "drip", name: "Drip reviewer" };
             mockForm = formAt({
@@ -309,5 +328,57 @@ describe("Custom agent page", () => {
                 knowledge: [zoneDoc],
             });
         });
+    });
+});
+
+describe("Custom agent page over its docs budget", () => {
+    beforeEach(() => {
+        mockForm = formAt({ isDirty: true });
+        mockResolve = {
+            repository: { id: "repo-1", name: "repo", branch: "main" },
+            agentIssues: [],
+            astGrep: { ruleCount: 0, ruleIds: [], errors: [] },
+            knowledge: {
+                status: "ok",
+                items: [],
+                candidates: [],
+                budgets: [
+                    {
+                        target: "agent:ledger",
+                        skills: 0,
+                        docs: 1,
+                        docTokens: 23900,
+                        over: ["docTokens"],
+                    },
+                ],
+            },
+            mcp: { status: "ok", integrations: [] },
+        };
+        save.mockReset();
+        save.mockResolvedValue({});
+        (toast as jest.Mock).mockClear();
+    });
+    afterEach(() => {
+        mockForm = formAt();
+        mockResolve = undefined;
+    });
+
+    it("says so on the agent and when it is saved", async () => {
+        await renderPage();
+        expect(
+            screen.getByText(/Over the limit for this agent \(doc tokens\)/),
+        ).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole("button", { name: /save/i }));
+        await act(async () => {});
+
+        expect(toast).toHaveBeenCalledWith(
+            expect.objectContaining({
+                variant: "warning",
+                description: expect.stringMatching(
+                    /^Agent saved\. Ledger reviewer is over its limit \(doc tokens\)/,
+                ),
+            }),
+        );
     });
 });

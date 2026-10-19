@@ -96,6 +96,8 @@ jest.mock("@services/organizationParameters/fetch", () => ({
 
 type Node = Record<string, unknown>;
 
+let sectionForm: ReturnType<typeof useForm<any>>;
+
 // Like the settings layout: it owns the form and computes its leave guard from
 // the root `formState`, so it only sees what re-renders the form's root.
 const Form = ({
@@ -118,8 +120,10 @@ const Form = ({
                 value: knowledge,
                 level: "repository",
             },
+            runOnDraft: { value: false, level: "repository" },
         },
     });
+    sectionForm = form;
     const { dirtyFields } = form.formState;
     return (
         <FormProvider {...form}>
@@ -428,6 +432,31 @@ describe("CustomAgentsList — at a directory", () => {
         );
     });
 
+    it("gives a new agent an id and a name no repository agent it runs next to has", async () => {
+        // An own agent with the id of an inherited one replaces it here, so
+        // a new agent that took "agent" made the repository's vanish.
+        const migrations = { ...agent, id: "agent", name: "New agent" };
+        render(
+            <QueryClientProvider client={new QueryClient()}>
+                <Form agentsNode={{ value: [migrations], level: "repository" }}>
+                    <CustomAgentsSection canEdit />
+                </Form>
+            </QueryClientProvider>,
+        );
+        await flush();
+
+        fireEvent.click(screen.getByRole("button", { name: "New agent" }));
+        fireEvent.click(await screen.findByRole("button", { name: /^Blank/ }));
+        await flush();
+
+        const [created] = savedAgents();
+        expect(created.id).toBe("agent-2");
+        expect(created.name).toBe("New agent 2");
+        expect(push).toHaveBeenLastCalledWith(
+            "/settings/code-review/repo-1/agents/agent-2?directoryId=dir-1",
+        );
+    });
+
     it("lists the repository's agents when the directory has none of its own", async () => {
         renderList({ value: [agent], level: "repository" });
         await flush();
@@ -545,12 +574,60 @@ const FormProbe = () => {
                 }>
                 edit
             </button>
+            <button
+                onClick={() =>
+                    updateAgent("ledger", (current) => ({
+                        ...current,
+                        name: "Ledger reviewer",
+                    }))
+                }>
+                rename back
+            </button>
             <button onClick={reset}>reset</button>
         </div>
     );
 };
 
 describe("useCustomAgentsForm", () => {
+    // A value written into the form without marking it dirty (a field that
+    // seeds itself on mount) differs from the saved config; the first edit
+    // of an agent makes react-hook-form recompute every dirty field, and
+    // from then on the layout guard counts it.
+    const renderWithSeededField = async () => {
+        render(
+            <QueryClientProvider client={new QueryClient()}>
+                <Form>
+                    <FormProbe />
+                </Form>
+            </QueryClientProvider>,
+        );
+        await act(async () => {
+            sectionForm.setValue("runOnDraft.value", true);
+        });
+        fireEvent.click(screen.getByText("edit"));
+        await flush();
+    };
+
+    it("is unsaved exactly when the layout guard keeps the user on the page", async () => {
+        await renderWithSeededField();
+        fireEvent.click(screen.getByText("rename back"));
+        await flush();
+
+        expect(screen.getByTestId("dirty")).toHaveTextContent(
+            screen.getByTestId("layout-blocks").textContent!,
+        );
+    });
+
+    it("reset lets the user leave again", async () => {
+        await renderWithSeededField();
+        fireEvent.click(screen.getByText("reset"));
+        await flush();
+
+        expect(screen.getByTestId("name")).toHaveTextContent("Ledger reviewer");
+        expect(screen.getByTestId("dirty")).toHaveTextContent("false");
+        expect(screen.getByTestId("layout-blocks")).toHaveTextContent("false");
+    });
+
     it("reset brings back the saved agents and clears the unsaved state", async () => {
         render(
             <QueryClientProvider client={new QueryClient()}>

@@ -9,6 +9,7 @@ import type { CustomAgent, KnowledgeItem } from "@services/custom-agents/types";
 import { useFormContext, useFormState, useWatch } from "react-hook-form";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 
+import { hasDirtyFieldsOutsidePromptOverrides } from "../_utils/layout-dirty-state";
 import { useCodeReviewSettingsMutation } from "../../_hooks/use-code-review-settings-mutation";
 import { FormattedConfigLevel, type CodeReviewFormType } from "../../_types";
 import {
@@ -73,6 +74,17 @@ const addOrReplace = <T>(
         (mine) => !inherited.some((entry) => keyOf(entry) === keyOf(mine)),
     ),
 ];
+
+/**
+ * An agent's empty `include` or `exclude` reads as the list left out: both
+ * mean every file, and removing the last glob leaves the empty one.
+ */
+const withoutEmptyGlobs = (key: string, value: unknown) =>
+    (key === "include" || key === "exclude") &&
+    Array.isArray(value) &&
+    value.length === 0
+        ? undefined
+        : value;
 
 /**
  * Said when the agents list saved at a repository replaces the global one:
@@ -147,8 +159,13 @@ export const useCustomAgentsForm = () => {
         (item) => item.path,
     );
     const dirtyKeys = Object.keys(dirtyFields ?? {});
-    const isDirty = dirtyKeys.some(
-        (key) => key === "customAgents" || key === "knowledge",
+    // What the settings layout's leave guard counts, so the pages that save
+    // these lists show Save and Reset whenever leaving is blocked. Besides
+    // the lists that is a value seeded into the form without being marked
+    // dirty: react-hook-form flags it once any edit recomputes dirty fields.
+    const isDirty = hasDirtyFieldsOutsidePromptOverrides(
+        (dirtyFields ?? {}) as Record<string, unknown>,
+        ["v2PromptOverrides"],
     );
     const otherFieldsDirty = dirtyKeys.some(
         (key) => key !== "customAgents" && key !== "knowledge",
@@ -165,7 +182,8 @@ export const useCustomAgentsForm = () => {
                 form.control._defaultValues as Record<string, unknown>
             )?.[field] as FieldNode<unknown[]>;
             const same = (a: unknown, b: unknown) =>
-                JSON.stringify(a ?? []) === JSON.stringify(b ?? []);
+                JSON.stringify(a ?? [], withoutEmptyGlobs) ===
+                JSON.stringify(b ?? [], withoutEmptyGlobs);
             form.setValue(
                 field as never,
                 (saved && same(ownList(saved, level), next)
@@ -239,20 +257,21 @@ export const useCustomAgentsForm = () => {
     // Not `resetField`: it acts only on registered fields, and these two are
     // written with `setValue`, so the edit stayed; and a field-level reset
     // does not re-render the settings layout, whose leave guard then kept the
-    // user on the page. A form reset that puts back only these two saved
-    // values, keeps every other field as it is and recomputes dirtiness
-    // against the saved config reaches every subscriber.
+    // user on the page. A form reset that puts back every saved value the
+    // leave guard counts (the prompt overrides, which it leaves out, stay as
+    // their editors wrote them) and recomputes dirtiness against the saved
+    // config reaches every subscriber.
     const reset = useCallback(() => {
         // The control holds the live defaults: `formState.defaultValues` is
         // the last render's snapshot and still held the page-load agents
         // after a save, so Reset brought back the version before it.
         const saved = (form.control._defaultValues ??
             {}) as Partial<CodeReviewFormType>;
+        const prompts = form.getValues("v2PromptOverrides");
         form.reset(
             {
-                ...form.getValues(),
-                customAgents: saved.customAgents,
-                knowledge: saved.knowledge,
+                ...saved,
+                ...(prompts && { v2PromptOverrides: prompts }),
             } as CodeReviewFormType,
             {
                 keepDefaultValues: true,
