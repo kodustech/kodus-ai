@@ -8,9 +8,15 @@ import {
     CreateSandboxParams,
     ISandboxProvider,
     SandboxInstance,
+    SandboxRunOptions,
     SandboxRunResult,
     toBranchName,
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
+import {
+    buildDropReviewUserPrivilegesScript,
+    confirmsPrivilegesDropped,
+    DROP_PRIVILEGES_TIMEOUT_MS,
+} from '@libs/sandbox/infrastructure/providers/review-user-privileges';
 import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
 import {
@@ -525,6 +531,75 @@ export async function syncE2BSandboxRepo(
     });
 }
 
+/**
+ * `SandboxInstance.run` on E2B, shared by the creator and the reconnect path.
+ * `asRoot` uses E2B's own per-command user, so a privileged step never goes
+ * through the review user (who has no sudo once the sandbox is set up).
+ */
+export async function runE2BCommand(
+    sandbox: Sandbox,
+    command: string,
+    opts?: SandboxRunOptions,
+): Promise<SandboxRunResult> {
+    const result = await sandbox.commands.run(command, {
+        timeoutMs: opts?.timeoutMs ?? TIMEOUTS.COMMAND_LONG_MS,
+        ...(opts?.envs && { envs: opts.envs }),
+        ...(opts?.asRoot && { user: 'root' }),
+    });
+    return {
+        stdout: result.stdout || '',
+        stderr: result.stderr || '',
+        exitCode: result.exitCode,
+    };
+}
+
+/**
+ * Remove every root path from the review user (see review-user-privileges).
+ * Never fails the sandbox: a sandbox where the drop did not succeed still
+ * serves reviews, but is marked so that nothing holding credentials runs in
+ * it.
+ */
+export async function dropE2BReviewUserPrivileges(
+    sandbox: Sandbox,
+    logger?: SimpleLogger,
+    logContext = 'dropE2BReviewUserPrivileges',
+): Promise<boolean> {
+    let run: { exitCode: number; stdout?: string; stderr?: string };
+    try {
+        run = await runE2BCommand(
+            sandbox,
+            buildDropReviewUserPrivilegesScript(),
+            { timeoutMs: DROP_PRIVILEGES_TIMEOUT_MS, asRoot: true },
+        );
+    } catch (err) {
+        run =
+            err instanceof CommandExitError
+                ? {
+                      exitCode: err.exitCode,
+                      stdout: err.stdout,
+                      stderr: err.stderr,
+                  }
+                : {
+                      exitCode: -1,
+                      stderr: err instanceof Error ? err.message : String(err),
+                  };
+    }
+    const dropped = confirmsPrivilegesDropped(run);
+    if (!dropped) {
+        logger?.warn?.({
+            message:
+                'Sandbox review user still has a root path; credentialed tools will not run in this sandbox',
+            context: logContext,
+            metadata: {
+                sandboxId: sandbox.sandboxId,
+                exitCode: run.exitCode,
+                stderr: (run.stderr ?? '').slice(-500),
+            },
+        });
+    }
+    return dropped;
+}
+
 @Injectable()
 export class E2BSandboxService implements ISandboxProvider {
     private readonly logger = createLogger(E2BSandboxService.name);
@@ -590,6 +665,11 @@ export class E2BSandboxService implements ISandboxProvider {
             // Configure Shadowsocks proxy for IP tunneling (clients with restricted git access)
             await this.setupProxy(sandbox);
 
+            // Before any repository content arrives: from here on nothing
+            // running as the review user can become root.
+            const privilegesDropped =
+                await this.dropReviewUserPrivileges(sandbox);
+
             await this.cloneRepository(sandbox, params);
 
             // CLI mode: when the user's branch isn't pushed (or there are
@@ -654,23 +734,9 @@ export class E2BSandboxService implements ISandboxProvider {
                 sandboxId: sandbox.sandboxId,
                 baseBranch: resolvedBaseBranch,
                 repoDir: REPO_DIR,
-                run: async (
-                    command: string,
-                    opts?: {
-                        timeoutMs?: number;
-                        envs?: Record<string, string>;
-                    },
-                ): Promise<SandboxRunResult> => {
-                    const result = await sandbox.commands.run(command, {
-                        timeoutMs: opts?.timeoutMs ?? TIMEOUTS.COMMAND_LONG_MS,
-                        ...(opts?.envs && { envs: opts.envs }),
-                    });
-                    return {
-                        stdout: result.stdout || '',
-                        stderr: result.stderr || '',
-                        exitCode: result.exitCode,
-                    };
-                },
+                privilegesDropped,
+                run: (command: string, opts?: SandboxRunOptions) =>
+                    runE2BCommand(sandbox, command, opts),
                 readFile: async (
                     path: string,
                     opts?: { timeoutMs?: number },
@@ -749,6 +815,14 @@ export class E2BSandboxService implements ISandboxProvider {
                 stderr: installResult.stderr?.slice(0, 300),
             },
         });
+    }
+
+    private dropReviewUserPrivileges(sandbox: Sandbox): Promise<boolean> {
+        return dropE2BReviewUserPrivileges(
+            sandbox,
+            this.logger,
+            E2BSandboxService.name,
+        );
     }
 
     private async cloneRepository(
@@ -1039,6 +1113,11 @@ export class E2BSandboxService implements ISandboxProvider {
                     apiKey,
                     metadata,
                     lifecycle: { onTimeout: 'pause', autoResume: true }, // SBX-03: pause not kill; autoResume must be explicit
+                    // envd (which runs commands as any user, root included)
+                    // answers only with the access token the SDK holds, so
+                    // a process inside the sandbox cannot use it. SDK
+                    // default, pinned because the privilege drop relies on it.
+                    secure: true,
                 });
                 return { sandbox, usedTemplate: true };
             } catch (error) {
@@ -1056,6 +1135,7 @@ export class E2BSandboxService implements ISandboxProvider {
             apiKey,
             metadata,
             lifecycle: { onTimeout: 'pause', autoResume: true }, // SBX-03: pause not kill; autoResume must be explicit
+            secure: true, // see the templated create above
         });
         return { sandbox, usedTemplate: false };
     }

@@ -10,13 +10,17 @@
  *   token (`scan` does not allow `scanner`);
  * - each CLI runs as its own unprivileged user, from the absolute path its
  *   pinned install produced, under a timeout;
- * - secrets travel only in the process env (named here, never valued).
+ * - secrets travel only in the process env (named here, never valued);
+ * - every script here runs as root through the sandbox's root channel
+ *   (`run(..., { asRoot: true })`), with a system-only PATH: the review user
+ *   has no sudo, and no step of a CLI's life passes through that user.
  */
 import { createHash } from 'node:crypto';
 
 import { CliToolConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { checkCliInstallCommand } from '@libs/core/infrastructure/config/types/general/cli-install';
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
+import { ROOT_SAFE_PATH_LINE } from '@libs/sandbox/infrastructure/providers/review-user-privileges';
 
 export const CLI_OUTPUT_MAX_CHARS = 20_000;
 export const CLI_DEFAULT_TIMEOUT_SEC = 120;
@@ -278,17 +282,18 @@ export function buildInstallScript(params: {
     const candidates = cliBinaryCandidates(h).map(shSingleQuote).join(' ');
     return inSubshell([
         'set -eu',
+        ROOT_SAFE_PATH_LINE,
         // The review user's home holds the proxy config and the checkout: the
         // CLI user may traverse to the repo, never list or read the rest.
-        'sudo -n chmod 711 /home/user 2>/dev/null || true',
-        'sudo -n chmod 600 /home/user/config.json 2>/dev/null || true',
-        `id -u ${shSingleQuote(identity.user)} >/dev/null 2>&1 || sudo -n useradd --create-home --home-dir ${shSingleQuote(h)} --shell /usr/sbin/nologin ${shSingleQuote(identity.user)}`,
-        `sudo -n chmod 700 ${shSingleQuote(h)}`,
+        'chmod 711 /home/user 2>/dev/null || true',
+        'chmod 600 /home/user/config.json 2>/dev/null || true',
+        `id -u ${shSingleQuote(identity.user)} >/dev/null 2>&1 || useradd --create-home --home-dir ${shSingleQuote(h)} --shell /usr/sbin/nologin ${shSingleQuote(identity.user)}`,
+        `chmod 700 ${shSingleQuote(h)}`,
         `sudo -n -u ${shSingleQuote(identity.user)} -- /usr/bin/env -C ${shSingleQuote(h)} -i ${shellJoin(env)} /usr/bin/timeout -k 5 ${CLI_INSTALL_TIMEOUT_SEC} ${shellJoin(argv)}`,
         // Nothing the install started (a lifecycle script's background
         // process) may live on as the CLI user into the calls that carry
         // its secrets.
-        `sudo -n pkill -KILL -u ${shSingleQuote(identity.user)} >/dev/null 2>&1 || true`,
+        `pkill -KILL -u ${shSingleQuote(identity.user)} >/dev/null 2>&1 || true`,
         `for d in ${candidates}; do`,
         `  if sudo -n -u ${shSingleQuote(identity.user)} test -x "$d"/${shSingleQuote(binary)}; then echo "${CLI_BINARY_MARKER}$d/"${shSingleQuote(binary)}; exit 0; fi`,
         'done',
@@ -359,9 +364,10 @@ export function buildNetworkScript(params: {
     const table = 'inet kodus_cli';
     const lines = [
         'set -eu',
-        'NFT="sudo -n nft"',
+        ROOT_SAFE_PATH_LINE,
+        'NFT="nft"',
         'IPS=""',
-        `sudo -n sed -i '/# ${tag}$/d' /etc/hosts`,
+        `sed -i '/# ${tag}$/d' /etc/hosts`,
     ];
     for (const domain of domains) {
         const d = shSingleQuote(domain);
@@ -371,7 +377,7 @@ export function buildNetworkScript(params: {
             // A domain that resolves inside the sandbox's network (metadata
             // endpoint, loopback services, private hosts) is refused whole.
             `for ip in $R; do echo "$ip" | awk ${shSingleQuote(PUBLIC_IPV4_AWK)} || { echo ${shSingleQuote(`${domain} resolves to a non-public address`)} "$ip" >&2; exit 4; }; done`,
-            `for ip in $R; do echo "$ip ${domain} # ${tag}" | sudo -n tee -a /etc/hosts >/dev/null; IPS="$IPS $ip"; done`,
+            `for ip in $R; do echo "$ip ${domain} # ${tag}" | tee -a /etc/hosts >/dev/null; IPS="$IPS $ip"; done`,
         );
     }
     lines.push(
@@ -393,15 +399,13 @@ export function buildNetworkScript(params: {
 }
 
 /**
- * The single line that runs one CLI call. Secrets are named in
- * `--preserve-env` and arrive through the sandbox process env, so their
- * values are never part of this string. The shell the sandbox starts holds
- * that env and runs as the review user, whose other commands could read a
- * process's env under /proc: it `exec`s into sudo at once, so the env lives
- * only in root's shell and the CLI user's processes from then on. After the
- * call, timed out or not, every process the CLI user still owns is killed,
- * so nothing it started (a daemon, a forked child) outlives the call; the
- * call's exit code is kept.
+ * The command that runs one CLI call, as root through the sandbox's root
+ * channel. Secrets are named in `--preserve-env` and arrive through that
+ * root process's env, so their values are never part of this string, and no
+ * process of the review user ever holds them (only root can read a root
+ * process's env). After the call, timed out or not, every process the CLI
+ * user still owns is killed, so nothing it started (a daemon, a forked
+ * child) outlives the call; the call's exit code is kept.
  */
 export function buildRunCommand(params: {
     identity: CliSandboxIdentity;
@@ -415,8 +419,12 @@ export function buildRunCommand(params: {
         ? ` --preserve-env=${secretEnvNames.join(',')}`
         : '';
     const user = shSingleQuote(identity.user);
-    const asRoot = `sudo -n -u ${user} -H${preserve} -- /usr/bin/env -C ${shSingleQuote(CLI_REPO_DIR)} /usr/bin/timeout -k 5 ${timeoutSec} ${shellJoin([binaryPath, ...args])}; rc=$?; pkill -KILL -u ${user} >/dev/null 2>&1; exit $rc`;
-    return `exec sudo -n${preserve} -- /bin/sh -c ${shSingleQuote(asRoot)}`;
+    return [
+        ROOT_SAFE_PATH_LINE,
+        `sudo -n -u ${user} -H${preserve} -- /usr/bin/env -C ${shSingleQuote(CLI_REPO_DIR)} /usr/bin/timeout -k 5 ${timeoutSec} ${shellJoin([binaryPath, ...args])}; rc=$?`,
+        `pkill -KILL -u ${user} >/dev/null 2>&1`,
+        'exit $rc',
+    ].join('\n');
 }
 
 export function resolveCliTimeoutSec(cli: Pick<CliToolConfig, 'timeoutSec'>) {

@@ -114,7 +114,9 @@ export async function executeRunCli(
         // As argv arrays: shown as one string, models sent it as one argument.
         return `Error: these arguments are not allowed for ${cli.name}. args must start with one of these argument lists: ${cli.allowedPrefixes
             .map((p) => JSON.stringify(prefixTokens(p, cli)))
-            .join(', ')} — each element is one argument; a "dir/" element accepts any path under it.`;
+            .join(
+                ', ',
+            )} — each element is one argument; a "dir/" element accepts any path under it.`;
     }
 
     // Decrypted here, for this one process, and never kept. A CLI that runs
@@ -157,8 +159,11 @@ export async function executeRunCli(
 
     let run: SandboxRunResult;
     try {
+        // As root: the review user has no sudo, and the process holding the
+        // secrets must not be one the review user owns.
         run = await sandbox.run(command, {
             timeoutMs: (timeoutSec + 15) * 1000,
+            asRoot: true,
             ...(secretValues.length ? { envs } : {}),
         });
     } catch (error) {

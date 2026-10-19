@@ -16,6 +16,7 @@ import {
     CLI_BINARY_MARKER,
     cliSandboxIdentity,
 } from './cli-command';
+import { ROOT_SAFE_PATH_LINE } from '@libs/sandbox/infrastructure/providers/review-user-privileges';
 
 /**
  * Runs the generated sandbox scripts under bash with the system tools they
@@ -66,8 +67,9 @@ const withStubs = (
     }
 };
 
+// The scripts pin a system-only PATH for root; the stubs live elsewhere.
 const runBash = (dir: string, script: string) =>
-    spawnSync('bash', ['-c', script], {
+    spawnSync('bash', ['-c', script.split(ROOT_SAFE_PATH_LINE).join(':')], {
         env: { PATH: `${dir}:/usr/bin:/bin` } as unknown as NodeJS.ProcessEnv,
         encoding: 'utf8',
     });
@@ -236,28 +238,58 @@ describe('runCli command with secrets', () => {
         timeoutSec: 5,
     });
 
-    // The sandbox starts the command in a shell of the review user with the
-    // secret in its env; that shell must be replaced by sudo, not wait for
-    // the CLI while other review-user commands could read its /proc env.
-    it('replaces the review user shell holding the secret with sudo', () => {
-        withStubs(
-            {
-                sh: 'echo "sh-parent $PPID"; exec /bin/sh "$@"',
-                env: 'echo "cli-token $LINTKIT_TOKEN"',
-            },
-            (dir) => {
-                const result = runBash(
-                    dir,
-                    `export LINTKIT_TOKEN=s3cret; echo "outer $$"; ${command}`,
+    it('hands the secret to the CLI by name only', () => {
+        withStubs({ env: 'echo "cli-token $LINTKIT_TOKEN"' }, (dir) => {
+            const result = runBash(
+                dir,
+                `export LINTKIT_TOKEN=s3cret; ${command}`,
+            );
+            expect(result.stdout).toContain('cli-token s3cret');
+            expect(result.status).toBe(0);
+            expect(command).not.toContain('s3cret');
+            expect(command).toContain('--preserve-env=LINTKIT_TOKEN');
+        });
+    });
+});
+
+/**
+ * The review user has no sudo once the sandbox is set up: every script here
+ * runs as root through the sandbox's root channel. sudo only ever appears to
+ * step DOWN to a CLI user, and every script pins root's PATH.
+ */
+describe('scripts are written for the root channel', () => {
+    const identity = cliSandboxIdentity('agent-1', 'lintkit');
+    const scripts = {
+        install: buildInstallScript({
+            identity,
+            argv: ['npm', 'i', '-g', 'lintkit@2.4.1'],
+            binary: 'lintkit',
+        }),
+        fence: buildNetworkScript({ identity, domains: ['api.lintkit.example'] }),
+        run: buildRunCommand({
+            identity,
+            binaryPath: `${identity.home}/.local/bin/lintkit`,
+            args: ['check'],
+            secretEnvNames: ['LINTKIT_TOKEN'],
+            timeoutSec: 5,
+        }),
+    };
+
+    it.each(Object.entries(scripts))(
+        '%s never elevates through sudo',
+        (_name, script) => {
+            const sudoCalls = script.match(/sudo [^\n]*/g) ?? [];
+            for (const call of sudoCalls) {
+                expect(call).toMatch(
+                    new RegExp(`^sudo -n -u '${identity.user}' `),
                 );
-                const outer = /outer (\d+)/.exec(result.stdout)?.[1];
-                const parent = /sh-parent (\d+)/.exec(result.stdout)?.[1];
-                expect(outer).toBeDefined();
-                expect(parent).toBe(outer);
-                expect(result.stdout).toContain('cli-token s3cret');
-                expect(result.status).toBe(0);
-            },
-        );
+            }
+            expect(script).not.toMatch(/exec sudo/);
+        },
+    );
+
+    it.each(Object.entries(scripts))('%s pins root PATH', (_name, script) => {
+        expect(script).toContain(ROOT_SAFE_PATH_LINE);
     });
 });
 

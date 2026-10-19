@@ -2,7 +2,11 @@ import type {
     CliToolConfig,
     CustomAgentConfig,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
-import type { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
+import type {
+    SandboxInstance,
+    SandboxRunOptions,
+} from '@libs/sandbox/domain/contracts/sandbox.provider';
+import { PRIVILEGES_DROPPED_MARKER } from '@libs/sandbox/infrastructure/providers/review-user-privileges';
 
 const mockWarn = jest.fn();
 jest.mock('@libs/core/log/logger', () => ({
@@ -47,6 +51,8 @@ const agent = (overrides: Partial<CustomAgentConfig> = {}): CustomAgentConfig =>
         ...overrides,
     }) as CustomAgentConfig;
 
+const isPrivilegeCheck = (s: string) => s.includes('gpasswd');
+
 const sandbox = (
     type: SandboxInstance['type'],
     handler?: (script: string) => {
@@ -54,8 +60,22 @@ const sandbox = (
         stderr?: string;
         exitCode: number;
     },
+    lockdown: { atCreation?: boolean; now?: boolean } = {},
 ) => {
-    const run = jest.fn(async (script: string) => {
+    const run = jest.fn(async (script: string, _opts?: SandboxRunOptions) => {
+        if (isPrivilegeCheck(script)) {
+            return lockdown.now === false
+                ? {
+                      stdout: '',
+                      stderr: 'review user can still use sudo',
+                      exitCode: 5,
+                  }
+                : {
+                      stdout: `${PRIVILEGES_DROPPED_MARKER}\n`,
+                      stderr: '',
+                      exitCode: 0,
+                  };
+        }
         if (handler) {
             const r = handler(script);
             return {
@@ -74,7 +94,11 @@ const sandbox = (
             exitCode: 0,
         };
     });
-    return { type, run } as unknown as SandboxInstance & { run: typeof run };
+    return {
+        type,
+        run,
+        privilegesDropped: lockdown.atCreation ?? true,
+    } as unknown as SandboxInstance & { run: typeof run };
 };
 
 const isInstall = (s: string) => s.includes('useradd');
@@ -227,6 +251,46 @@ describe('provisionCustomAgentClis', () => {
         expect(scripts.findIndex(isInstall)).toBeLessThan(
             scripts.findIndex(isFence),
         );
+    });
+
+    it('runs every sandbox step as root, the lockdown check first', async () => {
+        const sb = sandbox('e2b');
+        await provisionCustomAgentClis({
+            sandbox: sb,
+            agents: [agent()],
+            changedFiles: ['src/ledger/post.ts'],
+        });
+        const calls = sb.run.mock.calls;
+        expect(calls.length).toBeGreaterThanOrEqual(3);
+        expect(isPrivilegeCheck(calls[0][0])).toBe(true);
+        for (const [, opts] of calls) {
+            expect(opts).toEqual(expect.objectContaining({ asRoot: true }));
+        }
+    });
+
+    it('installs nothing in a sandbox not locked down at creation', async () => {
+        const sb = sandbox('e2b', undefined, { atCreation: false });
+        const result = await provisionCustomAgentClis({
+            sandbox: sb,
+            agents: [agent()],
+            changedFiles: ['src/ledger/post.ts'],
+        });
+        expect(result.byAgentId).toEqual({});
+        expect(result.warnings[0].detail).toContain('could not be locked down');
+        expect(sb.run).not.toHaveBeenCalled();
+    });
+
+    it('installs nothing when the review user can become root again', async () => {
+        const sb = sandbox('e2b', undefined, { now: false });
+        const result = await provisionCustomAgentClis({
+            sandbox: sb,
+            agents: [agent()],
+            changedFiles: ['src/ledger/post.ts'],
+        });
+        expect(result.byAgentId).toEqual({});
+        expect(result.warnings[0].detail).toContain('could not be locked down');
+        const scripts = sb.run.mock.calls.map(([s]) => s);
+        expect(scripts.some(isInstall)).toBe(false);
     });
 
     it('refuses an unpinned install without touching the sandbox', async () => {
