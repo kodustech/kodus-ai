@@ -53,7 +53,7 @@ export const TryIt = ({
     // after an edit or a reset, and must say it no longer matches.
     const [ranWith, setRanWith] = useState<string | null>(null);
     const run = useTryCustomAgent();
-    const canRun = canEdit && !!prUrl.trim() && repositoryId !== "global";
+    const canRun = canEdit && !!prUrl.trim();
     const onScreen = JSON.stringify({
         agent: prepareAgentsForSave([agent])[0],
         knowledge,
@@ -89,37 +89,38 @@ export const TryIt = ({
                     request of this repository. Nothing is posted.
                 </span>
             </span>
-            <div className="flex items-center gap-2">
-                <div className="min-w-0 flex-1">
-                    <Input
-                        size="md"
-                        aria-label="Pull request link"
-                        placeholder="Pull request link"
-                        value={prUrl}
-                        onChange={(e) => setPrUrl(e.target.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === "Enter" && canRun) start();
-                        }}
-                    />
-                </div>
-                <Button
-                    size="md"
-                    variant="secondary"
-                    disabled={!canRun}
-                    loading={run.isPending}
-                    onClick={start}>
-                    Run agent
-                </Button>
-            </div>
-            {!canEdit && (
-                <p className="text-text-secondary text-xs">
-                    Trying an agent needs permission to edit these settings.
-                </p>
-            )}
-            {repositoryId === "global" && (
+            {repositoryId === "global" ? (
                 <p className="text-text-secondary text-xs">
                     Open a repository&apos;s settings to try the agent on one of
                     its pull requests.
+                </p>
+            ) : (
+                <div className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                        <Input
+                            size="md"
+                            aria-label="Pull request link"
+                            placeholder="Pull request link"
+                            value={prUrl}
+                            onChange={(e) => setPrUrl(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter" && canRun) start();
+                            }}
+                        />
+                    </div>
+                    <Button
+                        size="md"
+                        variant="secondary"
+                        disabled={!canRun}
+                        loading={run.isPending}
+                        onClick={start}>
+                        Run agent
+                    </Button>
+                </div>
+            )}
+            {!canEdit && (
+                <p className="text-text-secondary text-xs">
+                    Trying an agent needs permission to edit these settings.
                 </p>
             )}
             {run.isPending && (

@@ -186,6 +186,13 @@ describe("CustomAgentsList", () => {
         expect(
             await within(row).findByText("9 PRs · 15 posted · 30 days"),
         ).toBeInTheDocument();
+        // The switch leads the row, as the categories' switches do.
+        const [first] = within(row).getAllByRole("switch");
+        expect(
+            first.compareDocumentPosition(
+                within(row).getByRole("link", { name: "Ledger reviewer" }),
+            ) & Node.DOCUMENT_POSITION_FOLLOWING,
+        ).toBeTruthy();
         // No inline editing: the agent page is the one place to configure.
         expect(screen.queryByRole("button", { name: /configure/i })).toBeNull();
         expect(screen.queryByLabelText("Instructions")).toBeNull();

@@ -102,6 +102,15 @@ const AgentRow = ({
                 "hover:bg-card-lv2/60 relative flex items-center gap-4 px-4 py-3 transition-colors",
                 !agent.enabled && "opacity-70",
             )}>
+            {/* On the left, as the categories above it on What to review. */}
+            <Switch
+                size="sm"
+                className="relative z-10 shrink-0"
+                aria-label={`${agent.name} enabled`}
+                checked={agent.enabled}
+                disabled={!canEdit || busy}
+                onCheckedChange={onToggle}
+            />
             <span
                 aria-hidden
                 className="size-2.5 shrink-0 rounded-full"
@@ -133,14 +142,6 @@ const AgentRow = ({
             <span className="text-text-tertiary hidden shrink-0 text-xs sm:block">
                 {usage}
             </span>
-            <Switch
-                size="sm"
-                className="relative z-10 shrink-0"
-                aria-label={`${agent.name} enabled`}
-                checked={agent.enabled}
-                disabled={!canEdit || busy}
-                onCheckedChange={onToggle}
-            />
             <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
                     <Button
@@ -321,7 +322,7 @@ export const NewAgentButton = ({ canEdit }: { canEdit: boolean }) => {
         <>
             <Button
                 size="sm"
-                variant="primary"
+                variant="secondary"
                 leftIcon={<PlusIcon />}
                 disabled={!canEdit}
                 onClick={() => setOpen(true)}>

@@ -110,4 +110,27 @@ describe("TryIt", () => {
         rerender(<TryIt {...props} agent={agent} />);
         expect(screen.queryByText(STALE)).not.toBeInTheDocument();
     });
+
+    it("offers no pull request field at the global level, only where to try it", () => {
+        (useTryCustomAgent as jest.Mock).mockReturnValue({
+            isPending: false,
+            isError: false,
+            mutate: jest.fn(),
+            reset: jest.fn(),
+        });
+        render(
+            <TryIt
+                teamId="team"
+                repositoryId="global"
+                knowledge={[]}
+                canEdit
+                agent={createAgentFromTemplate("blank", [])}
+            />,
+        );
+        expect(screen.queryByPlaceholderText("Pull request link")).toBeNull();
+        expect(screen.queryByText("Run agent")).toBeNull();
+        expect(
+            screen.getByText(/Open a repository's settings to try the agent/),
+        ).toBeInTheDocument();
+    });
 });
