@@ -14,7 +14,9 @@ type CodeReviewConfigLike =
 /**
  * Resolves the learning settings repositories actually run with: default →
  * global → repository. Directory-level values are ignored on purpose, because
- * rule generation and coding-agent instructions both work per repository.
+ * rule generation works per repository. Reviews resolve
+ * `repoInstructionsEnabled` through the full config (directories and
+ * kodus-config.yml included); here it is only the stored repository value.
  *
  * The defaults and the global level are merged once, so callers resolving
  * many repositories should build one resolver and reuse it.

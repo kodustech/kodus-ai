@@ -1,6 +1,7 @@
 import { ExecuteCliReviewUseCase } from '../execute-cli-review.use-case';
 import { KodyRulesStatus } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { resolveKodyLearningSettings } from '@libs/common/utils/kody-rules/kody-learning-settings';
 
 /**
  * We test the private helpers via the public execute() path and
@@ -73,6 +74,16 @@ function createMocks() {
         getDefaultBranch: jest.fn().mockResolvedValue('develop'),
     };
 
+    // Default: what the stored global and repository levels say, i.e. no
+    // directory override and no kodus-config.yml.
+    const codeBaseConfigService = {
+        getMergedCodeReviewConfigs: jest
+            .fn()
+            .mockImplementation(async (_org, repository, parameter) =>
+                resolveKodyLearningSettings(parameter, repository.id),
+            ),
+    };
+
     const useCase = new ExecuteCliReviewUseCase(
         converter as any,
         pipelineStrategy as any,
@@ -83,11 +94,13 @@ function createMocks() {
         kodyRulesService as any,
         kodyRulesValidationService as any,
         pipelineObserver as any,
+        codeBaseConfigService as any,
     );
 
     return {
         useCase,
         codeManagementService,
+        codeBaseConfigService,
         converter,
         pipelineStrategy,
         parametersService,
@@ -198,63 +211,94 @@ describe('ExecuteCliReviewUseCase', () => {
         });
     });
 
-    describe('resolveInstructionsBaseRef', () => {
+    describe('resolveRepoInstructions', () => {
         const org = { organizationId: 'org-1', teamId: 'team-1' };
-        const resolve = (
-            useCase: any,
-            config: any,
-            repoId: string,
-            isTrialMode = false,
-        ) =>
-            useCase.resolveInstructionsBaseRef(
+        const changedFiles = [{ filename: 'services/billing/pay.ts' }];
+        const parameter = (repoConfigs: Record<string, unknown> = {}) => ({
+            configs: {},
+            repositories: [{ id: 'repo-1', name: 'api', configs: repoConfigs }],
+        });
+        const resolve = (useCase: any, stored: any, repoId = 'repo-1') =>
+            useCase.resolveRepoInstructions(
                 org,
-                config,
                 { id: repoId, name: 'api' },
-                isTrialMode,
+                stored,
+                changedFiles,
             );
 
-        it('asks the git host nothing for anonymous trial traffic', async () => {
-            const { useCase, codeManagementService } = createMocks();
-
-            await expect(
-                resolve(useCase, { repoInstructionsEnabled: true }, 'repo-1', true),
-            ).resolves.toBeUndefined();
-            expect(codeManagementService.getDefaultBranch).not.toHaveBeenCalled();
-        });
-
-        it("reads the repository's real default branch when instructions are on", async () => {
-            const { useCase, codeManagementService } = createMocks();
-
-            await expect(
-                resolve(useCase, { repoInstructionsEnabled: true }, 'repo-1'),
-            ).resolves.toBe('develop');
-            expect(codeManagementService.getDefaultBranch).toHaveBeenCalledWith({
-                organizationAndTeamData: org,
-                repository: { id: 'repo-1', name: 'api' },
+        it('takes the setting from the resolution PR reviews use, with the changed files for directories', async () => {
+            const { useCase, codeBaseConfigService } = createMocks();
+            // A directory override or kodus-config.yml turns it on.
+            codeBaseConfigService.getMergedCodeReviewConfigs.mockResolvedValue({
+                repoInstructionsEnabled: true,
             });
+            const stored = parameter();
+
+            await expect(resolve(useCase, stored)).resolves.toEqual({
+                enabled: true,
+                baseRef: 'develop',
+            });
+            expect(
+                codeBaseConfigService.getMergedCodeReviewConfigs,
+            ).toHaveBeenCalledWith(
+                org,
+                { id: 'repo-1', name: 'api' },
+                stored,
+                'develop',
+                changedFiles,
+            );
         });
 
-        it('asks the git host nothing when instructions are off or the repository is unknown', async () => {
-            const { useCase, codeManagementService } = createMocks();
+        it('lets a directory or kodus-config.yml turn off what the repository turned on', async () => {
+            const { useCase, codeBaseConfigService } = createMocks();
+            codeBaseConfigService.getMergedCodeReviewConfigs.mockResolvedValue({
+                repoInstructionsEnabled: false,
+            });
 
             await expect(
-                resolve(useCase, { repoInstructionsEnabled: false }, 'repo-1'),
-            ).resolves.toBeUndefined();
-            await expect(
-                resolve(useCase, { repoInstructionsEnabled: true }, 'global'),
-            ).resolves.toBeUndefined();
-            expect(codeManagementService.getDefaultBranch).not.toHaveBeenCalled();
+                resolve(useCase, parameter({ repoInstructionsEnabled: true })),
+            ).resolves.toEqual({ enabled: false, baseRef: undefined });
         });
 
-        it('gives no branch when the lookup fails, so the review skips them and says why', async () => {
-            const { useCase, codeManagementService } = createMocks();
+        it("keeps the repository's own setting when the merged config cannot be read", async () => {
+            const { useCase, codeBaseConfigService } = createMocks();
+            codeBaseConfigService.getMergedCodeReviewConfigs.mockRejectedValue(
+                new Error('yml read failed'),
+            );
+
+            await expect(
+                resolve(useCase, parameter({ repoInstructionsEnabled: true })),
+            ).resolves.toEqual({ enabled: true, baseRef: 'develop' });
+        });
+
+        it("keeps the repository's own setting with no branch when the lookup fails, so the review skips them and says why", async () => {
+            const { useCase, codeManagementService, codeBaseConfigService } =
+                createMocks();
             codeManagementService.getDefaultBranch.mockRejectedValue(
                 new Error('404'),
             );
 
             await expect(
-                resolve(useCase, { repoInstructionsEnabled: true }, 'repo-1'),
-            ).resolves.toBeUndefined();
+                resolve(useCase, parameter({ repoInstructionsEnabled: true })),
+            ).resolves.toEqual({ enabled: true, baseRef: undefined });
+            expect(
+                codeBaseConfigService.getMergedCodeReviewConfigs,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('asks the git host nothing when the repository is unknown', async () => {
+            const { useCase, codeManagementService } = createMocks();
+
+            await expect(
+                resolve(
+                    useCase,
+                    { configs: { repoInstructionsEnabled: true } },
+                    'global',
+                ),
+            ).resolves.toEqual({ enabled: true, baseRef: undefined });
+            expect(
+                codeManagementService.getDefaultBranch,
+            ).not.toHaveBeenCalled();
         });
     });
 
@@ -585,10 +629,15 @@ describe('ExecuteCliReviewUseCase', () => {
             ['the repository opted out under a global on', { repoInstructionsEnabled: true }, { repoInstructionsEnabled: false }, false],
             ['only the global level opted in', { repoInstructionsEnabled: true }, {}, true],
         ])(
-            'resolves coding-agent instructions per repository like PR reviews: %s',
+            'resolves coding-agent instructions like PR reviews, with no directory or kodus-config.yml override: %s',
             async (_label, globalConfigs, repoConfigs, expected) => {
-                const { useCase, parametersService, kodyRulesService } =
-                    createMocks();
+                const {
+                    useCase,
+                    parametersService,
+                    kodyRulesService,
+                    codeBaseConfigService,
+                } = createMocks();
+                const changedFiles = [{ filename: 'src/index.ts' }];
                 parametersService.findByKey.mockResolvedValue({
                     toObject: () => ({
                         configValue: {
@@ -609,9 +658,22 @@ describe('ExecuteCliReviewUseCase', () => {
                 const result = await (useCase as any).loadUserConfigWithRules(
                     orgAndTeam,
                     { remote: 'https://github.com/org/my-repo.git' },
+                    changedFiles,
                 );
 
                 expect(result.config.repoInstructionsEnabled).toBe(expected);
+                expect(result.instructionsBaseRef).toBe(
+                    expected ? 'develop' : undefined,
+                );
+                expect(
+                    codeBaseConfigService.getMergedCodeReviewConfigs,
+                ).toHaveBeenCalledWith(
+                    orgAndTeam,
+                    { id: '123', name: 'my-repo' },
+                    expect.objectContaining({ configs: globalConfigs }),
+                    'develop',
+                    changedFiles,
+                );
             },
         );
 
