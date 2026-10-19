@@ -423,11 +423,6 @@ export const customAgentPresentationSchema = z.object({
     maxComments: z.number().int().positive().optional(),
     suggestedFix: z.enum(['when-confident', 'never']),
     writing: z.string().max(CUSTOM_AGENT_LIMITS.maxWritingLength).optional(),
-    /**
-     * @deprecated Ignored: custom agents always post. Still accepted so
-     * configs saved while a `shadow` mode existed keep parsing.
-     */
-    mode: z.enum(['shadow', 'post']).optional(),
 });
 
 export const customAgentConfigSchema = z.object({

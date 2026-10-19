@@ -323,6 +323,18 @@ describe("custom agent drafts", () => {
         ).toContain("Secret names are env variables, e.g. LEDGER_TOKEN");
     });
 
+    it("drops the retired shadow mode before saving", () => {
+        const agent = createAgentFromTemplate("blank", []);
+        const [prepared] = prepareAgentsForSave([
+            {
+                ...agent,
+                presentation: { ...agent.presentation, mode: "shadow" },
+            } as CustomAgent,
+        ]);
+        expect(prepared.presentation).not.toHaveProperty("mode");
+        expect(prepared.presentation).toEqual(agent.presentation);
+    });
+
     it("sends typed or kept secrets and drops a blank one before saving", () => {
         const agent = createAgentFromTemplate("blank", []);
         const [prepared] = prepareAgentsForSave([
@@ -647,17 +659,6 @@ describe("custom agent drafts", () => {
             };
             expect(pullRequestPlan(agent, knowledge, names)).toBe(
                 "On a pull request that changes apps/billing/** — loads create-e2e-tests, reads 1 doc, checks each finding, posts as E2E tests reviewer.",
-            );
-        });
-
-        it("runs on every pull request and posts, even for an agent saved in the retired shadow mode", () => {
-            const agent = {
-                ...base(),
-                scope: { exclude: ["**/*.test.ts"] },
-                presentation: { ...base().presentation, mode: "shadow" },
-            } as CustomAgent;
-            expect(pullRequestPlan(agent, [], [])).toBe(
-                "On every pull request except **/*.test.ts — follows its instructions, checks each finding, posts as E2E tests reviewer.",
             );
         });
 

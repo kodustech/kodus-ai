@@ -708,7 +708,14 @@ export const cliIssues = (cli: CliToolConfig): string[] => {
  * secret left blank after "Replace" has neither and is dropped.
  */
 export const prepareAgentsForSave = (agents: CustomAgent[]): CustomAgent[] =>
-    agents.map((agent) => {
+    agents.map((loaded) => {
+        // A preview config saved before shadow mode was retired still holds
+        // `presentation.mode`, which the save endpoint no longer takes.
+        const { mode: _retired, ...presentation } =
+            loaded.presentation as CustomAgent["presentation"] & {
+                mode?: unknown;
+            };
+        const agent = { ...loaded, presentation };
         if (!agent.tools.cli?.length) return agent;
         return {
             ...agent,

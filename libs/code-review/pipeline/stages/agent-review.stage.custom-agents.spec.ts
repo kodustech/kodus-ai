@@ -172,24 +172,6 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
         ).toEqual(['agent-ledger']);
     });
 
-    it('posts the finding of an agent stored with the retired shadow mode', async () => {
-        const { stage } = makeStage(output([finding()]));
-
-        const result = await run(
-            stage,
-            makeContext([agent({ presentation: { mode: 'shadow' } as any })]),
-        );
-
-        expect(contents(result.validSuggestions)).toEqual([
-            'The entry is booked on one side only.',
-        ]);
-        expect(
-            result.discardedSuggestions.filter(
-                (s: any) => s.customAgent?.id === 'agent-ledger',
-            ),
-        ).toEqual([]);
-    });
-
     it('posts a finding inline and counts it in the summary', async () => {
         const { stage } = makeStage(output([finding()]));
 

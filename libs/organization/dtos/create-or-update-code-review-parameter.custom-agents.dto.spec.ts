@@ -69,20 +69,18 @@ describe('CreateOrUpdateCodeReviewParameterDto — custom agents', () => {
         ).toContain('astGrepConfig');
     });
 
-    it('still accepts an agent saved with the retired mode', async () => {
-        for (const mode of ['shadow', 'post']) {
-            const legacy = agent();
-            expect(
-                await validateConfig({
-                    customAgents: [
-                        {
-                            ...legacy,
-                            presentation: { ...legacy.presentation, mode },
-                        },
-                    ],
-                }),
-            ).toBe('[]');
-        }
+    it('refuses the retired shadow mode', async () => {
+        const legacy = agent();
+        expect(
+            await validateConfig({
+                customAgents: [
+                    {
+                        ...legacy,
+                        presentation: { ...legacy.presentation, mode: 'shadow' },
+                    },
+                ],
+            }),
+        ).toContain('mode');
     });
 
     it('accepts a valid agent with a pinned CLI and linked knowledge', async () => {

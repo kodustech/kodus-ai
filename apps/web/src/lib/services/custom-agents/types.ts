@@ -45,11 +45,6 @@ export type CustomAgentPresentation = {
     maxComments?: number;
     suggestedFix: "when-confident" | "never";
     writing?: string;
-    /**
-     * @deprecated Ignored: custom agents always post. Configs saved while a
-     * shadow mode existed may still carry it.
-     */
-    mode?: "shadow" | "post";
 };
 
 export type CustomAgent = {
