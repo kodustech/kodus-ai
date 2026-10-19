@@ -202,6 +202,7 @@ function AgentContent() {
         <TryIt
             teamId={teamId}
             repositoryId={repositoryId}
+            directoryId={directoryId}
             agent={agent}
             // The skills and docs a review here reads, the repository's too
             // at a directory, so Try it runs the agent as the review would.

@@ -1,4 +1,7 @@
-import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
+import {
+    isFileMatchingGlob,
+    isFileMatchingGlobCaseInsensitive,
+} from '@libs/common/utils/glob-utils';
 import {
     customAgentSlug,
     type CustomAgentConfig,
@@ -32,11 +35,12 @@ export function filesInAgentScope<T extends { filename: string }>(
 
 // The files the review's ignore paths set aside that an agent still reviews:
 // those one of its include globs names explicitly (namesFilesExplicitly) and
-// its excludes leave in. A team that ignores `package.json`, or a default
-// such as `**/prod/**`, still meant an agent written for `package.json` or
-// `infra/**/*.tf` to read it; a broad glob such as `**/*.ts` did not ask for
-// the ignored files, so it does not get them. Callers pass only files that
-// still exist: a deleted file is reviewed by no one.
+// its excludes leave in, never a secret file (SECRET_FILE_GLOBS). A team that
+// ignores `package.json`, or a default such as `**/prod/**`, still meant an
+// agent written for `package.json` or `infra/**/*.tf` to read it; a broad
+// glob such as `**/*.ts` or a folder such as `web/**` did not ask for the
+// ignored files, so it does not get them. Callers pass only files that still
+// exist: a deleted file is reviewed by no one.
 export function ignoredFilesInAgentScope<T extends { filename: string }>(
     agent: Pick<CustomAgentConfig, 'scope'>,
     ignoredFiles: readonly T[],
@@ -47,10 +51,32 @@ export function ignoredFilesInAgentScope<T extends { filename: string }>(
     if (!explicit.length) {
         return [];
     }
-    return filesInAgentScope(agent, ignoredFiles).filter((file) =>
-        isFileMatchingGlob(file.filename, explicit),
+    return filesInAgentScope(agent, ignoredFiles).filter(
+        (file) =>
+            isFileMatchingGlob(file.filename, explicit) &&
+            !isFileMatchingGlobCaseInsensitive(
+                file.filename,
+                SECRET_FILE_GLOBS,
+            ),
     );
 }
+
+// Ignored files no glob hands to an agent: their diff would carry credentials
+// to the model provider. The secret files of the default ignore list, plus
+// the private keys and keystores it does not name.
+const SECRET_FILE_GLOBS = [
+    '**/.env*',
+    '**/*.pem',
+    '**/*.key',
+    '**/*.p12',
+    '**/*.pfx',
+    '**/*.jks',
+    '**/*.keystore',
+    '**/id_rsa*',
+    '**/id_dsa*',
+    '**/id_ecdsa*',
+    '**/id_ed25519*',
+];
 
 /**
  * The ignored files a review hands to its custom agents: those at least one
@@ -107,18 +133,24 @@ export function reviewsOnlyIgnoredFiles(review: {
 
 // Whether an include glob names its files rather than sweeping them up: it
 // does when at least one of its path segments is literal, a directory or a
-// file name with no glob syntax in it. `package.json`, `apps/web/package.json`,
-// `**/Dockerfile`, `infra/**/*.tf` and `src/**` name files; `**`, `**/*`, `*`,
-// `**/*.ts` and `*.{ts,tsx}` have no literal segment and do not, and neither
-// does a segment that only starts literal (`Dockerfile.*`). `.` segments are
-// not names.
+// file name with no glob syntax in it, and its last segment says more than
+// `*` or `**`. `package.json`, `apps/web/package.json`, `**/Dockerfile` and
+// `infra/**/*.tf` name files; a folder such as `src/**` or `apps/web/*` does
+// not, nor do `**`, `**/*`, `**/*.ts` and `*.{ts,tsx}`, which have no literal
+// segment, and neither does a segment that only starts literal
+// (`Dockerfile.*`). `.` segments are not names.
 export function namesFilesExplicitly(glob: string): boolean {
-    return glob
+    const segments = glob
         .trim()
         .split('/')
-        .some(
-            (segment) => segment && segment !== '.' && !hasGlobSyntax(segment),
-        );
+        .filter((segment) => segment && segment !== '.');
+    const last = segments[segments.length - 1];
+    return (
+        last !== undefined &&
+        last !== '*' &&
+        last !== '**' &&
+        segments.some((segment) => !hasGlobSyntax(segment))
+    );
 }
 
 // `(` and `[` also open a literal Next.js route folder, `(shop)` or `[id]`;

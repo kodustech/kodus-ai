@@ -142,11 +142,15 @@ describe('namesFilesExplicitly', () => {
         ['./package.json', true],
         ['**/Dockerfile', true],
         ['infra/**/*.tf', true],
-        ['src/**', true],
-        ['apps/web/*', true],
-        ['packages/@ledger/ui/**', true],
+        ['config/limits.json', true],
         ['src/[ab]/*.ts', true],
         ['src/app/(shop)/[id]/page.tsx', true],
+        ['src/**', false],
+        ['web/**', false],
+        ['apps/web/*', false],
+        ['packages/@ledger/ui/**', false],
+        ['infra/**/*', false],
+        ['./src/**/', false],
         ['**', false],
         ['**/*', false],
         ['*', false],
@@ -172,8 +176,10 @@ describe('ignoredFilesInAgentScope', () => {
         { filename: 'src/prod/handler.ts' },
     ];
     const names = (include?: string[], exclude?: string[]) =>
-        ignoredFilesInAgentScope(agent({ scope: { include, exclude } }), ignored)
-            .map((f) => f.filename);
+        ignoredFilesInAgentScope(
+            agent({ scope: { include, exclude } }),
+            ignored,
+        ).map((f) => f.filename);
 
     it('gives an agent the ignored file its glob names', () => {
         expect(names(['package.json'])).toEqual(['package.json']);
@@ -183,13 +189,42 @@ describe('ignoredFilesInAgentScope', () => {
         ]);
     });
 
-    it('reaches a file under an ignored directory through a literal directory', () => {
+    it('reaches a file under an ignored directory through a glob that names it', () => {
         // `**/prod/**` is among the default ignore paths.
         expect(names(['infra/**/*.tf'])).toEqual(['infra/envs/prod/main.tf']);
-        expect(names(['infra/**'])).toEqual([
-            'infra/envs/prod/main.tf',
-            'infra/envs/prod/notes.md',
-        ]);
+    });
+
+    it('gives nothing to a folder glob', () => {
+        expect(names(['infra/**'])).toEqual([]);
+        expect(names(['src/**', 'apps/web/*'])).toEqual([]);
+    });
+
+    it('never gives an agent a secret file, even one its glob names', () => {
+        const secrets = [
+            { filename: 'web/.env.production' },
+            { filename: 'src/certs/server.pem' },
+            { filename: 'src/config/master.key' },
+            { filename: 'deploy/id_rsa' },
+            { filename: 'android/release.KEYSTORE' },
+            { filename: 'web/package-lock.json' },
+        ];
+        const named = (include: string[]) =>
+            ignoredFilesInAgentScope(
+                agent({ scope: { include } }),
+                secrets,
+            ).map((f) => f.filename);
+
+        expect(named(['web/**', 'src/**'])).toEqual([]);
+        expect(
+            named([
+                'web/.env.production',
+                'src/certs/server.pem',
+                'src/config/master.key',
+                'deploy/id_rsa',
+                'android/release.KEYSTORE',
+                'web/package-lock.json',
+            ]),
+        ).toEqual(['web/package-lock.json']);
     });
 
     it('gives nothing to a broad glob or to an agent with no include glob', () => {

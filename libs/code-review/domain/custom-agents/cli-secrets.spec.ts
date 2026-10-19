@@ -4,6 +4,7 @@ import {
     collectStoredCustomAgents,
     maskCliSecrets,
     storedCustomAgentsAtLevel,
+    storedCustomAgentsForTry,
     maskCodeReviewConfigSecrets,
     maskCustomAgentSecrets,
     sealCustomAgentSecrets,
@@ -104,6 +105,133 @@ describe('custom agent CLI secrets', () => {
         expect(sealed.tools.cli[0].secrets).toEqual([
             { env: 'LEDGER_TOKEN', ciphertext: 'enc(iv:planted)' },
         ]);
+    });
+
+    describe('a kept secret and the CLI it goes to', () => {
+        const ledgerCli = {
+            name: 'ledgerctl',
+            install: 'npm i -g @acme-ledger/ctl@1.2.3',
+            binary: 'ledgerctl',
+            allowedDomains: ['api.ledger.example', 'auth.ledger.example'],
+        };
+        const withCli = (
+            cli: Partial<typeof ledgerCli>,
+            secret: Record<string, string>,
+        ) => ({
+            id: 'ledger-agent',
+            tools: { cli: [{ ...ledgerCli, ...cli, secrets: [secret] }] },
+        });
+        const stored = [
+            withCli({}, { env: 'LEDGER_TOKEN', ciphertext: 'iv:stored' }),
+        ];
+        const mask = { env: 'LEDGER_TOKEN', ciphertext: CLI_SECRET_MASK };
+
+        it('keeps it for the same install, binary and domains in any order', () => {
+            const [sealed] = sealCustomAgentSecrets(
+                [
+                    withCli(
+                        {
+                            allowedDomains: [
+                                'auth.ledger.example',
+                                'api.ledger.example',
+                            ],
+                        },
+                        mask,
+                    ),
+                ],
+                stored,
+                fakeEncrypt,
+            )!;
+
+            expect(sealed.tools.cli[0].secrets).toEqual([
+                { env: 'LEDGER_TOKEN', ciphertext: 'iv:stored' },
+            ]);
+        });
+
+        it.each([
+            ['install', { install: 'npm i -g ledger-exfil@1.0.0' }],
+            ['binary', { binary: 'node' }],
+            [
+                'allowed domains',
+                {
+                    allowedDomains: [
+                        'api.ledger.example',
+                        'collector.attacker.example',
+                    ],
+                },
+            ],
+        ])('drops it when the %s change', (_, change) => {
+            const seal = () =>
+                sealCustomAgentSecrets(
+                    [withCli(change, mask)],
+                    stored,
+                    fakeEncrypt,
+                );
+
+            expect(seal).toThrow(CliSecretMissingError);
+            expect(seal).toThrow(
+                'Secret LEDGER_TOKEN of CLI "ledgerctl" must be typed again',
+            );
+        });
+
+        it('encrypts a value typed again for a changed CLI', () => {
+            const [sealed] = sealCustomAgentSecrets(
+                [
+                    withCli(
+                        { binary: 'node' },
+                        { env: 'LEDGER_TOKEN', value: 'new-token' },
+                    ),
+                ],
+                stored,
+                fakeEncrypt,
+            )!;
+
+            expect(sealed.tools.cli[0].secrets).toEqual([
+                { env: 'LEDGER_TOKEN', ciphertext: 'enc(new-token)' },
+            ]);
+        });
+    });
+
+    it('lends a Try it run only the secrets of the level the caller edits', () => {
+        const at = (id: string, ciphertext: string) => ({
+            customAgents: [
+                { ...agent([{ env: 'LEDGER_TOKEN', ciphertext }]), id },
+            ],
+        });
+        const config = {
+            configs: at('global-agent', 'iv:global'),
+            repositories: [
+                {
+                    id: 'repo-1',
+                    configs: {
+                        customAgents: [
+                            ...at('repo-agent', 'iv:repo').customAgents,
+                            ...at('shared-agent', 'iv:repo-shared')
+                                .customAgents,
+                        ],
+                    },
+                    directories: [
+                        {
+                            id: 'dir-1',
+                            configs: at('shared-agent', 'iv:dir-shared'),
+                        },
+                    ],
+                },
+            ],
+        };
+        const lent = (level: { repositoryId: string; directoryId?: string }) =>
+            JSON.stringify(storedCustomAgentsForTry(config, level));
+
+        expect(lent({ repositoryId: 'repo-1' })).not.toContain('iv:global');
+        expect(lent({ repositoryId: 'repo-1' })).toContain('iv:repo');
+        const atDirectory = lent({
+            repositoryId: 'repo-1',
+            directoryId: 'dir-1',
+        });
+        expect(atDirectory).toContain('iv:dir-shared');
+        expect(atDirectory).not.toContain('iv:repo-shared');
+        expect(atDirectory).toContain('"iv:repo"');
+        expect(atDirectory).not.toContain('iv:global');
     });
 
     it('reads stored agents from exactly one level', () => {

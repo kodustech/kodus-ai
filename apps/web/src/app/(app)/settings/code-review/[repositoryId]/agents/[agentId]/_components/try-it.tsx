@@ -38,12 +38,15 @@ const errorMessage = (error: unknown) => {
 export const TryIt = ({
     teamId,
     repositoryId,
+    directoryId,
     agent,
     knowledge,
     canEdit,
 }: {
     teamId: string;
     repositoryId: string;
+    /** Set at a directory: its stored secrets are the ones a run can use. */
+    directoryId?: string;
     agent: CustomAgent;
     knowledge: KnowledgeItem[];
     canEdit: boolean;
@@ -64,6 +67,7 @@ export const TryIt = ({
         run.mutate({
             teamId,
             repositoryId,
+            directoryId,
             prUrl: prUrl.trim(),
             agent: prepareAgentsForSave([agent])[0],
             knowledge,
@@ -134,8 +138,8 @@ export const TryIt = ({
             )}
             {run.data && !run.isPending && isStale && (
                 <p className="text-warning text-xs">
-                    This result is from an earlier version of the agent. Run
-                    it again to see what the agent on screen does.
+                    This result is from an earlier version of the agent. Run it
+                    again to see what the agent on screen does.
                 </p>
             )}
             {run.data && !run.isPending && <TryResult trace={run.data} />}
