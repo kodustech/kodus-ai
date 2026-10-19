@@ -29,6 +29,12 @@ const ledger: CustomAgent = {
     },
 };
 const audit: CustomAgent = { ...ledger, id: "audit", name: "Audit reviewer" };
+const drip: CustomAgent = { ...ledger, id: "drip", name: "Drip reviewer" };
+const sprinkler: CustomAgent = {
+    ...ledger,
+    id: "sprinkler",
+    name: "Sprinkler reviewer",
+};
 
 let prepared: any;
 // What the save will send as revisions: the mutation reads them from the
@@ -47,13 +53,14 @@ jest.mock("src/core/providers/selected-team-context", () => ({
     useSelectedTeamId: () => ({ teamId: "team-1" }),
 }));
 
+let mockLevel = "repository";
 jest.mock("../../../_hooks", () => ({
     useCodeReviewRouteParams: () => ({
         repositoryId: "repo-1",
-        directoryId: undefined,
+        directoryId: mockLevel === "directory" ? "dir-1" : undefined,
         pageName: "review-scope",
     }),
-    useCurrentConfigLevel: () => "repository",
+    useCurrentConfigLevel: () => mockLevel,
 }));
 
 jest.mock("../../_hooks/use-code-review-settings-mutation", () => ({
@@ -78,21 +85,36 @@ const loaded = (agents: CustomAgent[], revision: string) => ({
 });
 
 let formRef: UseFormReturn<any>;
-const Form = ({ children }: { children: ReactNode }) => {
+const Form = ({
+    children,
+    defaults = loaded([ledger], "agents-r1"),
+}: {
+    children: ReactNode;
+    defaults?: object;
+}) => {
     const form = useForm<any>({
         mode: "all",
-        defaultValues: loaded([ledger], "agents-r1"),
+        defaultValues: defaults,
     });
     formRef = form;
     return <FormProvider {...form}>{children}</FormProvider>;
 };
 
 const Probe = () => {
-    const { agents, updateAgent, save, reset, isDirty } =
-        useCustomAgentsForm();
+    const {
+        agents,
+        inheritedAgentCount,
+        setAgents,
+        updateAgent,
+        save,
+        reset,
+        isDirty,
+    } = useCustomAgentsForm();
     return (
         <div>
             <span data-testid="dirty">{isDirty ? "unsaved" : "saved"}</span>
+            <span data-testid="inherited">{inheritedAgentCount}</span>
+            <button onClick={() => setAgents([...agents, sprinkler])}>add</button>
             <span data-testid="names">
                 {agents.map((agent) => agent.name).join(",")}
             </span>
@@ -129,10 +151,10 @@ const Probe = () => {
     );
 };
 
-const renderProbe = () =>
+const renderProbe = (defaults?: object) =>
     render(
         <QueryClientProvider client={new QueryClient()}>
-            <Form>
+            <Form defaults={defaults}>
                 <Probe />
             </Form>
         </QueryClientProvider>,
@@ -283,5 +305,65 @@ describe("customAgentsSaveErrorMessage", () => {
         expect(
             customAgentsSaveErrorMessage(new Error("boom"), "Couldn't save."),
         ).toBe("Couldn't save.");
+    });
+});
+
+describe("useCustomAgentsForm — at a directory", () => {
+    const savedIds = () =>
+        prepared.codeReviewConfig.customAgents.map((a: CustomAgent) => a.id);
+
+    beforeEach(() => {
+        mockLevel = "directory";
+        prepared = undefined;
+    });
+    afterEach(() => {
+        mockLevel = "repository";
+    });
+
+    it("lists and saves only the directory's agents when it has none yet", async () => {
+        renderProbe({
+            customAgents: { value: [ledger, audit], level: "repository" },
+            knowledge: { value: [], level: "repository" },
+        });
+        expect(screen.getByTestId("names")).toHaveTextContent(/^$/);
+        expect(screen.getByTestId("inherited")).toHaveTextContent("2");
+
+        fireEvent.click(screen.getByText("add"));
+        fireEvent.click(screen.getByText("save"));
+        await flush();
+
+        expect(savedIds()).toEqual(["sprinkler"]);
+    });
+
+    it("edits and saves the directory's own agents, still naming the inherited ones", async () => {
+        renderProbe({
+            customAgents: {
+                value: [drip],
+                level: "directory",
+                overriddenValue: [ledger, audit],
+                overriddenLevel: "repository",
+            },
+            knowledge: { value: [], level: "repository" },
+        });
+        expect(screen.getByTestId("names")).toHaveTextContent("Drip reviewer");
+
+        fireEvent.click(screen.getByText("add"));
+        fireEvent.click(screen.getByText("save"));
+        await flush();
+
+        expect(savedIds()).toEqual(["drip", "sprinkler"]);
+        expect(screen.getByTestId("inherited")).toHaveTextContent("2");
+    });
+
+    it("leaves the repository level as it was", async () => {
+        mockLevel = "repository";
+        renderProbe();
+        expect(screen.getByTestId("inherited")).toHaveTextContent("0");
+
+        fireEvent.click(screen.getByText("add"));
+        fireEvent.click(screen.getByText("save"));
+        await flush();
+
+        expect(savedIds()).toEqual(["ledger", "sprinkler"]);
     });
 });

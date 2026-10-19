@@ -10,7 +10,7 @@ import { useFormContext, useFormState, useWatch } from "react-hook-form";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 
 import { useCodeReviewSettingsMutation } from "../../_hooks/use-code-review-settings-mutation";
-import type { CodeReviewFormType } from "../../_types";
+import { FormattedConfigLevel, type CodeReviewFormType } from "../../_types";
 import {
     loadedListRevision,
     type RevisionedListField,
@@ -26,7 +26,20 @@ import {
  * (see settings-save-conflict.ts).
  */
 type FieldNode<T> =
-    { value?: T; level?: string; revision?: string } | undefined;
+    | { value?: T; level?: string; revision?: string; overriddenValue?: T }
+    | undefined;
+
+/**
+ * The list this level owns. A directory runs the repository's agents and
+ * knowledge plus its own (the server adds them, a same id replacing an
+ * inherited agent), so at a directory an inherited list is not the
+ * directory's to edit or save: it reads as empty here.
+ */
+const ownList = <T>(node: FieldNode<T[]>, level: string): T[] =>
+    level === FormattedConfigLevel.DIRECTORY &&
+    node?.level !== FormattedConfigLevel.DIRECTORY
+        ? []
+        : (node?.value ?? []);
 
 /**
  * The custom agents and the skills and docs they link, read from and written
@@ -57,8 +70,21 @@ export const useCustomAgentsForm = () => {
         control: form.control,
     });
 
-    const agents = agentsNode?.value ?? [];
-    const knowledge = knowledgeNode?.value ?? [];
+    const agents = ownList(agentsNode, level);
+    const knowledge = ownList(knowledgeNode, level);
+    // The repository's agents a directory also runs, for the note beside
+    // its list; none at any other level. Read from the list as loaded: an
+    // edit replaces the node without what it overrode.
+    const loadedAgents = (
+        form.control._defaultValues as Record<string, unknown>
+    )?.customAgents as FieldNode<CustomAgent[]>;
+    const inheritedAgentCount =
+        level === FormattedConfigLevel.DIRECTORY
+            ? ((loadedAgents?.level === FormattedConfigLevel.DIRECTORY
+                  ? loadedAgents.overriddenValue
+                  : loadedAgents?.value
+              )?.length ?? 0)
+            : 0;
     const dirtyKeys = Object.keys(dirtyFields ?? {});
     const isDirty = dirtyKeys.some(
         (key) => key === "customAgents" || key === "knowledge",
@@ -101,19 +127,19 @@ export const useCustomAgentsForm = () => {
     );
     const updateAgent = useCallback(
         (id: string, patch: (agent: CustomAgent) => CustomAgent) => {
-            const current =
-                (
-                    form.getValues("customAgents" as never) as FieldNode<
-                        CustomAgent[]
-                    >
-                )?.value ?? [];
+            const current = ownList(
+                form.getValues("customAgents" as never) as FieldNode<
+                    CustomAgent[]
+                >,
+                level,
+            );
             setAgents(
                 current.map((agent) =>
                     agent.id === id ? patch(agent) : agent,
                 ),
             );
         },
-        [form, setAgents],
+        [form, level, setAgents],
     );
 
     /**
@@ -135,16 +161,16 @@ export const useCustomAgentsForm = () => {
                     savedFormData: data,
                     codeReviewConfig: {
                         customAgents: prepareAgentsForSave(
-                            values.customAgents?.value ?? [],
+                            ownList(values.customAgents, level),
                         ),
                         knowledge: prepareKnowledgeForSave(
-                            values.knowledge?.value ?? [],
+                            ownList(values.knowledge, level),
                         ),
                     },
                 }),
             });
         },
-        [form, saveSettings, setAgents, setKnowledge],
+        [form, level, saveSettings, setAgents, setKnowledge],
     );
 
     // Not `resetField`: it acts only on registered fields, and these two are
@@ -182,6 +208,7 @@ export const useCustomAgentsForm = () => {
         directoryId,
         agents,
         knowledge,
+        inheritedAgentCount,
         level,
         isDirty,
         otherFieldsDirty,

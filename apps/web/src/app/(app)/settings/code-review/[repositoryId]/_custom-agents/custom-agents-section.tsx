@@ -216,6 +216,7 @@ export const CustomAgentsSection = ({ canEdit }: { canEdit: boolean }) => {
         directoryId,
         agents,
         knowledge,
+        inheritedAgentCount,
         updateAgent,
     } = useCustomAgentsForm();
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -266,6 +267,15 @@ export const CustomAgentsSection = ({ canEdit }: { canEdit: boolean }) => {
                             Skills &amp; docs for the main review
                         </Link>
                     </p>
+                    {inheritedAgentCount > 0 && (
+                        <p className="text-text-secondary text-sm">
+                            Also runs the repository&apos;s{" "}
+                            {inheritedAgentCount === 1
+                                ? "agent"
+                                : `${inheritedAgentCount} agents`}
+                            .
+                        </p>
+                    )}
                 </div>
                 <div className="flex items-center gap-3">
                     <Button
