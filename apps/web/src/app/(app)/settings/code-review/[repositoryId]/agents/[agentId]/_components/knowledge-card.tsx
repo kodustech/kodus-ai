@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { Button } from "@components/ui/button";
 import { Input } from "@components/ui/input";
 import {
@@ -19,7 +18,7 @@ import type {
 import { BookOpenIcon, PlusIcon, SparklesIcon, XIcon } from "lucide-react";
 import { cn } from "src/core/utils/components";
 
-import { Chip, Field, Section } from "./field";
+import { Chip, Field } from "./field";
 
 export const KnowledgeStatusChips = ({
     report,
@@ -390,27 +389,3 @@ const AddByPath = ({
         </Field>
     );
 };
-
-/** The agent page's card around the same field. */
-export const KnowledgeCard = ({
-    skillsHref,
-    ...props
-}: Parameters<typeof AgentKnowledgeField>[0] & { skillsHref: string }) => (
-    <Section
-        title="Follows"
-        description={
-            <>
-                The team&apos;s skills and docs this reviewer follows, read from
-                the pull request&apos;s target branch. A skill opens when the
-                change needs it; a doc loads whole. Scripts in a skill never
-                run.{" "}
-                <Link
-                    href={skillsHref}
-                    className="text-primary-light hover:underline">
-                    Skills &amp; docs for the main review
-                </Link>
-            </>
-        }>
-        <AgentKnowledgeField {...props} />
-    </Section>
-);

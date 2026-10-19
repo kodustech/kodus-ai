@@ -375,18 +375,18 @@ export const describeAgent = (agent: Pick<CustomAgent, "instructions">) => {
     return line.length > 140 ? `${line.slice(0, 137)}…` : line;
 };
 
+/** "9 PRs · 15 posted · 30 days": what the agent did lately, for its row. */
 export const agentUsageLine = (
     status: CustomAgentStatus | undefined,
     windowDays: number,
 ) => {
     if (!status || status.pullRequests === 0) {
-        return `No findings in the last ${windowDays} days`;
+        return `No findings in ${windowDays} days`;
     }
     return [
         `${status.pullRequests} ${status.pullRequests === 1 ? "PR" : "PRs"}`,
         `${status.posted} posted`,
-        `${status.dropped} dropped`,
-        `last ${windowDays} days`,
+        `${windowDays} days`,
     ].join(" · ");
 };
 
@@ -507,45 +507,32 @@ export const followedBy = (
 const plural = (count: number, word: string) =>
     `${count} ${count === 1 ? word : `${word}s`}`;
 
-/** "Follows: create-e2e-tests · 1 doc", or null when nothing is linked. */
-export const followsLine = (
-    knowledge: KnowledgeItem[],
-    agentId: string,
-    named: NamedKnowledge[] = [],
-): string | null => {
-    const { skills, docs } = followedBy(knowledge, agentId, named);
-    const parts = [
-        skills.map((skill) => skill.name).join(", "),
-        docs.length ? plural(docs.length, "doc") : "",
-    ].filter(Boolean);
-    return parts.length ? `Follows: ${parts.join(" · ")}` : null;
-};
-
-/** One sentence on what the agent does on a pull request, from its config. */
-export const pullRequestPlan = (
-    agent: Pick<CustomAgent, "id" | "name" | "scope" | "presentation">,
-    knowledge: KnowledgeItem[],
-    named: NamedKnowledge[] = [],
-): string => {
+/** The files an agent runs on, in a few words: "src/payments/** except **\/*.test.ts". */
+export const scopeLabel = (agent: Pick<CustomAgent, "scope">): string => {
     const include = agent.scope.include?.filter(Boolean) ?? [];
     const exclude = agent.scope.exclude?.filter(Boolean) ?? [];
-    const when = [
-        include.length
-            ? `On a pull request that changes ${include.join(", ")}`
-            : "On every pull request",
+    return [
+        include.length ? include.join(", ") : "all files",
         exclude.length ? ` except ${exclude.join(", ")}` : "",
     ].join("");
-    const { skills, docs } = followedBy(knowledge, agent.id, named);
-    const steps = [
-        skills.length
-            ? `loads ${skills.map((skill) => skill.name).join(", ")}`
-            : "",
-        docs.length ? `reads ${plural(docs.length, "doc")}` : "",
-    ].filter(Boolean);
-    if (!steps.length) steps.push("follows its instructions");
-    steps.push("checks each finding");
-    steps.push(`posts as ${agent.name || "this agent"}`);
-    return `${when} — ${steps.join(", ")}.`;
+};
+
+/**
+ * The agent page's one status line: where it runs and what it did lately,
+ * "Runs on src/payments/** · 9 PRs · 15 posted in 30 days".
+ */
+export const agentStatusLine = (
+    agent: Pick<CustomAgent, "scope">,
+    status: CustomAgentStatus | undefined,
+    windowDays: number,
+    isGlobal = false,
+): string => {
+    const where = `Runs on ${scopeLabel(agent)}`;
+    if (isGlobal) return `${where} · usage shows per repository`;
+    if (!status || status.pullRequests === 0) {
+        return `${where} · no findings in ${windowDays} days`;
+    }
+    return `${where} · ${plural(status.pullRequests, "PR")} · ${status.posted} posted in ${windowDays} days`;
 };
 
 const PLUGIN_NAMES_BY_ID: Record<string, string> = {
@@ -572,28 +559,30 @@ const pluginNameFromId = (integrationId: string): string => {
 };
 
 /**
- * The settings edited on the agent's own page, as short chips for its row:
- * plugins, CLIs and models.
+ * Short chips for an agent's row in the list: the files it runs on, what it
+ * follows and the tools it has. Never the instructions, never a raw id.
  */
-export const settingsSummary = (
-    agent: Pick<CustomAgent, "tools" | "models">,
-    names: {
-        pluginName?: (integrationId: string) => string | undefined;
-        modelName?: (modelId: string) => string | undefined;
-    } = {},
+export const agentChips = (
+    agent: Pick<CustomAgent, "id" | "scope" | "tools">,
+    knowledge: KnowledgeItem[],
+    names: { pluginName?: (integrationId: string) => string | undefined } = {},
 ): string[] => {
-    const model = (id: string) => names.modelName?.(id) ?? id;
-    const chips = [
+    const include = agent.scope.include?.filter(Boolean) ?? [];
+    const { skills, docs } = followedBy(knowledge, agent.id);
+    return [
+        include.length
+            ? `${include[0]}${include.length > 1 ? ` +${include.length - 1}` : ""}`
+            : "All files",
+        skills.length ? plural(skills.length, "skill") : "",
+        docs.length ? plural(docs.length, "doc") : "",
         ...(agent.tools.mcp ?? []).map(
             (plugin) =>
                 names.pluginName?.(plugin.integrationId) ??
                 pluginNameFromId(plugin.integrationId),
         ),
         ...(agent.tools.cli ?? []).map((cli) => `${cli.name || "Unnamed"} CLI`),
-    ];
-    const run = agent.models?.run;
-    chips.push(run ? `Model: ${model(run)}` : "Model: routing default");
-    return chips;
+        agent.tools.astGrepConfig?.trim() ? "ast-grep" : "",
+    ].filter(Boolean);
 };
 
 /**

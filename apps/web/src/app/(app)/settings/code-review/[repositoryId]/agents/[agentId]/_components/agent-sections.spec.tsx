@@ -2,12 +2,27 @@
 import "@testing-library/jest-dom";
 
 import type { CustomAgent } from "@services/custom-agents/types";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { getBYOK } from "@services/organizationParameters/fetch";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, screen, waitFor } from "@testing-library/react";
 
-import { RunsOn, WhatItDoes } from "./agent-sections";
+import {
+    CommentsAndModel,
+    FilesAndKnowledge,
+    InstructionsCard,
+} from "./agent-sections";
 
 jest.mock("@services/organizationParameters/fetch", () => ({
     getBYOK: jest.fn(),
+}));
+
+jest.mock("next/link", () => ({
+    __esModule: true,
+    default: ({ children, href, ...rest }: any) => (
+        <a href={typeof href === "string" ? href : ""} {...rest}>
+            {children}
+        </a>
+    ),
 }));
 
 const agent: CustomAgent = {
@@ -24,12 +39,11 @@ const agent: CustomAgent = {
     },
 };
 
-describe("WhatItDoes", () => {
+describe("InstructionsCard", () => {
     it("shows a name error inline and marks the field invalid", () => {
         render(
-            <WhatItDoes
+            <InstructionsCard
                 agent={agent}
-                knowledge={[]}
                 canEdit
                 onChange={jest.fn()}
                 nameError='Another agent, "Ledger Reviewer", already answers to @kody -v ledger-reviewer. Choose a different name.'
@@ -45,30 +59,36 @@ describe("WhatItDoes", () => {
     });
 
     it("shows no error when the name is free", () => {
-        render(
-            <WhatItDoes
-                agent={agent}
-                knowledge={[]}
-                canEdit
-                onChange={jest.fn()}
-            />,
-        );
+        render(<InstructionsCard agent={agent} canEdit onChange={jest.fn()} />);
         expect(screen.queryByRole("alert")).toBeNull();
     });
 });
 
-describe("RunsOn", () => {
+const renderFiles = (scope: CustomAgent["scope"]) =>
+    render(
+        <FilesAndKnowledge
+            agent={{ ...agent, scope }}
+            knowledge={[]}
+            canEdit
+            onChange={jest.fn()}
+            onKnowledgeChange={jest.fn()}
+            skillsHref="/settings/code-review/repo-1/skills"
+        />,
+    );
+
+describe("FilesAndKnowledge", () => {
+    it("names the globs 'Files' and links the skills & docs page", () => {
+        renderFiles({});
+        expect(screen.getByLabelText("Files")).toBeInTheDocument();
+        expect(screen.queryByText("Runs on")).toBeNull();
+        expect(screen.queryByText("Follows")).toBeNull();
+        expect(
+            screen.getByRole("link", { name: "Manage skills & docs" }),
+        ).toHaveAttribute("href", "/settings/code-review/repo-1/skills");
+    });
+
     it("explains that brackets and parentheses also match literally", () => {
-        render(
-            <RunsOn
-                agent={{
-                    ...agent,
-                    scope: { include: ["src/app/(shop)/[id]/**"] },
-                }}
-                canEdit
-                onChange={jest.fn()}
-            />,
-        );
+        renderFiles({ include: ["src/app/(shop)/[id]/**"] });
         expect(screen.getByRole("note")).toHaveTextContent(
             "src/app/(shop)/[id]/**",
         );
@@ -76,16 +96,33 @@ describe("RunsOn", () => {
     });
 
     it("shows no note for plain globs", () => {
-        render(
-            <RunsOn
-                agent={{
-                    ...agent,
-                    scope: { include: ["src/**"], exclude: ["**/*.spec.ts"] },
-                }}
-                canEdit
-                onChange={jest.fn()}
-            />,
-        );
+        renderFiles({ include: ["src/**"], exclude: ["**/*.spec.ts"] });
         expect(screen.queryByRole("note")).toBeNull();
+    });
+});
+
+describe("CommentsAndModel", () => {
+    it("shows model names, never raw ids", async () => {
+        (getBYOK as jest.Mock).mockResolvedValue({
+            models: [
+                {
+                    id: "m-flash",
+                    credentialId: "c1",
+                    model: "accounts/fireworks/models/glm-5p3-flash",
+                },
+            ],
+            routing: { defaultModelId: "m-flash" },
+        });
+        render(
+            <QueryClientProvider client={new QueryClient()}>
+                <CommentsAndModel agent={agent} canEdit onChange={jest.fn()} />
+            </QueryClientProvider>,
+        );
+        await waitFor(() =>
+            expect(
+                screen.getByRole("combobox", { name: "Model" }),
+            ).toHaveTextContent("Routing default (GLM 5.3 Flash)"),
+        );
+        expect(screen.queryByText(/accounts\/fireworks/)).toBeNull();
     });
 });

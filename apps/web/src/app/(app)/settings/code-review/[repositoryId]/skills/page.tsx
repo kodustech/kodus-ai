@@ -1,7 +1,6 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { Badge } from "@components/ui/badge";
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -34,7 +33,10 @@ import { Action, ResourceType } from "@services/permissions/types";
 import { BookOpenIcon, PlusIcon, SparklesIcon, Trash2Icon } from "lucide-react";
 import { useUnsavedChangesGuard } from "src/core/hooks/use-unsaved-changes-guard";
 
-import { useCustomAgentsForm } from "../_custom-agents/use-custom-agents-form";
+import {
+    agentsListHref,
+    useCustomAgentsForm,
+} from "../_custom-agents/use-custom-agents-form";
 import { CentralizedConfigReadOnlyAlert } from "../../_components/centralized-config-readonly-alert";
 import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedback";
 import { customAgentsSaveErrorMessage } from "../../_utils/settings-save-conflict";
@@ -94,9 +96,7 @@ function SkillsContent() {
             color: agent.presentation.tag.color,
         })),
     ];
-    const reviewScopeHref = `/settings/code-review/${repositoryId}/review-scope${
-        directoryId ? `?directoryId=${directoryId}` : ""
-    }`;
+    const listHref = agentsListHref(repositoryId, directoryId);
 
     useUnsavedChangesGuard({
         id: "skills-and-docs",
@@ -165,8 +165,8 @@ function SkillsContent() {
                     <Breadcrumb className="mb-1">
                         <BreadcrumbList>
                             <BreadcrumbItem>
-                                <BreadcrumbLink href={reviewScopeHref}>
-                                    What to review
+                                <BreadcrumbLink href={listHref}>
+                                    Custom agents
                                 </BreadcrumbLink>
                             </BreadcrumbItem>
                             <BreadcrumbSeparator />
@@ -177,15 +177,13 @@ function SkillsContent() {
                             </BreadcrumbItem>
                         </BreadcrumbList>
                     </Breadcrumb>
-                    <Page.Title>
-                        Skills &amp; docs <Badge>Beta</Badge>
-                    </Page.Title>
+                    <Page.Title>Skills &amp; docs</Page.Title>
                     <Page.Description>
                         Guides that live in the repository, linked here to the
                         main review, with who follows what. Each custom agent
-                        picks its own on its row in What to review. Read from
-                        each pull request&apos;s target branch; skills open on
-                        demand, docs load whole, scripts never run.
+                        picks its own on its page. Read from each pull
+                        request&apos;s target branch; skills open on demand,
+                        docs load whole, scripts never run.
                     </Page.Description>
                 </Page.TitleContainer>
                 <Page.SaveActions

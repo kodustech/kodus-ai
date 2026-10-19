@@ -2,22 +2,25 @@
 import "@testing-library/jest-dom";
 
 import { StrictMode, type ReactNode } from "react";
+import { newCliTool } from "@services/custom-agents/drafts";
 import type { CustomAgent } from "@services/custom-agents/types";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { FormProvider, useForm } from "react-hook-form";
 
 import { shouldBlockCodeReviewLayoutNavigation } from "../_utils/layout-dirty-state";
-import { CustomAgentsSection } from "./custom-agents-section";
-import { useCustomAgentsForm } from "./use-custom-agents-form";
+import { CustomAgentsList } from "./custom-agents-section";
+import { ownListNote, useCustomAgentsForm } from "./use-custom-agents-form";
 
 const agent: CustomAgent = {
     id: "ledger",
     name: "Ledger reviewer",
     enabled: true,
-    instructions: "Every posting balances.",
-    scope: {},
-    tools: {},
+    instructions: "# Ledger rules\nEvery posting balances.",
+    scope: { include: ["src/payments/**"] },
+    tools: {
+        cli: [{ ...newCliTool(), name: "semver", binary: "semver" }],
+    },
     presentation: {
         tag: { color: "#304FFE" },
         format: "inline",
@@ -25,12 +28,16 @@ const agent: CustomAgent = {
     },
 };
 
-const report = {
-    knowledge: { status: "ok", items: [], candidates: [], budgets: [] },
-    mcp: { status: "ok", integrations: [] },
-};
+const knowledge = [
+    {
+        path: "docs/ledger.md",
+        kind: "doc" as const,
+        linkedTo: [{ agentId: "ledger" }],
+    },
+];
 
-let releaseResolve: Array<() => void> = [];
+const push = jest.fn();
+const saveSettings = jest.fn();
 
 jest.mock("next/link", () => ({
     __esModule: true,
@@ -42,16 +49,25 @@ jest.mock("next/link", () => ({
 }));
 
 jest.mock("next/navigation", () => ({
-    useRouter: () => ({ push: jest.fn(), refresh: jest.fn() }),
+    useRouter: () => ({ push, refresh: jest.fn() }),
 }));
 
 jest.mock("@services/custom-agents/fetch", () => ({
     CUSTOM_AGENTS_PATHS: { STATUS: "status", RESOLVE: "resolve" },
-    getCustomAgentsStatus: async () => ({ windowDays: 30, agents: [] }),
-    resolveCustomAgent: () =>
-        new Promise((resolve) => releaseResolve.push(() => resolve(report))),
+    getCustomAgentsStatus: async () => ({
+        windowDays: 30,
+        agents: [
+            { agentId: "ledger", pullRequests: 9, posted: 15, dropped: 2 },
+        ],
+    }),
+    resolveCustomAgent: async () => ({
+        knowledge: { status: "ok", items: [], candidates: [], budgets: [] },
+        mcp: { status: "ok", integrations: [] },
+    }),
     tryCustomAgent: jest.fn(),
 }));
+
+jest.mock("@components/ui/toaster/use-toast", () => ({ toast: jest.fn() }));
 
 jest.mock("src/core/providers/selected-team-context", () => ({
     useSelectedTeamId: () => ({ teamId: "team-1" }),
@@ -61,27 +77,38 @@ jest.mock("../../../_hooks", () => ({
     useCodeReviewRouteParams: () => ({
         repositoryId: "repo-1",
         directoryId: undefined,
-        pageName: "review-scope",
+        pageName: "agents",
     }),
     useCurrentConfigLevel: () => "repository",
 }));
 
 jest.mock("../../_hooks/use-code-review-settings-mutation", () => ({
-    useCodeReviewSettingsMutation: () => ({ saveSettings: jest.fn() }),
+    useCodeReviewSettingsMutation: () => ({ saveSettings }),
 }));
 
 jest.mock("@services/organizationParameters/fetch", () => ({
     getBYOK: async () => null,
 }));
 
+type Node = Record<string, unknown>;
+
 // Like the settings layout: it owns the form and computes its leave guard from
 // the root `formState`, so it only sees what re-renders the form's root.
-const Form = ({ children }: { children: ReactNode }) => {
+const Form = ({
+    children,
+    agentsNode,
+}: {
+    children: ReactNode;
+    agentsNode?: Node;
+}) => {
     const form = useForm<any>({
         mode: "all",
         defaultValues: {
-            customAgents: { value: [agent], level: "repository" },
-            knowledge: { value: [], level: "repository" },
+            customAgents: agentsNode ?? {
+                value: [agent],
+                level: "repository",
+            },
+            knowledge: { value: knowledge, level: "repository" },
         },
     });
     const { dirtyFields } = form.formState;
@@ -100,46 +127,194 @@ const Form = ({ children }: { children: ReactNode }) => {
     );
 };
 
-const renderSection = () => {
-    const client = new QueryClient();
-    return render(
+const renderList = (agentsNode?: Node) =>
+    render(
         <StrictMode>
-            <QueryClientProvider client={client}>
-                <Form>
-                    <CustomAgentsSection canEdit />
+            <QueryClientProvider client={new QueryClient()}>
+                <Form agentsNode={agentsNode}>
+                    <CustomAgentsList canEdit />
                 </Form>
             </QueryClientProvider>
         </StrictMode>,
     );
-};
 
 const flush = () => act(async () => {});
 
-describe("CustomAgentsSection", () => {
+/** The agents a save sent, as the server receives them. */
+const savedAgents = (call = 0): CustomAgent[] => {
+    const [formData, options] = saveSettings.mock.calls[call];
+    return options.prepare(formData).codeReviewConfig.customAgents;
+};
+
+const openMenu = () => {
+    fireEvent.keyDown(
+        screen.getByRole("button", {
+            name: "More actions for Ledger reviewer",
+        }),
+        { key: "Enter" },
+    );
+};
+
+describe("CustomAgentsList", () => {
     beforeEach(() => {
-        releaseResolve = [];
+        push.mockReset();
+        saveSettings.mockReset();
+        saveSettings.mockResolvedValue({});
     });
 
-    it("opens an agent row on the first click of Configure", async () => {
-        renderSection();
+    it("shows one compact row: name, a short line, chips and usage", async () => {
+        renderList();
         await flush();
 
-        fireEvent.click(screen.getByRole("button", { name: /configure/i }));
-        await flush();
-
-        expect(screen.getByLabelText("Instructions")).toBeInTheDocument();
+        const [row] = within(
+            screen.getByRole("list", { name: "Custom agents" }),
+        ).getAllByRole("listitem");
+        expect(
+            within(row).getByRole("link", { name: "Ledger reviewer" }),
+        ).toBeInTheDocument();
+        expect(within(row).getByText("Ledger rules")).toBeInTheDocument();
+        expect(within(row).queryByText(/Every posting/)).toBeNull();
+        const chips = within(row).getByRole("list", { name: "Setup" });
+        expect(
+            within(chips)
+                .getAllByRole("listitem")
+                .map((item) => item.textContent),
+        ).toEqual(["src/payments/**", "1 doc", "semver CLI"]);
+        expect(
+            await within(row).findByText("9 PRs · 15 posted · 30 days"),
+        ).toBeInTheDocument();
+        // No inline editing: the agent page is the one place to configure.
+        expect(screen.queryByRole("button", { name: /configure/i })).toBeNull();
+        expect(screen.queryByLabelText("Instructions")).toBeNull();
     });
 
-    it("keeps the row open while the skill discovery resolves", async () => {
-        renderSection();
+    it("opens the agent page from the row", async () => {
+        renderList();
+        await flush();
+        expect(
+            screen.getByRole("link", { name: "Ledger reviewer" }),
+        ).toHaveAttribute("href", "/settings/code-review/repo-1/agents/ledger");
+    });
 
-        fireEvent.click(screen.getByRole("button", { name: /configure/i }));
-        await act(async () => {
-            releaseResolve.forEach((release) => release());
+    it("saves the list when an agent is switched off", async () => {
+        renderList();
+        await flush();
+
+        fireEvent.click(
+            screen.getByRole("switch", { name: "Ledger reviewer enabled" }),
+        );
+        await flush();
+
+        expect(saveSettings).toHaveBeenCalledTimes(1);
+        expect(savedAgents()[0]).toMatchObject({
+            id: "ledger",
+            enabled: false,
+        });
+    });
+
+    it("edits from the ⋯ menu", async () => {
+        renderList();
+        await flush();
+
+        openMenu();
+        fireEvent.click(await screen.findByRole("menuitem", { name: "Edit" }));
+        expect(push).toHaveBeenLastCalledWith(
+            "/settings/code-review/repo-1/agents/ledger",
+        );
+    });
+
+    it("tries from the ⋯ menu", async () => {
+        renderList();
+        await flush();
+
+        openMenu();
+        fireEvent.click(
+            await screen.findByRole("menuitem", { name: "Try it" }),
+        );
+        expect(push).toHaveBeenLastCalledWith(
+            "/settings/code-review/repo-1/agents/ledger#try-it",
+        );
+    });
+
+    it("deletes from the ⋯ menu only after the confirm dialog", async () => {
+        renderList();
+        await flush();
+
+        openMenu();
+        fireEvent.click(
+            await screen.findByRole("menuitem", { name: "Delete" }),
+        );
+        const dialog = await screen.findByRole("dialog");
+        expect(dialog).toHaveTextContent("Delete Ledger reviewer?");
+        expect(saveSettings).not.toHaveBeenCalled();
+
+        fireEvent.click(
+            within(dialog).getByRole("button", { name: "Delete agent" }),
+        );
+        await flush();
+
+        expect(saveSettings).toHaveBeenCalledTimes(1);
+        expect(savedAgents()).toEqual([]);
+    });
+
+    it("says when this repository's own list hides the global agents", async () => {
+        renderList({
+            value: [agent],
+            level: "repository",
+            overriddenLevel: "global",
+            overriddenValue: [],
         });
         await flush();
+        expect(screen.getByRole("note")).toHaveTextContent(
+            "This repository has its own agents list. Changes to the global agents don't reach it.",
+        );
+    });
 
-        expect(screen.getByLabelText("Instructions")).toBeInTheDocument();
+    it("says nothing when the list is inherited", async () => {
+        renderList({ value: [agent], level: "global" });
+        await flush();
+        expect(screen.queryByRole("note")).toBeNull();
+    });
+
+    it("explains an empty list and offers a new agent", async () => {
+        renderList({ value: [], level: "repository" });
+        await flush();
+        expect(screen.getByText("No custom agents yet")).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: "New agent" }),
+        ).toBeInTheDocument();
+    });
+});
+
+describe("ownListNote", () => {
+    it("names the level whose list this one replaces", () => {
+        expect(
+            ownListNote(
+                { level: "directory", overriddenLevel: "repository" },
+                "directory",
+            ),
+        ).toBe(
+            "This directory has its own agents list. Changes to the repository agents don't reach it.",
+        );
+        // A kodus-config.yml list is the repository's own list too.
+        expect(
+            ownListNote(
+                { level: "repository_file", overriddenLevel: "global" },
+                "repository",
+            ),
+        ).toMatch(/^This repository has its own agents list/);
+        expect(
+            ownListNote(
+                { level: "repository", overriddenLevel: "default" },
+                "repository",
+            ),
+        ).toBeNull();
+        expect(
+            ownListNote(
+                { level: "global", overriddenLevel: "default" },
+                "global",
+            ),
+        ).toBeNull();
     });
 });
 
@@ -181,14 +356,10 @@ describe("useCustomAgentsForm", () => {
 
         fireEvent.click(screen.getByText("reset"));
         await flush();
-        expect(screen.getByTestId("name")).toHaveTextContent(
-            "Ledger reviewer",
-        );
+        expect(screen.getByTestId("name")).toHaveTextContent("Ledger reviewer");
         expect(screen.getByTestId("dirty")).toHaveTextContent("false");
         // The settings layout guard reads the same form: it must let the
         // user leave once the edit is undone.
-        expect(screen.getByTestId("layout-blocks")).toHaveTextContent(
-            "false",
-        );
+        expect(screen.getByTestId("layout-blocks")).toHaveTextContent("false");
     });
 });

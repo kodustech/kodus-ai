@@ -26,7 +26,42 @@ import {
  * (see settings-save-conflict.ts).
  */
 type FieldNode<T> =
-    { value?: T; level?: string; revision?: string } | undefined;
+    | {
+          value?: T;
+          level?: string;
+          revision?: string;
+          overriddenValue?: T;
+          overriddenLevel?: string;
+      }
+    | undefined;
+
+const LEVEL_NAMES: Record<string, string> = {
+    global: "global",
+    repository: "repository",
+    repository_file: "repository",
+    directory: "directory",
+    directory_file: "directory",
+};
+
+/**
+ * Said when the agents list saved at this level replaces one above it: a
+ * repository with its own list no longer gets the global agents. Null when
+ * the list is inherited, global, or replaces only the defaults.
+ */
+export const ownListNote = (
+    saved: FieldNode<unknown[]>,
+    level: string,
+): string | null => {
+    if (!saved?.level || level === "global") return null;
+    const here = LEVEL_NAMES[level] ?? level;
+    // A kodus-config.yml list counts as the level's own list too.
+    if ((LEVEL_NAMES[saved.level] ?? saved.level) !== here) return null;
+    const above = saved.overriddenLevel;
+    if (!above || above === "default") return null;
+    const there = LEVEL_NAMES[above] ?? above;
+    if (there === here) return null;
+    return `This ${here} has its own agents list. Changes to the ${there} agents don't reach it.`;
+};
 
 /**
  * The custom agents and the skills and docs they link, read from and written
@@ -58,6 +93,12 @@ export const useCustomAgentsForm = () => {
     });
 
     const agents = agentsNode?.value ?? [];
+    // From the saved node: an edited node drops the override fields.
+    const listNote = ownListNote(
+        (form.control._defaultValues as Record<string, unknown> | undefined)
+            ?.customAgents as FieldNode<unknown[]>,
+        String(level),
+    );
     const knowledge = knowledgeNode?.value ?? [];
     const dirtyKeys = Object.keys(dirtyFields ?? {});
     const isDirty = dirtyKeys.some(
@@ -183,6 +224,7 @@ export const useCustomAgentsForm = () => {
         agents,
         knowledge,
         level,
+        listNote,
         isDirty,
         otherFieldsDirty,
         isSubmitting,
@@ -200,6 +242,11 @@ export const agentPageHref = (
     directoryId?: string,
 ) =>
     `/settings/code-review/${repositoryId}/agents/${encodeURIComponent(agentId)}${
+        directoryId ? `?directoryId=${directoryId}` : ""
+    }`;
+
+export const agentsListHref = (repositoryId: string, directoryId?: string) =>
+    `/settings/code-review/${repositoryId}/agents${
         directoryId ? `?directoryId=${directoryId}` : ""
     }`;
 

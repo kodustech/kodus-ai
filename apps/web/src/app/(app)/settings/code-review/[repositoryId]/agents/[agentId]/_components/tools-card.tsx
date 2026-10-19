@@ -11,6 +11,14 @@ import {
 } from "@components/ui/collapsible";
 import { Input } from "@components/ui/input";
 import { Link } from "@components/ui/link";
+import {
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetFooter,
+    SheetHeader,
+    SheetTitle,
+} from "@components/ui/sheet";
 import { Skeleton } from "@components/ui/skeleton";
 import { Switch } from "@components/ui/switch";
 import TagInput from "@components/ui/tag-input";
@@ -393,39 +401,26 @@ const SecretsEditor = ({
     );
 };
 
+/** One CLI's full form, shown in the side sheet. */
 const CliEditor = ({
     cli,
     canEdit,
     onChange,
-    onRemove,
 }: {
     cli: CliToolConfig;
     canEdit: boolean;
     onChange: (cli: CliToolConfig) => void;
-    onRemove: () => void;
 }) => {
     const issues = cliIssues(cli);
     const set = (patch: Partial<CliToolConfig>) =>
         onChange({ ...cli, ...patch });
 
     return (
-        <div className="border-card-lv3/60 flex flex-col gap-3 rounded-xl border p-4">
-            <div className="flex items-center justify-between gap-2">
-                <span className="text-text-primary text-sm font-medium">
-                    {cli.name || "New CLI"}
-                </span>
-                <Button
-                    size="xs"
-                    variant="cancel"
-                    leftIcon={<Trash2Icon />}
-                    disabled={!canEdit}
-                    onClick={onRemove}>
-                    Remove
-                </Button>
-            </div>
+        <div className="flex flex-col gap-3">
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <Field label="Name">
+                <Field label="Name" htmlFor="cli-name">
                     <Input
+                        id="cli-name"
                         size="md"
                         value={cli.name}
                         disabled={!canEdit}
@@ -433,8 +428,12 @@ const CliEditor = ({
                         onChange={(e) => set({ name: e.target.value })}
                     />
                 </Field>
-                <Field label="Binary" hint="What the agent calls.">
+                <Field
+                    label="Binary"
+                    htmlFor="cli-binary"
+                    hint="What the agent calls.">
                     <Input
+                        id="cli-binary"
                         size="md"
                         value={cli.binary}
                         disabled={!canEdit}
@@ -445,8 +444,10 @@ const CliEditor = ({
             </div>
             <Field
                 label="Install"
+                htmlFor="cli-install"
                 hint="Pinned to a version or digest. Runs once in the sandbox before the review.">
                 <Input
+                    id="cli-install"
                     size="md"
                     className="font-mono"
                     value={cli.install}
@@ -582,32 +583,73 @@ export const ClisField = ({
             tools: { ...current.tools, cli: next },
         }));
 
+    // The CLI open in the side sheet, by position: a CLI has no id, and its
+    // name is what the form is editing.
+    const [editing, setEditing] = useState<number | null>(null);
+    const open = editing !== null ? clis[editing] : undefined;
+    const remove = (index: number) => {
+        setEditing(null);
+        setClis(clis.filter((_, position) => position !== index));
+    };
+
     return (
         <Field
             label="CLIs"
-            hint={`Your team's command-line tools, installed in an isolated sandbox. Up to ${CUSTOM_AGENT_LIMITS.maxCliTools}.`}>
-            <div className="flex flex-col gap-3">
-                {clis.map((cli, index) => (
-                    <CliEditor
-                        key={index}
-                        cli={cli}
-                        canEdit={canEdit}
-                        onChange={(next) =>
-                            setClis(
-                                clis.map((item, position) =>
-                                    position === index ? next : item,
-                                ),
-                            )
-                        }
-                        onRemove={() =>
-                            setClis(
-                                clis.filter(
-                                    (_, position) => position !== index,
-                                ),
-                            )
-                        }
-                    />
-                ))}
+            hint={`Your team's command-line tools, in an isolated sandbox. Up to ${CUSTOM_AGENT_LIMITS.maxCliTools}.`}>
+            <div className="flex flex-col gap-2">
+                {clis.length > 0 && (
+                    <ul className="border-card-lv3/60 divide-card-lv3/60 flex flex-col divide-y rounded-xl border">
+                        {clis.map((cli, index) => {
+                            const issues = cliIssues(cli);
+                            const label = cli.name || "New CLI";
+                            return (
+                                <li
+                                    key={index}
+                                    className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+                                    <span className="flex min-w-0 flex-1 flex-col">
+                                        <span className="text-text-primary truncate text-sm font-medium">
+                                            {label}
+                                            {cli.binary &&
+                                                cli.binary !== cli.name && (
+                                                    <span className="text-text-tertiary font-normal">
+                                                        {" "}
+                                                        · {cli.binary}
+                                                    </span>
+                                                )}
+                                        </span>
+                                        <span className="text-text-tertiary truncate font-mono text-xs">
+                                            {cli.install || "No install yet"}
+                                        </span>
+                                    </span>
+                                    {issues.length > 0 && (
+                                        <Chip tone="warning">
+                                            {issues.length}{" "}
+                                            {issues.length === 1
+                                                ? "issue"
+                                                : "issues"}
+                                        </Chip>
+                                    )}
+                                    <Button
+                                        size="xs"
+                                        variant="helper"
+                                        aria-label={`Edit ${label}`}
+                                        onClick={() => setEditing(index)}>
+                                        {canEdit ? "Edit" : "View"}
+                                    </Button>
+                                    <Button
+                                        size="xs"
+                                        variant="cancel"
+                                        aria-label={`Remove ${label}`}
+                                        leftIcon={<Trash2Icon />}
+                                        disabled={!canEdit}
+                                        onClick={() => remove(index)}>
+                                        Remove
+                                    </Button>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                )}
                 <Button
                     size="xs"
                     variant="helper"
@@ -617,10 +659,50 @@ export const ClisField = ({
                         !canEdit ||
                         clis.length >= CUSTOM_AGENT_LIMITS.maxCliTools
                     }
-                    onClick={() => setClis([...clis, newCliTool()])}>
+                    onClick={() => {
+                        setClis([...clis, newCliTool()]);
+                        setEditing(clis.length);
+                    }}>
                     Add CLI
                 </Button>
             </div>
+
+            <Sheet
+                open={!!open}
+                onOpenChange={(next) => !next && setEditing(null)}>
+                <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
+                    <SheetHeader>
+                        <SheetTitle>{open?.name || "New CLI"}</SheetTitle>
+                        <SheetDescription>
+                            Changes land on the agent&apos;s form; save the page
+                            to keep them.
+                        </SheetDescription>
+                    </SheetHeader>
+                    {open && editing !== null && (
+                        <div className="px-6 py-4">
+                            <CliEditor
+                                cli={open}
+                                canEdit={canEdit}
+                                onChange={(next) =>
+                                    setClis(
+                                        clis.map((item, position) =>
+                                            position === editing ? next : item,
+                                        ),
+                                    )
+                                }
+                            />
+                        </div>
+                    )}
+                    <SheetFooter>
+                        <Button
+                            size="sm"
+                            variant="primary"
+                            onClick={() => setEditing(null)}>
+                            Done
+                        </Button>
+                    </SheetFooter>
+                </SheetContent>
+            </Sheet>
         </Field>
     );
 };
@@ -636,7 +718,7 @@ export const ToolsCard = (props: ToolsProps) => {
     return (
         <Section
             title="Tools"
-            description="What the agent can run besides reading the code. Every tool is read-only towards your systems.">
+            description="What the agent can run besides reading the code, all read-only towards your systems.">
             <PluginsField {...props} />
             <ClisField agent={agent} canEdit={canEdit} onChange={onChange} />
 

@@ -2,13 +2,14 @@ import {
     agentFromSkill,
     agentNameError,
     agentSlug,
+    agentChips,
+    agentStatusLine,
     agentUsageLine,
     cliIssues,
     createAgentFromTemplate,
     CUSTOM_AGENT_LIMITS,
     CUSTOM_AGENT_TEMPLATES,
     describeAgent,
-    followsLine,
     isLinked,
     knowledgeChoices,
     knowledgeItemFromPath,
@@ -17,11 +18,10 @@ import {
     normalizeKnowledgePath,
     prepareAgentsForSave,
     prepareKnowledgeForSave,
-    pullRequestPlan,
     reviewerName,
     setAgentKnowledge,
     setKnowledgeLink,
-    settingsSummary,
+    scopeLabel,
     TAG_COLORS,
     withoutAgent,
     withoutSecretValues,
@@ -114,7 +114,7 @@ describe("custom agent drafts", () => {
 
     it("summarizes the last window of findings", () => {
         expect(agentUsageLine(undefined, 30)).toBe(
-            "No findings in the last 30 days",
+            "No findings in 30 days",
         );
         expect(
             agentUsageLine(
@@ -126,7 +126,7 @@ describe("custom agent drafts", () => {
                 },
                 30,
             ),
-        ).toBe("3 PRs · 4 posted · 1 dropped · last 30 days");
+        ).toBe("3 PRs · 4 posted · 30 days");
     });
 
     it("links and unlinks knowledge without losing the registration", () => {
@@ -559,12 +559,15 @@ describe("custom agent drafts", () => {
             },
         ];
 
-        it("names skills by frontmatter, else folder, and counts docs", () => {
-            expect(followsLine(knowledge, "a1", names)).toBe(
-                "Follows: create-e2e-tests, ledger · 1 doc",
-            );
-            expect(followsLine(knowledge, "a2", names)).toBe("Follows: 1 doc");
-            expect(followsLine(knowledge, "a3", names)).toBeNull();
+        it("counts the skills and docs an agent follows on its row", () => {
+            const row = (id: string) =>
+                agentChips(
+                    { id, scope: {}, tools: {} } as CustomAgent,
+                    knowledge,
+                );
+            expect(row("a1")).toEqual(["All files", "2 skills", "1 doc"]);
+            expect(row("a2")).toEqual(["All files", "1 doc"]);
+            expect(row("a3")).toEqual(["All files"]);
         });
 
         it.each([
@@ -640,38 +643,58 @@ describe("custom agent drafts", () => {
             },
         ];
 
-        it("describes a pull request from the config", () => {
+        it("says where the agent runs and what it did, in one line", () => {
             const agent = {
                 ...base(),
-                scope: { include: ["apps/billing/**"] },
+                scope: {
+                    include: ["apps/billing/**"],
+                    exclude: ["**/*.test.ts"],
+                },
             };
-            expect(pullRequestPlan(agent, knowledge, names)).toBe(
-                "On a pull request that changes apps/billing/** — loads create-e2e-tests, reads 1 doc, checks each finding, posts as E2E tests reviewer.",
+            expect(scopeLabel(agent)).toBe(
+                "apps/billing/** except **/*.test.ts",
+            );
+            expect(scopeLabel(base())).toBe("all files");
+            expect(
+                agentStatusLine(
+                    agent,
+                    { agentId: "a", pullRequests: 9, posted: 15, dropped: 2 },
+                    30,
+                ),
+            ).toBe(
+                "Runs on apps/billing/** except **/*.test.ts · 9 PRs · 15 posted in 30 days",
+            );
+            expect(agentStatusLine(base(), undefined, 30)).toBe(
+                "Runs on all files · no findings in 30 days",
+            );
+            expect(agentStatusLine(base(), undefined, 30, true)).toBe(
+                "Runs on all files · usage shows per repository",
             );
         });
 
-        it("lists plugins, CLIs and the model in one line", () => {
+        it("lists files, skills, docs, plugins and CLIs as row chips", () => {
             const agent: CustomAgent = {
                 ...base(),
+                id: "agent",
+                scope: { include: ["src/payments/**", "src/ledger/**"] },
                 tools: {
                     mcp: [{ integrationId: "lin", tools: [] }],
                     cli: [{ name: "semver" } as CliToolConfig],
+                    astGrepConfig: "id: x",
                 },
             };
             expect(
-                settingsSummary(agent, {
+                agentChips(agent, knowledge, {
                     pluginName: (id) => (id === "lin" ? "Linear" : undefined),
                 }),
-            ).toEqual(["Linear", "semver CLI", "Model: routing default"]);
-            expect(
-                settingsSummary(
-                    { ...base(), models: { run: "m1" } },
-                    {
-                        modelName: (id) =>
-                            id === "m1" ? "Model One" : undefined,
-                    },
-                ),
-            ).toEqual(["Model: Model One"]);
+            ).toEqual([
+                "src/payments/** +1",
+                "1 skill",
+                "1 doc",
+                "Linear",
+                "semver CLI",
+                "ast-grep",
+            ]);
         });
 
         it("names a plugin from its id when its connection is not listed", () => {
@@ -690,7 +713,7 @@ describe("custom agent drafts", () => {
                     cli: [],
                 },
             };
-            expect(settingsSummary(agent).slice(0, 3)).toEqual([
+            expect(agentChips(agent, []).slice(1, 4)).toEqual([
                 "Linear",
                 "Git Issues",
                 "Plugin",
