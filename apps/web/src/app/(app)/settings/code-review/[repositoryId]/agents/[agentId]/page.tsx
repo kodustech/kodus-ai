@@ -45,7 +45,10 @@ import {
 } from "../../_custom-agents/use-custom-agents-form";
 import { CentralizedConfigReadOnlyAlert } from "../../../_components/centralized-config-readonly-alert";
 import { getCentralizedPrToastPayload } from "../../../_utils/centralized-pr-feedback";
-import { customAgentsSaveErrorMessage } from "../../../_utils/settings-save-conflict";
+import {
+    customAgentsSaveErrorToast,
+    logCustomAgentsSaveError,
+} from "../../../_utils/settings-save-conflict";
 import {
     CommentsAndModel,
     FilesAndKnowledge,
@@ -161,16 +164,14 @@ function AgentContent() {
                     : { description: "Agent saved", variant: "success" },
             );
         } catch (error) {
-            console.error("Error saving custom agent:", error);
-            toast({
-                title: "Error",
-                description: customAgentsSaveErrorMessage(
+            logCustomAgentsSaveError("Error saving custom agent:", error);
+            toast(
+                customAgentsSaveErrorToast(
                     error,
                     "Couldn't save the agent. Check the fields marked above and try again.",
                     agents,
                 ),
-                variant: "danger",
-            });
+            );
         }
     };
 
@@ -183,16 +184,14 @@ function AgentContent() {
             setConfirmingDelete(false);
             router.push(backHref);
         } catch (error) {
-            console.error("Error deleting custom agent:", error);
+            logCustomAgentsSaveError("Error deleting custom agent:", error);
             setConfirmingDelete(false);
-            toast({
-                title: "Error",
-                description: customAgentsSaveErrorMessage(
+            toast(
+                customAgentsSaveErrorToast(
                     error,
                     "Couldn't delete the agent. Try again.",
                 ),
-                variant: "danger",
-            });
+            );
         }
     };
 

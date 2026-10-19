@@ -40,7 +40,10 @@ import {
 } from "../_custom-agents/use-custom-agents-form";
 import { CentralizedConfigReadOnlyAlert } from "../../_components/centralized-config-readonly-alert";
 import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedback";
-import { customAgentsSaveErrorMessage } from "../../_utils/settings-save-conflict";
+import {
+    customAgentsSaveErrorToast,
+    logCustomAgentsSaveError,
+} from "../../_utils/settings-save-conflict";
 import { KnowledgeStatusChips } from "../agents/[agentId]/_components/knowledge-card";
 
 function SkillsContent() {
@@ -147,16 +150,14 @@ function SkillsContent() {
                     : { description: "Settings saved", variant: "success" },
             );
         } catch (error) {
-            console.error("Error saving skills and docs:", error);
-            toast({
-                title: "Error",
-                description: customAgentsSaveErrorMessage(
+            logCustomAgentsSaveError("Error saving skills and docs:", error);
+            toast(
+                customAgentsSaveErrorToast(
                     error,
                     "Couldn't save. Check the limits and try again.",
                     agents,
                 ),
-                variant: "danger",
-            });
+            );
         }
     };
 

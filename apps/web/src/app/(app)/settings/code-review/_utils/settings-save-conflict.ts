@@ -57,6 +57,40 @@ export const customAgentsSaveErrorMessage = (
     return refused.length ? refused.join(" · ") : fallback;
 };
 
+/**
+ * The toast for a failed save. A refused stale save stays up until closed:
+ * it says what to do next, and five seconds was too short to read it.
+ */
+export const customAgentsSaveErrorToast = (
+    error: unknown,
+    fallback: string,
+    agents?: ReadonlyArray<{ name: string }>,
+) => ({
+    title: "Error",
+    description: customAgentsSaveErrorMessage(error, fallback, agents),
+    variant: "danger" as const,
+    ...(error instanceof CodeReviewSettingsConflictError && {
+        duration: Infinity,
+    }),
+});
+
+/**
+ * Logs a failed save. A refused stale save is an outcome the toast explains,
+ * not an error: logged as one, the dev overlay counted it as an issue.
+ */
+export const logCustomAgentsSaveError = (
+    message: string,
+    error: unknown,
+    /** Where the save was made; never the agents' content. */
+    context?: object,
+) => {
+    const log =
+        error instanceof CodeReviewSettingsConflictError
+            ? console.warn
+            : console.error;
+    log(message, context ? { ...context, error } : error);
+};
+
 export type ExpectedCustomAgentsRevisions = {
     customAgents?: string;
     knowledge?: string;
