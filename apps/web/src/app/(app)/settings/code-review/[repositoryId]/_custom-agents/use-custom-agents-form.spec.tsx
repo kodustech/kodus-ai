@@ -65,7 +65,13 @@ jest.mock("../../_hooks/use-code-review-settings-mutation", () => ({
 // What the settings shell loads for a scope: the formatted lists and, beside
 // them, the revision of each list the server read.
 const loaded = (agents: CustomAgent[], revision: string) => ({
-    customAgents: { value: agents, level: "repository" },
+    // As the settings shell loads a list: with where it is overridden.
+    customAgents: {
+        value: agents,
+        level: "repository",
+        overriddenValue: [{ ...ledger, id: "global-agent", name: "New agent" }],
+        overriddenLevel: "global",
+    },
     knowledge: { value: [], level: "repository" },
     customAgentsRevision: revision,
     knowledgeRevision: "knowledge-r1",
@@ -82,9 +88,11 @@ const Form = ({ children }: { children: ReactNode }) => {
 };
 
 const Probe = () => {
-    const { agents, updateAgent, save, reset } = useCustomAgentsForm();
+    const { agents, updateAgent, save, reset, isDirty } =
+        useCustomAgentsForm();
     return (
         <div>
+            <span data-testid="dirty">{isDirty ? "unsaved" : "saved"}</span>
             <span data-testid="names">
                 {agents.map((agent) => agent.name).join(",")}
             </span>
@@ -98,6 +106,15 @@ const Probe = () => {
                 edit
             </button>
             <button onClick={() => void save()}>save</button>
+            <button
+                onClick={() =>
+                    updateAgent("ledger", (agent) => ({
+                        ...agent,
+                        name: "Ledger reviewer",
+                    }))
+                }>
+                rename back
+            </button>
             <button
                 onClick={() =>
                     updateAgent("ledger", (agent) => ({
@@ -205,6 +222,24 @@ describe("useCustomAgentsForm — reset", () => {
         await flush();
         expect(screen.getByTestId("names")).toHaveTextContent("Edited here");
         expect(formRef.formState.isDirty).toBe(false);
+    });
+});
+
+describe("useCustomAgentsForm — undo by hand", () => {
+    it("is not unsaved once an edit is typed back to the saved value", async () => {
+        renderProbe();
+        fireEvent.click(screen.getByText("edit"));
+        await flush();
+        expect(screen.getByTestId("dirty")).toHaveTextContent("unsaved");
+
+        fireEvent.click(screen.getByText("rename back"));
+        await flush();
+        expect(screen.getByTestId("dirty")).toHaveTextContent("saved");
+        // What the page compares: the edited node carried a revision and lost
+        // the override fields, so the same list never matched the saved one.
+        expect(formRef.getValues("customAgents")).toEqual(
+            formRef.control._defaultValues.customAgents,
+        );
     });
 });
 

@@ -68,16 +68,27 @@ export const useCustomAgentsForm = () => {
     );
 
     const setList = useCallback(
-        (field: RevisionedListField, next: unknown[]) =>
+        (field: RevisionedListField, next: unknown[]) => {
+            // An edit undone by hand puts back the saved node as it was
+            // loaded: the edited node carries a revision and drops the
+            // override fields, so the same list still read as unsaved.
+            const saved = (
+                form.control._defaultValues as Record<string, unknown>
+            )?.[field] as FieldNode<unknown[]>;
+            const same = (a: unknown, b: unknown) =>
+                JSON.stringify(a ?? []) === JSON.stringify(b ?? []);
             form.setValue(
                 field as never,
-                {
-                    value: next,
-                    level,
-                    revision: loadedListRevision(form.getValues(), field),
-                } as never,
+                (saved && same(saved.value, next)
+                    ? saved
+                    : {
+                          value: next,
+                          level,
+                          revision: loadedListRevision(form.getValues(), field),
+                      }) as never,
                 { shouldDirty: true },
-            ),
+            );
+        },
         [form, level],
     );
     const setAgents = useCallback(
