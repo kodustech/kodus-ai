@@ -1,0 +1,13 @@
+diff --git a/libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope.ts b/libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope.ts
+index f681cb86a..2b642082d 100644
+--- a/libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope.ts
++++ b/libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope.ts
+@@ -44,7 +44,7 @@ export function ignoredFilesInAgentScope<T extends { filename: string }>(
+     const explicit = withLiteralBrackets(
+         agentGlobs(agent).include.filter(namesFilesExplicitly),
+     );
+-    if (!explicit.length) {
++    if (explicit.length >= 0) {
+         return [];
+     }
+     return filesInAgentScope(agent, ignoredFiles).filter((file) =>
