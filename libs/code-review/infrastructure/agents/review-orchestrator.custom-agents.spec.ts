@@ -519,6 +519,58 @@ describe('ReviewOrchestratorService — custom agents', () => {
         expect(out.customAgentRuns?.[0].status).toBe('failed');
     });
 
+    it('logs a skipped and a failed agent with the review and agent ids', async () => {
+        const { service } = setup(() => {
+            throw new Error('provider down');
+        });
+        const logger = (service as any).logger;
+        const log = jest.spyOn(logger, 'log').mockImplementation(() => undefined);
+        const error = jest
+            .spyOn(logger, 'error')
+            .mockImplementation(() => undefined);
+        const ids = {
+            organizationId: 'org-1',
+            teamId: 'team-1',
+            repositoryId: 'repo-1',
+            prNumber: 7,
+        };
+
+        await service.execute(
+            inputFor({
+                organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
+                repositoryId: 'repo-1',
+                customAgents: [
+                    agentConfig(),
+                    agentConfig({
+                        id: 'agent-2',
+                        name: 'Docs only',
+                        scope: { include: ['**/*.nothing'] },
+                    }),
+                ],
+            }),
+        );
+
+        expect(log).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    ...ids,
+                    customAgentId: 'agent-2',
+                    customAgentSlug: 'docs-only',
+                    reason: 'no-matching-files',
+                }),
+            }),
+        );
+        expect(error).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.stringContaining('custom-agent:ledger-rules'),
+                metadata: expect.objectContaining({
+                    ...ids,
+                    customAgentId: 'agent-1',
+                }),
+            }),
+        );
+    });
+
     it('reports a cut-short agent as incomplete', async () => {
         const { service } = setup((config) => ({
             suggestions: [],
