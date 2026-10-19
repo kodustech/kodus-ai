@@ -58,12 +58,21 @@ class NotAProductionRoute extends Error {
     }
 }
 
+// crypto.ts runs `dotenv/config` on its first import, which puts back any .env
+// variable the route has just removed (applyPlatformEnv drops API_LLM_PROVIDER_MODEL).
+function loadEncrypt() {
+    const before = new Set(Object.keys(process.env));
+    const { encrypt } = require('../../libs/common/utils/crypto.ts');
+    for (const name of Object.keys(process.env)) if (!before.has(name)) delete process.env[name];
+    return encrypt;
+}
+
 function storedByokConfig({ provider, model, apiKey, baseURL, reasoningEffort, openrouterProviderOrder }) {
     const byokProvider = openrouterProviderOrder?.length ? 'open_router' : BYOK_PROVIDER[provider];
     if (!byokProvider) {
         throw new NotAProductionRoute(`provider '${provider}' has no BYOK route in production`);
     }
-    const { encrypt } = require('../../libs/common/utils/crypto.ts');
+    const encrypt = loadEncrypt();
     return {
         version: 2,
         credentials: [
@@ -98,7 +107,7 @@ function storedByokConfig({ provider, model, apiKey, baseURL, reasoningEffort, o
  * apiKey, baseURL?, reasoningEffort?, openrouterProviderOrder? }.
  */
 function storedByokConfigOf(models, routing) {
-    const { encrypt } = require('../../libs/common/utils/crypto.ts');
+    const encrypt = loadEncrypt();
     return {
         version: 2,
         credentials: models.map((m) => {
