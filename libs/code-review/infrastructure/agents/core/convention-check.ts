@@ -314,10 +314,16 @@ export async function checkConventionQuotes(
 
 /** The model cites a rule written in the agent's instructions by the name the
  *  prompt gives them (`<TeamInstructions>`). */
-function isTeamInstructionsSource(file: string): boolean {
-    // Models name it loosely ("Team instructions (Agent name)").
-    const name = file.replace(/[^A-Za-z]/g, '').toLowerCase();
-    return name.startsWith('teaminstructions') || name === 'instructions';
+export function isTeamInstructionsSource(file: string): boolean {
+    // Models name it loosely ("Team instructions (Agent name)"); only that
+    // display-name suffix is dropped, so a repository file such as
+    // `TeamInstructions.md` or `team-instructions/rules.md` stays a file.
+    const name = (file ?? '')
+        .trim()
+        .replace(/\s*\([^()]*\)\s*$/, '')
+        .replace(/[^A-Za-z]/g, '')
+        .toLowerCase();
+    return name === 'teaminstructions' || name === 'instructions';
 }
 
 async function findInSkillFiles(

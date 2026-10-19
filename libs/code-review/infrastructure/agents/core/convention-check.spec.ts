@@ -252,6 +252,42 @@ describe('checkConventionQuotes', () => {
             expect(r.passed).toHaveLength(1);
         });
 
+        it.each(['TeamInstructions.md', 'team-instructions/rules.md'])(
+            'treats %s as a repository file, not the instructions',
+            async (file) => {
+                const quote = 'Every gate valve reports its pressure reading.';
+                const r = await checkConventionQuotes(
+                    [conv(quote, { source: { file, section: '', quote } })],
+                    reader({ [file]: `# Rules\n\n${quote}\n` }),
+                    [file],
+                    undefined,
+                    INSTRUCTIONS,
+                );
+                expect(r.rejected).toEqual([]);
+                expect(r.passed[0].sectionText).toContain(quote);
+            },
+        );
+
+        it('accepts the display-name form of the instructions', async () => {
+            const quote = 'Close valves in a finally block.';
+            const r = await checkConventionQuotes(
+                [
+                    conv(quote, {
+                        source: {
+                            file: 'Team instructions (Valve agent)',
+                            section: '',
+                            quote,
+                        },
+                    }),
+                ],
+                reader({}),
+                [GUIDE],
+                undefined,
+                INSTRUCTIONS,
+            );
+            expect(r.rejected).toEqual([]);
+        });
+
         it('drops a quote the instructions do not hold', async () => {
             const r = await checkConventionQuotes(
                 [

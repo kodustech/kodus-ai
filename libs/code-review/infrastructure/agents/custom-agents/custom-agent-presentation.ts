@@ -10,6 +10,7 @@ import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/del
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 import type { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { isAnalyzerSuggestion } from '@libs/code-review/infrastructure/analyzers/analyzer-findings-to-suggestions';
+import { isTeamInstructionsSource } from '@libs/code-review/infrastructure/agents/core/convention-check';
 import type { DedupGroup } from '@libs/code-review/infrastructure/agents/engine/prefer-analyzer-keep';
 
 /**
@@ -313,9 +314,7 @@ export function ruleCitation(s: Finding): string {
     const quote = s.kind === 'convention' ? s.source?.quote?.trim() : '';
     if (!quote) return '';
     const file = s.source?.file?.trim() ?? '';
-    const where = /^(teaminstructions|instructions$)/i.test(
-        file.replace(/[^A-Za-z]/g, ''),
-    )
+    const where = isTeamInstructionsSource(file)
         ? "agent's instructions"
         : `\`${file}\``;
     const quoted = quote

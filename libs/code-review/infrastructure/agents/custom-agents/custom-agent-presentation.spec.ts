@@ -349,6 +349,19 @@ describe('ruleCitation', () => {
         ).toContain("**Rule** (agent's instructions)");
     });
 
+    it('names a repository file called TeamInstructions.md as a file', () => {
+        expect(
+            ruleCitation({
+                kind: 'convention',
+                source: {
+                    file: 'TeamInstructions.md',
+                    section: '',
+                    quote: 'Log the zone id.',
+                },
+            } as any),
+        ).toContain('**Rule** (`TeamInstructions.md`)');
+    });
+
     it('quotes every line of a multi-line rule', () => {
         expect(
             ruleCitation({
