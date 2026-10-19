@@ -297,18 +297,33 @@ const MAX_EVIDENCE_LINES = 5;
 
 /**
  * The lines of the agent's CLI output that name the finding's file, by CLI:
- * what the tool reported about it. Repeated runs of the same call add no line
- * twice.
+ * what the tool reported about it. A path printed with its directories names
+ * the file only when one ends with the other (relative to a subfolder or
+ * absolute); a bare file name, as tools that group by folder print it, names
+ * any file of that name. Repeated runs of the same call add no line twice.
  */
 export function cliEvidence(
     s: Finding,
     runs: readonly CustomAgentCliRun[] = [],
 ): Array<{ cli: string; lines: string[] }> {
-    const base = (s.relevantFile ?? '').split('/').pop();
+    const file = (s.relevantFile ?? '').replace(/^\.\//, '');
+    const base = file.split('/').pop();
     if (!base || !s.customAgent?.id) return [];
-    const names = new RegExp(
-        `(^|[\\s/])${base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(:|\\s|$)`,
+    const token = new RegExp(
+        `^(?:(.*)/)?${base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?::.*)?$`,
     );
+    const namesFile = (line: string) =>
+        line.split(/\s+/).some((word) => {
+            const m = word.match(token);
+            if (!m) return false;
+            const dir = (m[1] ?? '').replace(/^\.\//, '');
+            if (!dir) return true;
+            const printed = `${dir}/${base}`;
+            return (
+                `/${file}`.endsWith(`/${printed}`) ||
+                printed.endsWith(`/${file}`)
+            );
+        });
     const byCli = new Map<string, string[]>();
     for (const run of runs) {
         if (run.agentId !== s.customAgent.id) continue;
@@ -318,7 +333,7 @@ export function cliEvidence(
             const line = raw.replace(/\u001b\[[0-9;]*m/g, '').trim();
             if (
                 line &&
-                names.test(line) &&
+                namesFile(line) &&
                 !lines.includes(line) &&
                 lines.length < MAX_EVIDENCE_LINES
             ) {
@@ -328,6 +343,22 @@ export function cliEvidence(
         if (lines.length) byCli.set(run.cli, lines);
     }
     return [...byCli].map(([cli, lines]) => ({ cli, lines }));
+}
+
+/**
+ * CLI output as a fenced block: what the tool printed, shown as data. The
+ * fence is longer than any backtick run in the lines, so none closes it, and
+ * nothing inside renders as markdown, HTML or a mention.
+ */
+function fencedOutput(lines: string[]): string {
+    const longest = Math.max(
+        0,
+        ...lines.flatMap((line) =>
+            (line.match(/`+/g) ?? []).map((run) => run.length),
+        ),
+    );
+    const fence = '`'.repeat(Math.max(3, longest + 1));
+    return `${fence}text\n${lines.join('\n')}\n${fence}`;
 }
 
 /**
@@ -343,7 +374,7 @@ export function findingCitation(
     const evidence = cliEvidence(s, runs)
         .map(
             ({ cli, lines }) =>
-                `\n\n**Evidence** (\`${cli}\`):\n${lines.map((line) => `> ${line}`).join('\n')}`,
+                `\n\n**Evidence** (\`${cli}\` output):\n${fencedOutput(lines)}`,
         )
         .join('');
     const fromInstructions = isTeamInstructionsSource(s.source?.file ?? '');

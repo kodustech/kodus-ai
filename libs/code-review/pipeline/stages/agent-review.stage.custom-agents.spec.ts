@@ -318,7 +318,7 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
 
         const [posted] = contents(result.validSuggestions);
         expect(posted).toContain(
-            '**Evidence** (`dupfinder`):\n> src/ ledger.ts:1-9 ~ journal.ts:1-9',
+            '**Evidence** (`dupfinder` output):\n```text\nsrc/ ledger.ts:1-9 ~ journal.ts:1-9\n```',
         );
         expect(posted).not.toContain('Use the CLI output as evidence.');
     });

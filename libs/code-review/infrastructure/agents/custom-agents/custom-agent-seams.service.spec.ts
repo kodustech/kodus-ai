@@ -547,7 +547,7 @@ describe('buildTryTrace — what the check saw', () => {
         ]);
         const [kept, dropped] = trace.findings;
         expect(kept.comment).toBe(
-            'The parser is copied from charge.ts.\n\n**Evidence** (`dupfinder`):\n> refund.ts:1-20 ~ charge.ts:1-20',
+            'The parser is copied from charge.ts.\n\n**Evidence** (`dupfinder` output):\n```text\nrefund.ts:1-20 ~ charge.ts:1-20\n```',
         );
         expect(dropped.reason).toBe(
             'src/billing/void.ts is not a guide linked to this review',

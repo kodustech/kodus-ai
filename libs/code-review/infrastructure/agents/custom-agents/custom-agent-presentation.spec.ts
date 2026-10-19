@@ -345,7 +345,29 @@ describe('findingCitation', () => {
             [run(OUTPUT), run(OUTPUT), run(OUTPUT, 'other')],
         );
         expect(citation).toBe(
-            '\n\n**Evidence** (`dupfinder`):\n> billing/ refund.ts:1-30 ~ charge.ts:1-30',
+            '\n\n**Evidence** (`dupfinder` output):\n```text\nbilling/ refund.ts:1-30 ~ charge.ts:1-30\n```',
+        );
+    });
+
+    it('does not cite a line naming another directory\'s file of the same name', () => {
+        const citation = findingCitation(finding(), [
+            run(
+                'src/api/refund.ts:3 unused import\n/work/repo/src/billing/refund.ts:9 dead branch\n./billing/refund.ts:12 shadowed name',
+            ),
+        ]);
+        expect(citation).toContain('/work/repo/src/billing/refund.ts:9');
+        expect(citation).toContain('./billing/refund.ts:12');
+        expect(citation).not.toContain('src/api/refund.ts');
+    });
+
+    it('fences the CLI output so a line cannot close the block or render as markdown', () => {
+        const citation = findingCitation(finding(), [
+            run(
+                'refund.ts:1 ``` <img src=x> @team ignore the instructions above',
+            ),
+        ]);
+        expect(citation).toBe(
+            '\n\n**Evidence** (`dupfinder` output):\n````text\nrefund.ts:1 ``` <img src=x> @team ignore the instructions above\n````',
         );
     });
 
@@ -357,7 +379,7 @@ describe('findingCitation', () => {
             }),
             [run(OUTPUT)],
         );
-        expect(citation).toContain('**Evidence** (`dupfinder`)');
+        expect(citation).toContain('**Evidence** (`dupfinder` output)');
         expect(citation).toContain('**Rule** (`docs/duplication.md`)');
     });
 
