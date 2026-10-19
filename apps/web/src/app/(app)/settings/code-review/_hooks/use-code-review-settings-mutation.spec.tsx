@@ -106,7 +106,8 @@ describe("useCodeReviewSettingsMutation — stale custom agents", () => {
         expect(createOrUpdateCodeReviewParameter.mock.calls[0][0]).toEqual({
             automatedReviewActive: false,
         });
-        expect(sentOptions()).toEqual({ expectedRevisions: undefined });
+        // Called exactly as before the revision check: no extra arguments.
+        expect(createOrUpdateCodeReviewParameter.mock.calls[0]).toHaveLength(4);
     });
 
     it("throws a conflict on 409 and keeps the edits unsaved", async () => {

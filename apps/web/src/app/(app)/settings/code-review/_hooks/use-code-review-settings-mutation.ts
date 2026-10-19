@@ -167,14 +167,22 @@ export const useCodeReviewSettingsMutation = (params: {
             changedConfig,
         );
 
-        const result = await createOrUpdateCodeReviewParameter(
-            changedConfig,
-            teamId,
-            repositoryId,
-            directoryId,
-            undefined,
-            { expectedRevisions },
-        );
+        // A save that writes neither list calls exactly as before.
+        const result = await (expectedRevisions === undefined
+            ? createOrUpdateCodeReviewParameter(
+                  changedConfig,
+                  teamId,
+                  repositoryId,
+                  directoryId,
+              )
+            : createOrUpdateCodeReviewParameter(
+                  changedConfig,
+                  teamId,
+                  repositoryId,
+                  directoryId,
+                  undefined,
+                  { expectedRevisions },
+              ));
 
         // Someone else saved the lists this save was made from: nothing was
         // written, and the form keeps the user's edits.
