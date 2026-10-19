@@ -112,6 +112,45 @@ describe('runCli execute', () => {
         );
     });
 
+    it.each([
+        [['check', '--format', 'json', 'printenv']],
+        [['check', '--format', 'json', '/proc/self/environ']],
+        [['check', '--format', 'json', '$LINTKIT_TOKEN']],
+        [['check', '--format', 'json', '--x=${LINTKIT_TOKEN}']],
+    ])(
+        'refuses %j on a CLI with secrets, without decrypting or running',
+        async (args) => {
+            const sb = sandbox();
+            const tool = toolOf({
+                sandbox: sb,
+                installed: [installed()],
+                decrypt,
+            });
+            const out = await tool.execute({ cli: 'lintkit', args });
+            expect(out).toMatch(/^Error: refused/);
+            expect(sb.run).not.toHaveBeenCalled();
+            expect(decrypt).not.toHaveBeenCalled();
+        },
+    );
+
+    it('masks hex and JSON-escaped spellings of a secret', async () => {
+        const sb = sandbox();
+        sb.run.mockResolvedValueOnce({
+            stdout: `hex ${Buffer.from(SECRET).toString('hex').toUpperCase()} json ${JSON.stringify(SECRET)}`,
+            stderr: '',
+            exitCode: 0,
+        });
+        const tool = toolOf({ sandbox: sb, installed: [installed()], decrypt });
+        const out = await tool.execute({
+            cli: 'lintkit',
+            args: ['check', '--format', 'json', 'src/a.ts'],
+        });
+        expect(out).not.toContain(SECRET);
+        expect(out).not.toContain(
+            Buffer.from(SECRET).toString('hex').toUpperCase(),
+        );
+    });
+
     it('refuses a CLI the agent does not have', async () => {
         const sb = sandbox();
         const tool = toolOf({ sandbox: sb, installed: [installed()], decrypt });

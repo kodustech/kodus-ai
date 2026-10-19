@@ -293,6 +293,31 @@ describe('provisionCustomAgentClis', () => {
         expect(scripts.some(isInstall)).toBe(false);
     });
 
+    it('refuses a CLI with secrets whose prefixes print the env', async () => {
+        const sb = sandbox('e2b');
+        const result = await provisionCustomAgentClis({
+            sandbox: sb,
+            agents: [
+                agent({
+                    tools: {
+                        cli: [
+                            cli({
+                                allowedPrefixes: ['printenv'],
+                                secrets: [
+                                    { env: 'LINTKIT_TOKEN', ciphertext: 'c' },
+                                ],
+                            }),
+                        ],
+                    },
+                }),
+            ],
+            changedFiles: ['src/ledger/post.ts'],
+        });
+        expect(result.byAgentId).toEqual({});
+        expect(result.warnings[0].detail).toContain('cannot run with secrets');
+        expect(sb.run).not.toHaveBeenCalled();
+    });
+
     it('refuses an unpinned install without touching the sandbox', async () => {
         const sb = sandbox('e2b');
         mockWarn.mockClear();

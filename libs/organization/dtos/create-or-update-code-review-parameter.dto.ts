@@ -40,6 +40,10 @@ import {
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { cliInstallProblem } from '@libs/core/infrastructure/config/types/general/cli-install';
 import {
+    cliBinaryExposureProblem,
+    cliPrefixExposureProblem,
+} from '@libs/core/infrastructure/config/types/general/cli-env-guard';
+import {
     ConfigLevel,
     PullRequestMessageStatus,
 } from '@libs/core/infrastructure/config/types/general/pullRequestMessages.type';
@@ -441,6 +445,9 @@ class CliToolSecretDto {
     value?: string;
 }
 
+const hasSecrets = (cli: { secrets?: unknown } | undefined) =>
+    Array.isArray(cli?.secrets) && cli.secrets.length > 0;
+
 class CliToolConfigDto {
     @IsString()
     name: string;
@@ -458,13 +465,46 @@ class CliToolConfigDto {
     })
     install: string;
 
+    /** Not a shell or interpreter when the CLI has secrets: those can print
+     *  their env whatever the prefixes say. */
     @IsString()
+    @ValidateBy({
+        name: 'binaryKeepsSecrets',
+        validator: {
+            validate: (binary: unknown, args) =>
+                !hasSecrets(args?.object as CliToolConfigDto) ||
+                cliBinaryExposureProblem(String(binary ?? '')) === null,
+            defaultMessage: (args) =>
+                `binary ${cliBinaryExposureProblem(String(args?.value ?? ''))}`,
+        },
+    })
     binary: string;
 
     @IsArray()
     @ArrayMinSize(1)
     @IsString({ each: true })
     @IsNotEmpty({ each: true })
+    // With secrets, no prefix may list the env or print a stored token.
+    @ValidateBy({
+        name: 'prefixKeepsSecrets',
+        validator: {
+            validate: (prefixes: unknown, args) =>
+                !hasSecrets(args?.object as CliToolConfigDto) ||
+                !Array.isArray(prefixes) ||
+                prefixes.every(
+                    (prefix) =>
+                        cliPrefixExposureProblem(String(prefix)) === null,
+                ),
+            defaultMessage: (args) => {
+                const problem = (Array.isArray(args?.value) ? args.value : [])
+                    .map((prefix: unknown) =>
+                        cliPrefixExposureProblem(String(prefix)),
+                    )
+                    .find(Boolean);
+                return `allowedPrefixes cannot be used with secrets: ${problem ?? 'a prefix exposes the environment'}`;
+            },
+        },
+    })
     // The runner ignores the binary in a prefix, so one that is only the
     // binary would match no call at all.
     @ValidateBy({
@@ -478,7 +518,8 @@ class CliToolConfigDto {
                         const tokens = String(prefix).trim().split(/\s+/);
                         return !(
                             tokens.length === 1 &&
-                            (tokens[0] === cli?.binary || tokens[0] === cli?.name)
+                            (tokens[0] === cli?.binary ||
+                                tokens[0] === cli?.name)
                         );
                     })
                 );

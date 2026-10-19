@@ -13,6 +13,10 @@ import { jsonSchema } from 'ai';
 import type { AgentTool } from '@libs/agent-harness/domain/contracts/tool.contract';
 
 import type { CustomAgentCliRun } from '@libs/code-review/infrastructure/agents/review-agent.contract';
+import {
+    cliEnvExposureProblem,
+    cliSecretReferenceProblem,
+} from '@libs/core/infrastructure/config/types/general/cli-env-guard';
 import { createLogger } from '@libs/core/log/logger';
 import type {
     SandboxInstance,
@@ -117,6 +121,21 @@ export async function executeRunCli(
             .join(
                 ', ',
             )} — each element is one argument; a "dir/" element accepts any path under it.`;
+    }
+
+    // A CLI with credentials never runs a call that would print them: env
+    // listings, /proc, known token-printing subcommands, or an argument the
+    // CLI could expand into a secret. (argv itself never reaches a shell.)
+    if (!cli.runsProjectCode && cli.secrets?.length) {
+        const exposure =
+            cliEnvExposureProblem(args) ??
+            cliSecretReferenceProblem(
+                args,
+                cli.secrets.map((secret) => secret.env),
+            );
+        if (exposure) {
+            return `Error: refused, ${exposure}; this CLI holds credentials. The CLI was not run.`;
+        }
     }
 
     // Decrypted here, for this one process, and never kept. A CLI that runs

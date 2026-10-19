@@ -1,4 +1,8 @@
 import { cliInstallProblem } from './cli-install';
+import {
+    cliBinaryExposureProblem,
+    cliPrefixExposureProblem,
+} from './cli-env-guard';
 import type {
     ContextLayer,
     ContextPack,
@@ -366,7 +370,9 @@ export function utf8ByteLength(value: string): number {
  * read from the pull request's TARGET branch so a PR cannot rewrite the rules
  * it is judged by; anything else is inline YAML. Returns the path, if any.
  */
-export function astGrepRulesPath(value: string | undefined): string | undefined {
+export function astGrepRulesPath(
+    value: string | undefined,
+): string | undefined {
     const trimmed = value?.trim();
     if (!trimmed || /\s/.test(trimmed)) return undefined;
     return /^[^:#'"{}[\]]+\.ya?ml$/i.test(trimmed) ? trimmed : undefined;
@@ -391,27 +397,46 @@ export const cliToolSecretSchema = z.object({
     ciphertext: z.string().min(1),
 });
 
-export const cliToolConfigSchema = z.object({
-    name: z.string().min(1),
-    install: z
-        .string()
-        .min(1)
-        .superRefine((install, ctx) => {
-            const problem = cliInstallProblem(install);
-            if (problem) ctx.addIssue({ code: 'custom', message: problem });
-        }),
-    binary: z.string().min(1),
-    /** argv must start with one of these (no shell is involved). */
-    allowedPrefixes: z.array(z.string().min(1)).min(1),
-    /** Markdown the agent reads to learn how to call the CLI. */
-    usage: z.string(),
-    /** True when the CLI executes project code (tests, builds): no secrets then. */
-    runsProjectCode: z.boolean(),
-    secrets: z.array(cliToolSecretSchema).optional(),
-    /** Hosts the CLI may reach; everything else is blocked. */
-    allowedDomains: z.array(z.string().min(1)),
-    timeoutSec: z.number().int().positive().optional(),
-});
+export const cliToolConfigSchema = z
+    .object({
+        name: z.string().min(1),
+        install: z
+            .string()
+            .min(1)
+            .superRefine((install, ctx) => {
+                const problem = cliInstallProblem(install);
+                if (problem) ctx.addIssue({ code: 'custom', message: problem });
+            }),
+        binary: z.string().min(1),
+        /** argv must start with one of these (no shell is involved). */
+        allowedPrefixes: z.array(z.string().min(1)).min(1),
+        /** Markdown the agent reads to learn how to call the CLI. */
+        usage: z.string(),
+        /** True when the CLI executes project code (tests, builds): no secrets then. */
+        runsProjectCode: z.boolean(),
+        secrets: z.array(cliToolSecretSchema).optional(),
+        /** Hosts the CLI may reach; everything else is blocked. */
+        allowedDomains: z.array(z.string().min(1)),
+        timeoutSec: z.number().int().positive().optional(),
+    })
+    .superRefine((cli, ctx) => {
+        // With secrets, nothing configured may print the env or a stored token.
+        if (!cli.secrets?.length) return;
+        const binary = cliBinaryExposureProblem(cli.binary);
+        if (binary) {
+            ctx.addIssue({ code: 'custom', path: ['binary'], message: binary });
+        }
+        cli.allowedPrefixes.forEach((prefix, index) => {
+            const problem = cliPrefixExposureProblem(prefix);
+            if (problem) {
+                ctx.addIssue({
+                    code: 'custom',
+                    path: ['allowedPrefixes', index],
+                    message: problem,
+                });
+            }
+        });
+    });
 
 /** In `tools.mcp[].tools`: every read-only tool the plugin offers, now or later. */
 export const MCP_ALL_READ_TOOLS = '*';

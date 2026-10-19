@@ -33,6 +33,10 @@ import {
     type ReviewWarning,
 } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import {
+    cliBinaryExposureProblem,
+    cliPrefixExposureProblem,
+} from '@libs/core/infrastructure/config/types/general/cli-env-guard';
+import {
     buildDropReviewUserPrivilegesScript,
     confirmsPrivilegesDropped,
     DROP_PRIVILEGES_TIMEOUT_MS,
@@ -137,6 +141,15 @@ function preflight(cli: CliToolConfig): string | null {
     );
     if (reserved) {
         return `secret name ${reserved.env} is reserved`;
+    }
+    // Same rule as on save, for a config that skipped validation (YAML).
+    if (cli.secrets?.length && !cli.runsProjectCode) {
+        const exposure =
+            cliBinaryExposureProblem(cli.binary) ??
+            (cli.allowedPrefixes ?? [])
+                .map((prefix) => cliPrefixExposureProblem(prefix))
+                .find(Boolean);
+        if (exposure) return `cannot run with secrets: ${exposure}`;
     }
     const plan = planCliInstall(cli);
     return plan.ok === false ? plan.reason : null;

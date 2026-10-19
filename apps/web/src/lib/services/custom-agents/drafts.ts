@@ -744,7 +744,89 @@ export const cliIssues = (cli: CliToolConfig): string[] => {
     if (secrets.some((secret) => !CLI_SECRET_ENV_PATTERN.test(secret.env))) {
         issues.push("Secret names are env variables, e.g. LEDGER_TOKEN");
     }
+    if (secrets.length && !cli.runsProjectCode) {
+        if (ENV_EXPOSING_BINARIES.has(cli.binary.trim().toLowerCase())) {
+            issues.push(
+                "A CLI with secrets cannot be a shell or interpreter: name its own binary",
+            );
+        }
+        if (cli.allowedPrefixes.some(prefixExposesEnv)) {
+            issues.push(
+                "A CLI with secrets cannot allow env listings or token-printing commands",
+            );
+        }
+    }
     return issues;
+};
+
+// Mirrors the server's rule (libs/core/.../cli-env-guard.ts): with secrets,
+// nothing configured may list the env or print a stored token.
+const ENV_LISTING_WORDS = new Set([
+    "printenv",
+    "env",
+    "set",
+    "export",
+    "declare",
+    "typeset",
+    "environ",
+]);
+const TOKEN_PRINTING_SEQUENCES = [
+    ["auth", "token"],
+    ["auth:token"],
+    ["--show-token"],
+    ["auth", "status", "-t"],
+    ["config", "get"],
+    ["configure", "get"],
+    ["print-access-token"],
+    ["print-identity-token"],
+    ["get-access-token"],
+];
+const ENV_EXPOSING_BINARIES = new Set([
+    "sh",
+    "bash",
+    "zsh",
+    "dash",
+    "ksh",
+    "fish",
+    "busybox",
+    "env",
+    "printenv",
+    "node",
+    "nodejs",
+    "deno",
+    "bun",
+    "bunx",
+    "npx",
+    "pnpx",
+    "python",
+    "python2",
+    "python3",
+    "perl",
+    "ruby",
+    "php",
+    "awk",
+    "gawk",
+    "mawk",
+    "xargs",
+]);
+
+const prefixExposesEnv = (prefix: string): boolean => {
+    const tokens = prefix.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (
+        tokens.some(
+            (token) =>
+                ENV_LISTING_WORDS.has(token) ||
+                token.includes("/proc/") ||
+                token === "/proc",
+        )
+    ) {
+        return true;
+    }
+    return TOKEN_PRINTING_SEQUENCES.some((sequence) =>
+        tokens.some((_, i) =>
+            sequence.every((part, j) => tokens[i + j] === part),
+        ),
+    );
 };
 
 /**

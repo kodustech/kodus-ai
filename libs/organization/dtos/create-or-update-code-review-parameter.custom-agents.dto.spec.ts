@@ -76,7 +76,10 @@ describe('CreateOrUpdateCodeReviewParameterDto — custom agents', () => {
                 customAgents: [
                     {
                         ...legacy,
-                        presentation: { ...legacy.presentation, mode: 'shadow' },
+                        presentation: {
+                            ...legacy.presentation,
+                            mode: 'shadow',
+                        },
                     },
                 ],
             }),
@@ -95,6 +98,64 @@ describe('CreateOrUpdateCodeReviewParameterDto — custom agents', () => {
             ],
         });
         expect(flat).toBe('[]');
+    });
+
+    it('refuses env-listing or token-printing prefixes on a CLI with secrets', async () => {
+        const secrets = [{ env: 'LEDGER_TOKEN', value: 'x' }];
+        for (const prefix of [
+            'ledger-lint printenv',
+            'ledger-lint auth token',
+        ]) {
+            expect(
+                await validateConfig({
+                    customAgents: [
+                        agent({
+                            tools: {
+                                cli: [
+                                    cli({ allowedPrefixes: [prefix], secrets }),
+                                ],
+                            },
+                        }),
+                    ],
+                }),
+            ).toContain('allowedPrefixes cannot be used with secrets');
+        }
+        // Without secrets there is nothing to print.
+        expect(
+            await validateConfig({
+                customAgents: [
+                    agent({
+                        tools: {
+                            cli: [
+                                cli({ allowedPrefixes: ['ledger-lint env'] }),
+                            ],
+                        },
+                    }),
+                ],
+            }),
+        ).toBe('[]');
+    });
+
+    it('refuses a shell or interpreter as the binary of a CLI with secrets', async () => {
+        expect(
+            await validateConfig({
+                customAgents: [
+                    agent({
+                        tools: {
+                            cli: [
+                                cli({
+                                    binary: 'bash',
+                                    allowedPrefixes: ['bash -c'],
+                                    secrets: [
+                                        { env: 'LEDGER_TOKEN', value: 'x' },
+                                    ],
+                                }),
+                            ],
+                        },
+                    }),
+                ],
+            }),
+        ).toContain('binary');
     });
 
     it('accepts any number of agents', async () => {
