@@ -11,7 +11,7 @@
  */
 /** The evidence cannot close its own fence and reach the instructions. */
 function fenceEvidence(text: string): string {
-    return text.replace(/<\/?Evidence>/gi, (tag) => tag.replace('<', '&lt;'));
+    return text.replace(/<\/?Evidence>/gi, (tag) => tag.replace(/</g, '&lt;'));
 }
 
 export function buildConventionVerifierPrompt(

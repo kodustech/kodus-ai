@@ -155,11 +155,12 @@ function agentGlobs(agent: Pick<CustomAgentConfig, 'scope'>): {
  * Each glob, plus its copy with `(`, `)`, `[` and `]` escaped. Those are glob
  * syntax, so a Next.js route folder written as is, `src/app/(shop)/[id]/**`,
  * matched no file; the escaped copy matches the path literally while the
- * original keeps its meaning as a glob.
+ * original keeps its meaning as a glob. A backslash, the escape character
+ * itself, is escaped in the copy too.
  */
 function withLiteralBrackets(patterns: string[]): string[] {
     return patterns.flatMap((p) => {
-        const literal = p.replace(/[()[\]]/g, '\\$&');
+        const literal = p.replace(/[()[\]\\]/g, '\\$&');
         // A literal copy of a leading `!(…)` would read as a negation and
         // match nearly every file.
         return literal === p || p.startsWith('!') ? [p] : [p, literal];
