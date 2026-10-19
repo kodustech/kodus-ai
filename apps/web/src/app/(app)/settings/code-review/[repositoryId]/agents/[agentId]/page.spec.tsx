@@ -33,6 +33,7 @@ const formAt = (overrides = {}) => ({
     repositoryId: "repo-1",
     directoryId: undefined as string | undefined,
     agents: [agent],
+    linkableAgents: [agent],
     knowledge: [] as KnowledgeItem[],
     reviewKnowledge: [] as KnowledgeItem[],
     inheritedAgents: [] as CustomAgent[],
@@ -261,6 +262,22 @@ describe("Custom agent page", () => {
             );
             // The doc's one link was this agent's: unfollowed, it goes.
             expect(setKnowledge).toHaveBeenCalledWith([]);
+        });
+
+        it("refuses a name a repository agent it runs next to answers to", async () => {
+            const drip = { ...agent, id: "drip", name: "Drip reviewer" };
+            const ledger = { ...agent, name: "Drip Reviewer" };
+            mockForm = formAt({
+                directoryId: "dir-1",
+                agents: [ledger],
+                linkableAgents: [drip, ledger],
+                inheritedAgents: [drip],
+            });
+            await renderPage();
+
+            expect(
+                screen.getByText(/already answers to @kody -v drip-reviewer/),
+            ).toBeInTheDocument();
         });
 
         it("overrides a repository agent with a copy in the directory's list", async () => {

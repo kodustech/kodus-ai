@@ -40,6 +40,7 @@ import {
     sealCustomAgentSecrets,
     storedCustomAgentsAtLevel,
 } from '@libs/code-review/domain/custom-agents/cli-secrets';
+import { withDirectoryAgentLists } from '@libs/code-review/domain/custom-agents/directory-cascade';
 import {
     assertCustomAgentsRevisions,
     StaleCustomAgentsError,
@@ -51,6 +52,8 @@ import { IntegrationConfigKey, ParametersKey } from '@libs/core/domain/enums';
 import {
     CodeReviewConfigWithoutLLMProvider,
     CodeReviewVersion,
+    CustomAgentConfig,
+    customAgentSlugClashMessage,
     knowledgeLinkProblems,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import {
@@ -232,28 +235,48 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 organizationAndTeamData,
             );
 
-            // A knowledge link must name an agent the saved level runs: one
-            // this save configures or, at a directory, one of the repository's
-            // agents the directory adds to. A dangling link would never load,
-            // and would start loading if an agent with that id were created.
-            // The screen saves agents and knowledge together; a payload
-            // without agents is not checked.
-            if (
-                Array.isArray(configValue?.knowledge) &&
-                Array.isArray(configValue?.customAgents)
-            ) {
+            if (Array.isArray(configValue?.customAgents)) {
                 const atDirectory =
                     !!repositoryId && (!!directoryId || !!resolvedPaths);
-                const problems = knowledgeLinkProblems(configValue.knowledge, [
-                    ...(atDirectory
-                        ? effectiveStoredCustomAgents(codeReviewConfigs, {
-                              repositoryId,
-                          })
-                        : []),
-                    ...configValue.customAgents,
-                ]);
-                if (problems.length > 0) {
-                    throw new BadRequestException(problems.join('; '));
+                // At a directory, the repository's agents it adds its own to.
+                const inheritedAgents = atDirectory
+                    ? effectiveStoredCustomAgents(codeReviewConfigs, {
+                          repositoryId,
+                      })
+                    : [];
+
+                // A directory agent with an inherited id replaces that agent
+                // (an override); one with another id runs next to it, so its
+                // name must not give the same slug.
+                if (atDirectory) {
+                    // Stored agents, read whole: they carry their names.
+                    const inherited = {
+                        customAgents: inheritedAgents as CustomAgentConfig[],
+                    };
+                    const slugClash = customAgentSlugClashMessage(
+                        withDirectoryAgentLists(inherited, inherited, {
+                            customAgents: configValue.customAgents,
+                        }).customAgents,
+                    );
+                    if (slugClash) {
+                        throw new BadRequestException(slugClash);
+                    }
+                }
+
+                // A knowledge link must name an agent the saved level runs:
+                // one this save configures or, at a directory, one of the
+                // repository's agents the directory adds to. A dangling link
+                // would never load, and would start loading if an agent with
+                // that id were created. The screen saves agents and knowledge
+                // together; a payload without agents is not checked.
+                if (Array.isArray(configValue?.knowledge)) {
+                    const problems = knowledgeLinkProblems(
+                        configValue.knowledge,
+                        [...inheritedAgents, ...configValue.customAgents],
+                    );
+                    if (problems.length > 0) {
+                        throw new BadRequestException(problems.join('; '));
+                    }
                 }
             }
 

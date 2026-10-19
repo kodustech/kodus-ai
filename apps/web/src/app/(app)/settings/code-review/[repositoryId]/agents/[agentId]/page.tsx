@@ -63,6 +63,7 @@ function AgentContent() {
         repositoryId,
         directoryId,
         agents,
+        linkableAgents,
         knowledge,
         reviewKnowledge,
         inheritedAgents,
@@ -90,8 +91,11 @@ function AgentContent() {
     const agent = ownAgent ?? inheritedAgent;
     const canEditAgent = canEdit && !inheritedAgent;
     // Two agents with one command name can't be told apart; the server
-    // refuses the save, so the page does too.
-    const nameError = ownAgent ? agentNameError(ownAgent, agents) : null;
+    // refuses the save, so the page does too. At a directory that counts the
+    // repository's agents it runs next to.
+    const nameError = ownAgent
+        ? agentNameError(ownAgent, linkableAgents)
+        : null;
     const isGlobal = repositoryId === "global";
 
     const status = useCustomAgentsStatus({

@@ -428,6 +428,31 @@ describe("CustomAgentsList — at a directory", () => {
         );
     });
 
+    it("gives a new agent an id and a name no repository agent it runs next to has", async () => {
+        // An own agent with the id of an inherited one replaces it here, so
+        // a new agent that took "agent" made the repository's vanish.
+        const migrations = { ...agent, id: "agent", name: "New agent" };
+        render(
+            <QueryClientProvider client={new QueryClient()}>
+                <Form agentsNode={{ value: [migrations], level: "repository" }}>
+                    <CustomAgentsSection canEdit />
+                </Form>
+            </QueryClientProvider>,
+        );
+        await flush();
+
+        fireEvent.click(screen.getByRole("button", { name: "New agent" }));
+        fireEvent.click(await screen.findByRole("button", { name: /^Blank/ }));
+        await flush();
+
+        const [created] = savedAgents();
+        expect(created.id).toBe("agent-2");
+        expect(created.name).toBe("New agent 2");
+        expect(push).toHaveBeenLastCalledWith(
+            "/settings/code-review/repo-1/agents/agent-2?directoryId=dir-1",
+        );
+    });
+
     it("lists the repository's agents when the directory has none of its own", async () => {
         renderList({ value: [agent], level: "repository" });
         await flush();
