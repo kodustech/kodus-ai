@@ -18,6 +18,7 @@ import { toast } from "@components/ui/toaster/use-toast";
 import {
     agentChips,
     agentUsageLine,
+    deleteAgentNote,
     describeAgent,
     withoutAgent,
 } from "@services/custom-agents/drafts";
@@ -193,7 +194,7 @@ export const CustomAgentsList = ({ canEdit }: { canEdit: boolean }) => {
         directoryId,
         agents,
         knowledge,
-        inheritedAgentCount,
+        inheritedAgents,
         listNote,
         isSubmitting,
         otherFieldsDirty,
@@ -229,7 +230,7 @@ export const CustomAgentsList = ({ canEdit }: { canEdit: boolean }) => {
         if (!deleting) return;
         await saveWithToast(
             save,
-            withoutAgent(agents, knowledge, deleting.id),
+            withoutAgent(agents, knowledge, deleting.id, inheritedAgents),
             {
                 done: `${deleting.name} deleted`,
                 failed: "Couldn't delete the agent. Try again.",
@@ -252,12 +253,12 @@ export const CustomAgentsList = ({ canEdit }: { canEdit: boolean }) => {
                     {listNote}
                 </p>
             )}
-            {inheritedAgentCount > 0 && (
+            {inheritedAgents.length > 0 && (
                 <p role="note" className="text-text-secondary text-sm">
                     Also runs the repository&apos;s{" "}
-                    {inheritedAgentCount === 1
+                    {inheritedAgents.length === 1
                         ? "agent"
-                        : `${inheritedAgentCount} agents`}
+                        : `${inheritedAgents.length} agents`}
                     .
                 </p>
             )}
@@ -322,7 +323,10 @@ export const CustomAgentsList = ({ canEdit }: { canEdit: boolean }) => {
             <ConfirmModal
                 open={!!deleting}
                 title={`Delete ${deleting?.name ?? "agent"}?`}
-                description="Its findings stay on past pull requests."
+                description={deleteAgentNote(
+                    deleting?.id ?? "",
+                    inheritedAgents,
+                )}
                 confirmText="Delete agent"
                 loading={isSubmitting}
                 onConfirm={confirmDelete}

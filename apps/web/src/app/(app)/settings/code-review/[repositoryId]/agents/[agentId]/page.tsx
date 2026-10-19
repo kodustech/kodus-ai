@@ -17,6 +17,7 @@ import { Spinner } from "@components/ui/spinner";
 import { toast } from "@components/ui/toaster/use-toast";
 import {
     agentNameError,
+    deleteAgentNote,
     withoutAgent,
     withoutSecretValues,
 } from "@services/custom-agents/drafts";
@@ -60,6 +61,7 @@ function AgentContent() {
         directoryId,
         agents,
         knowledge,
+        inheritedAgents,
         isDirty,
         isSubmitting,
         setKnowledge,
@@ -139,7 +141,9 @@ function AgentContent() {
     const onDelete = async () => {
         if (!agent) return;
         try {
-            await save(withoutAgent(agents, knowledge, agent.id));
+            await save(
+                withoutAgent(agents, knowledge, agent.id, inheritedAgents),
+            );
             setConfirmingDelete(false);
             router.push(backHref);
         } catch (error) {
@@ -301,7 +305,10 @@ function AgentContent() {
                         <ConfirmModal
                             open={confirmingDelete}
                             title={`Delete ${agent.name || "this agent"}?`}
-                            description="Its findings stay on past pull requests."
+                            description={deleteAgentNote(
+                                agent.id,
+                                inheritedAgents,
+                            )}
                             confirmText="Delete agent"
                             loading={isSubmitting}
                             onConfirm={onDelete}

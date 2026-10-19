@@ -9,6 +9,7 @@ import {
     createAgentFromTemplate,
     CUSTOM_AGENT_LIMITS,
     CUSTOM_AGENT_TEMPLATES,
+    deleteAgentNote,
     describeAgent,
     isLinked,
     knowledgeChoices,
@@ -605,7 +606,7 @@ describe("custom agent drafts", () => {
             { path: "docs/a.md", kind: "doc", linkedTo: [{ agentId: "a" }] },
         ];
 
-        const next = withoutAgent(agents, knowledge, "a");
+        const next = withoutAgent(agents, knowledge, "a", []);
 
         expect(next.agents.map((agent) => agent.id)).toEqual(["b"]);
         expect(next.knowledge).toEqual([
@@ -616,6 +617,34 @@ describe("custom agent drafts", () => {
             },
             { path: "docs/a.md", kind: "doc", linkedTo: [] },
         ]);
+        expect(deleteAgentNote("a", [])).toBe(
+            "Its findings stay on past pull requests.",
+        );
+    });
+
+    it("keeps a directory's links when the deleted agent replaced an inherited one", () => {
+        // The repository's agent with that id runs at the directory again,
+        // and the directory's links now apply to it.
+        const agents = [
+            { id: "a", name: "Zone ledger" } as CustomAgent,
+            { id: "b" } as CustomAgent,
+        ];
+        const inherited = [{ id: "a", name: "Ledger" } as CustomAgent];
+        const knowledge: KnowledgeItem[] = [
+            {
+                path: ".claude/skills/money",
+                kind: "skill",
+                linkedTo: [{ agentId: "a" }, { agentId: "b" }],
+            },
+        ];
+
+        const next = withoutAgent(agents, knowledge, "a", inherited);
+
+        expect(next.agents.map((agent) => agent.id)).toEqual(["b"]);
+        expect(next.knowledge).toEqual(knowledge);
+        expect(deleteAgentNote("a", inherited)).toBe(
+            "The repository's Ledger runs here again, with the skills and docs this directory links to it. Its findings stay on past pull requests.",
+        );
     });
 
     describe("summaries", () => {

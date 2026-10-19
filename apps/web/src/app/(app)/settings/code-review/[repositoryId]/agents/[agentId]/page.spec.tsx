@@ -50,6 +50,7 @@ jest.mock("../../_custom-agents/use-custom-agents-form", () => ({
         directoryId: undefined,
         agents: [agent],
         knowledge: [],
+        inheritedAgents: [],
         isDirty: false,
         isSubmitting: false,
         setKnowledge: jest.fn(),

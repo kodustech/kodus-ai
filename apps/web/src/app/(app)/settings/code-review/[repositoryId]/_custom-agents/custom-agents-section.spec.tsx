@@ -76,13 +76,14 @@ jest.mock("src/core/providers/selected-team-context", () => ({
     useSelectedTeamId: () => ({ teamId: "team-1" }),
 }));
 
+let mockLevel = "repository";
 jest.mock("../../../_hooks", () => ({
     useCodeReviewRouteParams: () => ({
         repositoryId: "repo-1",
-        directoryId: undefined,
+        directoryId: mockLevel === "directory" ? "dir-1" : undefined,
         pageName: "agents",
     }),
-    useCurrentConfigLevel: () => "repository",
+    useCurrentConfigLevel: () => mockLevel,
 }));
 
 jest.mock("../../_hooks/use-code-review-settings-mutation", () => ({
@@ -100,9 +101,11 @@ type Node = Record<string, unknown>;
 const Form = ({
     children,
     agentsNode,
+    knowledgeNode,
 }: {
     children: ReactNode;
     agentsNode?: Node;
+    knowledgeNode?: Node;
 }) => {
     const form = useForm<any>({
         mode: "all",
@@ -111,7 +114,10 @@ const Form = ({
                 value: [agent],
                 level: "repository",
             },
-            knowledge: { value: knowledge, level: "repository" },
+            knowledge: knowledgeNode ?? {
+                value: knowledge,
+                level: "repository",
+            },
         },
     });
     const { dirtyFields } = form.formState;
@@ -130,11 +136,11 @@ const Form = ({
     );
 };
 
-const renderList = (agentsNode?: Node) =>
+const renderList = (agentsNode?: Node, knowledgeNode?: Node) =>
     render(
         <StrictMode>
             <QueryClientProvider client={new QueryClient()}>
-                <Form agentsNode={agentsNode}>
+                <Form agentsNode={agentsNode} knowledgeNode={knowledgeNode}>
                     <CustomAgentsList canEdit />
                 </Form>
             </QueryClientProvider>
@@ -147,6 +153,10 @@ const flush = () => act(async () => {});
 const savedAgents = (call = 0): CustomAgent[] => {
     const [formData, options] = saveSettings.mock.calls[call];
     return options.prepare(formData).codeReviewConfig.customAgents;
+};
+const savedKnowledge = (call = 0) => {
+    const [formData, options] = saveSettings.mock.calls[call];
+    return options.prepare(formData).codeReviewConfig.knowledge;
 };
 
 const openMenu = () => {
@@ -333,6 +343,68 @@ describe("CustomAgentsList", () => {
         expect(
             screen.getByRole("button", { name: "New agent" }),
         ).toBeInTheDocument();
+    });
+});
+
+describe("CustomAgentsList — at a directory", () => {
+    const zoneLedger = { ...agent, name: "Zone ledger reviewer" };
+    const zoneKnowledge = {
+        value: [
+            {
+                path: "docs/zone.md",
+                kind: "doc" as const,
+                linkedTo: [{ agentId: "ledger" }],
+            },
+        ],
+        level: "directory",
+    };
+
+    beforeEach(() => {
+        mockLevel = "directory";
+        saveSettings.mockReset();
+        saveSettings.mockResolvedValue({});
+    });
+    afterEach(() => {
+        mockLevel = "repository";
+    });
+
+    it("keeps the directory's links when deleting an agent that replaced the repository's", async () => {
+        renderList(
+            {
+                value: [zoneLedger],
+                level: "directory",
+                overriddenValue: [agent],
+                overriddenLevel: "repository",
+            },
+            zoneKnowledge,
+        );
+        await flush();
+
+        fireEvent.keyDown(
+            screen.getByRole("button", {
+                name: "More actions for Zone ledger reviewer",
+            }),
+            { key: "Enter" },
+        );
+        fireEvent.click(
+            await screen.findByRole("menuitem", { name: "Delete" }),
+        );
+        const dialog = await screen.findByRole("dialog");
+        expect(dialog).toHaveTextContent(
+            "The repository's Ledger reviewer runs here again",
+        );
+        fireEvent.click(
+            within(dialog).getByRole("button", { name: "Delete agent" }),
+        );
+        await flush();
+
+        expect(savedAgents()).toEqual([]);
+        expect(savedKnowledge()).toEqual([
+            expect.objectContaining({
+                path: "docs/zone.md",
+                linkedTo: [{ agentId: "ledger" }],
+            }),
+        ]);
     });
 });
 
