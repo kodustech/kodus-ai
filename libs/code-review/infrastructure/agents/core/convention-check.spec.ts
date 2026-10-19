@@ -340,7 +340,7 @@ describe('checkConventionQuotes', () => {
             const r = await checkConventionQuotes(
                 [conv(quote, { source: { file, section: '', quote } })],
                 reader({ [file]: `# Rules\n\n${quote}\n` }),
-                [],
+                [file],
                 undefined,
                 INSTRUCTIONS,
             );
@@ -357,7 +357,9 @@ describe('checkConventionQuotes', () => {
                 INSTRUCTIONS,
             );
             expect(r.passed).toEqual([]);
-            expect(r.rejected[0].detail).toContain('quote not found in src/valves/open.ts');
+            expect(r.rejected[0].detail).toContain(
+                'src/valves/open.ts is not a guide linked to this review',
+            );
         });
 
         it('judges a convention finding with no source against the instructions', async () => {
@@ -463,19 +465,26 @@ describe('checkConventionQuotes', () => {
         expect(r.rejected[0].detail).toContain('not a guide linked');
     });
 
-    it('accepts any file when no guide list is given', async () => {
+    it('drops a repository file quote when the agent has no guide linked', async () => {
+        // The rule exists in the repository, but nobody linked it to this
+        // agent: an unlinked doc is not one of its rules.
+        const read = reader({ 'docs/handlers.md': GUIDE_TEXT });
         const r = await checkConventionQuotes(
             [
                 conv('x', {
                     source: {
-                        file: 'README.md',
+                        file: 'docs/handlers.md',
                         quote: 'Handlers return ValveResult, never a bare boolean.',
                     },
                 }),
             ],
-            reader({ 'README.md': GUIDE_TEXT }),
+            read,
         );
-        expect(r.passed).toHaveLength(1);
+        expect(r.passed).toEqual([]);
+        expect(r.rejected[0].detail).toContain(
+            'docs/handlers.md is not a guide linked to this review',
+        );
+        expect(read).not.toHaveBeenCalled();
     });
 
     it('drops a finding without a source or with a trivially short quote', async () => {

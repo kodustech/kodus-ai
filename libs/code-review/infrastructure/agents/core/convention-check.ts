@@ -210,9 +210,9 @@ export function isLinkedGuide(
  * saying why. Never throws: a guide that cannot be read rejects the finding
  * (an unprovable quote is not published).
  *
- * `guideFiles`, when non-empty, restricts the quotable files to the guides
- * linked to this agent: a sentence from an arbitrary repository file is not a
- * team rule.
+ * `guideFiles` are the only quotable files: the guides linked to this agent.
+ * A sentence from an arbitrary repository file is not a team rule, and an
+ * agent with no guide linked quotes only its own instructions.
  *
  * A large skill keeps its rules in files beside SKILL.md (`rules/`,
  * `references/`), and the agent tends to cite the skill rather than the file
@@ -302,7 +302,7 @@ export async function checkConventionQuotes(
             });
             return true;
         };
-        if (guideFiles.length > 0 && !isLinkedGuide(file, guideFiles)) {
+        if (!isLinkedGuide(file, guideFiles)) {
             if (!passFromInstructions()) {
                 reject(finding, `${file} is not a guide linked to this review`);
             }
