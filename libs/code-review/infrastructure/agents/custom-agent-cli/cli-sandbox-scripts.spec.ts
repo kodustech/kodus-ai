@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import {
     chmodSync,
+    mkdirSync,
     mkdtempSync,
     readFileSync,
     rmSync,
@@ -14,6 +15,7 @@ import {
     buildNetworkScript,
     buildRunCommand,
     CLI_BINARY_MARKER,
+    CLI_EGRESS_PROXY_DIR,
     cliSandboxIdentity,
 } from './cli-command';
 import { ROOT_SAFE_PATH_LINE } from '@libs/sandbox/infrastructure/providers/review-user-privileges';
@@ -79,12 +81,43 @@ const runBash = (dir: string, script: string) =>
         encoding: 'utf8',
     });
 
+/**
+ * The fence script, made runnable outside a sandbox: the proxy's home and
+ * source path move to a temp dir and the real Node runs the proxy, so the
+ * test proves the shipped source survives the shell quoting and starts.
+ */
+const runFence = (
+    dir: string,
+    identity: ReturnType<typeof cliSandboxIdentity>,
+    domains: string[],
+    wrap: (script: string) => string = (x) => x,
+) => {
+    const home = join(dir, 'proxy-home');
+    mkdirSync(home, { recursive: true });
+    const script = buildNetworkScript({ identity, domains })
+        .split(identity.proxyHome)
+        .join(home)
+        .split(CLI_EGRESS_PROXY_DIR)
+        .join(dir)
+        .split('/usr/bin/node /usr/local/bin/node')
+        .join(process.execPath);
+    try {
+        return runBash(dir, wrap(script));
+    } finally {
+        spawnSync('pkill', ['-f', join(dir, 'egress-proxy.js')]);
+    }
+};
+
+const fenceStubs = (ip: string) => ({
+    getent: `echo "${ip}       STREAM api.lintkit.example"`,
+    useradd: 'exit 0',
+    stat: 'echo 0',
+    setsid: '"$@"',
+});
+
 describe('network fence script', () => {
     const identity = cliSandboxIdentity('agent-1', 'lintkit');
-    const fence = buildNetworkScript({
-        identity,
-        domains: ['api.lintkit.example'],
-    });
+    const port = identity.proxyPort;
 
     it.each([
         '127.0.0.1',
@@ -98,78 +131,104 @@ describe('network fence script', () => {
         '224.0.0.1',
         '198.18.0.1',
     ])('refuses an allowed domain that resolves to %s', (ip) => {
-        withStubs(
-            { getent: `echo "${ip}       STREAM api.lintkit.example"` },
-            (dir, log) => {
-                const result = runBash(dir, fence);
-                expect(result.status).not.toBe(0);
-                expect(result.stderr).toContain('non-public');
-                expect(log().join('\n')).not.toContain(
-                    `ct original ip daddr ${ip} accept`,
-                );
-            },
-        );
+        withStubs(fenceStubs(ip), (dir, log) => {
+            const result = runFence(dir, identity, ['api.lintkit.example']);
+            expect(result.status).not.toBe(0);
+            expect(result.stderr).toContain('non-public');
+            expect(log().join('\n')).not.toContain('redirect');
+        });
     });
 
     it.each(['93.184.216.34', '172.32.0.1', '100.128.0.1', '8.8.8.8'])(
-        'accepts a public address %s',
+        'accepts a public address %s and starts the proxy',
         (ip) => {
-            withStubs(
-                { getent: `echo "${ip}       STREAM api.lintkit.example"` },
-                (dir, log) => {
-                    const result = runBash(dir, fence);
-                    expect(result.stderr).toBe('');
-                    expect(result.status).toBe(0);
-                    expect(log().join('\n')).toContain(
-                        `ct original ip daddr ${ip} accept`,
-                    );
-                },
-            );
+            withStubs(fenceStubs(ip), (dir, log) => {
+                const result = runFence(dir, identity, ['api.lintkit.example']);
+                expect(result.stderr).toBe('');
+                expect(result.status).toBe(0);
+                expect(log().join('\n')).toContain(
+                    `nft add rule ip kodus_cli_nat out meta skuid 4242 tcp dport 443 redirect to :${port}`,
+                );
+            });
         },
     );
 
-    it('fences the CLI user with nft, which E2B supports, not the iptables owner match it lacks', () => {
-        withStubs(
-            { getent: 'echo "93.184.216.34  STREAM api.lintkit.example"' },
-            (dir, log) => {
-                expect(runBash(dir, fence).status).toBe(0);
-                const calls = log().join('\n');
-                expect(calls).not.toContain('iptables');
-                expect(calls).toContain(
-                    `nft add rule inet kodus_cli out meta skuid 4242 jump ${identity.chain}`,
-                );
-                expect(calls).toContain(
-                    `nft add rule inet kodus_cli ${identity.chain} meta nfproto ipv6 reject`,
-                );
-            },
-        );
+    it('lets the CLI user reach only its proxy, by host name, not addresses', () => {
+        withStubs(fenceStubs('93.184.216.34'), (dir, log) => {
+            expect(
+                runFence(dir, identity, ['api.lintkit.example']).status,
+            ).toBe(0);
+            const rules = log().filter((line) =>
+                line.startsWith(
+                    `nft add rule inet kodus_cli ${identity.chain} `,
+                ),
+            );
+            expect(rules).toEqual([
+                `nft add rule inet kodus_cli ${identity.chain} meta nfproto ipv6 reject`,
+                `nft add rule inet kodus_cli ${identity.chain} ip daddr 127.0.0.1 tcp dport ${port} accept`,
+                `nft add rule inet kodus_cli ${identity.chain} reject`,
+            ]);
+            const calls = log().join('\n');
+            expect(calls).not.toContain('iptables');
+            expect(calls).toContain(
+                `nft add rule inet kodus_cli out meta skuid 4242 jump ${identity.chain}`,
+            );
+            expect(calls).toContain(
+                `nft add rule inet kodus_cli out meta skuid 4242 jump ${identity.proxyChain}`,
+            );
+        });
     });
 
-    it('rejects non-public ranges in the chain before any accept', () => {
+    it('lets the proxy user reach DNS and public HTTPS only', () => {
+        withStubs(fenceStubs('93.184.216.34'), (dir, log) => {
+            expect(
+                runFence(dir, identity, ['api.lintkit.example']).status,
+            ).toBe(0);
+            const rules = log().filter((line) =>
+                line.startsWith(
+                    `nft add rule inet kodus_cli ${identity.proxyChain} `,
+                ),
+            );
+            const nonPublic = rules.findIndex((r) =>
+                r.includes('169.254.0.0/16'),
+            );
+            const https = rules.findIndex((r) =>
+                r.endsWith('ct original proto-dst 443 accept'),
+            );
+            expect(nonPublic).toBeGreaterThanOrEqual(0);
+            expect(https).toBeGreaterThan(nonPublic);
+            expect(rules[rules.length - 1]).toMatch(/ reject$/);
+            expect(rules.join('\n')).not.toContain('proto-dst 80 ');
+        });
+    });
+
+    it('runs the proxy as its own user with the allowlist', () => {
+        withStubs(fenceStubs('93.184.216.34'), (dir, log) => {
+            expect(
+                runFence(dir, identity, ['api.lintkit.example']).status,
+            ).toBe(0);
+            expect(
+                log().some(
+                    (c) =>
+                        c.startsWith(`sudo -n -u ${identity.proxyUser} -- `) &&
+                        c.includes('["api.lintkit.example"]') &&
+                        c.includes(` ${port} `),
+                ),
+            ).toBe(true);
+        });
+    });
+
+    it('fails when the proxy does not start', () => {
         withStubs(
-            { getent: 'echo "93.184.216.34  STREAM api.lintkit.example"' },
-            (dir, log) => {
-                expect(runBash(dir, fence).status).toBe(0);
-                const rules = log().filter((line) =>
-                    line.startsWith(
-                        `nft add rule inet kodus_cli ${identity.chain} `,
-                    ),
-                );
-                const firstAccept = rules.findIndex((r) =>
-                    r.endsWith(' accept'),
-                );
-                const privateRejects = rules
-                    .slice(0, firstAccept)
-                    .filter((r) => r.endsWith(' reject'));
-                for (const cidr of [
-                    '10.0.0.0/8',
-                    '127.0.0.0/8',
-                    '169.254.0.0/16',
-                    '172.16.0.0/12',
-                    '192.168.0.0/16',
-                ]) {
-                    expect(privateRejects.join('\n')).toContain(cidr);
-                }
+            {
+                ...fenceStubs('93.184.216.34'),
+                setsid: 'exit 0',
+                sleep: 'exit 0',
+            },
+            (dir) => {
+                const result = runFence(dir, identity, ['api.lintkit.example']);
+                expect(result.status).toBe(4);
+                expect(result.stderr).toContain('egress proxy did not start');
             },
         );
     });
@@ -347,7 +406,9 @@ describe('scripts are written for the root channel', () => {
             const sudoCalls = script.match(/sudo [^\n]*/g) ?? [];
             for (const call of sudoCalls) {
                 expect(call).toMatch(
-                    new RegExp(`^sudo -n -u '${identity.user}' `),
+                    new RegExp(
+                        `^sudo -n -u '(${identity.user}|${identity.proxyUser})' `,
+                    ),
                 );
             }
             expect(script).not.toMatch(/exec sudo/);
@@ -415,11 +476,8 @@ describe('scripts on a sandbox shell whose exit hook fails (E2B)', () => {
     });
 
     it('a fence with no domains exits 0', () => {
-        withStubs({}, (dir) => {
-            const result = runBash(
-                dir,
-                onE2bShell(buildNetworkScript({ identity, domains: [] })),
-            );
+        withStubs(fenceStubs('93.184.216.34'), (dir) => {
+            const result = runFence(dir, identity, [], onE2bShell);
             expect(result.status).toBe(0);
         });
     });
