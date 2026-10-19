@@ -140,6 +140,55 @@ describe('checkConventionQuotes in a skill with rule files', () => {
         expect(r.rejected[0].reason).toBe(QUOTE_NOT_FOUND);
     });
 
+    it('does not look in files deeper than the references the skill serves', async () => {
+        const DEEP = '.claude/skills/valve-rules/rules/archive/old.md';
+        const deepFiles = {
+            ...files,
+            [DEEP]: '# Old\n\nA valve may open before its zone lock is held.\n',
+        };
+        const read = reader(deepFiles);
+        const r = await checkConventionQuotes(
+            [
+                conv('A valve may open before its zone lock is held.', {
+                    source: {
+                        file: SKILL,
+                        section: 'Old',
+                        quote: 'A valve may open before its zone lock is held.',
+                    },
+                }),
+            ],
+            read,
+            [SKILL],
+            jest.fn(async () => Object.keys(deepFiles)),
+        );
+        expect(r.passed).toEqual([]);
+        expect(read).not.toHaveBeenCalledWith(DEEP);
+    });
+
+    it('reads a bounded number of skill files when the quote is missing', async () => {
+        const many: Record<string, string> = { [SKILL]: files[SKILL] };
+        for (let i = 0; i < 100; i++) {
+            many[`.claude/skills/valve-rules/rules/zone-${i}.md`] = '# Zone\n';
+        }
+        const read = reader(many);
+        const r = await checkConventionQuotes(
+            [
+                conv('A valve opens only after its zone lock is held.', {
+                    source: {
+                        file: SKILL,
+                        section: 'Opening',
+                        quote: 'A valve opens only after its zone lock is held.',
+                    },
+                }),
+            ],
+            read,
+            [SKILL],
+            jest.fn(async () => Object.keys(many)),
+        );
+        expect(r.passed).toEqual([]);
+        expect(read.mock.calls.length).toBeLessThanOrEqual(1 + 40);
+    });
+
     it('keeps rejecting without a lister', async () => {
         const r = await checkConventionQuotes(
             [

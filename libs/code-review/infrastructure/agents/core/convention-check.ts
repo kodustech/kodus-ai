@@ -30,6 +30,9 @@ export type GuideDirLister = (dir: string) => Promise<string[]>;
 
 /** Skill files a rule can be quoted from: prose, not scripts or data. */
 const SKILL_TEXT_FILE = /\.(md|mdx|markdown|txt)$/i;
+/** Files a missing quote is looked up in, per cited skill: one `git show`
+ *  each, so a reference-heavy skill cannot turn one finding into hundreds. */
+const MAX_SKILL_FALLBACK_FILES = 40;
 
 export const QUOTE_NOT_FOUND = 'quote-not-found' as const;
 
@@ -327,15 +330,20 @@ async function findInSkillFiles(
     const dir = cited.replace(/\/?SKILL\.md$/i, '');
     if (!dir) return null;
     const files = await listGuideDir(dir).catch(() => [] as string[]);
+    let reads = 0;
     for (const raw of files) {
         const file = stripLeading(raw);
         if (
             file === cited ||
             !file.startsWith(`${dir}/`) ||
+            // The same scope the knowledge resolver serves: references one
+            // level below the skill folder, never deeper.
+            file.slice(dir.length + 1).split('/').length > 2 ||
             !SKILL_TEXT_FILE.test(file)
         ) {
             continue;
         }
+        if (reads++ >= MAX_SKILL_FALLBACK_FILES) break;
         const content = await read(file);
         const sectionText = content && findQuoteSection(content, quote);
         if (sectionText) return { file, sectionText };
