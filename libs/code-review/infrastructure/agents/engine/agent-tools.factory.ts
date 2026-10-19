@@ -828,8 +828,10 @@ export function buildAgentTools(
                         dirPath,
                     );
                 }
-                // Filter out common noise directories
+                // Filter out common noise directories, and the astGrep tool's
+                // scratch directory while a call is using it.
                 const IGNORE_DIRS = [
+                    '.kody-ast-grep-',
                     'node_modules',
                     '.git',
                     'dist',

@@ -181,3 +181,19 @@ describe('searchDocs — distinguishes "backend unavailable" from "no docs"', ()
         );
     });
 });
+
+describe('listDir — the astGrep scratch directory', () => {
+    it('does not list it while an astGrep call is using it', async () => {
+        // astGrep writes its rules into a directory in the checkout; a listDir
+        // made in the same step showed it to the agent as repository content.
+        const remote = makeRemote({
+            listDir: async () =>
+                'src/sync.ts\n.kody-ast-grep-mvfad36b-80061llu/sgconfig.yml\n.kody-ast-grep-mvfad36b-80061llu/rules.yml',
+        });
+        const out = await buildAgentTools(remote).listDir.execute({
+            path: '.',
+        });
+        expect(out).toContain('src/sync.ts');
+        expect(out).not.toContain('.kody-ast-grep-');
+    });
+});
