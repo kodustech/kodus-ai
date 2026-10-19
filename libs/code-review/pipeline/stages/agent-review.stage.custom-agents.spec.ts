@@ -298,7 +298,6 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
                     0,
                     {
                         suggestionContent: 'O débito fica sem crédito.',
-                        title: 'Lançamento sem contrapartida',
                     },
                 ],
             ]),
@@ -319,13 +318,12 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
             [expect.objectContaining({ title: 'Unbalanced ledger entry' })],
             expect.objectContaining({
                 customWritingGuidelines: writing,
-                rewriteTitle: true,
             }),
         );
         const [comment] = result.validSuggestionsByPR;
         expect(comment.oneSentenceSummary).toBe('Ledger Rules (1)');
         expect(comment.suggestionContent).toBe(
-            '1. **Lançamento sem contrapartida** — `src/ledger.ts:3`\n\n   O débito fica sem crédito.',
+            '1. **Unbalanced ledger entry** — `src/ledger.ts:3`\n\n   O débito fica sem crédito.',
         );
     });
 

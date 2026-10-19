@@ -1,4 +1,4 @@
-import { buildFormatPrompt, parseFormatResponse } from './format-prompt';
+import { buildFormatPrompt } from './format-prompt';
 
 const suggestion = {
     title: 'User can be null when the account was deleted',
@@ -43,57 +43,14 @@ describe('buildFormatPrompt — body under a title', () => {
     });
 });
 
-describe('buildFormatPrompt — language under a custom agent voice (#2172)', () => {
-    it('lets an agent voice name another language than the team default', () => {
+describe('buildFormatPrompt — language', () => {
+    it("keeps the team's language mandatory, whatever the writing guidelines say", () => {
         const prompt = buildFormatPrompt([suggestion], {
-            customWritingGuidelines: 'Escreva em português do Brasil.',
-            languageLabel: 'English',
-            languageIsDefault: true,
-        });
-
-        expect(prompt).not.toContain('Do not fall back to English');
-        expect(prompt).toContain(
-            'Write in English unless the writing guidelines above name another language.',
-        );
-    });
-
-    it('keeps the team language mandatory for the main review', () => {
-        const prompt = buildFormatPrompt([suggestion], {
+            customWritingGuidelines: 'Escribe en español.',
             languageLabel: 'English',
         });
 
         expect(prompt).toContain('IMPORTANT: Write all output in English.');
-    });
-});
-
-describe('buildFormatPrompt — title in the agent voice', () => {
-    it('leaves the title alone by default', () => {
-        const prompt = buildFormatPrompt([suggestion]);
         expect(prompt).not.toContain('"title"');
-    });
-
-    it('asks for the title in the same language and voice when the voice is the agent own', () => {
-        const prompt = buildFormatPrompt([suggestion], {
-            customWritingGuidelines: 'Escreva em português.',
-            rewriteTitle: true,
-        });
-        expect(prompt).toMatch(/rewrite the title in the same language/i);
-        expect(prompt).toContain('"title"');
-    });
-});
-
-describe('parseFormatResponse — title', () => {
-    it('reads a rewritten title when present', () => {
-        const { formatted } = parseFormatResponse(
-            '[{"index":0,"suggestionContent":"Corpo.","title":"Título novo"}]',
-        );
-        expect(formatted.get(0)?.title).toBe('Título novo');
-    });
-
-    it('has no title when the model returns none', () => {
-        const { formatted } = parseFormatResponse(
-            '[{"index":0,"suggestionContent":"Body."}]',
-        );
-        expect(formatted.get(0)?.title).toBeUndefined();
     });
 });

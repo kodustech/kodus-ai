@@ -18,7 +18,6 @@ import {
     ruleCitation,
     preferCustomAgentKeep,
     stripCustomAgentFixes,
-    languageNamedInWriting,
 } from './custom-agent-presentation';
 import {
     formatCustomAgentsSummary,
@@ -531,20 +530,5 @@ describe('custom agents summary', () => {
             '| Agent | Status | Posted | Dropped by checks |',
         );
         expect(markdown).not.toMatch(/shadow|mode/i);
-    });
-});
-
-describe('languageNamedInWriting', () => {
-    it.each([
-        ['Escribe todos los comentarios en español.', 'es'],
-        ['Write every comment in Spanish.', 'es'],
-        ['Escreva em português, curto.', 'pt'],
-        ['Reply in English only.', 'en'],
-        ['Écris en français.', 'fr'],
-        ['Schreibe auf Deutsch.', 'de'],
-        ['Be blunt. One sentence.', undefined],
-        ['Mention the English name of each currency.', undefined],
-    ])('%s -> %s', (writing, code) => {
-        expect(languageNamedInWriting(writing)).toBe(code);
     });
 });

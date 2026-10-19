@@ -8,7 +8,6 @@ import {
 } from '@libs/code-review/infrastructure/agents/engine/strip-review-scaffolding';
 import {
     customAgentWriting,
-    languageNamedInWriting,
     type CustomAgentsById,
 } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-presentation';
 
@@ -83,9 +82,6 @@ export async function formatAndShapeSuggestions(
         }
         let count = 0;
         for (const [agentWriting, voiceTargets] of targetsByWriting) {
-            const namedLanguage = agentWriting
-                ? languageNamedInWriting(agentWriting)
-                : undefined;
             const formatted = await formatSuggestionContent(
                 voiceTargets.map((i) => ({
                     title: suggestions[i].oneSentenceSummary || '',
@@ -104,16 +100,9 @@ export async function formatAndShapeSuggestions(
                             ? writingGuidelines.text
                             : undefined),
                     byokConfig: options.byokConfig,
-                    // A language the voice names wins outright; left as a
-                    // mere default, the team's language won on findings the
-                    // finder had already written in it.
-                    languageResultPrompt:
-                        namedLanguage ?? options.languageResultPrompt,
-                    languageIsDefault:
-                        agentWriting !== undefined && !namedLanguage,
-                    // The agent's voice may name another language than the
-                    // team's; the title has to follow it.
-                    rewriteTitle: agentWriting !== undefined,
+                    // The team's language, set in General, holds for an
+                    // agent's voice too.
+                    languageResultPrompt: options.languageResultPrompt,
                     organizationId: options.organizationId,
                 },
             );
@@ -127,11 +116,6 @@ export async function formatAndShapeSuggestions(
                     formattedTargets.add(suggestions[target]);
                     suggestions[target].suggestionContent =
                         fmt.suggestionContent;
-                    // Only when asked: a native finding keeps its title even
-                    // if the model volunteers one.
-                    if (fmt.title && agentWriting !== undefined) {
-                        suggestions[target].oneSentenceSummary = fmt.title;
-                    }
                 }
             }
             count += formatted.size;

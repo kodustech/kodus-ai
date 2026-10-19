@@ -17,8 +17,6 @@ export interface SuggestionToFormat {
 export interface FormattedSuggestion {
     suggestionContent: string;
     improvedCode: string;
-    /** Only when asked (`rewriteTitle`): the title in the voice's language. */
-    title?: string;
 }
 
 export function buildFormatPrompt(
@@ -27,19 +25,13 @@ export function buildFormatPrompt(
         customWritingGuidelines?: string;
         /** Already-resolved language label (e.g. "Portuguese"), not a locale code. */
         languageLabel?: string | null;
-        /** The language is only a default the guidelines may change (a custom agent's voice). */
-        languageIsDefault?: boolean;
-        /** Also return the title, so a voice in another language reaches it. */
-        rewriteTitle?: boolean;
     },
 ): string {
     const customGuidelines = options?.customWritingGuidelines?.trim() || '';
 
     const langInstruction = !options?.languageLabel
         ? ''
-        : options.languageIsDefault
-          ? `\nWrite in ${options.languageLabel} unless the writing guidelines above name another language.`
-          : `\nIMPORTANT: Write all output in ${options.languageLabel}. Do not fall back to English.`;
+        : `\nIMPORTANT: Write all output in ${options.languageLabel}. Do not fall back to English.`;
 
     const suggestionsText = suggestions
         .map(
@@ -55,18 +47,13 @@ export function buildFormatPrompt(
         ? `\nThe team has provided custom writing guidelines. Follow them for tone and length — they take priority over the default rules above.\n${customGuidelines}\n\nThese rules apply regardless of the team's guidelines:\n${shapeRules}`
         : `\n- Write at most 2 sentences: one on the impact, one on what to change.`;
 
-    const titleRule = options?.rewriteTitle
-        ? `\n- Also rewrite the title in the same language and voice as the text: one sentence that names the problem, keeping identifiers as they are. Return it as "title".`
-        : '';
-    const titleField = options?.rewriteTitle ? ', "title": "rewritten title"' : '';
-
     return `You are a code review comment editor. Each suggestion is shown in the pull request as a title followed by the text you write.
 
 Rules:
 - Remove labels like "WHAT:", "WHY:", "HOW:", "1.", "2.", "3." from the beginning of sentences and merge what they delimited into natural prose.
 - Keep every technical detail that matters: function names, file names, variable names, error types, line numbers.
 ${shapeRules}
-- Do NOT touch existingCode or improvedCode — return them exactly as provided.${titleRule}${lengthOrTeam}${langInstruction}
+- Do NOT touch existingCode or improvedCode — return them exactly as provided.${lengthOrTeam}${langInstruction}
 
 Example:
 Title: "join() leaves flusher processes running after a timeout"
@@ -76,7 +63,7 @@ Output: "Every process after the deadline keeps running as an orphan. Remove the
 Respond with ONLY a JSON array:
 \`\`\`json
 [
-  {"index": 0, "suggestionContent": "cleaned text"${titleField}}
+  {"index": 0, "suggestionContent": "cleaned text"}
 ]
 \`\`\`
 
@@ -356,9 +343,6 @@ export function parseFormatResponse(text: string): {
             formatted.set(item.index, {
                 suggestionContent: item.suggestionContent,
                 improvedCode: item.improvedCode || '',
-                ...(typeof item.title === 'string' && item.title.trim()
-                    ? { title: item.title.trim() }
-                    : {}),
             });
         }
     }

@@ -98,10 +98,6 @@ export async function formatSuggestionContent(
         customWritingGuidelines?: string;
         byokConfig?: NormalizedModel;
         languageResultPrompt?: string;
-        /** A custom agent's voice may name another language than the team's. */
-        languageIsDefault?: boolean;
-        /** Return the title too, rewritten in the voice's language. */
-        rewriteTitle?: boolean;
         organizationId?: string;
     },
 ): Promise<Map<number, FormattedSuggestion>> {
@@ -126,8 +122,6 @@ export async function formatSuggestionContent(
             user: buildFormatPrompt(suggestions, {
                 customWritingGuidelines: options?.customWritingGuidelines,
                 languageLabel: langLabel,
-                languageIsDefault: options?.languageIsDefault,
-                rewriteTitle: options?.rewriteTitle,
             }),
             runName: 'suggestion-formatter',
             timeoutMs: FORMAT_TIMEOUT_MS,

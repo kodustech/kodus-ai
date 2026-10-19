@@ -132,7 +132,7 @@ describe('formatAndShapeSuggestions', () => {
     });
 });
 
-describe('formatAndShapeSuggestions — a custom agent voice naming a language', () => {
+describe('formatAndShapeSuggestions — a custom agent voice', () => {
     beforeEach(() => formatter.mockReset());
 
     const agents = (writing: string) =>
@@ -143,58 +143,22 @@ describe('formatAndShapeSuggestions — a custom agent voice naming a language',
             ],
         ]);
 
-    it('writes in the language the agent names, not the team language', async () => {
+    it("writes in the team's language even when the voice names another", async () => {
         formatter.mockResolvedValue(
-            new Map([
-                [0, { suggestionContent: 'Uno. Dos.', title: 'Título' } as any],
-            ]),
+            new Map([[0, { suggestionContent: 'Um. Dois.' } as any]]),
         );
         const s = [finding({ customAgent: { id: 'ag', name: 'Money' } })];
+        const title = s[0].oneSentenceSummary;
         await formatAndShapeSuggestions(s, {
             writingGuidelines: DEFAULT,
             languageResultPrompt: 'pt-BR',
             organizationId: 'org',
-            customAgentsById: agents(
-                'Escribe todos los comentarios en español, incluido el título.',
-            ),
+            customAgentsById: agents('Escribe en español. Sé breve.'),
         });
         expect(formatter.mock.calls[0][1]).toMatchObject({
-            languageResultPrompt: 'es',
-            languageIsDefault: false,
-            rewriteTitle: true,
-        });
-        expect(s[0].oneSentenceSummary).toBe('Título');
-    });
-
-    it('keeps the team language as a default when the voice names none', async () => {
-        formatter.mockResolvedValue(new Map());
-        await formatAndShapeSuggestions(
-            [finding({ customAgent: { id: 'ag', name: 'Money' } })],
-            {
-                writingGuidelines: DEFAULT,
-                languageResultPrompt: 'pt-BR',
-                organizationId: 'org',
-                customAgentsById: agents('Be blunt. One sentence.'),
-            },
-        );
-        expect(formatter.mock.calls[0][1]).toMatchObject({
+            customWritingGuidelines: 'Escribe en español. Sé breve.',
             languageResultPrompt: 'pt-BR',
-            languageIsDefault: true,
         });
-    });
-
-    it('leaves a native finding in the team language', async () => {
-        formatter.mockResolvedValue(new Map());
-        await formatAndShapeSuggestions([finding()], {
-            writingGuidelines: DEFAULT,
-            languageResultPrompt: 'pt-BR',
-            organizationId: 'org',
-            customAgentsById: agents('Escribe en español.'),
-        });
-        expect(formatter.mock.calls[0][1]).toMatchObject({
-            languageResultPrompt: 'pt-BR',
-            languageIsDefault: false,
-            rewriteTitle: false,
-        });
+        expect(s[0].oneSentenceSummary).toBe(title);
     });
 });

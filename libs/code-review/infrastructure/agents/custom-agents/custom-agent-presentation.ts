@@ -147,39 +147,6 @@ export function customAgentWriting(
     return writing || undefined;
 }
 
-/** Language names as a writing instruction spells them, by locale code. */
-const WRITING_LANGUAGES: ReadonlyArray<[string, RegExp]> = [
-    ['es', /espa[ñn]ol|spanish|castellano|espanhol/],
-    ['pt', /portugu[eêé]se?|portuguese/],
-    ['en', /english|ingl[eéê]s|englisch|anglais/],
-    ['fr', /fran[cç]ais|french|franc[eé]s|franz[öo]sisch/],
-    ['de', /deutsch|german|alem[aã]n?o?/],
-    ['it', /italiano|italian|italien/],
-    ['ja', /japanese|japon[eéê]s|日本語/],
-    ['zh', /chinese|chin[eêé]s|中文/],
-    ['ko', /korean|coreano|한국어/],
-];
-
-/**
- * The language a custom agent's writing instructions ask for, as a locale
- * code: "Escribe en español" gives `es`. Only a language named after "in",
- * "en", "em", "auf" or "au", so a passing mention ("the English name of the
- * currency") names none.
- */
-export function languageNamedInWriting(writing: string): string | undefined {
-    const text = writing.toLowerCase();
-    for (const [code, name] of WRITING_LANGUAGES) {
-        const asked = new RegExp(
-            `(?:^|[^\\p{L}])(?:in|en|em|auf|au)\\s+(?:${name.source})`,
-            'u',
-        );
-        if (asked.test(text)) {
-            return code;
-        }
-    }
-    return undefined;
-}
-
 /**
  * A custom agent finding inside the agent's lane: it applies the team rule
  * the agent was asked for, and quotes it.
@@ -362,11 +329,11 @@ function buildSingleComment(
     const ordered = [...findings].sort(
         (a, b) => rankOf(a.severity) - rankOf(b.severity),
     );
-    // An agent with its own writing instructions may write in any language,
-    // and its findings already come in that voice (the formatter rewrites
-    // their title and body). The comment then adds no English words of its
-    // own: no "finding" heading and no severity names, which the order (most
-    // severe first) and the comment's severity badge already carry.
+    // An agent with its own writing instructions sets how its comments read,
+    // and the formatter already wrote its findings that way. The comment then
+    // adds no English words of its own: no "finding" heading and no severity
+    // names, which the order (most severe first) and the comment's severity
+    // badge already carry.
     const ownVoice = !!agent.presentation?.writing?.trim();
     const items = ordered.map((s, i) => {
         const location = s.relevantFile

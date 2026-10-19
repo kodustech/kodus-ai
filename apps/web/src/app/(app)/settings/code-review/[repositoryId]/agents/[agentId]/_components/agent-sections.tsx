@@ -354,7 +354,7 @@ export const CommentsAndModel = ({
             <Field
                 label="How it writes"
                 htmlFor="agent-writing"
-                hint="Tone, length, language and what every comment must say. Empty: the team's writing settings.">
+                hint="Tone, length and what every comment must say. Comments are in the language set in General. Empty: the team's writing settings.">
                 <Textarea
                     id="agent-writing"
                     className="min-h-20 text-sm"
