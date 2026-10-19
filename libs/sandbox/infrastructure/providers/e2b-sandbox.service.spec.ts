@@ -209,7 +209,7 @@ describe('buildE2BRemoteCommands', () => {
             const out = await rc.grep('needle', 'src');
             expect(out).toBe('a.ts:1:hit');
             expect(run).toHaveBeenCalledWith(
-                `cd ${REPO_DIR} && rg --no-heading -n 'needle' 'src'`,
+                `cd ${REPO_DIR} && rg --no-heading -n -e 'needle' -- 'src'`,
                 { timeoutMs: 30_000 },
             );
         });
@@ -223,7 +223,7 @@ describe('buildE2BRemoteCommands', () => {
             const rc = buildE2BRemoteCommands(makeSandbox(run));
             await rc.grep('needle', 'src', '*.ts');
             expect(run).toHaveBeenCalledWith(
-                `cd ${REPO_DIR} && rg --no-heading -n 'needle' 'src' --glob '*.ts'`,
+                `cd ${REPO_DIR} && rg --no-heading -n --glob '*.ts' -e 'needle' -- 'src'`,
                 { timeoutMs: 30_000 },
             );
         });
@@ -237,8 +237,21 @@ describe('buildE2BRemoteCommands', () => {
             const rc = buildE2BRemoteCommands(makeSandbox(run));
             await rc.grep("a'b", "d'ir", "*'.ts");
             expect(run).toHaveBeenCalledWith(
-                `cd ${REPO_DIR} && rg --no-heading -n 'a'\\''b' 'd'\\''ir' --glob '*'\\''.ts'`,
+                `cd ${REPO_DIR} && rg --no-heading -n --glob '*'\\''.ts' -e 'a'\\''b' -- 'd'\\''ir'`,
                 { timeoutMs: 30_000 },
+            );
+        });
+
+        it('never lets a pattern starting with "-" become an rg option', async () => {
+            const run = jest.fn().mockResolvedValue({
+                stdout: '',
+                stderr: '',
+                exitCode: 1,
+            });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            await rc.grep('--pre=sh', 'src');
+            expect(run.mock.calls[0][0]).toBe(
+                `cd ${REPO_DIR} && rg --no-heading -n -e '--pre=sh' -- 'src'`,
             );
         });
 

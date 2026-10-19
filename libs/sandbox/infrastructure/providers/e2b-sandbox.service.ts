@@ -131,7 +131,9 @@ export function buildE2BRemoteCommands(
             const escapedPattern = pattern.replace(/'/g, "'\\''");
             const safeRelativePath = path.replace(/'/g, "'\\''");
             const result = await runCmd(
-                `cd ${REPO_DIR} && rg --no-heading -n '${escapedPattern}' '${safeRelativePath}'${globArg}`,
+                // `-e` and `--`: a pattern or path starting with "-" is never
+                // read as an rg flag (`--pre` would run a command).
+                `cd ${REPO_DIR} && rg --no-heading -n${globArg} -e '${escapedPattern}' -- '${safeRelativePath}'`,
                 { timeoutMs: TIMEOUTS.COMMAND_LONG_MS },
             );
             // rg exit 1 = "no matches" (valid); exit >= 2 with stderr = real error.

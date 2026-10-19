@@ -407,16 +407,18 @@ export class LocalSandboxService implements ISandboxProvider {
 
                 // rg with --no-follow ensures symlinks are not followed during search.
                 // cwd = repoDir so rg outputs relative paths (downstream expects "./src/foo.ts")
+                // `-e` and `--`: a pattern or path starting with "-" is never
+                // read as an rg flag (`--pre` would run a command).
                 const args = [
                     '--no-heading',
                     '-n',
                     '--no-follow',
+                    ...(glob ? ['--glob', glob] : []),
+                    '-e',
                     pattern,
+                    '--',
                     path,
                 ];
-                if (glob) {
-                    args.push('--glob', glob);
-                }
 
                 try {
                     const { stdout } = await execFileAsync('rg', args, {
