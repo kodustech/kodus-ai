@@ -1,14 +1,10 @@
 import type { CodeSuggestion } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import type { NormalizedModel } from '@libs/llm/byok-config';
-import {
-    dropImpactWhenLong,
-    shapeSuggestionBodyWithReport,
-} from '@libs/common/utils/codeManagement/suggestion-body-shape';
+import { shapeSuggestionBodyWithReport } from '@libs/common/utils/codeManagement/suggestion-body-shape';
 import {
     boundSuggestionTitle,
     MAX_TITLE_CHARS,
 } from '@libs/common/utils/codeManagement/suggestion-title';
-import { BODY_WORD_BUDGET } from '@libs/code-review/infrastructure/agents/engine/format-prompt';
 import { isAnalyzerSuggestion } from '@libs/code-review/infrastructure/analyzers/analyzer-findings-to-suggestions';
 import {
     impactAndActionFallback,
@@ -21,8 +17,6 @@ export interface SuggestionShapeCounts {
     droppedTitleRepeat: number;
     capped: number;
     impactActionFallback: number;
-    /** Fallback bodies over the word budget that lost an impact sentence. */
-    impactDropped: number;
     /** Titles over the ceiling the formatter rewrote. */
     titleRewritten: number;
     /** Titles still over the ceiling, cut at a word boundary. */
@@ -141,7 +135,6 @@ export async function formatAndShapeSuggestions(
         droppedTitleRepeat: 0,
         capped: 0,
         impactActionFallback: 0,
-        impactDropped: 0,
         titleRewritten: rewrittenTitles.size,
         titleCut: 0,
     };
@@ -168,19 +161,6 @@ export async function formatAndShapeSuggestions(
             capSentences: !writingGuidelines.isCustom,
         });
         s.suggestionContent = shaped.body;
-        // The word budget the formatter is asked for, on the text it never
-        // rewrote; a team's own guidelines set their own length.
-        if (!writingGuidelines.isCustom && !formattedTargets.has(s)) {
-            const trimmed = dropImpactWhenLong({
-                body: s.suggestionContent,
-                title: s.oneSentenceSummary,
-                maxWords: BODY_WORD_BUDGET,
-            });
-            if (trimmed.dropped) {
-                s.suggestionContent = trimmed.body;
-                shapeCounts.impactDropped++;
-            }
-        }
         shapeCounts.shaped++;
         if (shaped.removedFences) shapeCounts.removedFences++;
         if (shaped.droppedTitleRepeat) shapeCounts.droppedTitleRepeat++;

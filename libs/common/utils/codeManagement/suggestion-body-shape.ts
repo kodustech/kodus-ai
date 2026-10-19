@@ -167,57 +167,6 @@ function withoutLeadingSentence(text: string): string {
         : rest.trim();
 }
 
-/** Prose words; an inline code span counts as one. */
-const countWords = (text: string): number =>
-    (text.replace(/`[^`]*`/g, ' x ').match(/[\p{L}\p{N}_]+/gu) ?? []).length;
-
-/**
- * Code names a reader looks for: a backticked name or path, or a word that can
- * only be code (dotted, camelCase, snake_case, PascalCase compounds, calls).
- * The same reading as evals/format/checks.js `identifiers`.
- */
-const CODE_WORD =
-    /(?<![\w$.])(?:[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+|[a-z_$][\w$]*[A-Z_][\w$]*|[A-Z][a-z0-9]+[A-Z][\w$]*)(?:\(\))?(?![\w$])/g;
-const NAME_OR_PATH =
-    /^(?:[A-Za-z_$][\w$]*(?:(?:\.|::|#)[A-Za-z_$][\w$]*)*(?:\(\))?|[\w.-]+(?:\/[\w.-]+)+)$/;
-function codeNames(text: string): string[] {
-    const out = new Set<string>();
-    for (const m of text.matchAll(/`([^`\n]{3,80})`/g)) {
-        if (NAME_OR_PATH.test(m[1].trim())) out.add(m[1].trim());
-    }
-    for (const m of text.replace(/`[^`\n]*`/g, ' ').matchAll(CODE_WORD)) {
-        out.add(m[0]);
-    }
-    return [...out].filter(
-        (name) => name.length >= 3 && !/^(e\.g|i\.e|etc)\.?$/i.test(name),
-    );
-}
-
-/**
- * The local fallback ships the finder's own sentences, and those run long: the
- * word budget the formatter is asked for has no model to hold it. Over the
- * budget, the impact sentences go when every code name they carry is already
- * in the title or the action, so the comment keeps its names and what to do.
- * Otherwise the body is left as it is.
- */
-export function dropImpactWhenLong(params: {
-    body: string;
-    title?: string | null;
-    maxWords: number;
-}): { body: string; dropped: boolean } {
-    const { body } = params;
-    if (countWords(body) <= params.maxWords) return { body, dropped: false };
-    const sentences = splitSentences(body);
-    if (sentences.length < 2) return { body, dropped: false };
-    const action = sentences[sentences.length - 1];
-    const shown = `${params.title ?? ''}\n${action}`;
-    const impactNames = codeNames(sentences.slice(0, -1).join(' '));
-    if (!impactNames.every((name) => shown.includes(name))) {
-        return { body, dropped: false };
-    }
-    return { body: action, dropped: true };
-}
-
 export function shapeSuggestionBody(params: {
     body: string;
     title?: string | null;

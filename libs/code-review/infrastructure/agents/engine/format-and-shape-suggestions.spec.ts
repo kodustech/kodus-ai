@@ -6,13 +6,10 @@ jest.mock(
     '@libs/code-review/infrastructure/agents/engine/format-suggestion-content',
     () => ({ formatSuggestionContent: jest.fn() }),
 );
-const formatter = formatSuggestionContent as jest.MockedFunction<
-    typeof formatSuggestionContent
->;
+const formatter = formatSuggestionContent as jest.MockedFunction<typeof formatSuggestionContent>;
 
 const DEFAULT = { text: 'default guidelines', isCustom: false };
-const SCAFFOLDED =
-    'WHAT: The loop reads past the end. WHY: The last read throws on an empty list. HOW: Stop at length minus one.';
+const SCAFFOLDED = 'WHAT: The loop reads past the end. WHY: The last read throws on an empty list. HOW: Stop at length minus one.';
 
 const finding = (over: Record<string, unknown> = {}) => ({
     oneSentenceSummary: 'Loop reads past the end of the list',
@@ -28,104 +25,46 @@ describe('formatAndShapeSuggestions', () => {
     beforeEach(() => formatter.mockReset());
 
     it("ships the formatter's text, shaped: no code block, two sentences", async () => {
-        formatter.mockResolvedValue(
-            new Map([
-                [
-                    0,
-                    {
-                        suggestionContent: 'One. Two. Three.\n```ts\nx\n```',
-                    } as any,
-                ],
-            ]),
-        );
+        formatter.mockResolvedValue(new Map([[0, { suggestionContent: 'One. Two. Three.\n```ts\nx\n```' } as any]]));
         const s = [finding()];
-        const r = await formatAndShapeSuggestions(s, {
-            writingGuidelines: DEFAULT,
-            languageResultPrompt: 'pt-BR',
-            organizationId: 'org',
-        });
+        const r = await formatAndShapeSuggestions(s, { writingGuidelines: DEFAULT, languageResultPrompt: 'pt-BR', organizationId: 'org' });
         expect(s[0].suggestionContent).toBe('One. Two.');
-        expect(r).toMatchObject({
-            formatted: 1,
-            formatTargets: 1,
-            shapeCounts: {
-                shaped: 1,
-                removedFences: 1,
-                capped: 1,
-                impactActionFallback: 0,
-            },
-        });
-        expect(formatter.mock.calls[0][0][0]).toMatchObject({
-            title: 'Loop reads past the end of the list',
-            suggestionContent: SCAFFOLDED,
-        });
-        expect(formatter.mock.calls[0][1]).toMatchObject({
-            customWritingGuidelines: undefined,
-            languageResultPrompt: 'pt-BR',
-            organizationId: 'org',
-        });
+        expect(r).toMatchObject({ formatted: 1, formatTargets: 1, shapeCounts: { shaped: 1, removedFences: 1, capped: 1, impactActionFallback: 0 } });
+        expect(formatter.mock.calls[0][0][0]).toMatchObject({ title: 'Loop reads past the end of the list', suggestionContent: SCAFFOLDED });
+        expect(formatter.mock.calls[0][1]).toMatchObject({ customWritingGuidelines: undefined, languageResultPrompt: 'pt-BR', organizationId: 'org' });
     });
 
     it('falls back to the impact and the action when the formatter returned nothing', async () => {
         formatter.mockResolvedValue(new Map());
         const s = [finding()];
-        const r = await formatAndShapeSuggestions(s, {
-            writingGuidelines: DEFAULT,
-            organizationId: 'org',
-        });
-        expect(s[0].suggestionContent).toBe(
-            'The last read throws on an empty list. Stop at length minus one.',
-        );
+        const r = await formatAndShapeSuggestions(s, { writingGuidelines: DEFAULT, organizationId: 'org' });
+        expect(s[0].suggestionContent).toBe('The last read throws on an empty list. Stop at length minus one.');
         expect(r.shapeCounts.impactActionFallback).toBe(1);
     });
 
     it("hands a team's own guidelines to the formatter and neither falls back nor caps", async () => {
-        formatter.mockResolvedValue(
-            new Map([[0, { suggestionContent: 'One. Two. Three.' } as any]]),
-        );
+        formatter.mockResolvedValue(new Map([[0, { suggestionContent: 'One. Two. Three.' } as any]]));
         const s = [finding()];
-        const r = await formatAndShapeSuggestions(s, {
-            writingGuidelines: { text: 'Write one sentence.', isCustom: true },
-            organizationId: 'org',
-        });
-        expect(formatter.mock.calls[0][1]).toMatchObject({
-            customWritingGuidelines: 'Write one sentence.',
-        });
+        const r = await formatAndShapeSuggestions(s, { writingGuidelines: { text: 'Write one sentence.', isCustom: true }, organizationId: 'org' });
+        expect(formatter.mock.calls[0][1]).toMatchObject({ customWritingGuidelines: 'Write one sentence.' });
         expect(s[0].suggestionContent).toBe('One. Two. Three.');
-        expect(r.shapeCounts).toMatchObject({
-            capped: 0,
-            impactActionFallback: 0,
-        });
+        expect(r.shapeCounts).toMatchObject({ capped: 0, impactActionFallback: 0 });
     });
 
     it("leaves an analyzer's finding out of both passes", async () => {
         formatter.mockResolvedValue(new Map());
-        const analyzer = finding({
-            suggestionContent: '- pkg a\n- pkg b',
-            evidence: { source: ANALYZER_SOURCE },
-        });
+        const analyzer = finding({ suggestionContent: '- pkg a\n- pkg b', evidence: { source: ANALYZER_SOURCE } });
         const s = [analyzer, finding()];
-        const r = await formatAndShapeSuggestions(s as any, {
-            writingGuidelines: DEFAULT,
-            organizationId: 'org',
-        });
+        const r = await formatAndShapeSuggestions(s as any, { writingGuidelines: DEFAULT, organizationId: 'org' });
         expect(formatter.mock.calls[0][0]).toHaveLength(1);
         expect(s[0].suggestionContent).toBe('- pkg a\n- pkg b');
-        expect(r).toMatchObject({
-            formatTargets: 1,
-            shapeCounts: { shaped: 1 },
-        });
+        expect(r).toMatchObject({ formatTargets: 1, shapeCounts: { shaped: 1 } });
     });
 
     it('keeps each text and still shapes it when the formatter throws', async () => {
         formatter.mockRejectedValue(new Error('provider down'));
-        const s = [
-            finding({ suggestionContent: 'Plain prose. Second. Third.' }),
-        ];
-        const r = await formatAndShapeSuggestions(s, {
-            writingGuidelines: DEFAULT,
-            organizationId: 'org',
-        });
+        const s = [finding({ suggestionContent: 'Plain prose. Second. Third.' })];
+        const r = await formatAndShapeSuggestions(s, { writingGuidelines: DEFAULT, organizationId: 'org' });
         expect(r.formatted).toBeNull();
         expect(String((r.formatError as Error).message)).toBe('provider down');
         expect(s[0].suggestionContent).toBe('Plain prose. Second.');
@@ -136,216 +75,64 @@ describe('formatAndShapeSuggestions', () => {
             '`Array.prototype.forEach` does not await its async callback, so `bulkReassign` returns `{ reassigned: 0, skipped: 0 }` before any await resolves';
 
         it("ships the formatter's title instead of cutting it", async () => {
-            formatter.mockResolvedValue(
-                new Map([
-                    [
-                        0,
-                        {
-                            suggestionContent:
-                                'Counts are always zero. Use for...of.',
-                            title: '`forEach` does not await its async callback',
-                        } as any,
-                    ],
-                ]),
-            );
+            formatter.mockResolvedValue(new Map([[0, { suggestionContent: 'Counts are always zero. Use for...of.', title: '`forEach` does not await its async callback' } as any]]));
             const s = [finding({ oneSentenceSummary: LONG })];
-            const r = await formatAndShapeSuggestions(s, {
-                writingGuidelines: DEFAULT,
-                organizationId: 'org',
-            });
-            expect(formatter.mock.calls[0][0][0]).toMatchObject({
-                title: LONG,
-                rewriteTitle: true,
-            });
-            expect(s[0].oneSentenceSummary).toBe(
-                '`forEach` does not await its async callback',
-            );
-            expect(r.shapeCounts).toMatchObject({
-                titleRewritten: 1,
-                titleCut: 0,
-            });
+            const r = await formatAndShapeSuggestions(s, { writingGuidelines: DEFAULT, organizationId: 'org' });
+            expect(formatter.mock.calls[0][0][0]).toMatchObject({ title: LONG, rewriteTitle: true });
+            expect(s[0].oneSentenceSummary).toBe('`forEach` does not await its async callback');
+            expect(r.shapeCounts).toMatchObject({ titleRewritten: 1, titleCut: 0 });
         });
 
         it('cuts it as before when the formatter returned no title or failed', async () => {
-            for (const answer of [
-                new Map([[0, { suggestionContent: 'Body.' } as any]]),
-                new Map([
-                    [0, { suggestionContent: 'Body.', title: '   ' } as any],
-                ]),
-            ]) {
+            for (const answer of [new Map([[0, { suggestionContent: 'Body.' } as any]]), new Map([[0, { suggestionContent: 'Body.', title: '   ' } as any]])]) {
                 formatter.mockResolvedValue(answer);
                 const s = [finding({ oneSentenceSummary: LONG })];
-                const r = await formatAndShapeSuggestions(s, {
-                    writingGuidelines: DEFAULT,
-                    organizationId: 'org',
-                });
-                expect(s[0].oneSentenceSummary).toBe(
-                    '`Array.prototype.forEach` does not await its async callback, so `bulkReassign` returns…',
-                );
-                expect(r.shapeCounts).toMatchObject({
-                    titleRewritten: 0,
-                    titleCut: 1,
-                });
+                const r = await formatAndShapeSuggestions(s, { writingGuidelines: DEFAULT, organizationId: 'org' });
+                expect(s[0].oneSentenceSummary).toBe('`Array.prototype.forEach` does not await its async callback, so `bulkReassign` returns…');
+                expect(r.shapeCounts).toMatchObject({ titleRewritten: 0, titleCut: 1 });
             }
             formatter.mockRejectedValue(new Error('down'));
             const s = [finding({ oneSentenceSummary: LONG })];
-            await formatAndShapeSuggestions(s, {
-                writingGuidelines: DEFAULT,
-                organizationId: 'org',
-            });
+            await formatAndShapeSuggestions(s, { writingGuidelines: DEFAULT, organizationId: 'org' });
             expect(s[0].oneSentenceSummary.endsWith('returns…')).toBe(true);
         });
 
         it('still bounds a rewritten title that is too long', async () => {
-            formatter.mockResolvedValue(
-                new Map([
-                    [
-                        0,
-                        {
-                            suggestionContent: 'Body.',
-                            title: `${LONG} and more`,
-                        } as any,
-                    ],
-                ]),
-            );
+            formatter.mockResolvedValue(new Map([[0, { suggestionContent: 'Body.', title: `${LONG} and more` } as any]]));
             const s = [finding({ oneSentenceSummary: LONG })];
-            await formatAndShapeSuggestions(s, {
-                writingGuidelines: DEFAULT,
-                organizationId: 'org',
-            });
+            await formatAndShapeSuggestions(s, { writingGuidelines: DEFAULT, organizationId: 'org' });
             expect(s[0].oneSentenceSummary.length).toBeLessThanOrEqual(100);
             expect(s[0].oneSentenceSummary.endsWith('…')).toBe(true);
         });
 
         it('drops quotes the model put around its title', async () => {
-            formatter.mockResolvedValue(
-                new Map([
-                    [
-                        0,
-                        {
-                            suggestionContent: 'Body.',
-                            title: '"`forEach` does not await its callback"',
-                        } as any,
-                    ],
-                ]),
-            );
+            formatter.mockResolvedValue(new Map([[0, { suggestionContent: 'Body.', title: '"`forEach` does not await its callback"' } as any]]));
             const s = [finding({ oneSentenceSummary: LONG })];
-            await formatAndShapeSuggestions(s, {
-                writingGuidelines: DEFAULT,
-                organizationId: 'org',
-            });
-            expect(s[0].oneSentenceSummary).toBe(
-                '`forEach` does not await its callback',
-            );
+            await formatAndShapeSuggestions(s, { writingGuidelines: DEFAULT, organizationId: 'org' });
+            expect(s[0].oneSentenceSummary).toBe('`forEach` does not await its callback');
         });
 
         it('ignores a title the formatter was not asked for', async () => {
-            formatter.mockResolvedValue(
-                new Map([
-                    [
-                        0,
-                        {
-                            suggestionContent: 'Body.',
-                            title: 'Something else',
-                        } as any,
-                    ],
-                ]),
-            );
+            formatter.mockResolvedValue(new Map([[0, { suggestionContent: 'Body.', title: 'Something else' } as any]]));
             const s = [finding()];
-            const r = await formatAndShapeSuggestions(s, {
-                writingGuidelines: DEFAULT,
-                organizationId: 'org',
-            });
-            expect(formatter.mock.calls[0][0][0]).toMatchObject({
-                rewriteTitle: false,
-            });
-            expect(s[0].oneSentenceSummary).toBe(
-                'Loop reads past the end of the list',
-            );
-            expect(r.shapeCounts).toMatchObject({
-                titleRewritten: 0,
-                titleCut: 0,
-            });
+            const r = await formatAndShapeSuggestions(s, { writingGuidelines: DEFAULT, organizationId: 'org' });
+            expect(formatter.mock.calls[0][0][0]).toMatchObject({ rewriteTitle: false });
+            expect(s[0].oneSentenceSummary).toBe('Loop reads past the end of the list');
+            expect(r.shapeCounts).toMatchObject({ titleRewritten: 0, titleCut: 0 });
         });
 
         it("bounds an analyzer's title, which skips the formatter", async () => {
             formatter.mockResolvedValue(new Map());
-            const s = [
-                finding({
-                    oneSentenceSummary: LONG,
-                    suggestionContent: '- pkg a',
-                    evidence: { source: ANALYZER_SOURCE },
-                }),
-            ];
-            await formatAndShapeSuggestions(s as any, {
-                writingGuidelines: DEFAULT,
-                organizationId: 'org',
-            });
+            const s = [finding({ oneSentenceSummary: LONG, suggestionContent: '- pkg a', evidence: { source: ANALYZER_SOURCE } })];
+            await formatAndShapeSuggestions(s as any, { writingGuidelines: DEFAULT, organizationId: 'org' });
             expect(s[0].oneSentenceSummary.length).toBeLessThanOrEqual(100);
         });
 
         it('drops a body opening that repeats the new title', async () => {
-            formatter.mockResolvedValue(
-                new Map([
-                    [
-                        0,
-                        {
-                            suggestionContent:
-                                'forEach does not await its async callback. Counts are always zero.',
-                            title: '`forEach` does not await its async callback',
-                        } as any,
-                    ],
-                ]),
-            );
+            formatter.mockResolvedValue(new Map([[0, { suggestionContent: 'forEach does not await its async callback. Counts are always zero.', title: '`forEach` does not await its async callback' } as any]]));
             const s = [finding({ oneSentenceSummary: LONG })];
-            await formatAndShapeSuggestions(s, {
-                writingGuidelines: DEFAULT,
-                organizationId: 'org',
-            });
+            await formatAndShapeSuggestions(s, { writingGuidelines: DEFAULT, organizationId: 'org' });
             expect(s[0].suggestionContent).toBe('Counts are always zero.');
-        });
-    });
-
-    describe('word budget on the local fallback (#2181 review)', () => {
-        const LONGWHY = `Every caller then reads stale data because ${Array.from({ length: 45 }, () => 'word').join(' ')}`;
-
-        it('drops an impact sentence that names nothing else when the fallback runs long', async () => {
-            formatter.mockResolvedValue(new Map());
-            const s = [
-                finding({
-                    suggestionContent: `WHAT: The loop reads past the end. WHY: ${LONGWHY}. HOW: Stop at \`xs.length\` minus one.`,
-                }),
-            ];
-            const r = await formatAndShapeSuggestions(s, {
-                writingGuidelines: DEFAULT,
-                organizationId: 'org',
-            });
-            expect(s[0].suggestionContent).toBe(
-                'Stop at `xs.length` minus one.',
-            );
-            expect(r.shapeCounts).toMatchObject({ impactDropped: 1 });
-        });
-
-        it("never touches the formatter's text or a team's guidelines", async () => {
-            const long = `${LONGWHY}. Stop at \`xs.length\` minus one.`;
-            formatter.mockResolvedValue(
-                new Map([[0, { suggestionContent: long } as any]]),
-            );
-            const a = [finding()];
-            await formatAndShapeSuggestions(a, {
-                writingGuidelines: DEFAULT,
-                organizationId: 'org',
-            });
-            expect(a[0].suggestionContent).toBe(long);
-
-            formatter.mockResolvedValue(new Map());
-            const b = [finding({ suggestionContent: long })];
-            const r = await formatAndShapeSuggestions(b, {
-                writingGuidelines: { text: 'Be detailed.', isCustom: true },
-                organizationId: 'org',
-            });
-            expect(b[0].suggestionContent).toBe(long);
-            expect(r.shapeCounts).toMatchObject({ impactDropped: 0 });
         });
     });
 });

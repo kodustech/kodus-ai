@@ -5,8 +5,8 @@
 import { TITLE_PROMPT_SPEC } from '@libs/common/utils/codeManagement/suggestion-title';
 import { normalizeEnvelope } from '@libs/llm/structured-output-repair';
 
-/** Words in a suggestion body under the default guidelines: asked of the
- *  formatter here, held by formatAndShapeSuggestions on its fallback. */
+/** Words in a suggestion body under the default guidelines, as the
+ *  formatter is asked for them. */
 export const BODY_WORD_BUDGET = 50;
 
 export interface SuggestionToFormat {
