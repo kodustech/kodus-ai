@@ -925,18 +925,24 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                 ].join('\n');
             }
 
-            const comment = await this.codeManagementService.createIssueComment(
-                {
-                    organizationAndTeamData,
-                    prNumber,
-                    repository: {
-                        name: repository.name,
-                        id: repository.id,
+            // Status note, not a finding: on GitLab it must be a plain MR
+            // note, otherwise "All threads must be resolved" blocks the merge
+            // on a thread that says the review started (#1721). The facade
+            // only diverges from createIssueComment for GitLab, so every
+            // other platform keeps its previous behaviour.
+            const comment =
+                await this.codeManagementService.createSingleIssueComment(
+                    {
+                        organizationAndTeamData,
+                        prNumber,
+                        repository: {
+                            name: repository.name,
+                            id: repository.id,
+                        },
+                        body: commentBody,
                     },
-                    body: commentBody,
-                },
-                undefined,
-            );
+                    undefined,
+                );
 
             if (
                 PlatformType.GITHUB === platformType &&
@@ -978,7 +984,10 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
             // Extract platform-specific IDs
             switch (platformType) {
                 case PlatformType.GITLAB:
-                    // GitLab uses noteId
+                    // Discussion responses nest the note (`notes[0].id`); the
+                    // plain status note returned by createSingleIssueComment
+                    // has none, so noteId stays null and updateIssueComment
+                    // edits commentId as a note (#1721).
                     noteId = comment?.notes?.[0]?.id
                         ? Number(comment.notes[0].id)
                         : null;
@@ -2989,15 +2998,19 @@ ${reviewOptions}
             );
         }
 
-        const comment = await this.codeManagementService.createIssueComment(
-            {
-                organizationAndTeamData,
-                repository,
-                prNumber,
-                body: commentBody,
-            },
-            undefined,
-        );
+        // End-of-review / empty-review summary is a status message too —
+        // same #1721 reasoning as createInitialComment: it must not become
+        // a resolvable GitLab discussion that blocks the merge.
+        const comment =
+            await this.codeManagementService.createSingleIssueComment(
+                {
+                    organizationAndTeamData,
+                    repository,
+                    prNumber,
+                    body: commentBody,
+                },
+                undefined,
+            );
 
         if (
             platformType === PlatformType.GITHUB &&

@@ -2869,6 +2869,20 @@ export class GitlabService implements Omit<
 
             const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
 
+            // Status messages (start-of-review / end-of-review summaries) are
+            // plain MR notes, not discussions, so they never count against
+            // "All threads must be resolved" (#1721). A note has no discussion
+            // to address: the caller passes no noteId and commentId carries the
+            // note id itself, so edit the note instead of the discussion.
+            if (noteId === null || noteId === undefined) {
+                return await gitlabAPI.MergeRequestNotes.edit(
+                    repository.id,
+                    prNumber,
+                    Number(commentId),
+                    { body: body },
+                );
+            }
+
             // Update the comment in the Merge Request
             const response = await gitlabAPI.MergeRequestDiscussions.editNote(
                 repository.id,
