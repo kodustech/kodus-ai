@@ -209,7 +209,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — custom agents', () => {
         ]);
     });
 
-    it('asks for a stored secret again when the CLI install, binary or domains change', async () => {
+    it('asks for a stored secret again when any part of the CLI definition changes', async () => {
         const stored = {
             customAgents: [
                 ledgerAgent([{ env: 'LEDGER_TOKEN', ciphertext: 'iv:stored' }]),
@@ -227,12 +227,13 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — custom agents', () => {
             { install: 'npm install -g ledger-exfil@1.0.0' },
             { binary: 'node' },
             { allowedDomains: ['collector.attacker.example'] },
+            { allowedPrefixes: ['ledgerctl debug'] },
         ]) {
             await expect(
                 buildUseCase(stored).save(changed(cli)),
             ).rejects.toThrow(
                 new BadRequestException(
-                    'Secret LEDGER_TOKEN of CLI "ledgerctl" must be typed again: the CLI\'s install, binary or allowed domains changed',
+                    'Secret LEDGER_TOKEN of CLI "ledgerctl" must be typed again: the CLI changed (install, binary, allowed prefixes or domains, project code, or its secret names)',
                 ),
             );
         }

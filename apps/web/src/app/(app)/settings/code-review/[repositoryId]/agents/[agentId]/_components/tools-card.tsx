@@ -414,20 +414,35 @@ const CliEditor = ({
     const issues = cliIssues(cli);
     const set = (patch: Partial<CliToolConfig>) =>
         onChange({ ...cli, ...patch });
-    // A stored secret only goes back to the package, binary and hosts it was
-    // set for: changing one of them asks for every stored value again.
-    const setDestination = (
+    // A stored secret only goes back to the CLI definition it was set for:
+    // changing the name, binary, install, prefixes, domains or the secrets'
+    // env names asks for every stored value again (the server refuses them).
+    const clearStored = (secrets: CliToolSecret[] | undefined) =>
+        secrets?.map((secret) =>
+            secret.ciphertext && secret.value === undefined
+                ? { env: secret.env, value: "" }
+                : secret,
+        );
+    const setDefinition = (
         patch: Partial<
-            Pick<CliToolConfig, "install" | "binary" | "allowedDomains">
+            Pick<
+                CliToolConfig,
+                | "name"
+                | "install"
+                | "binary"
+                | "allowedPrefixes"
+                | "allowedDomains"
+            >
         >,
-    ) =>
+    ) => set({ ...patch, secrets: clearStored(cli.secrets) });
+    const envNames = (secrets: CliToolSecret[] | undefined) =>
+        (secrets ?? []).map((secret) => secret.env).join("\u0000");
+    const setSecrets = (secrets: CliToolSecret[]) =>
         set({
-            ...patch,
-            secrets: cli.secrets?.map((secret) =>
-                secret.ciphertext && secret.value === undefined
-                    ? { env: secret.env, value: "" }
-                    : secret,
-            ),
+            secrets:
+                envNames(secrets) === envNames(cli.secrets)
+                    ? secrets
+                    : clearStored(secrets),
         });
 
     return (
@@ -440,7 +455,9 @@ const CliEditor = ({
                         value={cli.name}
                         disabled={!canEdit}
                         placeholder="ledgerctl"
-                        onChange={(e) => set({ name: e.target.value })}
+                        onChange={(e) =>
+                            setDefinition({ name: e.target.value })
+                        }
                     />
                 </Field>
                 <Field
@@ -454,7 +471,7 @@ const CliEditor = ({
                         disabled={!canEdit}
                         placeholder="ledgerctl"
                         onChange={(e) =>
-                            setDestination({ binary: e.target.value })
+                            setDefinition({ binary: e.target.value })
                         }
                     />
                 </Field>
@@ -470,9 +487,7 @@ const CliEditor = ({
                     value={cli.install}
                     disabled={!canEdit}
                     placeholder="npm i -g ledgerctl@1.4.2"
-                    onChange={(e) =>
-                        setDestination({ install: e.target.value })
-                    }
+                    onChange={(e) => setDefinition({ install: e.target.value })}
                 />
             </Field>
             <Field
@@ -482,7 +497,9 @@ const CliEditor = ({
                     tags={cli.allowedPrefixes}
                     disabled={!canEdit}
                     placeholder="ledgerctl check"
-                    onTagsChange={(allowedPrefixes) => set({ allowedPrefixes })}
+                    onTagsChange={(allowedPrefixes) =>
+                        setDefinition({ allowedPrefixes })
+                    }
                 />
             </Field>
             <Field
@@ -493,7 +510,7 @@ const CliEditor = ({
                     disabled={!canEdit}
                     placeholder="api.ledger.example"
                     onTagsChange={(allowedDomains) =>
-                        setDestination({ allowedDomains })
+                        setDefinition({ allowedDomains })
                     }
                 />
             </Field>
@@ -537,7 +554,7 @@ const CliEditor = ({
                     <SecretsEditor
                         secrets={cli.secrets ?? []}
                         disabled={!canEdit}
-                        onChange={(secrets) => set({ secrets })}
+                        onChange={setSecrets}
                     />
                 </Field>
             )}

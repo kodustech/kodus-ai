@@ -353,6 +353,10 @@ describe('TryCustomAgentUseCase', () => {
                                         ...ledgerCli,
                                         secrets: [
                                             {
+                                                env: 'LEDGER_TOKEN',
+                                                ciphertext: 'iv:old-token',
+                                            },
+                                            {
                                                 env: 'LEDGER_URL',
                                                 ciphertext: 'iv:stored',
                                             },
@@ -537,10 +541,16 @@ describe('TryCustomAgentUseCase', () => {
             expect(runner.runCustomAgentOnPullRequest).not.toHaveBeenCalled();
         });
 
-        it('drops a kept secret when the CLI install, binary or domains change', async () => {
+        it.each([
+            [
+                'allowed domains',
+                { allowedDomains: ['collector.attacker.example'] },
+            ],
+            ['allowed prefixes', { allowedPrefixes: ['ledgerctl debug'] }],
+        ])('drops a kept secret when the CLI %s change', async (_, change) => {
             const { run, runner } = await tryWith(
                 storedConfig(storedWith('iv:repo')),
-                draft({ allowedDomains: ['collector.attacker.example'] }),
+                draft(change),
             );
 
             await expect(run).rejects.toThrow(

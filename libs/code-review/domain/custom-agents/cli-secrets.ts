@@ -22,7 +22,9 @@ type CliLike = {
     name: string;
     install?: string;
     binary?: string;
+    allowedPrefixes?: string[];
     allowedDomains?: string[];
+    runsProjectCode?: boolean;
     secrets?: IncomingCliSecret[];
 };
 
@@ -95,18 +97,28 @@ export function maskCodeReviewConfigSecrets<T>(configValue: T): T {
 const secretKey = (agentId: string, cliName: string, env: string) =>
     `${agentId}\u0000${cliName}\u0000${env}`;
 
+const sortedSet = (values: readonly string[] | undefined) =>
+    [...new Set(values ?? [])].sort();
+
 /**
- * What a stored secret is bound to: the package installed, the binary run and
- * the hosts it may reach. A kept secret only goes back to the same ones.
+ * What a stored secret is bound to: everything that decides what runs with it
+ * and where its data can go. The package installed, the binary run, the
+ * arguments the agent may pass, the hosts it may reach, whether it runs
+ * project code, and the env names of the CLI's secrets. A kept secret only
+ * goes back to the same definition; `usage` and `timeoutSec` are left out,
+ * as neither changes what runs or where data goes.
  */
-const cliDestination = (cli: CliLike) =>
+const cliDefinition = (cli: CliLike) =>
     JSON.stringify([
         cli.install ?? '',
         cli.binary ?? '',
-        [...new Set(cli.allowedDomains ?? [])].sort(),
+        sortedSet(cli.allowedPrefixes),
+        sortedSet(cli.allowedDomains),
+        !!cli.runsProjectCode,
+        sortedSet((cli.secrets ?? []).map((secret) => secret?.env)),
     ]);
 
-type StoredSecret = { ciphertext: string; destination: string };
+type StoredSecret = { ciphertext: string; definition: string };
 
 /** Every stored ciphertext, keyed by agent id, CLI name and env name. */
 const indexStoredSecrets = (stored: AgentLike[] | undefined) => {
@@ -120,7 +132,7 @@ const indexStoredSecrets = (stored: AgentLike[] | undefined) => {
                 ) {
                     index.set(secretKey(agent.id, cli.name, secret.env), {
                         ciphertext: secret.ciphertext,
-                        destination: cliDestination(cli),
+                        definition: cliDefinition(cli),
                     });
                 }
             }
@@ -133,12 +145,12 @@ export class CliSecretMissingError extends Error {
     constructor(
         readonly env: string,
         readonly cliName: string,
-        /** The CLI's install, binary or allowed domains changed since it was stored. */
+        /** The CLI's definition changed since the secret was stored. */
         readonly cliChanged = false,
     ) {
         super(
             cliChanged
-                ? `Secret ${env} of CLI "${cliName}" must be typed again: the CLI's install, binary or allowed domains changed`
+                ? `Secret ${env} of CLI "${cliName}" must be typed again: the CLI changed (install, binary, allowed prefixes or domains, project code, or its secret names)`
                 : `Secret ${env} of CLI "${cliName}" has no value at this level: send the value to set it`,
         );
         this.name = 'CliSecretMissingError';
@@ -152,9 +164,9 @@ export class CliSecretMissingError extends Error {
  * repository or level must not be reachable from another one.
  * - a typed `value` is encrypted;
  * - the mask (or an empty ciphertext) keeps the ciphertext stored for the
- *   same agent, CLI and env name, and fails when there is none or when the
- *   CLI's install, binary or allowed domains changed: a new destination
- *   needs the value typed again;
+ *   same agent, CLI and env name, and fails when there is none or when any
+ *   part of the CLI's definition changed (`cliDefinition`): a changed CLI
+ *   needs every value typed again;
  * - a ciphertext equal to the one stored in that same slot is kept;
  * - any other ciphertext is a plaintext from an API client and is encrypted,
  *   so a client can never plant a ciphertext of its choosing.
@@ -187,7 +199,7 @@ export function sealCustomAgentSecrets<T extends AgentLike>(
                             secretKey(agent.id, tool.name, secret?.env),
                         );
                         const kept =
-                            stored?.destination === cliDestination(tool)
+                            stored?.definition === cliDefinition(tool)
                                 ? stored.ciphertext
                                 : undefined;
                         const sent = secret?.ciphertext;

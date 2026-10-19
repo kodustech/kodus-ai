@@ -112,25 +112,40 @@ describe('custom agent CLI secrets', () => {
             name: 'ledgerctl',
             install: 'npm i -g @acme-ledger/ctl@1.2.3',
             binary: 'ledgerctl',
+            allowedPrefixes: ['ledgerctl check', 'ledgerctl show'],
             allowedDomains: ['api.ledger.example', 'auth.ledger.example'],
+            runsProjectCode: false,
         };
         const withCli = (
             cli: Partial<typeof ledgerCli>,
             secret: Record<string, string>,
+            moreSecrets: Array<Record<string, string>> = [],
         ) => ({
             id: 'ledger-agent',
-            tools: { cli: [{ ...ledgerCli, ...cli, secrets: [secret] }] },
+            tools: {
+                cli: [
+                    {
+                        ...ledgerCli,
+                        ...cli,
+                        secrets: [secret, ...moreSecrets] as any,
+                    },
+                ],
+            },
         });
         const stored = [
             withCli({}, { env: 'LEDGER_TOKEN', ciphertext: 'iv:stored' }),
         ];
         const mask = { env: 'LEDGER_TOKEN', ciphertext: CLI_SECRET_MASK };
 
-        it('keeps it for the same install, binary and domains in any order', () => {
+        it('keeps it for the same definition, lists in any order', () => {
             const [sealed] = sealCustomAgentSecrets(
                 [
                     withCli(
                         {
+                            allowedPrefixes: [
+                                'ledgerctl show',
+                                'ledgerctl check',
+                            ],
                             allowedDomains: [
                                 'auth.ledger.example',
                                 'api.ledger.example',
@@ -160,6 +175,11 @@ describe('custom agent CLI secrets', () => {
                     ],
                 },
             ],
+            [
+                'allowed prefixes',
+                { allowedPrefixes: ['ledgerctl check', 'ledgerctl debug'] },
+            ],
+            ['project code flag', { runsProjectCode: true }],
         ])('drops it when the %s change', (_, change) => {
             const seal = () =>
                 sealCustomAgentSecrets(
@@ -172,6 +192,64 @@ describe('custom agent CLI secrets', () => {
             expect(seal).toThrow(
                 'Secret LEDGER_TOKEN of CLI "ledgerctl" must be typed again',
             );
+        });
+
+        it('drops it when a secret is added to the CLI', () => {
+            const seal = () =>
+                sealCustomAgentSecrets(
+                    [withCli({}, mask, [{ env: 'LEDGER_ORG', value: 'acme' }])],
+                    stored,
+                    fakeEncrypt,
+                );
+
+            expect(seal).toThrow(
+                'Secret LEDGER_TOKEN of CLI "ledgerctl" must be typed again',
+            );
+        });
+
+        it('drops the others when one secret is removed from the CLI', () => {
+            const twoStored = [
+                withCli({}, { env: 'LEDGER_TOKEN', ciphertext: 'iv:token' }, [
+                    { env: 'LEDGER_ORG', ciphertext: 'iv:org' },
+                ]),
+            ];
+
+            expect(() =>
+                sealCustomAgentSecrets(
+                    [withCli({}, mask)],
+                    twoStored,
+                    fakeEncrypt,
+                ),
+            ).toThrow(
+                'Secret LEDGER_TOKEN of CLI "ledgerctl" must be typed again',
+            );
+        });
+
+        it('names the CLI and env when the CLI was renamed', () => {
+            expect(() =>
+                sealCustomAgentSecrets(
+                    [withCli({ name: 'ledger2' } as any, mask)],
+                    stored,
+                    fakeEncrypt,
+                ),
+            ).toThrow('Secret LEDGER_TOKEN of CLI "ledger2" has no value');
+        });
+
+        it('keeps it when only the usage notes or timeout change', () => {
+            const [sealed] = sealCustomAgentSecrets(
+                [
+                    withCli(
+                        { usage: 'Run check first.', timeoutSec: 30 } as any,
+                        mask,
+                    ),
+                ],
+                stored,
+                fakeEncrypt,
+            )!;
+
+            expect(sealed.tools.cli[0].secrets).toEqual([
+                { env: 'LEDGER_TOKEN', ciphertext: 'iv:stored' },
+            ]);
         });
 
         it('encrypts a value typed again for a changed CLI', () => {

@@ -77,64 +77,91 @@ describe("ClisField", () => {
         expect(screen.getByTestId("names")).toHaveTextContent("semver2");
     });
 
-    it.each([
-        ["Install", "npm i -g semver-fork@1.0.0"],
-        ["Binary", "node"],
-    ])("asks for a stored secret again when the %s changes", (label, value) => {
-        const withSecret: CustomAgent = {
-            ...agent,
-            tools: {
-                cli: [
-                    {
-                        ...agent.tools.cli![0],
-                        secrets: [
-                            { env: "NPM_TOKEN", ciphertext: CLI_SECRET_MASK },
-                        ],
-                    },
-                ],
-            },
-        };
+    const withSecret: CustomAgent = {
+        ...agent,
+        tools: {
+            cli: [
+                {
+                    ...agent.tools.cli![0],
+                    allowedPrefixes: ["semver-cli check", "semver-cli show"],
+                    secrets: [
+                        { env: "NPM_TOKEN", ciphertext: CLI_SECRET_MASK },
+                    ],
+                },
+            ],
+        },
+    };
+    const openSheet = () => {
         render(<Harness initial={withSecret} />);
         fireEvent.click(screen.getByRole("button", { name: "Edit semver" }));
         const sheet = screen.getByRole("dialog");
         expect(within(sheet).getByText("Stored · hidden")).toBeInTheDocument();
+        return sheet;
+    };
+    const expectAskedAgain = (sheet: HTMLElement, env = "NPM_TOKEN") => {
+        expect(within(sheet).queryByText("Stored · hidden")).toBeNull();
+        expect(screen.getByTestId("secrets")).toHaveTextContent(
+            JSON.stringify({ env, value: "" }),
+        );
+    };
+
+    it.each([
+        ["Install", "npm i -g semver-fork@1.0.0"],
+        ["Binary", "node"],
+        ["Name", "semver2"],
+    ])("asks for a stored secret again when the %s changes", (label, value) => {
+        const sheet = openSheet();
 
         fireEvent.change(within(sheet).getByLabelText(label), {
             target: { value },
         });
 
-        expect(within(sheet).queryByText("Stored · hidden")).toBeNull();
+        expectAskedAgain(sheet);
         expect(
             within(sheet).getByPlaceholderText("Value (write-only)"),
         ).toHaveValue("");
-        expect(screen.getByTestId("secrets")).toHaveTextContent(
-            JSON.stringify([{ env: "NPM_TOKEN", value: "" }]),
-        );
     });
 
-    it("keeps a stored secret when the name or usage change", () => {
-        const withSecret: CustomAgent = {
-            ...agent,
-            tools: {
-                cli: [
-                    {
-                        ...agent.tools.cli![0],
-                        secrets: [
-                            { env: "NPM_TOKEN", ciphertext: CLI_SECRET_MASK },
-                        ],
-                    },
-                ],
-            },
-        };
-        render(<Harness initial={withSecret} />);
-        fireEvent.click(screen.getByRole("button", { name: "Edit semver" }));
-        fireEvent.change(
-            within(screen.getByRole("dialog")).getByLabelText("Name"),
-            { target: { value: "semver2" } },
+    it("asks for a stored secret again when an allowed prefix changes", () => {
+        const sheet = openSheet();
+
+        fireEvent.click(
+            within(sheet).getByRole("button", {
+                name: "Remove semver-cli show",
+            }),
         );
-        expect(
-            within(screen.getByRole("dialog")).getByText("Stored · hidden"),
-        ).toBeInTheDocument();
+
+        expectAskedAgain(sheet);
+    });
+
+    it("asks for a stored secret again when its env name changes", () => {
+        const sheet = openSheet();
+
+        fireEvent.change(within(sheet).getByDisplayValue("NPM_TOKEN"), {
+            target: { value: "NPM_TOKEN2" },
+        });
+
+        expectAskedAgain(sheet, "NPM_TOKEN2");
+    });
+
+    it("asks for a stored secret again when another secret is added", () => {
+        const sheet = openSheet();
+
+        fireEvent.click(
+            within(sheet).getByRole("button", { name: "Add secret" }),
+        );
+
+        expectAskedAgain(sheet);
+    });
+
+    it("keeps a stored secret when only the usage notes change", () => {
+        const sheet = openSheet();
+
+        fireEvent.change(sheet.querySelector("textarea")!, {
+            target: { value: "Run check first." },
+        });
+
+        expect(within(sheet).getByText("Stored · hidden")).toBeInTheDocument();
     });
 
     it("removes a CLI from its row", () => {
