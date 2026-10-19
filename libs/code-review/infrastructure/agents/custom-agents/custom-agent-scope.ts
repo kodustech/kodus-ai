@@ -23,12 +23,14 @@ export function filesInAgentScope<T extends { filename: string }>(
         (list ?? []).map((g) => (g ?? '').trim()).filter(Boolean);
     // A `!glob` written among the includes is an exclusion: matched as a
     // pattern of its own it matches every other file and widens the scope.
+    // `!(…)` is a negative extglob, an include pattern of its own.
+    const isNegation = (g: string) => g.startsWith('!') && !g.startsWith('!(');
     const includeGlobs = globs(agent.scope?.include);
-    const include = includeGlobs.filter((g) => !g.startsWith('!'));
+    const include = includeGlobs.filter((g) => !isNegation(g));
     const exclude = [
         ...globs(agent.scope?.exclude),
         ...includeGlobs
-            .filter((g) => g.startsWith('!'))
+            .filter(isNegation)
             .map((g) => g.slice(1))
             .filter(Boolean),
     ];
@@ -51,7 +53,9 @@ export function filesInAgentScope<T extends { filename: string }>(
 function withLiteralBrackets(patterns: string[]): string[] {
     return patterns.flatMap((p) => {
         const literal = p.replace(/[()[\]]/g, '\\$&');
-        return literal === p ? [p] : [p, literal];
+        // A literal copy of a leading `!(…)` would read as a negation and
+        // match nearly every file.
+        return literal === p || p.startsWith('!') ? [p] : [p, literal];
     });
 }
 

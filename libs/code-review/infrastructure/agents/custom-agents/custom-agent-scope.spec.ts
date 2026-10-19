@@ -51,6 +51,18 @@ describe('filesInAgentScope', () => {
         expect(scoped.map((f) => f.filename)).toEqual(['src/ledger/post.ts']);
     });
 
+    it('keeps a leading negative extglob as an include pattern', () => {
+        const scoped = filesInAgentScope(
+            agent({ scope: { include: ['!(test).ts'] } }),
+            [
+                { filename: 'post.ts' },
+                { filename: 'test.ts' },
+                { filename: 'README.md' },
+            ],
+        );
+        expect(scoped.map((f) => f.filename)).toEqual(['post.ts']);
+    });
+
     it('takes every file when the only include globs are negations', () => {
         const scoped = filesInAgentScope(
             agent({ scope: { include: ['!web/**'] } }),
