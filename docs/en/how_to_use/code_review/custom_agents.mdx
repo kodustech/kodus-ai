@@ -107,12 +107,14 @@ The page has a status line (on/off, the files it runs on and what it posted in t
 
 Globs are matched against the path from the repository root, at every level, including at a directory.
 
-**Ignored files.** Your repository's ignored paths (in **General**) still apply, with one exception: a glob that **names** a file reaches it even when the repository ignores it. A glob names a file when one of its path segments is literal:
+**Ignored files.** Your repository's ignored paths (in **General**) still apply, with one exception: a glob that **names** a file reaches it even when the repository ignores it. A glob names a file when one of its path segments is literal and its last segment is more than `*` or `**`:
 
 | Glob | Reaches ignored files? |
 | --- | --- |
-| `package.json`, `apps/web/package.json`, `**/Dockerfile`, `infra/**/*.tf`, `src/**` | Yes |
-| `**`, `**/*`, `**/*.ts`, `*.{ts,tsx}` | No |
+| `package.json`, `apps/web/package.json`, `**/Dockerfile`, `infra/**/*.tf` | Yes |
+| `**`, `**/*`, `**/*.ts`, `*.{ts,tsx}`, `src/**`, `apps/web/*` | No |
+
+Secret files (`.env*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`, `id_rsa*` and other SSH keys) are never handed to an agent from the ignored paths, even by a glob that names them.
 
 A pull request whose changed files are all ignored is still reviewed by an agent that names one of them, and only by it: Kody's own review has nothing to look at.
 

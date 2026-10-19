@@ -107,12 +107,14 @@ A página tem uma linha de status (ligado/desligado, os arquivos em que ele roda
 
 Os globs são comparados com o caminho a partir da raiz do repositório, em todos os níveis, inclusive num diretório.
 
-**Arquivos ignorados.** Os caminhos ignorados do repositório (em **General**) continuam valendo, com uma exceção: um glob que **nomeia** um arquivo chega nele mesmo que o repositório o ignore. Um glob nomeia arquivos quando pelo menos um segmento do caminho é literal:
+**Arquivos ignorados.** Os caminhos ignorados do repositório (em **General**) continuam valendo, com uma exceção: um glob que **nomeia** um arquivo chega nele mesmo que o repositório o ignore. Um glob nomeia arquivos quando pelo menos um segmento do caminho é literal e o último segmento é mais que `*` ou `**`:
 
 | Glob | Chega em arquivos ignorados? |
 | --- | --- |
-| `package.json`, `apps/web/package.json`, `**/Dockerfile`, `infra/**/*.tf`, `src/**` | Sim |
-| `**`, `**/*`, `**/*.ts`, `*.{ts,tsx}` | Não |
+| `package.json`, `apps/web/package.json`, `**/Dockerfile`, `infra/**/*.tf` | Sim |
+| `**`, `**/*`, `**/*.ts`, `*.{ts,tsx}`, `src/**`, `apps/web/*` | Não |
+
+Arquivos de segredo (`.env*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`, `id_rsa*` e outras chaves SSH) nunca chegam a um agente pelos caminhos ignorados, nem por um glob que os nomeia.
 
 Um pull request em que todos os arquivos alterados são ignorados ainda é revisado pelo agente que nomeia algum deles, e só por ele: a revisão da Kody não tem nada para olhar.
 

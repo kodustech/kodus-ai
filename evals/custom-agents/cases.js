@@ -72,9 +72,10 @@ const MIGRATIONS_AGENT = {
         'A migration that adds a column to an existing table as NOT NULL must give it a DEFAULT (or backfill it first): on a table that has rows the ALTER fails and blocks the deploy.',
         "Every migration's `down` must undo what its `up` does.",
     ].join('\n'),
-    // Literal directory segments: the glob names these files, so it reaches
-    // them even where the team's ignorePaths set them aside (#37).
-    scope: { include: ['db/migrations/**'] },
+    // A literal directory and a last segment that says which files: the glob
+    // names these files, so it reaches them even where the team's ignorePaths
+    // set them aside (#37). A bare folder, `db/migrations/**`, would not.
+    scope: { include: ['db/migrations/**/*.ts'] },
     tools: {},
     presentation,
 };

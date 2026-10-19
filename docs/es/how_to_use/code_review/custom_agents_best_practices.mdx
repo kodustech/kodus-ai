@@ -51,7 +51,7 @@ Una regla que solo existe en la cabeza de alguien no se puede citar, así que es
 
 - Define **Files** con el código que le importa al agente: `src/payments/**`, no vacío. Un agente sin globs se ejecuta en todo pull request.
 - Usa **Except** para pruebas, fixtures y código generado.
-- Nombra los archivos explícitamente cuando están en tus rutas ignoradas y el agente igual debe leerlos: `package.json`, `infra/**/*.tf`. Un glob amplio como `**/*.ts` no llega a archivos ignorados.
+- Nombra los archivos explícitamente cuando están en tus rutas ignoradas y el agente igual debe leerlos: `package.json`, `infra/**/*.tf`. Un glob amplio como `**/*.ts`, o una carpeta como `src/**`, no llega a archivos ignorados.
 - En un directorio, los globs siguen empezando en la raíz del repositorio.
 
 ## ¿Skill o doc?

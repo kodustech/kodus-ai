@@ -51,7 +51,7 @@ A rule that exists only in someone's head can't be quoted, so write it in the in
 
 - Set **Files** to the code the agent cares about: `src/payments/**`, not empty. An agent with no globs runs on every pull request.
 - Use **Except** for tests, fixtures and generated code.
-- Name files explicitly when they are in your ignored paths and the agent must still read them: `package.json`, `infra/**/*.tf`. A broad glob such as `**/*.ts` does not reach ignored files.
+- Name files explicitly when they are in your ignored paths and the agent must still read them: `package.json`, `infra/**/*.tf`. A broad glob such as `**/*.ts`, or a folder such as `src/**`, does not reach ignored files.
 - At a directory, globs still start at the repository root.
 
 ## Skill or doc?
