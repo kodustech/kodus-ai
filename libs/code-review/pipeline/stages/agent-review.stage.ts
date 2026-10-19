@@ -446,14 +446,16 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
 
     /**
      * One line per review with what each custom agent did (#2172): ran or
-     * why not, findings kept, and what the checks and filters set aside, by
-     * reason. Counts and ids only. Disabled agents are listed so "my agent
-     * did not comment" is answered from the logs.
+     * why not, findings kept, merged into another comment by the dedup, and
+     * what the checks and filters set aside, by reason. Counts, ids and the
+     * checks' reasons, never a finding's text. Disabled agents are listed so
+     * "my agent did not comment" is answered from the logs.
      */
     private logCustomAgentOutcome(
         context: CodeReviewPipelineContext,
         runs: ReturnType<typeof summarizeCustomAgentRuns>,
         discarded: Array<Partial<CodeSuggestion>>,
+        mergedInDedup: Array<Partial<CodeSuggestion>>,
     ): void {
         const configured = context.codeReviewConfig?.customAgents ?? [];
         if (!configured.length) return;
@@ -477,6 +479,28 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     status: run.status,
                     kept: run.posted,
                     droppedByChecks: run.droppedByVerify,
+                    mergedInDedup: mergedInDedup.filter(
+                        (s) => s.customAgent?.id === run.id,
+                    ).length,
+                    // Where and why the checks refuted each finding; the
+                    // finding's own text stays out.
+                    checkDrops: discarded
+                        .filter(
+                            (s) =>
+                                s.customAgent?.id === run.id &&
+                                CHECK_DROPS.has(s.priorityStatus),
+                        )
+                        .map((s) => ({
+                            at: `${s.relevantFile}:${s.relevantLinesStart}`,
+                            reason:
+                                s.priorityStatus ===
+                                PriorityStatus.DISCARDED_BY_VERIFY_ERROR
+                                    ? 'the check could not run'
+                                    : (s.discardReason ?? 'refuted').slice(
+                                          0,
+                                          300,
+                                      ),
+                        })),
                     discarded: discarded
                         .filter((s) => s.customAgent?.id === run.id)
                         .reduce<Record<string, number>>((counts, s) => {
@@ -1275,6 +1299,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             );
             let deduped = dedup.deduped;
             const dedupTrace = dedup.dedupTrace;
+            // A custom agent's findings the dedup merged into another
+            // comment, which posts in their place: neither posted as the
+            // agent's nor dropped, so the outcome log counts them apart.
+            const keptByDedup = new Set(deduped);
+            const mergedInDedup = severityNormalized.filter(
+                (s) => isCustomAgentFinding(s) && !keptByDedup.has(s),
+            );
 
             // NOTE: Kody Rule link enrichment happens AFTER the content
             // formatter (see block further below). Doing it before would
@@ -1601,6 +1632,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 context,
                 customAgentSummaries,
                 allDiscarded,
+                mergedInDedup,
             );
             const prLevelSuggestions = deduped.filter(isPrLevelSuggestion);
             const fileLevelSuggestions = deduped.filter(
@@ -3743,3 +3775,9 @@ function customAgentSlugOf(event: AgentProgressEvent): string | undefined {
         ? event.agentName.slice(CUSTOM_AGENT_RUN_PREFIX.length) || undefined
         : undefined;
 }
+
+/** The statuses the agents table counts as "Dropped by checks". */
+const CHECK_DROPS = new Set<PriorityStatus | undefined>([
+    PriorityStatus.DISCARDED_BY_SAFEGUARD,
+    PriorityStatus.DISCARDED_BY_VERIFY_ERROR,
+]);

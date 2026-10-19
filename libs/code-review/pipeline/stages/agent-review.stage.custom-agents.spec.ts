@@ -260,6 +260,52 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
         expect(JSON.stringify(entry)).not.toContain('Rounding note.');
     });
 
+    it('logs why the checks dropped each finding', async () => {
+        const dropped = (over: Record<string, any>) => ({
+            relevantFile: 'src/ledger.ts',
+            relevantLinesStart: 5,
+            suggestionContent: 'Not logged.',
+            customAgent: { id: 'agent-ledger' },
+            ...over,
+        });
+        const { stage } = makeStage(
+            output([finding()], {
+                agentResults: [
+                    {
+                        suggestions: [],
+                        discardedByVerify: [
+                            dropped({
+                                discardReason: 'Line 4 already balances it.',
+                            }),
+                        ],
+                        discardedByVerifyError: [
+                            dropped({ relevantLinesStart: 8 }),
+                        ],
+                    },
+                ],
+            }),
+        );
+        const log = jest
+            .spyOn((stage as any).logger, 'log')
+            .mockImplementation(() => undefined);
+
+        await run(stage, makeContext([agent()]));
+
+        const entry = log.mock.calls
+            .map(([e]: any[]) => e)
+            .find((e: any) =>
+                String(e?.message).startsWith('[AGENT] Custom agents outcome'),
+            );
+        expect(entry?.metadata.agents[0].checkDrops).toEqual([
+            {
+                at: 'src/ledger.ts:5',
+                reason: 'Line 4 already balances it.',
+            },
+            { at: 'src/ledger.ts:8', reason: 'the check could not run' },
+        ]);
+        expect(JSON.stringify(entry)).not.toContain('Not logged.');
+    });
+
     it('keeps the most severe findings up to maxComments', async () => {
         const { stage } = makeStage(
             output([
@@ -705,6 +751,41 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
                     'Rule: debit needs a credit.\n\n**Rule** (`docs/ledger.md`):\n> Debits equal credits.',
                 ].sort(),
             );
+        });
+
+        it('logs a finding the agent lost to dedup', async () => {
+            // Its bug merged into the main review's comment read "0 dropped",
+            // as if the agent never raised it.
+            (hasManagedModelKey as jest.Mock).mockReturnValue(true);
+            runSpy.mockImplementation(async (args: any) =>
+                args?.runName === 'code-review-dedup'
+                    ? { groups: [{ keep: 1, duplicates: [0] }], unique: [] }
+                    : { groups: [], unique: [] },
+            );
+            const { stage } = makeStage(
+                output([native(), finding({ kind: 'bug' })]),
+            );
+            honorEveryMerge(stage);
+            const log = jest
+                .spyOn((stage as any).logger, 'log')
+                .mockImplementation(() => undefined);
+
+            const result = await run(stage, makeContext([agent()]));
+
+            expect(contents(result.validSuggestions)).toEqual([
+                'Native: the entry is one-sided.',
+            ]);
+            expect(result.customAgentRuns[0].posted).toBe(0);
+            const entry = log.mock.calls
+                .map(([e]: any[]) => e)
+                .find((e: any) =>
+                    String(e?.message).startsWith(
+                        '[AGENT] Custom agents outcome',
+                    ),
+                );
+            expect(entry?.metadata.agents[0]).toMatchObject({
+                mergedInDedup: 1,
+            });
         });
 
         // A finding in the agent's lane keeps a group it shares with a native
