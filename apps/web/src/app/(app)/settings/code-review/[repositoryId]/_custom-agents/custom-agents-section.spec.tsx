@@ -96,6 +96,8 @@ jest.mock("@services/organizationParameters/fetch", () => ({
 
 type Node = Record<string, unknown>;
 
+let sectionForm: ReturnType<typeof useForm<any>>;
+
 // Like the settings layout: it owns the form and computes its leave guard from
 // the root `formState`, so it only sees what re-renders the form's root.
 const Form = ({
@@ -118,8 +120,10 @@ const Form = ({
                 value: knowledge,
                 level: "repository",
             },
+            runOnDraft: { value: false, level: "repository" },
         },
     });
+    sectionForm = form;
     const { dirtyFields } = form.formState;
     return (
         <FormProvider {...form}>
@@ -570,12 +574,60 @@ const FormProbe = () => {
                 }>
                 edit
             </button>
+            <button
+                onClick={() =>
+                    updateAgent("ledger", (current) => ({
+                        ...current,
+                        name: "Ledger reviewer",
+                    }))
+                }>
+                rename back
+            </button>
             <button onClick={reset}>reset</button>
         </div>
     );
 };
 
 describe("useCustomAgentsForm", () => {
+    // A value written into the form without marking it dirty (a field that
+    // seeds itself on mount) differs from the saved config; the first edit
+    // of an agent makes react-hook-form recompute every dirty field, and
+    // from then on the layout guard counts it.
+    const renderWithSeededField = async () => {
+        render(
+            <QueryClientProvider client={new QueryClient()}>
+                <Form>
+                    <FormProbe />
+                </Form>
+            </QueryClientProvider>,
+        );
+        await act(async () => {
+            sectionForm.setValue("runOnDraft.value", true);
+        });
+        fireEvent.click(screen.getByText("edit"));
+        await flush();
+    };
+
+    it("is unsaved exactly when the layout guard keeps the user on the page", async () => {
+        await renderWithSeededField();
+        fireEvent.click(screen.getByText("rename back"));
+        await flush();
+
+        expect(screen.getByTestId("dirty")).toHaveTextContent(
+            screen.getByTestId("layout-blocks").textContent!,
+        );
+    });
+
+    it("reset lets the user leave again", async () => {
+        await renderWithSeededField();
+        fireEvent.click(screen.getByText("reset"));
+        await flush();
+
+        expect(screen.getByTestId("name")).toHaveTextContent("Ledger reviewer");
+        expect(screen.getByTestId("dirty")).toHaveTextContent("false");
+        expect(screen.getByTestId("layout-blocks")).toHaveTextContent("false");
+    });
+
     it("reset brings back the saved agents and clears the unsaved state", async () => {
         render(
             <QueryClientProvider client={new QueryClient()}>
