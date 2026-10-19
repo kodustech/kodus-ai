@@ -102,4 +102,24 @@ describe('LocalSandboxService exec — flag/path boundary', () => {
             expect(leaks(r)).toBe(false);
         });
     });
+
+    // The per-arg realpath check only sees the paths passed as arguments. A
+    // symlink-following flag makes the reader DISCOVER a symlinked directory
+    // mid-walk (never an argument) and read its outside target. `linkdir`
+    // points outside, so each of these would leak without the flag being
+    // refused outright. `ast-grep/sg --follow` was the last traverser missing
+    // the guard that find/fd/grep already had.
+    describe('P1c — walk-time symlink follow', () => {
+        it.each([
+            "sg run --follow -p 'const secret = $V' -l js .",
+            "ast-grep run --follow -p 'const secret = $V' -l js .",
+            'find . -L', // find follow (control — already blocked)
+            'fd --follow secret', // fd follow (control — already blocked)
+            'grep -R SECRET .', // grep recurse-follow (control — already blocked)
+        ])('refuses the follow flag in %s', async (cmd) => {
+            const r = await exec(cmd);
+            expect(isBlocked(r)).toBe(true);
+            expect(leaks(r)).toBe(false);
+        });
+    });
 });

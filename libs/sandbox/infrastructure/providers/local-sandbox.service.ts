@@ -56,16 +56,24 @@ const MAX_BUFFER = 5 * 1024 * 1024; // 5 MB — cap output to prevent memory iss
  * fd) — host RCE on a self-hosted worker — or that write/delete files
  * (`-delete`, `-fprint*`, `-fls`). Other readers accept flags that follow
  * symlinks out of the clone (`find -L/-H/-follow`, `fd -L/--follow`, `grep
- * -R/--dereference-recursive/--dereference`, ast-grep `-U/--update-all` which
- * rewrites files). A flag matched here fails the command. Programs with no
- * entry (cat/head/tail/wc/file) carry no such flag and pass through.
+ * -R/--dereference-recursive/--dereference`, ast-grep `--follow`), or rewrite
+ * files (ast-grep `-U/--update-all`). A flag matched here fails the command.
+ * Programs with no entry (cat/head/tail/wc/file) carry no such flag and pass
+ * through.
+ *
+ * Why `--follow` matters even with the per-argument symlink check below: that
+ * check canonicalizes the paths passed as arguments, but `ast-grep . --follow`
+ * passes `.` (inside the clone) and the walker then descends into a symlinked
+ * directory it discovers during traversal — a path that was never an argument,
+ * so the realpath check never sees it. The follower flags must be refused
+ * outright for every traversing reader.
  */
 const DANGEROUS_FLAGS: Record<string, RegExp> = {
     find: /^-(exec|execdir|ok|okdir|delete|fprint|fprintf|fprint0|fls|L|H|follow)$/,
     fd: /^(-x|-X|--exec|--exec-batch|-L|--follow)$/,
     grep: /^(-R|--dereference-recursive|--dereference)$/,
-    sg: /^(-U|--update-all)$/,
-    'ast-grep': /^(-U|--update-all)$/,
+    sg: /^(-U|--update-all|--follow)$/,
+    'ast-grep': /^(-U|--update-all|--follow)$/,
 };
 
 /**
