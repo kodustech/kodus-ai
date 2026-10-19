@@ -80,6 +80,13 @@ const NIGHTLY_EVALS = [
         sets: { controlled: [], full: null },
         files: ['evals/memories/targets.json'],
     },
+    {
+        id: 'custom-agents',
+        stage: 'custom-agents',
+        run: ['evals/custom-agents/run.js'],
+        sets: { controlled: [], full: null },
+        files: ['evals/custom-agents/targets.json'],
+    },
 ];
 
 // The finder and Kody Rules keep their own nightly jobs (their own verdicts:

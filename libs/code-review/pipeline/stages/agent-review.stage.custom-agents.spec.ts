@@ -661,15 +661,28 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
             );
         });
 
+        // A finding in the agent's lane keeps a group it shares with a native
+        // one (preferCustomAgentKeep), so only the floor and cap running
+        // before dedup save the native comment.
+        const laneFinding = (over: Record<string, any> = {}) =>
+            finding({
+                kind: 'convention',
+                source: {
+                    file: 'docs/ledger.md',
+                    quote: 'Debits equal credits.',
+                },
+                ...over,
+            });
+
         it('a finding its own agent filters out never takes a native one with it', async () => {
             (hasManagedModelKey as jest.Mock).mockReturnValue(true);
             runSpy.mockImplementation(async (args: any) =>
                 args?.runName === 'code-review-dedup'
-                    ? { groups: [{ keep: 0, duplicates: [1] }], unique: [] }
+                    ? { groups: [{ keep: 1, duplicates: [0] }], unique: [] }
                     : { groups: [], unique: [] },
             );
             const { stage } = makeStage(
-                output([native(), finding({ severity: 'medium' })]),
+                output([native(), laneFinding({ severity: 'medium' })]),
             );
             honorEveryMerge(stage);
 
@@ -691,7 +704,7 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
             (hasManagedModelKey as jest.Mock).mockReturnValue(true);
             runSpy.mockImplementation(async (args: any) =>
                 args?.runName === 'code-review-dedup'
-                    ? { groups: [{ keep: 0, duplicates: [2] }], unique: [1] }
+                    ? { groups: [{ keep: 2, duplicates: [0] }], unique: [1] }
                     : { groups: [], unique: [] },
             );
             const { stage } = makeStage(
@@ -703,7 +716,7 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
                         severity: 'critical',
                         suggestionContent: 'Critical one.',
                     }),
-                    finding({ severity: 'medium' }),
+                    laneFinding({ severity: 'medium' }),
                 ]),
             );
             honorEveryMerge(stage);
