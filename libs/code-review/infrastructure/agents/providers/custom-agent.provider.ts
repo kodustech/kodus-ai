@@ -344,6 +344,10 @@ export class CustomAgentProvider extends BaseCodeReviewAgentProvider {
         };
     }
 
+    protected getWarningName(): string {
+        return this.agent.name;
+    }
+
     protected getCategoryLabel(): string {
         return LabelType.CUSTOM_AGENT;
     }
