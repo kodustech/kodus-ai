@@ -115,6 +115,7 @@ import {
     LICENSE_SERVICE_TOKEN,
 } from '@libs/ee/license/interfaces/license.interface';
 import { isTeamsOrEnterpriseTierAllowed } from '@libs/ee/license/tier/teams-or-enterprise-tier-policy';
+import { isCustomAgentsPlanAllowed } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agents-plan';
 import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 @Injectable()
@@ -211,6 +212,15 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             // Strip non-empty links on free so other settings can still save,
             // and free orgs never accumulate a paid-only config payload.
             await this.stripLinkedRepositoriesIfPlanNotAllowed(
+                organizationAndTeamData,
+                configValue,
+            );
+
+            // Custom agents and their skills and docs are Teams/Enterprise
+            // too, but a plan change must not lose them: on another plan the
+            // save leaves both lists out, so the stored ones stay as they are
+            // and the other settings still save.
+            await this.keepCustomAgentsIfPlanNotAllowed(
                 organizationAndTeamData,
                 configValue,
             );
@@ -692,6 +702,39 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             metadata: {
                 organizationId: organizationAndTeamData?.organizationId,
                 attemptedCount: links.length,
+            },
+        });
+    }
+
+    private async keepCustomAgentsIfPlanNotAllowed(
+        organizationAndTeamData: OrganizationAndTeamData,
+        configValue:
+            CreateOrUpdateCodeReviewParameterDto['configValue'] | undefined,
+    ): Promise<void> {
+        if (
+            configValue?.customAgents === undefined &&
+            configValue?.knowledge === undefined
+        ) {
+            return;
+        }
+        if (
+            await isCustomAgentsPlanAllowed(
+                this.licenseService,
+                organizationAndTeamData,
+                UpdateOrCreateCodeReviewParameterUseCase.name,
+            )
+        ) {
+            return;
+        }
+
+        delete configValue.customAgents;
+        delete configValue.knowledge;
+        this.logger.log({
+            message:
+                'Left customAgents and knowledge out of the save — plan is not Teams/Enterprise',
+            context: UpdateOrCreateCodeReviewParameterUseCase.name,
+            metadata: {
+                organizationId: organizationAndTeamData?.organizationId,
             },
         });
     }

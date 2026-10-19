@@ -39,6 +39,7 @@ const buildUseCase = (
         globalConfigs?: Record<string, unknown>;
         otherRepositoryConfigs?: Record<string, unknown>;
         directoryConfigs?: Record<string, unknown>;
+        license?: Record<string, unknown>;
     } = {},
 ) => {
     const createOrUpdateParametersUseCase = {
@@ -112,11 +113,13 @@ const buildUseCase = (
         { getBYOKConfig: jest.fn(), getSubscriptionStatus: jest.fn() } as any,
         { execute: jest.fn().mockResolvedValue(undefined) } as any,
         {
-            validateOrganizationLicense: jest.fn().mockResolvedValue({
-                valid: true,
-                subscriptionStatus: 'active',
-                planType: 'teams_byok',
-            }),
+            validateOrganizationLicense: jest.fn().mockResolvedValue(
+                stored.license ?? {
+                    valid: true,
+                    subscriptionStatus: 'active',
+                    planType: 'teams_byok',
+                },
+            ),
         } as any,
         { codeReviewSettingsUpdated: jest.fn() } as any,
     );
@@ -125,10 +128,11 @@ const buildUseCase = (
         configValue: Record<string, unknown>,
         extra: Record<string, unknown> = {},
     ) => {
+        const { source = 'sync', ...rest } = extra;
         await useCase.execute({
-            ...extra,
+            ...rest,
             actor: {
-                source: 'sync',
+                source,
                 organizationId: 'org-1',
                 userId: 'kody',
                 userEmail: 'kody@kodus.io',
@@ -417,6 +421,53 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — custom agents', () => {
             );
 
             expect(configs.automatedReviewActive).toBe(false);
+        });
+    });
+
+    describe('plan', () => {
+        const stored = {
+            customAgents: [ledgerAgent([])],
+            knowledge: [
+                {
+                    path: 'docs/ledger.md',
+                    kind: 'doc',
+                    linkedTo: [{ agentId: 'ledger-agent' }],
+                },
+            ],
+        };
+
+        it('on free, keeps the stored agents and knowledge and saves the other settings', async () => {
+            const configs = await buildUseCase(stored, {
+                license: {
+                    valid: true,
+                    subscriptionStatus: 'active',
+                    planType: 'free_byok',
+                },
+            }).save(
+                {
+                    customAgents: [],
+                    knowledge: [],
+                    summary: { generatePRSummary: false },
+                },
+                { source: 'web' },
+            );
+
+            expect(configs.customAgents).toEqual(stored.customAgents);
+            expect(configs.knowledge).toEqual(stored.knowledge);
+            expect(configs.summary).toEqual({ generatePRSummary: false });
+        });
+
+        it('on a trial, saves the agents as sent', async () => {
+            const configs = await buildUseCase(stored, {
+                license: {
+                    valid: true,
+                    subscriptionStatus: 'trial',
+                    planType: 'teams_managed',
+                },
+            }).save({ customAgents: [], knowledge: [] }, { source: 'web' });
+
+            expect(configs.customAgents ?? []).toEqual([]);
+            expect(configs.knowledge ?? []).toEqual([]);
         });
     });
 });
