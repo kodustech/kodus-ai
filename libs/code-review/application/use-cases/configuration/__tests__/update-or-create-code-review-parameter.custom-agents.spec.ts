@@ -424,9 +424,13 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — custom agents', () => {
         it('is rejected with a conflict and writes nothing', async () => {
             // This tab loaded one agent; another tab saved a second since.
             const loaded = loadedFrom({ customAgents: [ledgerAgent([])] });
-            const { save, createOrUpdateParametersUseCase } = buildUseCase({
-                customAgents: [ledgerAgent([]), auditAgent],
-            });
+            const { save, useCase, createOrUpdateParametersUseCase } =
+                buildUseCase({
+                    customAgents: [ledgerAgent([]), auditAgent],
+                });
+            const warn = jest
+                .spyOn((useCase as any).logger, 'warn')
+                .mockImplementation(() => undefined);
 
             const attempt = save(
                 {
@@ -442,6 +446,18 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — custom agents', () => {
             expect(
                 createOrUpdateParametersUseCase.execute,
             ).not.toHaveBeenCalled();
+            expect(warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    metadata: expect.objectContaining({
+                        organizationId: expect.any(String),
+                        repositoryId: expect.any(String),
+                        status: 409,
+                    }),
+                }),
+            );
+            expect(JSON.stringify(warn.mock.calls)).not.toContain(
+                'Edited here.',
+            );
         });
 
         it('is saved when the lists did not change since they were loaded', async () => {
