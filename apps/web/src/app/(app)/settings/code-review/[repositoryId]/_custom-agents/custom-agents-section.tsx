@@ -222,6 +222,7 @@ export const CustomAgentsList = ({ canEdit }: { canEdit: boolean }) => {
         directoryId,
         agents,
         knowledge,
+        reviewKnowledge,
         linkableAgents,
         inheritedAgents,
         listNote,
@@ -314,7 +315,7 @@ export const CustomAgentsList = ({ canEdit }: { canEdit: boolean }) => {
                                 agent.id,
                                 directoryId,
                             )}
-                            chips={agentChips(agent, knowledge)}
+                            chips={agentChips(agent, reviewKnowledge)}
                             usage={
                                 // Usage is counted per repository.
                                 isGlobal

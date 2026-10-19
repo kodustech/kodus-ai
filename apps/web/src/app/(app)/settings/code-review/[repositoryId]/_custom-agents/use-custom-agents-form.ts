@@ -48,6 +48,33 @@ const ownList = <T>(node: FieldNode<T[]>, level: string): T[] =>
         : (node?.value ?? []);
 
 /**
+ * At a directory, the repository's list it adds to, read from the node as
+ * loaded (an edit replaces the node without what it overrode); none at any
+ * other level.
+ */
+const inheritedList = <T>(loaded: FieldNode<T[]>, level: string): T[] =>
+    level === FormattedConfigLevel.DIRECTORY
+        ? ((loaded?.level === FormattedConfigLevel.DIRECTORY
+              ? loaded.overriddenValue
+              : loaded?.value) ?? [])
+        : [];
+
+/** `inherited` with each entry `own` shares a key with in its place, then
+ *  the rest of `own`: how the server merges a directory's lists. */
+const addOrReplace = <T>(
+    inherited: T[],
+    own: T[],
+    keyOf: (entry: T) => string | undefined,
+): T[] => [
+    ...inherited.map(
+        (entry) => own.find((mine) => keyOf(mine) === keyOf(entry)) ?? entry,
+    ),
+    ...own.filter(
+        (mine) => !inherited.some((entry) => keyOf(entry) === keyOf(mine)),
+    ),
+];
+
+/**
  * Said when the agents list saved at a repository replaces the global one:
  * that repository no longer gets the global agents. Null anywhere else; a
  * directory adds its agents to the repository's instead of replacing them.
@@ -100,25 +127,25 @@ export const useCustomAgentsForm = () => {
         form.control._defaultValues as Record<string, unknown>
     )?.customAgents as FieldNode<CustomAgent[]>;
     const listNote = ownListNote(loadedAgents, level);
-    const inheritedAgents =
-        level === FormattedConfigLevel.DIRECTORY
-            ? ((loadedAgents?.level === FormattedConfigLevel.DIRECTORY
-                  ? loadedAgents.overriddenValue
-                  : loadedAgents?.value) ?? [])
-            : [];
+    const loadedKnowledge = (
+        form.control._defaultValues as Record<string, unknown>
+    )?.knowledge as FieldNode<KnowledgeItem[]>;
+    const inheritedAgents = inheritedList(loadedAgents, level);
     // What a skill or doc at this level can link to: the agents a review
     // here runs, so at a directory the repository's too, a directory agent
     // with an inherited id in its place (as the server merges them).
-    const linkableAgents = [
-        ...inheritedAgents.map(
-            (inherited) =>
-                agents.find((agent) => agent.id === inherited.id) ?? inherited,
-        ),
-        ...agents.filter(
-            (agent) =>
-                !inheritedAgents.some((inherited) => inherited.id === agent.id),
-        ),
-    ];
+    const linkableAgents = addOrReplace(
+        inheritedAgents,
+        agents,
+        (agent) => agent.id,
+    );
+    // The skills and docs a review here reads, merged the same way by path:
+    // what Try it runs with and what the rows count.
+    const reviewKnowledge = addOrReplace(
+        inheritedList(loadedKnowledge, level),
+        knowledge,
+        (item) => item.path,
+    );
     const dirtyKeys = Object.keys(dirtyFields ?? {});
     const isDirty = dirtyKeys.some(
         (key) => key === "customAgents" || key === "knowledge",
@@ -246,6 +273,7 @@ export const useCustomAgentsForm = () => {
         knowledge,
         linkableAgents,
         inheritedAgents,
+        reviewKnowledge,
         level,
         listNote,
         isDirty,

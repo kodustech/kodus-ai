@@ -105,6 +105,7 @@ const Probe = () => {
         agents,
         linkableAgents,
         inheritedAgents,
+        reviewKnowledge,
         setAgents,
         updateAgent,
         save,
@@ -126,6 +127,9 @@ const Probe = () => {
             </button>
             <span data-testid="names">
                 {agents.map((agent) => agent.name).join(",")}
+            </span>
+            <span data-testid="review-knowledge">
+                {reviewKnowledge.map((item) => item.path).join(",")}
             </span>
             <span data-testid="linkable">
                 {linkableAgents.map((agent) => agent.name).join(",")}
@@ -414,6 +418,24 @@ describe("useCustomAgentsForm — at a directory", () => {
 
         expect(screen.getByTestId("linkable")).toHaveTextContent(
             "Zone ledger reviewer,Audit reviewer,Drip reviewer",
+        );
+    });
+
+    it("reads the repository's skills and docs too, a directory item in place of the one with its path", () => {
+        const doc = (path: string, agents: string[]) =>
+            ({ kind: "doc", path, agents }) as any;
+        renderProbe({
+            customAgents: { value: [], level: "repository" },
+            knowledge: {
+                value: [doc("docs/zones.md", ["ledger"]), doc("docs/drip.md", ["drip"])],
+                level: "directory",
+                overriddenValue: [doc("docs/style.md", ["ledger"]), doc("docs/zones.md", ["audit"])],
+                overriddenLevel: "repository",
+            },
+        });
+
+        expect(screen.getByTestId("review-knowledge")).toHaveTextContent(
+            "docs/style.md,docs/zones.md,docs/drip.md",
         );
     });
 

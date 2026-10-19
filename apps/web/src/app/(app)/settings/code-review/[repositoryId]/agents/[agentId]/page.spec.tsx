@@ -34,6 +34,7 @@ const formAt = (overrides = {}) => ({
     directoryId: undefined as string | undefined,
     agents: [agent],
     knowledge: [] as KnowledgeItem[],
+    reviewKnowledge: [] as KnowledgeItem[],
     inheritedAgents: [] as CustomAgent[],
     isDirty: false,
     isSubmitting: false,

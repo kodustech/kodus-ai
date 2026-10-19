@@ -64,6 +64,7 @@ function AgentContent() {
         directoryId,
         agents,
         knowledge,
+        reviewKnowledge,
         inheritedAgents,
         isDirty,
         isSubmitting,
@@ -193,7 +194,9 @@ function AgentContent() {
             teamId={teamId}
             repositoryId={repositoryId}
             agent={agent}
-            knowledge={knowledge}
+            // The skills and docs a review here reads, the repository's too
+            // at a directory, so Try it runs the agent as the review would.
+            knowledge={reviewKnowledge}
             canEdit={canEdit}
         />
     );
