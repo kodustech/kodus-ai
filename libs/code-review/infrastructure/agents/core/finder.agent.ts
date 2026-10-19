@@ -611,6 +611,11 @@ export interface RunFinderWithVerifyParams {
     conventionCheck?: ConventionCheckParams;
     /** A custom agent's team system (MCP) tools; see RecallPassesParams. */
     teamSystemTools?: string[];
+    /** A custom agent kept to its lane: what it may report. The verifier
+     *  drops a bug finding outside it (see verifierPromptFor), and the
+     *  synthesis rescue asks only for missed findings within it. Absent →
+     *  both run exactly as before. */
+    laneFocus?: string;
 }
 
 export interface ConventionCheckParams {
@@ -758,6 +763,7 @@ export async function runFinderWithVerify(
             recoverProse: params.recoverProse,
             conventionGuides: params.conventionCheck?.guideFiles,
             teamSystemTools: params.teamSystemTools,
+            laneScoped: !!params.laneFocus,
         },
         ctx,
     );
@@ -959,6 +965,7 @@ export async function verifyFindings(
         | 'agentName'
         | 'usageRunName'
         | 'previousDecisions'
+        | 'laneFocus'
     >,
     suggestions: FinderSuggestion[],
     investigated: Set<string>,
@@ -980,6 +987,7 @@ export async function verifyFindings(
         agentName: params.agentName,
         usageRunName: params.usageRunName,
         previousDecisions: params.previousDecisions,
+        laneFocus: params.laneFocus,
     });
     const pass = await runVerificationPass<FinderSuggestion>(
         { candidates: suggestions, verifier, concurrency: params.concurrency },
@@ -1013,6 +1021,7 @@ export async function verifyFindings(
             agentName: params.agentName,
             usageRunName: params.usageRunName,
             previousDecisions: params.previousDecisions,
+            laneFocus: params.laneFocus,
         });
         const gate = await runVerificationPass<FinderSuggestion>(
             {
@@ -1201,6 +1210,10 @@ interface RecallPassesParams {
      *  asks whether one it consulted states a requirement the change breaks.
      *  Unset or empty for every other agent, whose prompt stays unchanged. */
     teamSystemTools?: string[];
+    /** A custom agent kept to its lane: the synthesis rescue asks for missed
+     *  findings within its focus instead of missed bugs. Unset for every
+     *  other agent, whose prompt stays unchanged. */
+    laneScoped?: boolean;
 }
 
 const ZERO_RECALL_USAGE: VerifyUsage = {
@@ -1272,6 +1285,7 @@ export async function runRecallPasses(
                 findings.suggestions,
                 params.conventionGuides,
                 params.teamSystemTools,
+                params.laneScoped,
             ),
             'synthesis-rescue',
         );
@@ -1391,6 +1405,7 @@ function buildSynthesisPrompt(
     current: FinderSuggestion[],
     conventionGuides?: string[],
     teamSystemTools?: string[],
+    laneScoped?: boolean,
 ): string {
     const inspectedList = inspected.size
         ? [...inspected].join('\n')
@@ -1417,13 +1432,24 @@ ${investigationSummary(toolCalls) || 'No tool calls captured.'}
 ${currentSummary}
 </CurrentFindings>
 
-Your task:
+${laneScoped ? LANE_SYNTHESIS_TASK : SYNTHESIS_TASK}${formatMissedConventionsTask(conventionGuides)}${formatTeamSystemsTask(teamSystemTools, toolCalls)}`;
+}
+
+const SYNTHESIS_TASK = `Your task:
 - Re-think the review based on the context above.
 - Do not add variants or restatements of existing findings.
 - Do not add speculative risks.
 - If there are concrete missed bugs, submit them.
-- If there is no clearly missed bug, submit an empty suggestions array.${formatMissedConventionsTask(conventionGuides)}${formatTeamSystemsTask(teamSystemTools, toolCalls)}`;
-}
+- If there is no clearly missed bug, submit an empty suggestions array.`;
+
+/** The rescue of a custom agent kept to its lane: re-thinking for missed bugs
+ *  would re-do the generalist's hunt (#2172). */
+const LANE_SYNTHESIS_TASK = `Your task:
+- Re-think the review based on the context above, within your focus (the team's instructions, guides, skills and tools in your system prompt).
+- Do not add variants or restatements of existing findings.
+- Do not add speculative risks, and do not add general bugs outside your focus: the generalist reviewer covers them.
+- If there are concrete missed findings within your focus, submit them.
+- If there is none, submit an empty suggestions array.`;
 
 /** Custom agents with team system (MCP) tools: the rescue also asks whether a
  *  record they read states a requirement the change breaks. The finder only

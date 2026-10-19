@@ -181,6 +181,22 @@ export abstract class BaseCodeReviewAgentProvider {
         return undefined;
     }
 
+    /** Unset for every built-in agent; a custom agent the team opted into
+     *  "Also report general bugs" returns true and keeps the defect hunt. */
+    protected reportsGeneralBugs(): boolean | undefined {
+        return undefined;
+    }
+
+    /**
+     * What this agent is allowed to report, as the verifier reads it: set
+     * only for a custom agent kept to its lane, whose findings outside it are
+     * dropped by the verification they already take. Unset → verification is
+     * exactly as before.
+     */
+    protected getLaneFocus(_input: ReviewAgentInput): string | undefined {
+        return undefined;
+    }
+
     /**
      * Where read-only tool results are kept for this review run. Unset by
      * default, so a provider shared across reviews (every built-in agent)
@@ -607,7 +623,12 @@ export abstract class BaseCodeReviewAgentProvider {
                           this.getRunToolCache() ?? new RunToolCache(),
                       )
                     : [];
-            const extraTools = [...knowledgeTools, ...agentTools.tools];
+            // Agent tools before the skill tools: astGrep is the same for
+            // every custom agent without rules, while loadSkill/readSkillFile
+            // enumerate this agent's skills. Tools shared by the custom agents
+            // of a review come first, so their tool blocks stay identical
+            // for as long as possible (the provider prompt cache is a prefix).
+            const extraTools = [...agentTools.tools, ...knowledgeTools];
             // Secrets are passed via closure (not as tracing arg) so that
             // Langfuse span I/O never serialises API keys, tokens, or
             // NestJS service instances (which carry ConfigService with all env vars).
@@ -684,6 +705,7 @@ export abstract class BaseCodeReviewAgentProvider {
                     previousDecisions: input.previousDecisions,
                     conventionGuides: this.getConventionGuides(input),
                     teamInstructions: this.getTeamInstructions(),
+                    laneFocus: this.getLaneFocus(input),
                     ...(agentTools.teamSystemTools?.length && {
                         teamSystemTools: agentTools.teamSystemTools,
                     }),
@@ -1009,6 +1031,7 @@ export abstract class BaseCodeReviewAgentProvider {
             supportsMixed: this.supportsMixedLabels(),
             conventionGuides: this.getConventionGuides(input),
             knowledgeSection: renderKnowledgeSection(input.knowledge),
+            reportGeneralBugs: this.reportsGeneralBugs(),
         };
     }
 

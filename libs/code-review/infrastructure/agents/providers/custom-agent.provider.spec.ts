@@ -21,12 +21,16 @@ jest.mock(
 
 import { resolveReviewAgentModel } from '@libs/code-review/infrastructure/agents/collaborators/model-factory';
 import { runAgentLoopViaCore } from '@libs/code-review/infrastructure/agents/core/core-agent-loop.adapter';
-import type { CustomAgentConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import {
+    customAgentConfigSchema,
+    type CustomAgentConfig,
+} from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { LLM_TASK } from '@libs/llm/byok-config';
 
 import {
     CustomAgentProvider,
     CustomAgentProviderFactory,
+    buildCustomAgentLaneFocus,
     buildCustomAgentPrompt,
     kodusPluginArgs,
 } from './custom-agent.provider';
@@ -687,5 +691,135 @@ describe('kodusPluginArgs', () => {
         expect(
             kodusPluginArgs({ organizationId: 'org-1' }, 'acme/billing'),
         ).toBeUndefined();
+    });
+});
+
+describe('CustomAgentProvider — lane', () => {
+    const withSandbox = () => input({ remoteCommands: {} });
+
+    it('keeps to its lane by default and hands the verifier its focus', async () => {
+        await provider().execute(withSandbox());
+
+        const [loopParams] = runLoopMock.mock.calls[0];
+        expect(loopParams.systemPrompt).toContain(
+            'The generalist reviewer already covers general correctness bugs on it.',
+        );
+        expect(loopParams.systemPrompt).not.toContain(
+            'Assume every change is broken until you prove it is safe.',
+        );
+        expect(loopParams.laneFocus).toContain('Reviewer: "Ledger Rules"');
+        expect(loopParams.laneFocus).toContain(
+            'Every ledger write must go through JournalService.post.',
+        );
+    });
+
+    it('names its linked guides and tools in the focus', () => {
+        const focus = buildCustomAgentLaneFocus(
+            config({
+                tools: {
+                    astGrepConfig: 'rule: x',
+                    mcp: [{ integrationId: 'tracker', tools: ['get_issue'] }],
+                },
+            }),
+            ['.skills/ledger-posting/SKILL.md'],
+        );
+
+        expect(focus).toContain(
+            'Linked guides and skills: .skills/ledger-posting/SKILL.md',
+        );
+        expect(focus).toContain("the team's ast-grep rules");
+        expect(focus).toContain('tracker (get_issue)');
+    });
+
+    it('hunts general bugs and takes no lane check when the team opts in', async () => {
+        await provider(config({ reportGeneralBugs: true })).execute(
+            withSandbox(),
+        );
+
+        const [loopParams] = runLoopMock.mock.calls[0];
+        expect(loopParams.laneFocus).toBeUndefined();
+        expect(loopParams.systemPrompt).toContain(
+            'Assume every change is broken until you prove it is safe.',
+        );
+        expect(loopParams.systemPrompt).toContain(
+            'Also report the general correctness bugs you find',
+        );
+        expect(loopParams.systemPrompt).not.toContain(
+            "issues outside what the team's instructions ask for",
+        );
+    });
+
+    it('puts its own tools before the skill tools', async () => {
+        class WithTool extends CustomAgentProvider {
+            protected async buildAgentTools() {
+                return {
+                    tools: [
+                        {
+                            name: 'astGrep',
+                            description: 'x',
+                            inputSchema: { type: 'object' },
+                            execute: async () => ({ output: '' }),
+                        } as any,
+                    ],
+                    close: async () => {},
+                };
+            }
+        }
+        const knowledge = {
+            ref: 'main',
+            skills: [
+                {
+                    name: 'ledger-posting',
+                    description: 'How the team posts journal entries.',
+                    path: '.skills/ledger-posting/SKILL.md',
+                    folder: '.skills/ledger-posting',
+                    body: 'Post through JournalService.',
+                    bodyTruncated: false,
+                    files: [],
+                },
+            ],
+            docs: [],
+            warnings: [],
+        };
+        const reader = {
+            ref: 'main',
+            readFile: jest.fn(),
+            listFiles: jest.fn(),
+            matchFiles: jest.fn(),
+        };
+
+        await new WithTool(config(), {} as any, {} as any).execute(
+            input({ knowledge, knowledgeReader: reader }),
+        );
+
+        const [, secrets] = runLoopMock.mock.calls[0];
+        expect(secrets.extraTools.map((t: any) => t.name)).toEqual([
+            'astGrep',
+            'loadSkill',
+            'readSkillFile',
+        ]);
+    });
+});
+
+describe('customAgentConfigSchema — reportGeneralBugs', () => {
+    it('leaves an agent saved without the setting kept to its lane', () => {
+        const { reportGeneralBugs: _omit, ...saved } = config();
+        const parsed = customAgentConfigSchema.parse(saved);
+
+        expect(parsed.reportGeneralBugs).toBeUndefined();
+        expect(provider(parsed)['reportsGeneralBugs']()).toBe(false);
+    });
+
+    it('keeps the setting through a parse (resolve and Try it parse the draft)', () => {
+        expect(
+            customAgentConfigSchema.parse(config({ reportGeneralBugs: true }))
+                .reportGeneralBugs,
+        ).toBe(true);
+        expect(() =>
+            customAgentConfigSchema.parse({
+                ...config(),
+                reportGeneralBugs: 'yes',
+            }),
+        ).toThrow();
     });
 });

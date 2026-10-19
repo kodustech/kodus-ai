@@ -335,6 +335,7 @@ export async function runAgentLoopViaCore(
             // run at all (not fast/self-contained); harmless otherwise.
             heavy: !!input.heavy && !skipHeavyPasses,
             teamSystemTools: input.teamSystemTools,
+            laneFocus: input.laneFocus,
             ...(readGuide && {
                 conventionCheck: {
                     readGuide,

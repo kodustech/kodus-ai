@@ -27,6 +27,7 @@ import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/i
 import {
     buildVerifierPrompt,
     VERIFIER_REPEAT_RULE,
+    verifierLaneRule,
 } from '@libs/code-review/infrastructure/agents/prompts/verifier-prompt';
 import { formatPreviousDecisions } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
 import { LLM_ENVELOPE_TAG } from '@libs/llm/structured-output-repair';
@@ -138,11 +139,16 @@ export function buildVerifierAgentSpec(
 
 /** Format a finding into the verifier's per-run task prompt (HV2 evidence).
  *  `previousDecisions` (issue #1313) is the PR's history, not filtered by
- *  file — see LlmVerifier.verify(). */
+ *  file — see LlmVerifier.verify(). `laneFocus` (a custom agent kept to its
+ *  lane, #2172) adds the out-of-focus drop criterion; absent, the prompt is
+ *  unchanged. */
 export function verifierPromptFor(
     finding: FinderSuggestion,
     previousDecisions?: readonly PrDecisionRecord[],
+    options: { laneFocus?: string } = {},
 ): string {
+    const laneFocus =
+        typeof options?.laneFocus === 'string' ? options.laneFocus : '';
     const bundle = [
         `File: ${finding.relevantFile}`,
         finding.relevantLinesStart != null
@@ -153,6 +159,7 @@ export function verifierPromptFor(
         finding.existingCode ? `Code:\n${finding.existingCode}` : '',
         formatPreviousDecisions(previousDecisions),
         previousDecisions?.length ? VERIFIER_REPEAT_RULE : '',
+        laneFocus.trim() ? verifierLaneRule(laneFocus) : '',
     ]
         .filter(Boolean)
         .join('\n');
@@ -296,6 +303,9 @@ export interface LlmVerifierParams {
      *  NOT done here (line numbers shift across commits); the model judges
      *  whether a same-file record is "the same issue" semantically. */
     previousDecisions?: PrDecisionRecord[];
+    /** A custom agent kept to its lane (#2172): its focus, against which each
+     *  finding is also judged in the same run (see verifierLaneRule). */
+    laneFocus?: string;
 }
 
 /** The LLM-judge Verifier (HV2): runs a verifier AgentSpec once per finding on
@@ -379,7 +389,9 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
         const state = await this.runner.run(
             spec,
             {
-                prompt: verifierPromptFor(candidate, matchingDecisions),
+                prompt: verifierPromptFor(candidate, matchingDecisions, {
+                    laneFocus: this.params.laneFocus,
+                }),
                 ...toAiSdkTelemetryArgs(
                     buildLangfuseTelemetry(fnId, this.params.telemetryMetadata),
                 ),

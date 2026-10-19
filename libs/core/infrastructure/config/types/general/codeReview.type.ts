@@ -476,6 +476,13 @@ export const customAgentConfigSchema = z.object({
             check: z.string().optional(),
         })
         .optional(),
+    /**
+     * "Also report general bugs": the agent also hunts the general
+     * correctness bugs the generalist covers. Absent or false (agents saved
+     * before the setting included) → it reports only within its focus, and
+     * its findings outside that focus are dropped by verification.
+     */
+    reportGeneralBugs: z.boolean().optional(),
     presentation: customAgentPresentationSchema,
 });
 
