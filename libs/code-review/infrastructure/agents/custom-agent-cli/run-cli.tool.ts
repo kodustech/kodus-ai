@@ -12,7 +12,7 @@ import { jsonSchema } from 'ai';
 
 import type { AgentTool } from '@libs/agent-harness/domain/contracts/tool.contract';
 
-import type { CustomAgentTooling } from '@libs/code-review/infrastructure/agents/review-agent.contract';
+import type { CustomAgentCliRun } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import { createLogger } from '@libs/core/log/logger';
 import type {
     SandboxInstance,
@@ -40,7 +40,7 @@ export interface RunCliToolDeps {
     /** Decrypts a stored secret ciphertext (`decrypt` from common/utils/crypto). */
     decrypt: (ciphertext: string) => string;
     /** Told of each call and the output the agent got. */
-    onRun?: CustomAgentTooling['onCliRun'];
+    onRun?: (run: Omit<CustomAgentCliRun, 'agentId'>) => void;
 }
 
 function describe(installed: readonly InstalledCustomAgentCli[]): string {

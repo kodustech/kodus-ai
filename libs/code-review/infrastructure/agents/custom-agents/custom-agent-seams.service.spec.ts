@@ -499,6 +499,7 @@ describe('buildTryTrace — what the check saw', () => {
                 suggestions: [
                     {
                         relevantFile: 'src/billing/refund.ts',
+                        customAgent: { id: 'ledger-agent', name: 'Ledger' },
                         oneSentenceSummary: 'Refund repeats the charge parser',
                         suggestionContent: 'The parser is copied from charge.ts.',
                         kind: 'convention',
@@ -531,6 +532,7 @@ describe('buildTryTrace — what the check saw', () => {
             ],
             cliRuns: [
                 {
+                    agentId: 'ledger-agent',
                     cli: 'dupfinder',
                     args: ['src'],
                     output: 'refund.ts:1-20 ~ charge.ts:1-20',
@@ -545,7 +547,7 @@ describe('buildTryTrace — what the check saw', () => {
         ]);
         const [kept, dropped] = trace.findings;
         expect(kept.comment).toBe(
-            "The parser is copied from charge.ts.\n\n**Rule** (agent's instructions):\n> Report every copied parser.",
+            'The parser is copied from charge.ts.\n\n**Evidence** (`dupfinder`):\n> refund.ts:1-20 ~ charge.ts:1-20',
         );
         expect(dropped.reason).toBe(
             'src/billing/void.ts is not a guide linked to this review',

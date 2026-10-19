@@ -65,7 +65,10 @@ import {
     IAutomationExecutionService,
 } from '@libs/automation/domain/automationExecution/contracts/automation-execution.service';
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
-import { AgentProgressEvent } from '@libs/code-review/infrastructure/agents/review-agent.contract';
+import {
+    AgentProgressEvent,
+    type CustomAgentCliRun,
+} from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { analyzerFindingsToSuggestions } from '@libs/code-review/infrastructure/analyzers/analyzer-findings-to-suggestions';
 import { preferAnalyzerKeep } from '@libs/code-review/infrastructure/agents/engine/prefer-analyzer-keep';
@@ -76,7 +79,7 @@ import {
     indexCustomAgents,
     isCustomAgentFinding,
     keepOwnFindingsApart,
-    ruleCitation,
+    findingCitation,
     preferCustomAgentKeep,
     stripCustomAgentFixes,
     type CustomAgentsById,
@@ -533,6 +536,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         if (!changedFiles.length && !ignoredChangedFiles.length) {
             return context;
         }
+        // What each custom agent's CLIs reported, cited by its findings.
+        const cliRuns: CustomAgentCliRun[] = [];
 
         // When no sandbox is available (e.g. trial mode, or sandbox provider
         // unavailable), run the agent in "self-contained" mode: no tools,
@@ -811,6 +816,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 customAgentTooling: {
                     sandbox: context.sandboxHandle,
                     installedClis: context.customAgentClis?.byAgentId,
+                    onCliRun: (run) => cliRuns.push(run),
                 },
             });
 
@@ -1396,10 +1402,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 }
             }
 
-            // The team rule a convention finding applies, after formatting so
-            // the rewrite cannot paraphrase or drop it (#2172).
+            // The CLI output that names a custom agent finding's file and the
+            // team rule it applies, after formatting so the rewrite cannot
+            // paraphrase or drop them (#2172).
             for (const s of deduped) {
-                const citation = ruleCitation(s);
+                const citation = findingCitation(s, cliRuns);
                 if (!citation) continue;
                 s.suggestionContent = `${s.suggestionContent || ''}${citation}`;
                 s.fullExplanation = `${s.fullExplanation || ''}${citation}`;

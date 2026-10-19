@@ -15,6 +15,7 @@ import {
     customAgentWriting,
     indexCustomAgents,
     keepOwnFindingsApart,
+    findingCitation,
     ruleCitation,
     preferCustomAgentKeep,
     stripCustomAgentFixes,
@@ -316,6 +317,60 @@ describe('keepOwnFindingsApart', () => {
                 suggestions,
             ),
         ).toEqual([{ keep: 0, duplicates: [1, 2] }]);
+    });
+});
+
+describe('findingCitation', () => {
+    const run = (output: string, agentId = 'dup') => ({
+        agentId,
+        cli: 'dupfinder',
+        args: ['src'],
+        output,
+    });
+    const finding = (source?: { file: string; quote: string }) => ({
+        relevantFile: 'src/billing/refund.ts',
+        customAgent: { id: 'dup', name: 'Duplicates' },
+        kind: 'convention' as const,
+        ...(source && { source }),
+    });
+    const OUTPUT =
+        '\u001b[1mClones\u001b[22m:\nbilling/ refund.ts:1-30 ~ charge.ts:1-30\nledger/ post.ts:4-9 ~ book.ts:4-9\n[exit code 0]';
+
+    it("cites the CLI lines that name the finding's file instead of the agent's instructions", () => {
+        const citation = findingCitation(
+            finding({
+                file: 'TeamInstructions',
+                quote: 'Use the CLI output as evidence.',
+            }),
+            [run(OUTPUT), run(OUTPUT), run(OUTPUT, 'other')],
+        );
+        expect(citation).toBe(
+            '\n\n**Evidence** (`dupfinder`):\n> billing/ refund.ts:1-30 ~ charge.ts:1-30',
+        );
+    });
+
+    it('keeps a rule from a repository guide beside the evidence', () => {
+        const citation = findingCitation(
+            finding({
+                file: 'docs/duplication.md',
+                quote: 'Never copy a parser between billing modules.',
+            }),
+            [run(OUTPUT)],
+        );
+        expect(citation).toContain('**Evidence** (`dupfinder`)');
+        expect(citation).toContain('**Rule** (`docs/duplication.md`)');
+    });
+
+    it("keeps the instructions' rule when no CLI output names the file", () => {
+        expect(
+            findingCitation(
+                finding({
+                    file: 'TeamInstructions',
+                    quote: 'Every posting balances.',
+                }),
+                [run('ledger/ post.ts:4-9 ~ book.ts:4-9')],
+            ),
+        ).toBe("\n\n**Rule** (agent's instructions):\n> Every posting balances.");
     });
 });
 

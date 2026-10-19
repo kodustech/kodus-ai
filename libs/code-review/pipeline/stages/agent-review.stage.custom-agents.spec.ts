@@ -291,6 +291,38 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
         expect(result.customAgentRuns[0].posted).toBe(2);
     });
 
+    it("cites the CLI output that names the finding's file in the posted comment", async () => {
+        const { stage, reviewOrchestrator } = makeStage(
+            output([
+                finding({
+                    kind: 'convention',
+                    source: {
+                        file: 'TeamInstructions',
+                        quote: 'Use the CLI output as evidence.',
+                    },
+                }),
+            ]),
+        );
+        const execute = reviewOrchestrator.execute.getMockImplementation()!;
+        reviewOrchestrator.execute.mockImplementation(async (input: any) => {
+            input.customAgentTooling.onCliRun({
+                agentId: 'agent-ledger',
+                cli: 'dupfinder',
+                args: ['src'],
+                output: 'src/ ledger.ts:1-9 ~ journal.ts:1-9',
+            });
+            return execute(input);
+        });
+
+        const result = await run(stage, makeContext([agent()]));
+
+        const [posted] = contents(result.validSuggestions);
+        expect(posted).toContain(
+            '**Evidence** (`dupfinder`):\n> src/ ledger.ts:1-9 ~ journal.ts:1-9',
+        );
+        expect(posted).not.toContain('Use the CLI output as evidence.');
+    });
+
     it("writes a single-comment agent's comment in the agent's voice", async () => {
         (formatSuggestionContent as jest.Mock).mockResolvedValueOnce(
             new Map([

@@ -12,6 +12,7 @@ import type { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/int
 import { isAnalyzerSuggestion } from '@libs/code-review/infrastructure/analyzers/analyzer-findings-to-suggestions';
 import { isTeamInstructionsSource } from '@libs/code-review/infrastructure/agents/core/convention-check';
 import type { DedupGroup } from '@libs/code-review/infrastructure/agents/engine/prefer-analyzer-keep';
+import type { CustomAgentCliRun } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 
 /**
  * How a custom agent's findings reach the PR (#2172): its own severity floor,
@@ -289,6 +290,64 @@ export function ruleCitation(s: Finding): string {
         .map((line) => `> ${line}`)
         .join('\n');
     return `\n\n**Rule** (${where}):\n${quoted}`;
+}
+
+/** Lines of CLI output a finding cites as proof, at most this many per CLI. */
+const MAX_EVIDENCE_LINES = 5;
+
+/**
+ * The lines of the agent's CLI output that name the finding's file, by CLI:
+ * what the tool reported about it. Repeated runs of the same call add no line
+ * twice.
+ */
+export function cliEvidence(
+    s: Finding,
+    runs: readonly CustomAgentCliRun[] = [],
+): Array<{ cli: string; lines: string[] }> {
+    const base = (s.relevantFile ?? '').split('/').pop();
+    if (!base || !s.customAgent?.id) return [];
+    const names = new RegExp(
+        `(^|[\\s/])${base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(:|\\s|$)`,
+    );
+    const byCli = new Map<string, string[]>();
+    for (const run of runs) {
+        if (run.agentId !== s.customAgent.id) continue;
+        const lines = byCli.get(run.cli) ?? [];
+        for (const raw of run.output.split(/\r?\n/)) {
+            // eslint-disable-next-line no-control-regex
+            const line = raw.replace(/\u001b\[[0-9;]*m/g, '').trim();
+            if (
+                line &&
+                names.test(line) &&
+                !lines.includes(line) &&
+                lines.length < MAX_EVIDENCE_LINES
+            ) {
+                lines.push(line);
+            }
+        }
+        if (lines.length) byCli.set(run.cli, lines);
+    }
+    return [...byCli].map(([cli, lines]) => ({ cli, lines }));
+}
+
+/**
+ * What a custom agent finding's comment cites, appended after the formatter:
+ * the CLI output that names its file, and the team rule it applies. A rule
+ * quoted from the agent's own instructions is how the agent was told to
+ * review, not proof, so it is left out when the CLI output is there.
+ */
+export function findingCitation(
+    s: Finding,
+    runs: readonly CustomAgentCliRun[] = [],
+): string {
+    const evidence = cliEvidence(s, runs)
+        .map(
+            ({ cli, lines }) =>
+                `\n\n**Evidence** (\`${cli}\`):\n${lines.map((line) => `> ${line}`).join('\n')}`,
+        )
+        .join('');
+    const fromInstructions = isTeamInstructionsSource(s.source?.file ?? '');
+    return `${evidence}${evidence && fromInstructions ? '' : ruleCitation(s)}`;
 }
 
 /**

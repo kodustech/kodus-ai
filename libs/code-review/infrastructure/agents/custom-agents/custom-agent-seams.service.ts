@@ -73,7 +73,7 @@ import {
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 
-import { ruleCitation } from './custom-agent-presentation';
+import { findingCitation } from './custom-agent-presentation';
 import { customAgentSlug, filesInAgentScope } from './custom-agent-scope';
 
 const logger = createLogger('CustomAgentSeams');
@@ -435,7 +435,7 @@ export function buildTryTrace(params: {
         // The comment as the review appends to it; the review's formatter,
         // which rewrites the body, does not run here.
         ...(verdict === 'kept' && {
-            comment: `${s.suggestionContent ?? ''}${ruleCitation(s)}`,
+            comment: `${s.suggestionContent ?? ''}${findingCitation(s, params.cliRuns)}`,
         }),
     });
 

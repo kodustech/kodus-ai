@@ -203,6 +203,8 @@ export interface CustomAgentTooling {
 
 /** One runCli call: the CLI, its arguments and the output the agent got. */
 export interface CustomAgentCliRun {
+    /** The custom agent that ran it. */
+    agentId: string;
     cli: string;
     args: string[];
     output: string;
