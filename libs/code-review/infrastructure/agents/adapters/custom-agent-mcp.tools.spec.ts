@@ -4,6 +4,16 @@
  * allowed set is refused even when called by name, and that failures come back
  * as tool output instead of being thrown.
  */
+const mockWarn = jest.fn();
+jest.mock('@libs/core/log/logger', () => ({
+    createLogger: () => ({
+        log: jest.fn(),
+        warn: (...args: unknown[]) => mockWarn(...args),
+        error: jest.fn(),
+        debug: jest.fn(),
+    }),
+}));
+
 import type {
     MCPAdapter,
     MCPAdapterConfig,
@@ -404,6 +414,39 @@ describe('buildCustomAgentMcpTools', () => {
         });
         expect(set.tools.map((t) => t.name)).toEqual(['Wiki__get_page']);
         expect(set.unavailable).toEqual(['Tracker']);
+    });
+
+    it('logs a missing connection and an unreachable server with the review ids', async () => {
+        mockWarn.mockClear();
+        const broken = fakeAdapter([tool('get_ticket')]);
+        broken.connect.mockRejectedValueOnce(new Error('401'));
+        const ids = { organizationId: 'org-1', prNumber: 7, agentId: 'agent-1' };
+        await buildCustomAgentMcpTools({
+            selections: [
+                { integrationId: 'int-tracker', tools: ['get_ticket'] },
+                { integrationId: 'int-gone', tools: ['get_page'] },
+            ],
+            servers: [TRACKER],
+            createAdapter: () => broken,
+            logContext: ids,
+        });
+        expect(mockWarn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    ...ids,
+                    integrationId: 'int-tracker',
+                }),
+            }),
+        );
+        expect(mockWarn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.stringContaining('connection not found'),
+                metadata: expect.objectContaining({
+                    ...ids,
+                    integrationId: 'int-gone',
+                }),
+            }),
+        );
     });
 
     it('disconnects every adapter on close', async () => {
