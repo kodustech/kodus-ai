@@ -3,6 +3,8 @@ import type { CustomAgentConfig } from '@libs/core/infrastructure/config/types/g
 import {
     customAgentSlug,
     filesInAgentScope,
+    ignoredFilesInAgentScope,
+    namesFilesExplicitly,
     parseCustomAgentCommand,
     selectCustomAgents,
 } from './custom-agent-scope';
@@ -130,6 +132,83 @@ describe('filesInAgentScope', () => {
         expect(
             filesInAgentScope(agent({ scope: { include: [' '] } }), files),
         ).toHaveLength(3);
+    });
+});
+
+describe('namesFilesExplicitly', () => {
+    it.each([
+        ['package.json', true],
+        ['apps/web/package.json', true],
+        ['./package.json', true],
+        ['**/Dockerfile', true],
+        ['infra/**/*.tf', true],
+        ['src/**', true],
+        ['apps/web/*', true],
+        ['packages/@ledger/ui/**', true],
+        ['src/[ab]/*.ts', true],
+        ['src/app/(shop)/[id]/page.tsx', true],
+        ['**', false],
+        ['**/*', false],
+        ['*', false],
+        ['./*', false],
+        ['*.lock', false],
+        ['**/*.ts', false],
+        ['**/*.{ts,tsx}', false],
+        ['Dockerfile.*', false],
+        ['(shop)/**', false],
+        ['!(test).ts', false],
+        ['', false],
+    ])('%j → %s', (glob, explicit) => {
+        expect(namesFilesExplicitly(glob)).toBe(explicit);
+    });
+});
+
+describe('ignoredFilesInAgentScope', () => {
+    const ignored = [
+        { filename: 'package.json' },
+        { filename: 'apps/web/package.json' },
+        { filename: 'infra/envs/prod/main.tf' },
+        { filename: 'infra/envs/prod/notes.md' },
+        { filename: 'src/prod/handler.ts' },
+    ];
+    const names = (include?: string[], exclude?: string[]) =>
+        ignoredFilesInAgentScope(agent({ scope: { include, exclude } }), ignored)
+            .map((f) => f.filename);
+
+    it('gives an agent the ignored file its glob names', () => {
+        expect(names(['package.json'])).toEqual(['package.json']);
+        expect(names(['**/package.json'])).toEqual([
+            'package.json',
+            'apps/web/package.json',
+        ]);
+    });
+
+    it('reaches a file under an ignored directory through a literal directory', () => {
+        // `**/prod/**` is among the default ignore paths.
+        expect(names(['infra/**/*.tf'])).toEqual(['infra/envs/prod/main.tf']);
+        expect(names(['infra/**'])).toEqual([
+            'infra/envs/prod/main.tf',
+            'infra/envs/prod/notes.md',
+        ]);
+    });
+
+    it('gives nothing to a broad glob or to an agent with no include glob', () => {
+        expect(names(['**/*.ts', '**/*.json'])).toEqual([]);
+        expect(names(['**/*', '*.tf'])).toEqual([]);
+        expect(names()).toEqual([]);
+    });
+
+    it('takes only the files the explicit glob matches when broad ones sit beside it', () => {
+        expect(names(['**/*.ts', 'package.json'])).toEqual(['package.json']);
+    });
+
+    it('still applies the excludes', () => {
+        expect(names(['**/package.json'], ['apps/**'])).toEqual([
+            'package.json',
+        ]);
+        expect(names(['**/package.json', '!package.json'])).toEqual([
+            'apps/web/package.json',
+        ]);
     });
 });
 

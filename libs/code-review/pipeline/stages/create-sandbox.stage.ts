@@ -288,6 +288,10 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
                 changedFiles: (context.changedFiles ?? [])
                     .map((file) => file?.filename)
                     .filter(Boolean),
+                ignoredFiles: (context.ignoredFileChanges ?? [])
+                    .filter((file) => file?.status !== 'removed')
+                    .map((file) => file?.filename)
+                    .filter(Boolean),
             });
             this.logger.log({
                 message: `Custom agent CLIs ready: ${Object.values(

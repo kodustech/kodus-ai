@@ -82,7 +82,10 @@ import {
     type CustomAgentsById,
 } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-presentation';
 import { summarizeCustomAgentRuns } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-summary';
-import { customAgentSlug } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
+import {
+    customAgentSlug,
+    ignoredFilesNamedByAgents,
+} from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import type { CustomAgentConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import {
     bothFromAnalyzers,
@@ -779,6 +782,15 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 changedFiles,
             );
             stageWarnings.push(...reviewKnowledge.warnings);
+            // The ignored files a custom agent names explicitly (#2172),
+            // with the content and line numbers FetchChangedFilesStage gave
+            // them; none without custom agents.
+            const ignoredChangedFiles = ignoredFilesNamedByAgents(
+                customAgents,
+                (context.ignoredFileChanges ?? []).filter(
+                    (file) => file?.filename && file.status !== 'removed',
+                ),
+            );
             const result = await this.reviewOrchestrator.execute({
                 ...buildOrchestratorInput(context, {
                     changedFiles,
@@ -795,6 +807,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 }),
                 customAgents,
                 onlyCustomAgent: context.onlyCustomAgent,
+                ignoredChangedFiles,
                 knowledgeByTarget: reviewKnowledge.byTarget,
                 knowledgeReader: reviewKnowledge.reader,
                 customAgentTooling: {
@@ -1119,9 +1132,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             const changedFilesByName = new Map(
                 changedFiles.map((f) => [f.filename, f]),
             );
+            // A custom agent's findings on an ignored file it names are held
+            // to that file's hunks like any other.
             const validatedSuggestions = this.anchorSuggestionsToDiff(
                 result.suggestions,
-                changedFiles,
+                [...changedFiles, ...ignoredChangedFiles],
                 context.codeReviewConfig?.kodyRules ?? [],
                 allDiscarded,
             );

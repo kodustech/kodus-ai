@@ -14,6 +14,7 @@
 import { createLogger } from '@libs/core/log/logger';
 import {
     filesInAgentScope,
+    ignoredFilesInAgentScope,
     selectCustomAgents,
 } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import type {
@@ -70,17 +71,18 @@ export function customAgentMatchesFiles(
     return touchesAgentScope(agent, changedFiles);
 }
 
-/** At least one changed file is in the agent's scope (same rule as the
- *  orchestrator's dispatch). */
+/** At least one changed file is in the agent's scope, or one ignored file
+ *  its globs name explicitly (same rule as the orchestrator's dispatch). */
 function touchesAgentScope(
     agent: Pick<CustomAgentConfig, 'scope'>,
     changedFiles: readonly string[],
+    ignoredFiles: readonly string[] = [],
 ): boolean {
+    const asFiles = (names: readonly string[]) =>
+        names.map((filename) => ({ filename }));
     return (
-        filesInAgentScope(
-            agent,
-            changedFiles.map((filename) => ({ filename })),
-        ).length > 0
+        filesInAgentScope(agent, asFiles(changedFiles)).length > 0 ||
+        ignoredFilesInAgentScope(agent, asFiles(ignoredFiles)).length > 0
     );
 }
 
@@ -132,6 +134,9 @@ export async function provisionCustomAgentClis(params: {
     sandbox: SandboxInstance | undefined;
     agents: readonly CustomAgentConfig[] | undefined;
     changedFiles: readonly string[];
+    /** Changed files the ignore paths set aside, deleted ones excluded: an
+     *  agent whose globs name one explicitly runs on it. */
+    ignoredFiles?: readonly string[];
     /** `@kody -v <slug>`: only that agent runs, enabled or not. */
     onlyCustomAgent?: string;
     /** Set when this review must not run CLIs at all; each skipped CLI gets
@@ -149,7 +154,11 @@ export async function provisionCustomAgentClis(params: {
     ).filter(
         (agent) =>
             agent?.tools?.cli?.length &&
-            touchesAgentScope(agent, params.changedFiles),
+            touchesAgentScope(
+                agent,
+                params.changedFiles,
+                params.ignoredFiles,
+            ),
     );
     if (!candidates.length) return result;
 

@@ -17,6 +17,7 @@ import { CustomAgentProviderFactory } from '@libs/code-review/infrastructure/age
 import {
     customAgentSlug,
     filesInAgentScope,
+    ignoredFilesInAgentScope,
     scopeCallGraph,
     selectCustomAgents,
 } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
@@ -44,6 +45,10 @@ export interface OrchestratorInput extends ReviewAgentInput {
     customAgents?: CustomAgentConfig[];
     /** `@kody -v <slug>`: run only that custom agent, nothing else. */
     onlyCustomAgent?: string;
+    /** Changed files the review's ignore paths set aside (deleted files
+     *  excluded). Only a custom agent whose include globs name one
+     *  explicitly reviews it; no other agent sees them. */
+    ignoredChangedFiles?: ReviewAgentInput['changedFiles'];
     /** Skills and docs per target: `main-review` for the built-in category
      *  agents, a custom agent's id for that agent. Kody Rules takes none. */
     knowledgeByTarget?: ReadonlyMap<string, ResolvedKnowledge>;
@@ -153,6 +158,7 @@ export class ReviewOrchestratorService {
             customAgents,
             onlyCustomAgent,
             knowledgeByTarget,
+            ignoredChangedFiles,
             ...agentInput
         } = input;
         const mainKnowledge = knowledgeByTarget?.get(
@@ -263,10 +269,13 @@ export class ReviewOrchestratorService {
                 onlyCustomAgent,
             )) {
                 const slug = customAgentSlug(agent.name);
-                const files = filesInAgentScope(
-                    agent,
-                    agentInput.changedFiles ?? [],
-                );
+                const files = [
+                    ...filesInAgentScope(agent, agentInput.changedFiles ?? []),
+                    ...ignoredFilesInAgentScope(
+                        agent,
+                        ignoredChangedFiles ?? [],
+                    ),
+                ];
                 const run: CustomAgentRun = {
                     id: agent.id,
                     name: agent.name,

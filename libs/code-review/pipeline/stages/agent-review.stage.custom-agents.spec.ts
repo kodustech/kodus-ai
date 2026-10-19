@@ -439,6 +439,70 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
         expect(severities).toEqual(['partial', 'partial', 'partial']);
     });
 
+    describe('ignored files', () => {
+        const ignoredFileChanges = [
+            { filename: 'package.json', status: 'modified', patch: PATCH },
+            { filename: 'pnpm-lock.yaml', status: 'modified', patch: PATCH },
+        ];
+        const ledgerAndManifest = agent({
+            scope: { include: ['src/**', 'package.json'] },
+        });
+
+        it('hands the orchestrator only the ignored files an agent names, as fetched', async () => {
+            const { stage, reviewOrchestrator } = makeStage(output([]));
+
+            await run(
+                stage,
+                makeContext([ledgerAndManifest], { ignoredFileChanges }),
+            );
+
+            const call = reviewOrchestrator.execute.mock.calls[0][0];
+            expect(call.changedFiles.map((f: any) => f.filename)).toEqual([
+                'src/ledger.ts',
+            ]);
+            expect(
+                call.ignoredChangedFiles.map((f: any) => f.filename),
+            ).toEqual(['package.json']);
+            expect(call.ignoredChangedFiles[0]).toBe(ignoredFileChanges[0]);
+        });
+
+        it('hands the orchestrator no ignored file without custom agents', async () => {
+            const { stage, reviewOrchestrator } = makeStage(output([]));
+
+            await run(stage, makeContext([], { ignoredFileChanges }));
+
+            expect(
+                reviewOrchestrator.execute.mock.calls[0][0].ignoredChangedFiles,
+            ).toEqual([]);
+        });
+
+        it("anchors an agent's finding on an ignored file to that file's hunks", async () => {
+            const { stage } = makeStage(
+                output([
+                    finding({
+                        relevantFile: 'package.json',
+                        suggestionContent: 'The new dependency is unpinned.',
+                    }),
+                    finding({
+                        relevantFile: 'package.json',
+                        relevantLinesStart: 90,
+                        relevantLinesEnd: 91,
+                        suggestionContent: 'Outside every hunk.',
+                    }),
+                ]),
+            );
+
+            const result = await run(
+                stage,
+                makeContext([ledgerAndManifest], { ignoredFileChanges }),
+            );
+
+            expect(contents(result.validSuggestions)).toEqual([
+                'The new dependency is unpinned.',
+            ]);
+        });
+    });
+
     describe('dedup against native findings and Kody Rules', () => {
         const native = (over: Record<string, any> = {}) => ({
             ...finding({

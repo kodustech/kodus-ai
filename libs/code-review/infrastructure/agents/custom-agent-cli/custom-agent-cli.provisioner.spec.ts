@@ -159,6 +159,22 @@ describe('provisionCustomAgentClis', () => {
         expect(sb.run).not.toHaveBeenCalled();
     });
 
+    it('installs for an agent whose only file is an ignored one it names', async () => {
+        const manifest = agent({ scope: { include: ['package.json'] } });
+        const broad = agent({
+            id: 'agent-2',
+            name: 'Json reviewer',
+            scope: { include: ['**/*.json'] },
+        });
+        const result = await provisionCustomAgentClis({
+            sandbox: sandbox('e2b'),
+            agents: [manifest, broad],
+            changedFiles: ['docs/readme.md'],
+            ignoredFiles: ['package.json'],
+        });
+        expect(Object.keys(result.byAgentId)).toEqual(['agent-1']);
+    });
+
     it('installs the CLIs of a disabled agent asked for by `@kody -v`', async () => {
         const sb = sandbox('e2b');
         const result = await provisionCustomAgentClis({

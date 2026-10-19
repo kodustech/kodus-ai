@@ -9,6 +9,10 @@ import {
     IPullRequestManagerService,
     PULL_REQUEST_MANAGER_SERVICE_TOKEN,
 } from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
+import {
+    ignoredFilesNamedByAgents,
+    selectCustomAgents,
+} from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
 import {
     convertToUnifiedDiffWithLineNumbers,
@@ -174,13 +178,52 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
 
         const stats = this.getStatsForPR(filesWithLineNumbers);
 
+        const ignoredFileChanges = await this.withContentForCustomAgents(
+            context,
+            ignoredList?.filter((f) => f.status !== 'removed') || [],
+        );
+
         return this.updateContext(context, (draft) => {
             draft.changedFiles = filesWithLineNumbers;
             draft.pullRequest.stats = stats;
             draft.ignoredFiles = ignoredList?.map((f) => f.filename) || [];
-            draft.ignoredFileChanges =
-                ignoredList?.filter((f) => f.status !== 'removed') || [];
+            draft.ignoredFileChanges = ignoredFileChanges;
         });
+    }
+
+    /**
+     * A custom agent reviews an ignored file one of its include globs names
+     * explicitly (#2172), so those files get content and line numbers as the
+     * reviewed ones do; the rest stay as listed. Without such an agent
+     * nothing more is fetched.
+     */
+    private async withContentForCustomAgents(
+        context: CodeReviewPipelineContext,
+        ignoredFileChanges: FileChange[],
+    ): Promise<FileChange[]> {
+        const named = ignoredFilesNamedByAgents(
+            selectCustomAgents(
+                context.codeReviewConfig?.customAgents,
+                context.onlyCustomAgent,
+            ),
+            ignoredFileChanges,
+        );
+        if (!named.length) {
+            return ignoredFileChanges;
+        }
+        const enriched = new Map(
+            this.prepareFilesWithLineNumbers(
+                await this.pullRequestHandlerService.enrichFilesWithContent(
+                    context.organizationAndTeamData,
+                    context.repository,
+                    context.pullRequest,
+                    named,
+                ),
+            ).map((file) => [file.filename, file]),
+        );
+        return ignoredFileChanges.map(
+            (file) => enriched.get(file.filename) ?? file,
+        );
     }
 
     private validateFiles(

@@ -273,6 +273,95 @@ describe('ReviewOrchestratorService — custom agents', () => {
         ).toBe(previousDecisions);
     });
 
+    describe('ignored files', () => {
+        const ignoredChangedFiles = [
+            { filename: 'package.json', patch: '@@ -1 +1 @@\n-a\n+b' },
+            { filename: 'infra/envs/prod/main.tf', patch: '@@ -1 +1 @@\n-a\n+b' },
+        ];
+
+        it('gives an agent the ignored files its globs name, and no one else', async () => {
+            const { service, generalist, kodyRules, customCalls } = setup();
+
+            await service.execute(
+                inputFor({
+                    ignoredChangedFiles,
+                    customAgents: [
+                        agentConfig({
+                            scope: {
+                                include: ['src/ledger/**', 'package.json'],
+                                exclude: ['**/*.spec.ts'],
+                            },
+                        }),
+                        agentConfig({
+                            id: 'agent-2',
+                            name: 'Infra',
+                            scope: { include: ['infra/**/*.tf'] },
+                        }),
+                        agentConfig({
+                            id: 'agent-3',
+                            name: 'Everything',
+                            scope: { include: ['**/*'] },
+                        }),
+                    ],
+                }),
+            );
+
+            const seen = (id: string) =>
+                customCalls.get(id)!.changedFiles.map((f) => f.filename);
+            expect(seen('agent-1')).toEqual([
+                'src/ledger/post-entry.ts',
+                'package.json',
+            ]);
+            expect(seen('agent-2')).toEqual(['infra/envs/prod/main.tf']);
+            expect(seen('agent-3')).toEqual(files.map((f) => f.filename));
+            for (const builtIn of [generalist, kodyRules]) {
+                const call = (builtIn.execute.mock.calls[0] as any[])[0];
+                expect(
+                    call.changedFiles.map((f: any) => f.filename),
+                ).toEqual(files.map((f) => f.filename));
+                expect(call.ignoredChangedFiles).toBeUndefined();
+            }
+        });
+
+        it('runs an agent whose only files are ignored files it names', async () => {
+            const { service, customCalls } = setup();
+
+            const out = await service.execute(
+                inputFor({
+                    ignoredChangedFiles,
+                    customAgents: [
+                        agentConfig({ scope: { include: ['package.json'] } }),
+                    ],
+                }),
+            );
+
+            expect(
+                customCalls.get('agent-1')!.changedFiles.map((f) => f.filename),
+            ).toEqual(['package.json']);
+            expect(out.customAgentRuns).toEqual([
+                expect.objectContaining({ id: 'agent-1', status: 'ran' }),
+            ]);
+        });
+
+        it('does not run an agent whose broad globs match only ignored files', async () => {
+            const { service, factory } = setup();
+
+            const out = await service.execute(
+                inputFor({
+                    ignoredChangedFiles,
+                    customAgents: [
+                        agentConfig({ scope: { include: ['**/*.json'] } }),
+                    ],
+                }),
+            );
+
+            expect(factory.create).not.toHaveBeenCalled();
+            expect(out.customAgentRuns).toEqual([
+                expect.objectContaining({ status: 'no-matching-files' }),
+            ]);
+        });
+    });
+
     it('skips an agent whose globs match no changed file and records it', async () => {
         const { service, factory } = setup();
 

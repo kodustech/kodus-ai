@@ -19,21 +19,7 @@ export function filesInAgentScope<T extends { filename: string }>(
     agent: Pick<CustomAgentConfig, 'scope'>,
     changedFiles: readonly T[],
 ): T[] {
-    const globs = (list?: string[]) =>
-        (list ?? []).map((g) => (g ?? '').trim()).filter(Boolean);
-    // A `!glob` written among the includes is an exclusion: matched as a
-    // pattern of its own it matches every other file and widens the scope.
-    // `!(…)` is a negative extglob, an include pattern of its own.
-    const isNegation = (g: string) => g.startsWith('!') && !g.startsWith('!(');
-    const includeGlobs = globs(agent.scope?.include);
-    const include = includeGlobs.filter((g) => !isNegation(g));
-    const exclude = [
-        ...globs(agent.scope?.exclude),
-        ...includeGlobs
-            .filter(isNegation)
-            .map((g) => g.slice(1))
-            .filter(Boolean),
-    ];
+    const { include, exclude } = agentGlobs(agent);
     const includeAll = withLiteralBrackets(include);
     const excludeAll = withLiteralBrackets(exclude);
     return changedFiles.filter(
@@ -42,6 +28,93 @@ export function filesInAgentScope<T extends { filename: string }>(
                 isFileMatchingGlob(file.filename, includeAll)) &&
             !isFileMatchingGlob(file.filename, excludeAll),
     );
+}
+
+// The files the review's ignore paths set aside that an agent still reviews:
+// those one of its include globs names explicitly (namesFilesExplicitly) and
+// its excludes leave in. A team that ignores `package.json`, or a default
+// such as `**/prod/**`, still meant an agent written for `package.json` or
+// `infra/**/*.tf` to read it; a broad glob such as `**/*.ts` did not ask for
+// the ignored files, so it does not get them. Callers pass only files that
+// still exist: a deleted file is reviewed by no one.
+export function ignoredFilesInAgentScope<T extends { filename: string }>(
+    agent: Pick<CustomAgentConfig, 'scope'>,
+    ignoredFiles: readonly T[],
+): T[] {
+    const explicit = withLiteralBrackets(
+        agentGlobs(agent).include.filter(namesFilesExplicitly),
+    );
+    if (!explicit.length) {
+        return [];
+    }
+    return filesInAgentScope(agent, ignoredFiles).filter((file) =>
+        isFileMatchingGlob(file.filename, explicit),
+    );
+}
+
+/** The ignored files that at least one of `agents` reviews by
+ *  ignoredFilesInAgentScope; empty without agents. */
+export function ignoredFilesNamedByAgents<T extends { filename: string }>(
+    agents: ReadonlyArray<Pick<CustomAgentConfig, 'scope'>>,
+    ignoredFiles: readonly T[],
+): T[] {
+    if (!agents.length || !ignoredFiles.length) {
+        return [];
+    }
+    const named = new Set(
+        agents.flatMap((agent) =>
+            ignoredFilesInAgentScope(agent, ignoredFiles).map(
+                (file) => file.filename,
+            ),
+        ),
+    );
+    return ignoredFiles.filter((file) => named.has(file.filename));
+}
+
+// Whether an include glob names its files rather than sweeping them up: it
+// does when at least one of its path segments is literal, a directory or a
+// file name with no glob syntax in it. `package.json`, `apps/web/package.json`,
+// `**/Dockerfile`, `infra/**/*.tf` and `src/**` name files; `**`, `**/*`, `*`,
+// `**/*.ts` and `*.{ts,tsx}` have no literal segment and do not, and neither
+// does a segment that only starts literal (`Dockerfile.*`). `.` segments are
+// not names.
+export function namesFilesExplicitly(glob: string): boolean {
+    return glob
+        .trim()
+        .split('/')
+        .some(
+            (segment) => segment && segment !== '.' && !hasGlobSyntax(segment),
+        );
+}
+
+// `(` and `[` also open a literal Next.js route folder, `(shop)` or `[id]`;
+// read as glob syntax they can only make a segment non-literal, so such a
+// folder never names files on its own.
+const hasGlobSyntax = (segment: string) => /[*?[\]{}()]/.test(segment);
+
+/** An agent's include and exclude globs, trimmed, with a `!glob` written
+ *  among the includes moved to the excludes. */
+function agentGlobs(agent: Pick<CustomAgentConfig, 'scope'>): {
+    include: string[];
+    exclude: string[];
+} {
+    const globs = (list?: string[]) =>
+        (list ?? []).map((g) => (g ?? '').trim()).filter(Boolean);
+    // A `!glob` written among the includes is an exclusion: matched as a
+    // pattern of its own it matches every other file and widens the scope.
+    // `!(…)` is a negative extglob, an include pattern of its own.
+    const isNegation = (g: string) => g.startsWith('!') && !g.startsWith('!(');
+    const includeGlobs = globs(agent.scope?.include);
+    return {
+        include: includeGlobs.filter((g) => !isNegation(g)),
+        exclude: [
+            ...globs(agent.scope?.exclude),
+            ...includeGlobs
+                .filter(isNegation)
+                .map((g) => g.slice(1))
+                .filter(Boolean),
+        ],
+    };
 }
 
 /**
