@@ -507,6 +507,38 @@ describe('collectRepoInstructions — pointers to another file', () => {
         ]);
     });
 
+    it('gives a target named by two scoped pointers both scopes', async () => {
+        const result = await collectRepoInstructions({
+            ...files({
+                'billing/CLAUDE.md': '../shared.md',
+                'checkout/CLAUDE.md': '../shared.md',
+                'shared.md': guide,
+            }),
+            changedFiles: ['billing/pay.ts', 'checkout/cart.ts'],
+        });
+
+        expect(result.files.map((f) => [f.path, f.appliesTo])).toEqual([
+            ['shared.md', 'billing/**,checkout/**'],
+        ]);
+    });
+
+    it("passes a second pointer's scope on to the files its target points to", async () => {
+        const result = await collectRepoInstructions({
+            ...files({
+                'billing/CLAUDE.md': '../shared.md',
+                'checkout/CLAUDE.md': '../shared.md',
+                'shared.md': 'Rule shared.\n@docs/deep.md',
+                'docs/deep.md': guide,
+            }),
+            changedFiles: ['billing/pay.ts', 'checkout/cart.ts'],
+        });
+
+        expect(result.files.map((f) => [f.path, f.appliesTo])).toEqual([
+            ['shared.md', 'billing/**,checkout/**'],
+            ['docs/deep.md', 'billing/**,checkout/**'],
+        ]);
+    });
+
     it('follows a chain of pointers and stops at a cycle', async () => {
         const repo = files({
             'CLAUDE.md': '@a.md',

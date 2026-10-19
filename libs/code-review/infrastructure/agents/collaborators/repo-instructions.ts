@@ -331,6 +331,10 @@ export async function collectRepoInstructions(params: {
         (path) => ({ path }),
     );
     const seen = new Set<string>(candidates);
+    // A target can be named by pointers in several scopes; it applies to all
+    // of them, and so do the files it points to.
+    const scopes = new Map<string, Set<string>>();
+    const pointedFrom = new Map<string, string[]>();
     const budgetFull = () =>
         files.length >= limits.maxFiles || total >= limits.maxTotalBytes;
 
@@ -356,6 +360,7 @@ export async function collectRepoInstructions(params: {
                 continue;
             }
             appliesTo = globs ? globs.join(',') : scope ? `${scope}/**` : '**';
+            scopes.set(path, new Set([appliesTo]));
         }
 
         const { refs, pure } = pointersIn(content);
@@ -365,6 +370,10 @@ export async function collectRepoInstructions(params: {
             const candidatesForRef = resolvePointer(ref, path);
             const known = candidatesForRef.find((c) => seen.has(c));
             if (known) {
+                pointedFrom.set(known, [
+                    ...(pointedFrom.get(known) ?? []),
+                    path,
+                ]);
                 resolved = true;
                 continue;
             }
@@ -378,6 +387,7 @@ export async function collectRepoInstructions(params: {
                 if ((await read(target))?.trim()) {
                     targets.push(target);
                     seen.add(target);
+                    pointedFrom.set(target, [path]);
                     resolved = true;
                     break;
                 }
@@ -407,9 +417,33 @@ export async function collectRepoInstructions(params: {
         files.push({ path, content: text, appliesTo, truncated: cut });
     }
 
+    // Spread each pointer's scopes to its targets until nothing changes; the
+    // graph is at most a few files, and cycles settle.
+    let changedScopes = true;
+    while (changedScopes) {
+        changedScopes = false;
+        for (const [target, pointers] of pointedFrom) {
+            const into = scopes.get(target) ?? new Set<string>();
+            scopes.set(target, into);
+            for (const pointer of pointers) {
+                for (const scope of scopes.get(pointer) ?? []) {
+                    if (!into.has(scope)) {
+                        into.add(scope);
+                        changedScopes = true;
+                    }
+                }
+            }
+        }
+    }
+
     const used = new Set([...files.map((f) => f.path), ...dropped]);
     return {
-        files,
+        files: files.map((file) => ({
+            ...file,
+            appliesTo: [...(scopes.get(file.path) ?? [file.appliesTo])].join(
+                ',',
+            ),
+        })),
         otherFiles: prose
             .filter((p) => !used.has(p))
             .slice(0, limits.maxOtherFiles),
