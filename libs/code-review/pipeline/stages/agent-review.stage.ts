@@ -428,10 +428,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     }
 
     /**
-     * The custom agents this review may dispatch (#2172): the configured
-     * ones, only when the org has the `custom-agents` beta. A gate that
-     * cannot be evaluated runs none, so a review never changes shape on an
-     * outage.
+     * The custom agents this review may dispatch (#2172): the enabled ones,
+     * or the one `@kody -v` names even when it is off.
      */
     async resolveCustomAgents(
         context: CodeReviewPipelineContext,
