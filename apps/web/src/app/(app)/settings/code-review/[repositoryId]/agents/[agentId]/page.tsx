@@ -140,6 +140,7 @@ function AgentContent() {
                 description: customAgentsSaveErrorMessage(
                     error,
                     "Couldn't save the agent. Check the fields marked above and try again.",
+                    agents,
                 ),
                 variant: "danger",
             });

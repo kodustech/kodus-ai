@@ -138,6 +138,7 @@ function SkillsContent() {
                 description: customAgentsSaveErrorMessage(
                     error,
                     "Couldn't save. Check the limits and try again.",
+                    agents,
                 ),
                 variant: "danger",
             });

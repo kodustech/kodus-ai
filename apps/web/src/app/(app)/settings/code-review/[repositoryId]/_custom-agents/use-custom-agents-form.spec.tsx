@@ -9,6 +9,7 @@ import { FormProvider, useForm, type UseFormReturn } from "react-hook-form";
 
 import {
     CodeReviewSettingsConflictError,
+    CodeReviewSettingsValidationError,
     customAgentsSaveErrorMessage,
     expectedCustomAgentsRevisions,
 } from "../../_utils/settings-save-conflict";
@@ -215,6 +216,32 @@ describe("customAgentsSaveErrorMessage", () => {
                 "Couldn't save.",
             ),
         ).toMatch(/someone else changed these agents.*reload/i);
+    });
+
+    it("names the agent and the field the server refused", () => {
+        // One oversized agent fails the whole save; the toast used to say
+        // only "An error occurred", with no way to find the agent.
+        expect(
+            customAgentsSaveErrorMessage(
+                new CodeReviewSettingsValidationError([
+                    "configValue.customAgents.1.tools.astGrepConfig allows at most 64000 bytes",
+                ]),
+                "Couldn't save.",
+                [ledger, audit],
+            ),
+        ).toBe("Audit reviewer: tools.astGrepConfig allows at most 64000 bytes");
+    });
+
+    it("falls back to the caller's message for a refusal about something else", () => {
+        expect(
+            customAgentsSaveErrorMessage(
+                new CodeReviewSettingsValidationError([
+                    "configValue.language must be a string",
+                ]),
+                "Couldn't save.",
+                [ledger],
+            ),
+        ).toBe("Couldn't save.");
     });
 
     it("falls back to the caller's message for other errors", () => {

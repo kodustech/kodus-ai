@@ -112,6 +112,11 @@ function ReviewScopeContent() {
                 description: customAgentsSaveErrorMessage(
                     error,
                     "An error occurred while saving the settings. Please try again.",
+                    (
+                        form.getValues("customAgents" as never) as
+                            | { value?: { name: string }[] }
+                            | undefined
+                    )?.value,
                 ),
                 variant: "danger",
             });

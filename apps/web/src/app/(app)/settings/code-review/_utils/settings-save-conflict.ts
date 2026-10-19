@@ -14,6 +14,14 @@ export class CodeReviewSettingsConflictError extends Error {
     }
 }
 
+/** The server refused the save as invalid; nothing was written. */
+export class CodeReviewSettingsValidationError extends Error {
+    constructor(readonly messages: string[]) {
+        super(messages.join("; "));
+        this.name = "CodeReviewSettingsValidationError";
+    }
+}
+
 export const STALE_CUSTOM_AGENTS_MESSAGE =
     "Someone else changed these agents since you opened them. Reload the page to see their changes; your edits stay here until you leave, so copy what you need first.";
 
@@ -21,10 +29,26 @@ export const STALE_CUSTOM_AGENTS_MESSAGE =
 export const customAgentsSaveErrorMessage = (
     error: unknown,
     fallback: string,
-) =>
-    error instanceof CodeReviewSettingsConflictError
-        ? STALE_CUSTOM_AGENTS_MESSAGE
-        : fallback;
+    /** The agents saved, to name the one a refusal is about. */
+    agents?: ReadonlyArray<{ name: string }>,
+) => {
+    if (error instanceof CodeReviewSettingsConflictError) {
+        return STALE_CUSTOM_AGENTS_MESSAGE;
+    }
+    // "configValue.customAgents.5.tools.astGrepConfig allows at most …": one
+    // agent the server refuses fails the whole save, so the toast says which.
+    const refused =
+        error instanceof CodeReviewSettingsValidationError
+            ? error.messages.flatMap((message) => {
+                  const match = /customAgents\.(\d+)\.(.+)$/.exec(message);
+                  if (!match) return [];
+                  const index = Number(match[1]);
+                  const name = agents?.[index]?.name ?? `Agent ${index + 1}`;
+                  return [`${name}: ${match[2]}`];
+              })
+            : [];
+    return refused.length ? refused.join(" · ") : fallback;
+};
 
 export type ExpectedCustomAgentsRevisions = {
     customAgents?: string;

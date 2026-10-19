@@ -24,6 +24,7 @@ import {
 } from "../_utils/changed-config";
 import {
     CodeReviewSettingsConflictError,
+    CodeReviewSettingsValidationError,
     expectedCustomAgentsRevisions,
     withoutListRevisions,
 } from "../_utils/settings-save-conflict";
@@ -188,6 +189,16 @@ export const useCodeReviewSettingsMutation = (params: {
         // written, and the form keeps the user's edits.
         if ((result as { error?: unknown })?.error === 409) {
             throw new CodeReviewSettingsConflictError();
+        }
+
+        const refused = (result as { messages?: unknown })?.messages;
+        if (
+            (result as { error?: unknown })?.error === 400 &&
+            (Array.isArray(refused) || typeof refused === "string")
+        ) {
+            throw new CodeReviewSettingsValidationError(
+                ([] as unknown[]).concat(refused).map(String),
+            );
         }
 
         if ((result as { error?: string })?.error) {

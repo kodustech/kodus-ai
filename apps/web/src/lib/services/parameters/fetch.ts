@@ -147,7 +147,11 @@ export const createOrUpdateCodeReviewParameter = async (
 
         return response.data;
     } catch (error: any) {
-        return { error: error.response?.status || "Erro desconhecido" };
+        return {
+            error: error.response?.status || "Erro desconhecido",
+            // What the server refused, e.g. which agent field is too long.
+            messages: error.response?.data?.message,
+        };
     }
 };
 

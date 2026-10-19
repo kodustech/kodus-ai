@@ -7,7 +7,10 @@ import {
 import { act, renderHook } from "@testing-library/react";
 import { useForm } from "react-hook-form";
 
-import { CodeReviewSettingsConflictError } from "../_utils/settings-save-conflict";
+import {
+    CodeReviewSettingsConflictError,
+    CodeReviewSettingsValidationError,
+} from "../_utils/settings-save-conflict";
 import { useCodeReviewSettingsMutation } from "./use-code-review-settings-mutation";
 
 const createOrUpdateCodeReviewParameter = jest.fn();
@@ -128,6 +131,30 @@ describe("useCodeReviewSettingsMutation — stale custom agents", () => {
         expect(result.current.form.control._defaultValues.customAgents).toEqual(
             loaded.customAgents,
         );
+    });
+
+    it("throws what the server refused on 400, so the toast can name it", async () => {
+        createOrUpdateCodeReviewParameter.mockResolvedValue({
+            error: 400,
+            messages: [
+                "configValue.customAgents.0.tools.astGrepConfig allows at most 64000 bytes",
+            ],
+        });
+        const result = setup();
+
+        let thrown: unknown;
+        await act(async () => {
+            try {
+                await result.current.saveSettings(draft as any);
+            } catch (error) {
+                thrown = error;
+            }
+        });
+
+        expect(thrown).toBeInstanceOf(CodeReviewSettingsValidationError);
+        expect((thrown as CodeReviewSettingsValidationError).messages).toEqual([
+            "configValue.customAgents.0.tools.astGrepConfig allows at most 64000 bytes",
+        ]);
     });
 
     it("keeps the generic error for any other failure", async () => {
