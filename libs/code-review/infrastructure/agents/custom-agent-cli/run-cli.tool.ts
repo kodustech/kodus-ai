@@ -41,6 +41,8 @@ export interface RunCliToolDeps {
     decrypt: (ciphertext: string) => string;
     /** Told of each call and the output the agent got. */
     onRun?: (run: Omit<CustomAgentCliRun, 'agentId'>) => void;
+    /** The review's ids (organization, team, repository, PR) for the logs. */
+    logContext?: Record<string, unknown>;
 }
 
 function describe(installed: readonly InstalledCustomAgentCli[]): string {
@@ -127,6 +129,16 @@ export async function executeRunCli(
                 value = '';
             }
             if (!value) {
+                logger.warn({
+                    message: `runCli: secret ${secret.env} of ${cli.name} could not be decrypted; not run`,
+                    context: 'runCli',
+                    metadata: {
+                        ...deps.logContext,
+                        agentId: entry.agentId,
+                        cli: cli.name,
+                        secretEnv: secret.env,
+                    },
+                });
                 return `Error: credential ${secret.env} for ${cli.name} is not available; the CLI was not run.`;
             }
             envs[secret.env] = value;
@@ -159,7 +171,12 @@ export async function executeRunCli(
             logger.warn({
                 message: `runCli failed to execute ${cli.name}`,
                 context: 'runCli',
-                metadata: { agentId: entry.agentId, cli: cli.name, message },
+                metadata: {
+                    ...deps.logContext,
+                    agentId: entry.agentId,
+                    cli: cli.name,
+                    message,
+                },
             });
             return capCliOutput(`Error: ${message}`);
         }

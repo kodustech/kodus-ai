@@ -19,6 +19,15 @@
 jest.mock('@libs/llm/model-invocation', () => ({
     resolveModelConfig: jest.fn(),
 }));
+const mockLog = jest.fn();
+jest.mock('@libs/core/log/logger', () => ({
+    createLogger: () => ({
+        log: (...args: unknown[]) => mockLog(...args),
+        warn: jest.fn(),
+        error: jest.fn(),
+        debug: jest.fn(),
+    }),
+}));
 
 import { MockLanguageModelV3 } from 'ai/test';
 import { resolveModelConfig } from '@libs/llm/model-invocation';
@@ -240,7 +249,10 @@ function tools() {
     ]);
 }
 
-async function run(withConventionPath: boolean) {
+async function run(
+    withConventionPath: boolean,
+    extra: Record<string, unknown> = {},
+) {
     const astGrepLog = new AstGrepOutputLog();
     const registry = withConventionPath
         ? recordAstGrepOutputs(tools(), astGrepLog)
@@ -263,6 +275,7 @@ async function run(withConventionPath: boolean) {
             modelId: 'mock',
             tools: registry,
             skipHeavyPasses: true,
+            ...extra,
             ...(withConventionPath && {
                 conventionCheck: { readGuide, guideFiles: [GUIDE], astGrepLog },
             }),
@@ -324,6 +337,37 @@ describe('convention findings: HV2 path vs convention path (same findings)', () 
         expect(
             r.droppedByQuoteCheck.every((q) => q.reason === 'quote-not-found'),
         ).toBe(true);
+    });
+
+    it('logs the quote gate drops by reason with the review ids, never the quote', async () => {
+        mockLog.mockClear();
+        await run(true, {
+            telemetryMetadata: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+                repositoryId: 'repo-1',
+                pullRequestId: 7,
+            },
+            agentName: 'kodus-custom-agent-valves',
+        });
+        const call = mockLog.mock.calls.find(([entry]) =>
+            String(entry?.message).startsWith('[quote-check]'),
+        );
+        expect(call?.[0].metadata).toEqual(
+            expect.objectContaining({
+                organizationId: 'org-1',
+                teamId: 'team-1',
+                repositoryId: 'repo-1',
+                pullRequestId: 7,
+                agent: 'kodus-custom-agent-valves',
+                byReason: expect.objectContaining({
+                    'quote not in guide': 1,
+                }),
+            }),
+        );
+        expect(JSON.stringify(call?.[0])).not.toContain(
+            LOGGING.source.quote,
+        );
     });
 
     it('the convention judge sees the quoted rule and its guide section; the ast-grep match skips the judge', async () => {

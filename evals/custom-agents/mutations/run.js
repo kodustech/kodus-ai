@@ -14,7 +14,8 @@
 //
 // Exit: 0 every measured check went red and the tree is restored, 1 a check
 // stayed green (the property is not proven falsifiable by it), 2 a patch did
-// not apply or the tree was not restored.
+// not apply, the tree was not restored, nothing was selected, or more than 5%
+// of the checks were not measured (--skip-model included).
 const fs = require('fs');
 const path = require('path');
 const { spawn, spawnSync } = require('child_process');
@@ -274,7 +275,19 @@ async function main() {
             `| ${r.property} | ${r.patch} | ${r.check} | ${r.measured ? (r.red ? 'red' : '**green: not falsified**') : 'not measured'} |`,
         );
     console.log(`\ntree restored after every patch: ${broken ? 'NO' : 'yes'}`);
-    return rows.some((r) => r.measured && !r.red) ? 1 : 0;
+    if (rows.some((r) => r.measured && !r.red)) return 1;
+    if (!rows.length) {
+        console.error('not measured: no mutation selected');
+        return 2;
+    }
+    const unmeasured = rows.filter((r) => !r.measured).length;
+    if (unmeasured / rows.length > 0.05) {
+        console.error(
+            `not measured: ${unmeasured} of ${rows.length} checks (more than 5%)`,
+        );
+        return 2;
+    }
+    return 0;
 }
 
 main()

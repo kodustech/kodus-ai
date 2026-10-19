@@ -53,9 +53,12 @@ runs the checks that hold its property, expects every one red (a jest failure,
 or this eval's gate at exit 1; exit 2 is "not measured", never red), reverts,
 checks the touched files are clean again, and prints the table. `--only=P3`
 runs one property, `--model=<id>` picks the real model, `--skip-model` skips it.
+More than 5% of the checks not measured, `--skip-model` included, exits 2.
 
 Run on ca/eval, 2026-10-19 (`node evals/custom-agents/mutations/run.js`,
-exit 0). Every patch was reverted and its files checked clean after each one.
+exit 0 then; with 2 of its 20 checks not measured, more than 5%, the runner
+now exits 2 on the same run). Every patch was reverted and its files checked
+clean after each one.
 
 | Property | Break (`mutations/`) | Check | Result |
 |---|---|---|---|

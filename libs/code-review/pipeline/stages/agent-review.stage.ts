@@ -445,6 +445,51 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     }
 
     /**
+     * One line per review with what each custom agent did (#2172): ran or
+     * why not, findings kept, and what the checks and filters set aside, by
+     * reason. Counts and ids only. Disabled agents are listed so "my agent
+     * did not comment" is answered from the logs.
+     */
+    private logCustomAgentOutcome(
+        context: CodeReviewPipelineContext,
+        runs: ReturnType<typeof summarizeCustomAgentRuns>,
+        discarded: Array<Partial<CodeSuggestion>>,
+    ): void {
+        const configured = context.codeReviewConfig?.customAgents ?? [];
+        if (!configured.length) return;
+        const disabled = context.onlyCustomAgent
+            ? []
+            : configured.filter((a) => !a?.enabled).map((a) => a.id);
+        this.logger.log({
+            message: `[AGENT] Custom agents outcome for PR#${context.pullRequest?.number}`,
+            context: this.stageName,
+            metadata: {
+                organizationId: context.organizationAndTeamData?.organizationId,
+                teamId: context.organizationAndTeamData?.teamId,
+                repositoryId: context.repository?.id,
+                repositoryName: context.repository?.name,
+                prNumber: context.pullRequest?.number,
+                onlyCustomAgent: context.onlyCustomAgent,
+                disabled,
+                agents: runs.map((run) => ({
+                    id: run.id,
+                    slug: run.slug,
+                    status: run.status,
+                    kept: run.posted,
+                    droppedByChecks: run.droppedByVerify,
+                    discarded: discarded
+                        .filter((s) => s.customAgent?.id === run.id)
+                        .reduce<Record<string, number>>((counts, s) => {
+                            const why = String(s.priorityStatus ?? 'unknown');
+                            counts[why] = (counts[why] ?? 0) + 1;
+                            return counts;
+                        }, {}),
+                })),
+            },
+        });
+    }
+
+    /**
      * Skills and docs linked to the main review and to each custom agent,
      * read from the PR's target branch (#2172). See resolveReviewKnowledge.
      */
@@ -467,6 +512,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             organizationAndTeamData: context.organizationAndTeamData,
             repository: context.repository,
             logContext: this.stageName,
+            prNumber: context.pullRequest?.number,
         });
     }
 
@@ -1549,6 +1595,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             ),
                     ),
                 },
+                allDiscarded,
+            );
+            this.logCustomAgentOutcome(
+                context,
+                customAgentSummaries,
                 allDiscarded,
             );
             const prLevelSuggestions = deduped.filter(isPrLevelSuggestion);

@@ -142,6 +142,8 @@ export async function provisionCustomAgentClis(params: {
     /** Set when this review must not run CLIs at all; each skipped CLI gets
      *  a warning with this reason. */
     skipReason?: string;
+    /** The review's ids (organization, team, repository, PR) for the logs. */
+    logContext?: Record<string, unknown>;
 }): Promise<CustomAgentCliProvisioning> {
     const result: CustomAgentCliProvisioning = { byAgentId: {}, warnings: [] };
     const { sandbox } = params;
@@ -173,6 +175,16 @@ export async function provisionCustomAgentClis(params: {
     if (skipReason) {
         for (const agent of candidates) {
             for (const cli of agent.tools.cli ?? []) {
+                logger.log({
+                    message: `Custom agent CLI not installed: ${cli.name}`,
+                    context: 'provisionCustomAgentClis',
+                    metadata: {
+                        ...params.logContext,
+                        agentId: agent.id,
+                        cli: cli.name,
+                        reason: skipReason,
+                    },
+                });
                 result.warnings.push(
                     buildCliInstallFailedWarning({
                         agentName: agent.name,
@@ -185,11 +197,28 @@ export async function provisionCustomAgentClis(params: {
         return result;
     }
 
+    // One log line per CLI the agent runs without: the reason, and for a
+    // script that ran, its exit code and the tail of its stderr.
     const fail = (
         agent: CustomAgentConfig,
         cli: CliToolConfig,
         reason: string,
+        run?: { exitCode?: number; stderr?: string },
     ) => {
+        logger.warn({
+            message: `Custom agent CLI unavailable: ${cli.name} (${reason})`,
+            context: 'provisionCustomAgentClis',
+            metadata: {
+                ...params.logContext,
+                agentId: agent.id,
+                cli: cli.name,
+                reason,
+                ...(run && {
+                    exitCode: run.exitCode,
+                    stderr: (run.stderr ?? '').slice(-2_000),
+                }),
+            },
+        });
         result.warnings.push(
             buildCliInstallFailedWarning({
                 agentName: agent.name,
@@ -238,17 +267,7 @@ export async function provisionCustomAgentClis(params: {
                     !binaryPath ||
                     !expected.includes(binaryPath)
                 ) {
-                    logger.warn({
-                        message: `Custom agent CLI install failed: ${cli.name}`,
-                        context: 'provisionCustomAgentClis',
-                        metadata: {
-                            agentId: agent.id,
-                            cli: cli.name,
-                            exitCode: run.exitCode,
-                            stderr: (run.stderr ?? '').slice(-2_000),
-                        },
-                    });
-                    fail(agent, cli, 'install failed');
+                    fail(agent, cli, 'install failed', run);
                     return null;
                 }
                 return { agent, cli, identity, binaryPath };
@@ -268,17 +287,7 @@ export async function provisionCustomAgentClis(params: {
             60_000,
         );
         if (fence.exitCode !== 0) {
-            logger.warn({
-                message: `Custom agent CLI network fence failed: ${cli.name}`,
-                context: 'provisionCustomAgentClis',
-                metadata: {
-                    agentId: agent.id,
-                    cli: cli.name,
-                    exitCode: fence.exitCode,
-                    stderr: (fence.stderr ?? '').slice(-2_000),
-                },
-            });
-            fail(agent, cli, 'network allowlist could not be applied');
+            fail(agent, cli, 'network allowlist could not be applied', fence);
             continue;
         }
         (result.byAgentId[agent.id] ??= []).push({

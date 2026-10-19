@@ -4,6 +4,16 @@ import type {
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import type { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 
+const mockWarn = jest.fn();
+jest.mock('@libs/core/log/logger', () => ({
+    createLogger: () => ({
+        log: jest.fn(),
+        warn: (...args: unknown[]) => mockWarn(...args),
+        error: jest.fn(),
+        debug: jest.fn(),
+    }),
+}));
+
 import { cliSandboxIdentity } from './cli-command';
 import {
     customAgentMatchesFiles,
@@ -221,7 +231,9 @@ describe('provisionCustomAgentClis', () => {
 
     it('refuses an unpinned install without touching the sandbox', async () => {
         const sb = sandbox('e2b');
+        mockWarn.mockClear();
         const result = await provisionCustomAgentClis({
+            logContext: { organizationId: 'org-1', prNumber: 7 },
             sandbox: sb,
             agents: [
                 agent({
@@ -238,6 +250,18 @@ describe('provisionCustomAgentClis', () => {
             }),
         ]);
         expect(sb.run).not.toHaveBeenCalled();
+        // A refusal before any install is logged too, with the review's ids.
+        expect(mockWarn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    organizationId: 'org-1',
+                    prNumber: 7,
+                    agentId: 'agent-1',
+                    cli: 'lintkit',
+                    reason: expect.stringContaining('pin'),
+                }),
+            }),
+        );
     });
 
     it('reports a failed install and leaves the agent without that CLI', async () => {

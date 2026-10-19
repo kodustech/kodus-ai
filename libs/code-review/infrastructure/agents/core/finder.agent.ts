@@ -840,7 +840,13 @@ export async function runFinderWithVerify(
     // ast-grep call in this run actually matched is proven and skips both.
     // Without `conventionCheck` everything below sees only `bugs` = all.
     const route = params.conventionCheck
-        ? await routeByKind(suggestions, params.conventionCheck)
+        ? await routeByKind(suggestions, params.conventionCheck, {
+              organizationId: params.telemetryMetadata?.organizationId,
+              teamId: params.telemetryMetadata?.teamId,
+              repositoryId: params.telemetryMetadata?.repositoryId,
+              pullRequestId: params.telemetryMetadata?.pullRequestId,
+              agent: params.agentName,
+          })
         : {
               bugs: suggestions,
               proven: [] as FinderSuggestion[],
@@ -1088,6 +1094,7 @@ export async function verifyFindings(
 async function routeByKind(
     suggestions: FinderSuggestion[],
     check: ConventionCheckParams,
+    logContext: Record<string, unknown> = {},
 ): Promise<{
     bugs: FinderSuggestion[];
     proven: FinderSuggestion[];
@@ -1134,6 +1141,16 @@ async function routeByKind(
             context: 'finder',
             serviceName: 'finder',
             metadata: {
+                ...logContext,
+                // Counts by why: the detail names the guide, never the quote.
+                byReason: quoted.rejected.reduce<Record<string, number>>(
+                    (counts, r) => {
+                        const why = quoteRejectReason(r.detail);
+                        counts[why] = (counts[why] ?? 0) + 1;
+                        return counts;
+                    },
+                    {},
+                ),
                 rejected: quoted.rejected.map((r) => ({
                     file: r.finding.relevantFile,
                     guide: r.finding.source?.file,
@@ -1151,6 +1168,19 @@ async function routeByKind(
         ),
         rejected: quoted.rejected,
     };
+}
+
+/** A quote-check rejection's detail without the guide's path, so the log
+ *  counts rejections by why. */
+function quoteRejectReason(detail: string): string {
+    if (detail.startsWith('quote not found in ')) return 'quote not in guide';
+    if (detail.endsWith(' is not a guide linked to this review'))
+        return 'guide not linked';
+    if (detail.endsWith(' not found on the target branch'))
+        return 'guide not on target branch';
+    if (detail.startsWith('could not list the files of '))
+        return 'skill files not listable';
+    return detail;
 }
 
 /** Files the finder actually investigated via readFile/checkTypes — the "strong

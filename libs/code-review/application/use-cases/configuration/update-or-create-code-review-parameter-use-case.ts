@@ -631,10 +631,29 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             return result;
         } catch (error) {
             if (
-                error instanceof ForbiddenException ||
                 error instanceof BadRequestException ||
                 error instanceof ConflictException
             ) {
+                // A refused save (validation, stale revision): the reason
+                // names agents, paths or secret names, never values.
+                this.logger.warn({
+                    message: `Code review settings save refused (${error.getStatus()}): ${error.message}`,
+                    context: UpdateOrCreateCodeReviewParameterUseCase.name,
+                    metadata: {
+                        organizationId:
+                            body.organizationAndTeamData?.organizationId,
+                        teamId: body.organizationAndTeamData?.teamId,
+                        repositoryId: body.repositoryId,
+                        directoryId: body.directoryId,
+                        directoryPath: body.directoryPath,
+                        status: error.getStatus(),
+                        reason: error.message,
+                        source: body.actor?.source,
+                    },
+                });
+                throw error;
+            }
+            if (error instanceof ForbiddenException) {
                 throw error;
             }
 

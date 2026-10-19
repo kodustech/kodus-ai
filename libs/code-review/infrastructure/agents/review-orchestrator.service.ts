@@ -164,6 +164,13 @@ export class ReviewOrchestratorService {
         const mainKnowledge = knowledgeByTarget?.get(
             KNOWLEDGE_MAIN_REVIEW_TARGET,
         );
+        const reviewLogContext = {
+            organizationId: agentInput.organizationAndTeamData?.organizationId,
+            teamId: agentInput.organizationAndTeamData?.teamId,
+            repositoryId: agentInput.repositoryId,
+            repositoryName: agentInput.repositoryFullName,
+            prNumber: agentInput.prNumber,
+        };
 
         // Determine which agents to run based on review options
         const agentTasks: Array<{
@@ -290,6 +297,16 @@ export class ReviewOrchestratorService {
                 customAgentRuns.push(run);
                 if (files.length === 0) {
                     run.status = 'no-matching-files';
+                    this.logger.log({
+                        message: `[AGENT] Custom agent ${slug} not run for PR#${agentInput.prNumber}: no changed file in its scope`,
+                        context: ReviewOrchestratorService.name,
+                        metadata: {
+                            ...reviewLogContext,
+                            customAgentId: agent.id,
+                            customAgentSlug: slug,
+                            reason: 'no-matching-files',
+                        },
+                    });
                     continue;
                 }
                 const provider = this.customAgentFactory.create(agent);
@@ -400,8 +417,9 @@ export class ReviewOrchestratorService {
                     context: ReviewOrchestratorService.name,
                     error,
                     metadata: {
+                        ...reviewLogContext,
                         agent: task.name,
-                        prNumber: agentInput.prNumber,
+                        customAgentId: task.customAgent?.id,
                         organizationAndTeamData:
                             agentInput.organizationAndTeamData,
                         durationMs: Date.now() - agentStart,
@@ -460,8 +478,9 @@ export class ReviewOrchestratorService {
                         message: `[AGENT] ${agentName} stopped at its ${result.value.finishReason} limit for PR#${agentInput.prNumber} with ${result.value.suggestions.length} suggestions — review is incomplete`,
                         context: ReviewOrchestratorService.name,
                         metadata: {
+                            ...reviewLogContext,
                             agent: agentName,
-                            prNumber: agentInput.prNumber,
+                            customAgentId: customAgent?.id,
                             finishReason: result.value.finishReason,
                             durationMs: result.value.durationMs,
                         },
@@ -477,11 +496,30 @@ export class ReviewOrchestratorService {
                         category: result.value.agentCategory ?? agentName,
                         unverifiedCount,
                     });
+                    this.logger.warn({
+                        message: `[AGENT] ${agentName} dropped ${unverifiedCount} finding(s) it could not verify for PR#${agentInput.prNumber}`,
+                        context: ReviewOrchestratorService.name,
+                        metadata: {
+                            ...reviewLogContext,
+                            agent: agentName,
+                            customAgentId: customAgent?.id,
+                            unverifiedCount,
+                        },
+                    });
                 }
 
                 this.logger.log({
                     message: `[AGENT] ${agentName} returned ${result.value.suggestions.length} suggestions in ${result.value.durationMs}ms`,
                     context: ReviewOrchestratorService.name,
+                    metadata: {
+                        ...reviewLogContext,
+                        agent: agentName,
+                        ...(customAgent && {
+                            customAgentId: customAgent.id,
+                            droppedByVerify:
+                                result.value.discardedByVerify?.length ?? 0,
+                        }),
+                    },
                 });
             } else {
                 const err =
@@ -509,8 +547,9 @@ export class ReviewOrchestratorService {
                     context: ReviewOrchestratorService.name,
                     error: err,
                     metadata: {
+                        ...reviewLogContext,
                         agent: agentName,
-                        prNumber: agentInput.prNumber,
+                        customAgentId: customAgent?.id,
                         organizationAndTeamData:
                             agentInput.organizationAndTeamData,
                     },

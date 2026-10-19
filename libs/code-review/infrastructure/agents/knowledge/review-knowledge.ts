@@ -45,11 +45,21 @@ export async function resolveReviewKnowledge(params: {
     repository: { id?: string | number; name?: string } | undefined;
     /** Who logs a failure (the caller's name). */
     logContext: string;
+    /** The pull request, for the logs. */
+    prNumber?: number;
 }): Promise<ReviewKnowledge> {
     const items = params.items ?? [];
     if (!items.length) return { warnings: [] };
     const { baseBranch, repository, customAgents } = params;
     if (!baseBranch || !repository?.id) return { warnings: [] };
+    const ids = {
+        organizationId: params.organizationAndTeamData?.organizationId,
+        teamId: params.organizationAndTeamData?.teamId,
+        repositoryId: repository.id,
+        repositoryName: repository.name,
+        prNumber: params.prNumber,
+        baseBranch,
+    };
 
     try {
         const reader = createBaseBranchReader({
@@ -78,16 +88,29 @@ export async function resolveReviewKnowledge(params: {
                     : names.get(target),
             ),
         );
+        // What could not be read or was cut, by target: codes and paths only,
+        // never the skill or doc text.
+        const problems = [...byTarget.entries()].flatMap(([target, resolved]) =>
+            resolved.warnings.map((w) => ({
+                target,
+                code: w.code,
+                path: w.path,
+            })),
+        );
+        if (problems.length) {
+            logger.warn({
+                message: `[AGENT] ${problems.length} linked skill/doc problem(s); the review used what could be read`,
+                context: params.logContext,
+                metadata: { ...ids, problems },
+            });
+        }
         return { byTarget, reader, warnings };
     } catch (err) {
         logger.warn({
             message: `[AGENT] Skills and docs could not be read; reviewing without them`,
             context: params.logContext,
             error: err,
-            metadata: {
-                organizationId: params.organizationAndTeamData?.organizationId,
-                repositoryId: repository?.id,
-            },
+            metadata: ids,
         });
         return {
             warnings: [

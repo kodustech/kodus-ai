@@ -285,8 +285,16 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
         }
 
         const org = context.organizationAndTeamData;
+        const logContext = {
+            organizationId: org?.organizationId,
+            teamId: org?.teamId,
+            repositoryId: context.repository?.id,
+            repositoryName: context.repository?.name,
+            prNumber: context.pullRequest?.number,
+        };
         try {
             const provisioning = await provisionCustomAgentClis({
+                logContext,
                 sandbox,
                 agents,
                 onlyCustomAgent: context.onlyCustomAgent,
@@ -307,7 +315,7 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
                     0,
                 )} installed, ${provisioning.warnings.length} failed`,
                 context: this.stageName,
-                metadata: { organizationId: org.organizationId },
+                metadata: logContext,
             });
             return provisioning;
         } catch (error) {
@@ -315,7 +323,7 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
                 message: 'Custom agent CLI provisioning failed',
                 context: this.stageName,
                 error,
-                metadata: { organizationId: org?.organizationId },
+                metadata: logContext,
             });
             return undefined;
         }

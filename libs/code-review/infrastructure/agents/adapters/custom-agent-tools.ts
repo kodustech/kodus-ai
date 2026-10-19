@@ -146,6 +146,7 @@ export async function buildCustomAgentTools(
                 callTimeoutMs: deps.mcp.callTimeoutMs,
                 boundArgs: deps.mcp.boundArgs,
                 cache: deps.mcp.cache,
+                logContext: deps.logContext,
             });
             tools.push(...mcp.tools);
             teamSystemTools.push(...mcp.tools.map((t) => t.name));

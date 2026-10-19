@@ -224,7 +224,10 @@ export async function buildCustomAgentMcpTools(params: {
     boundArgs?: Record<string, Record<string, unknown>>;
     /** Results kept for the review run; one per toolset when not given. */
     cache?: RunToolCache;
+    /** The review's ids (organization, team, repository, PR, agent) for the logs. */
+    logContext?: Record<string, unknown>;
 }): Promise<CustomAgentMcpToolset> {
+    const logContext = params.logContext ?? {};
     const cache = params.cache ?? new RunToolCache();
     const createAdapter = params.createAdapter ?? createMCPAdapter;
     const callTimeoutMs = params.callTimeoutMs ?? DEFAULT_MCP_CALL_TIMEOUT_MS;
@@ -256,7 +259,19 @@ export async function buildCustomAgentMcpTools(params: {
         const server = params.servers.find(
             (s) => s.integrationId === selection.integrationId,
         );
-        if (!server) continue;
+        if (!server) {
+            // The plugin was removed or disconnected after the agent picked it.
+            logger.warn({
+                message:
+                    'Custom agent MCP connection not found; continuing without it',
+                context: 'buildCustomAgentMcpTools',
+                metadata: {
+                    ...logContext,
+                    integrationId: selection.integrationId,
+                },
+            });
+            continue;
+        }
 
         // The connection's own allow-list narrows further when it has one.
         const connectionAllows = server.allowedTools?.length
@@ -294,6 +309,7 @@ export async function buildCustomAgentMcpTools(params: {
                 context: 'buildCustomAgentMcpTools',
                 error,
                 metadata: {
+                    ...logContext,
                     server: server.name,
                     integrationId: selection.integrationId,
                 },
@@ -370,6 +386,17 @@ export async function buildCustomAgentMcpTools(params: {
             const isError = (result as { isError?: unknown })?.isError === true;
             return { output: cap(stringify(result)), isError };
         } catch (error) {
+            // The arguments stay out of the log: only which tool failed.
+            logger.warn({
+                message: 'Custom agent MCP tool call failed',
+                context: 'buildCustomAgentMcpTools',
+                error,
+                metadata: {
+                    ...logContext,
+                    server: entry.server,
+                    tool: entry.tool,
+                },
+            });
             return {
                 output: `MCP ${entry.server}:${entry.tool} failed: ${error instanceof Error ? error.message : String(error)}`,
                 isError: true,
@@ -396,6 +423,7 @@ export async function buildCustomAgentMcpTools(params: {
                             context: 'buildCustomAgentMcpTools',
                             error,
                             metadata: {
+                                ...logContext,
                                 server,
                                 integrationId,
                                 connectTimeoutMs,
