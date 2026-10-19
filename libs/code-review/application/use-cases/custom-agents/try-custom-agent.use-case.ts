@@ -7,7 +7,7 @@ import {
     ServiceUnavailableException,
 } from '@nestjs/common';
 
-import { encrypt } from '@libs/common/utils/crypto';
+import { encryptCliSecret } from '@libs/code-review/domain/custom-agents/cli-secret-cipher';
 import {
     CliSecretMissingError,
     sealCustomAgentSecrets,
@@ -104,7 +104,7 @@ export class TryCustomAgentUseCase {
                     repositoryId: params.repositoryId,
                     directoryId: params.directoryId,
                 }),
-                encrypt,
+                encryptCliSecret,
             );
         } catch (error) {
             if (error instanceof CliSecretMissingError) {

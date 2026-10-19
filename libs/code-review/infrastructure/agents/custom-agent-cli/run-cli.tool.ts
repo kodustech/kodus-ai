@@ -12,6 +12,7 @@ import { jsonSchema } from 'ai';
 
 import type { AgentTool } from '@libs/agent-harness/domain/contracts/tool.contract';
 
+import type { CliSecretSlot } from '@libs/code-review/domain/custom-agents/cli-secret-cipher';
 import type { CustomAgentCliRun } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import {
     cliEnvExposureProblem,
@@ -41,8 +42,9 @@ export const RUN_CLI_TOOL_NAME = 'runCli';
 export interface RunCliToolDeps {
     sandbox: SandboxInstance | undefined;
     installed: readonly InstalledCustomAgentCli[] | undefined;
-    /** Decrypts a stored secret ciphertext (`decrypt` from common/utils/crypto). */
-    decrypt: (ciphertext: string) => string;
+    /** Decrypts a stored secret of this slot (`decryptCliSecret`); throws
+     *  when it cannot. */
+    decrypt: (ciphertext: string, slot: CliSecretSlot) => string;
     /** Told of each call and the output the agent got. */
     onRun?: (run: Omit<CustomAgentCliRun, 'agentId'>) => void;
     /** The review's ids (organization, team, repository, PR) for the logs. */
@@ -145,13 +147,17 @@ export async function executeRunCli(
         for (const secret of cli.secrets ?? []) {
             let value = '';
             try {
-                value = decrypt(secret.ciphertext);
+                value = decrypt(secret.ciphertext, {
+                    agentId: entry.agentId,
+                    cliName: cli.name,
+                    env: secret.env,
+                });
             } catch {
                 value = '';
             }
             if (!value) {
                 logger.warn({
-                    message: `runCli: secret ${secret.env} of ${cli.name} could not be decrypted; not run`,
+                    message: `runCli: secret ${secret.env} of ${cli.name} could not be decrypted; it must be typed again; not run`,
                     context: 'runCli',
                     metadata: {
                         ...deps.logContext,
@@ -160,7 +166,7 @@ export async function executeRunCli(
                         secretEnv: secret.env,
                     },
                 });
-                return `Error: credential ${secret.env} for ${cli.name} is not available; the CLI was not run.`;
+                return `Error: credential ${secret.env} for ${cli.name} cannot be read and must be typed again in the agent's settings; the CLI was not run.`;
             }
             envs[secret.env] = value;
         }

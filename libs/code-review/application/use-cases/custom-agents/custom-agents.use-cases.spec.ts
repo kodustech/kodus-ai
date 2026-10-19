@@ -5,7 +5,7 @@ import {
     ServiceUnavailableException,
 } from '@nestjs/common';
 
-import { decrypt } from '@libs/common/utils/crypto';
+import { decryptCliSecret } from '@libs/code-review/domain/custom-agents/cli-secret-cipher';
 import { CLI_SECRET_MASK } from '@libs/code-review/domain/custom-agents/cli-secrets';
 import { CUSTOM_AGENTS_PLAN_REQUIRED } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agents-plan';
 
@@ -354,11 +354,12 @@ describe('TryCustomAgentUseCase', () => {
                                         secrets: [
                                             {
                                                 env: 'LEDGER_TOKEN',
-                                                ciphertext: 'iv:old-token',
+                                                ciphertext:
+                                                    'kcs1:iv:old-token:t',
                                             },
                                             {
                                                 env: 'LEDGER_URL',
-                                                ciphertext: 'iv:stored',
+                                                ciphertext: 'kcs1:iv:stored:t',
                                             },
                                         ],
                                     },
@@ -402,10 +403,16 @@ describe('TryCustomAgentUseCase', () => {
         const call = runner.runCustomAgentOnPullRequest.mock.calls[0][0];
         const secrets = call.agent.tools.cli[0].secrets;
         expect(JSON.stringify(call)).not.toContain('typed-token');
-        expect(decrypt(secrets[0].ciphertext)).toBe('typed-token');
+        expect(
+            decryptCliSecret(secrets[0].ciphertext, {
+                agentId: call.agent.id,
+                cliName: call.agent.tools.cli[0].name,
+                env: secrets[0].env,
+            }),
+        ).toBe('typed-token');
         expect(secrets[1]).toEqual({
             env: 'LEDGER_URL',
-            ciphertext: 'iv:stored',
+            ciphertext: 'kcs1:iv:stored:t',
         });
         expect(call.knowledge.map((item: any) => item.path)).toEqual([
             'docs/ledger.md',
@@ -424,7 +431,7 @@ describe('TryCustomAgentUseCase', () => {
                                 secrets: [
                                     {
                                         env: 'LEDGER_URL',
-                                        ciphertext: 'iv:other',
+                                        ciphertext: 'kcs1:iv:other:t',
                                     },
                                 ],
                             },
@@ -524,7 +531,7 @@ describe('TryCustomAgentUseCase', () => {
 
         it("never lends a global agent's secret to a repository draft", async () => {
             const config: Record<string, any> = storedConfig({});
-            config.configs = storedWith('iv:global');
+            config.configs = storedWith('kcs1:iv:global:t');
             // Same id, CLI and env as the global agent, with its own install
             // and egress: the owner's secret must not reach it.
             const { run, runner } = await tryWith(
@@ -549,7 +556,7 @@ describe('TryCustomAgentUseCase', () => {
             ['allowed prefixes', { allowedPrefixes: ['ledgerctl debug'] }],
         ])('drops a kept secret when the CLI %s change', async (_, change) => {
             const { run, runner } = await tryWith(
-                storedConfig(storedWith('iv:repo')),
+                storedConfig(storedWith('kcs1:iv:repo:t')),
                 draft(change),
             );
 
@@ -560,18 +567,18 @@ describe('TryCustomAgentUseCase', () => {
         });
 
         it("at a directory uses its own secret, and the repository's for an agent it inherits", async () => {
-            const config = storedConfig(storedWith('iv:repo'));
+            const config = storedConfig(storedWith('kcs1:iv:repo:t'));
             (config.repositories[0].directories as any[]).push({
                 id: 'dir-1',
                 folders: [{ path: 'src/ledger' }],
-                configs: storedWith('iv:dir'),
+                configs: storedWith('kcs1:iv:dir:t'),
             });
             const atDirectory = await tryWith(config, draft(), 'dir-1');
             await atDirectory.run;
             expect(
                 atDirectory.runner.runCustomAgentOnPullRequest.mock.calls[0][0]
                     .agent.tools.cli[0].secrets[0].ciphertext,
-            ).toBe('iv:dir');
+            ).toBe('kcs1:iv:dir:t');
 
             (config.repositories[0].directories as any[])[0].configs = {
                 customAgents: [],
@@ -581,7 +588,7 @@ describe('TryCustomAgentUseCase', () => {
             expect(
                 inherited.runner.runCustomAgentOnPullRequest.mock.calls[0][0]
                     .agent.tools.cli[0].secrets[0].ciphertext,
-            ).toBe('iv:repo');
+            ).toBe('kcs1:iv:repo:t');
         });
     });
 

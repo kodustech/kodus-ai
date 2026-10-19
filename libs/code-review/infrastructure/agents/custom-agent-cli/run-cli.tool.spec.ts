@@ -273,7 +273,7 @@ describe('runCli execute', () => {
             cli: 'lintkit',
             args: ['check', '--format', 'json'],
         });
-        expect(out).toMatch(/not available/);
+        expect(out).toMatch(/must be typed again/);
         expect(sb.run).not.toHaveBeenCalled();
     });
 

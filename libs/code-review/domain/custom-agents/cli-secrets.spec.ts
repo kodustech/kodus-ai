@@ -22,7 +22,7 @@ const fakeEncrypt = (plaintext: string) => `enc(${plaintext})`;
 describe('custom agent CLI secrets', () => {
     it('masks every stored ciphertext on read', () => {
         const [masked] = maskCustomAgentSecrets([
-            agent([{ env: 'LEDGER_TOKEN', ciphertext: 'iv:abc' }]),
+            agent([{ env: 'LEDGER_TOKEN', ciphertext: 'kcs1:iv:abc:t' }]),
         ])!;
 
         expect(masked.tools.cli[0].secrets).toEqual([
@@ -31,7 +31,9 @@ describe('custom agent CLI secrets', () => {
     });
 
     it('masks agents at global, repository and directory level', () => {
-        const stored = agent([{ env: 'LEDGER_TOKEN', ciphertext: 'iv:abc' }]);
+        const stored = agent([
+            { env: 'LEDGER_TOKEN', ciphertext: 'kcs1:iv:abc:t' },
+        ]);
         const masked = maskCodeReviewConfigSecrets({
             configs: { customAgents: [stored] },
             repositories: [
@@ -42,7 +44,7 @@ describe('custom agent CLI secrets', () => {
             ],
         });
 
-        expect(JSON.stringify(masked)).not.toContain('iv:abc');
+        expect(JSON.stringify(masked)).not.toContain('kcs1:iv:abc:t');
         expect(collectStoredCustomAgents(masked)).toHaveLength(3);
     });
 
@@ -62,20 +64,53 @@ describe('custom agent CLI secrets', () => {
     it('keeps the stored ciphertext when the mask comes back', () => {
         const [sealed] = sealCustomAgentSecrets(
             [agent([{ env: 'LEDGER_TOKEN', ciphertext: CLI_SECRET_MASK }])],
-            [agent([{ env: 'LEDGER_TOKEN', ciphertext: 'iv:stored' }])],
+            [agent([{ env: 'LEDGER_TOKEN', ciphertext: 'kcs1:iv:stored:t' }])],
             fakeEncrypt,
         )!;
 
         expect(sealed.tools.cli[0].secrets).toEqual([
-            { env: 'LEDGER_TOKEN', ciphertext: 'iv:stored' },
+            { env: 'LEDGER_TOKEN', ciphertext: 'kcs1:iv:stored:t' },
         ]);
+    });
+
+    it('asks again for a kept value stored in another format', () => {
+        let error: unknown;
+        try {
+            sealCustomAgentSecrets(
+                [agent([{ env: 'LEDGER_TOKEN', ciphertext: CLI_SECRET_MASK }])],
+                [agent([{ env: 'LEDGER_TOKEN', ciphertext: 'a1b2:c3d4' }])],
+                fakeEncrypt,
+            );
+        } catch (e) {
+            error = e;
+        }
+        expect(error).toBeInstanceOf(CliSecretMissingError);
+        expect((error as Error).message).toContain('must be typed again');
+    });
+
+    it('encrypts each secret bound to its agent, CLI and env name', () => {
+        const encrypt = jest.fn((plaintext: string) => `enc(${plaintext})`);
+        sealCustomAgentSecrets(
+            [agent([{ env: 'LEDGER_TOKEN', value: 'plain-token' }])],
+            [],
+            encrypt,
+        );
+        expect(encrypt).toHaveBeenCalledWith('plain-token', {
+            agentId: 'ledger-agent',
+            cliName: 'ledgerctl',
+            env: 'LEDGER_TOKEN',
+        });
     });
 
     it('refuses a mask with nothing stored behind it', () => {
         expect(() =>
             sealCustomAgentSecrets(
                 [agent([{ env: 'OTHER_TOKEN', ciphertext: CLI_SECRET_MASK }])],
-                [agent([{ env: 'LEDGER_TOKEN', ciphertext: 'iv:stored' }])],
+                [
+                    agent([
+                        { env: 'LEDGER_TOKEN', ciphertext: 'kcs1:iv:stored:t' },
+                    ]),
+                ],
                 fakeEncrypt,
             ),
         ).toThrow(CliSecretMissingError);
@@ -83,7 +118,7 @@ describe('custom agent CLI secrets', () => {
 
     it('does not restore a secret stored for another agent', () => {
         const other = {
-            ...agent([{ env: 'LEDGER_TOKEN', ciphertext: 'iv:other' }]),
+            ...agent([{ env: 'LEDGER_TOKEN', ciphertext: 'kcs1:iv:other:t' }]),
             id: 'another-agent',
         };
         expect(() =>
@@ -97,13 +132,13 @@ describe('custom agent CLI secrets', () => {
 
     it('encrypts a ciphertext that is not the one stored in that slot', () => {
         const [sealed] = sealCustomAgentSecrets(
-            [agent([{ env: 'LEDGER_TOKEN', ciphertext: 'iv:planted' }])],
-            [agent([{ env: 'LEDGER_TOKEN', ciphertext: 'iv:stored' }])],
+            [agent([{ env: 'LEDGER_TOKEN', ciphertext: 'kcs1:iv:planted:t' }])],
+            [agent([{ env: 'LEDGER_TOKEN', ciphertext: 'kcs1:iv:stored:t' }])],
             fakeEncrypt,
         )!;
 
         expect(sealed.tools.cli[0].secrets).toEqual([
-            { env: 'LEDGER_TOKEN', ciphertext: 'enc(iv:planted)' },
+            { env: 'LEDGER_TOKEN', ciphertext: 'enc(kcs1:iv:planted:t)' },
         ]);
     });
 
@@ -133,7 +168,10 @@ describe('custom agent CLI secrets', () => {
             },
         });
         const stored = [
-            withCli({}, { env: 'LEDGER_TOKEN', ciphertext: 'iv:stored' }),
+            withCli(
+                {},
+                { env: 'LEDGER_TOKEN', ciphertext: 'kcs1:iv:stored:t' },
+            ),
         ];
         const mask = { env: 'LEDGER_TOKEN', ciphertext: CLI_SECRET_MASK };
 
@@ -159,7 +197,7 @@ describe('custom agent CLI secrets', () => {
             )!;
 
             expect(sealed.tools.cli[0].secrets).toEqual([
-                { env: 'LEDGER_TOKEN', ciphertext: 'iv:stored' },
+                { env: 'LEDGER_TOKEN', ciphertext: 'kcs1:iv:stored:t' },
             ]);
         });
 
@@ -209,9 +247,11 @@ describe('custom agent CLI secrets', () => {
 
         it('drops the others when one secret is removed from the CLI', () => {
             const twoStored = [
-                withCli({}, { env: 'LEDGER_TOKEN', ciphertext: 'iv:token' }, [
-                    { env: 'LEDGER_ORG', ciphertext: 'iv:org' },
-                ]),
+                withCli(
+                    {},
+                    { env: 'LEDGER_TOKEN', ciphertext: 'kcs1:iv:token:t' },
+                    [{ env: 'LEDGER_ORG', ciphertext: 'kcs1:iv:org:t' }],
+                ),
             ];
 
             expect(() =>
@@ -248,7 +288,7 @@ describe('custom agent CLI secrets', () => {
             )!;
 
             expect(sealed.tools.cli[0].secrets).toEqual([
-                { env: 'LEDGER_TOKEN', ciphertext: 'iv:stored' },
+                { env: 'LEDGER_TOKEN', ciphertext: 'kcs1:iv:stored:t' },
             ]);
         });
 
@@ -277,21 +317,21 @@ describe('custom agent CLI secrets', () => {
             ],
         });
         const config = {
-            configs: at('global-agent', 'iv:global'),
+            configs: at('global-agent', 'kcs1:iv:global:t'),
             repositories: [
                 {
                     id: 'repo-1',
                     configs: {
                         customAgents: [
-                            ...at('repo-agent', 'iv:repo').customAgents,
-                            ...at('shared-agent', 'iv:repo-shared')
+                            ...at('repo-agent', 'kcs1:iv:repo:t').customAgents,
+                            ...at('shared-agent', 'kcs1:iv:repo-shared:t')
                                 .customAgents,
                         ],
                     },
                     directories: [
                         {
                             id: 'dir-1',
-                            configs: at('shared-agent', 'iv:dir-shared'),
+                            configs: at('shared-agent', 'kcs1:iv:dir-shared:t'),
                         },
                     ],
                 },
@@ -300,16 +340,18 @@ describe('custom agent CLI secrets', () => {
         const lent = (level: { repositoryId: string; directoryId?: string }) =>
             JSON.stringify(storedCustomAgentsForTry(config, level));
 
-        expect(lent({ repositoryId: 'repo-1' })).not.toContain('iv:global');
-        expect(lent({ repositoryId: 'repo-1' })).toContain('iv:repo');
+        expect(lent({ repositoryId: 'repo-1' })).not.toContain(
+            'kcs1:iv:global:t',
+        );
+        expect(lent({ repositoryId: 'repo-1' })).toContain('kcs1:iv:repo:t');
         const atDirectory = lent({
             repositoryId: 'repo-1',
             directoryId: 'dir-1',
         });
-        expect(atDirectory).toContain('iv:dir-shared');
-        expect(atDirectory).not.toContain('iv:repo-shared');
-        expect(atDirectory).toContain('"iv:repo"');
-        expect(atDirectory).not.toContain('iv:global');
+        expect(atDirectory).toContain('kcs1:iv:dir-shared:t');
+        expect(atDirectory).not.toContain('kcs1:iv:repo-shared:t');
+        expect(atDirectory).toContain('"kcs1:iv:repo:t"');
+        expect(atDirectory).not.toContain('kcs1:iv:global:t');
     });
 
     it('reads stored agents from exactly one level', () => {
@@ -317,16 +359,16 @@ describe('custom agent CLI secrets', () => {
             customAgents: [agent([{ env: 'LEDGER_TOKEN', ciphertext }])],
         });
         const config = {
-            configs: at('iv:global'),
+            configs: at('kcs1:iv:global:t'),
             repositories: [
                 {
                     id: 'repo-1',
-                    configs: at('iv:repo-1'),
+                    configs: at('kcs1:iv:repo-1:t'),
                     directories: [
                         {
                             id: 'dir-1',
                             folders: [{ path: 'src/ledger' }],
-                            configs: at('iv:dir-1'),
+                            configs: at('kcs1:iv:dir-1:t'),
                         },
                     ],
                 },
@@ -337,19 +379,25 @@ describe('custom agent CLI secrets', () => {
             level: Parameters<typeof storedCustomAgentsAtLevel>[1],
         ) => JSON.stringify(storedCustomAgentsAtLevel(config, level));
 
-        expect(secretAt({})).toContain('iv:global');
-        expect(secretAt({ repositoryId: 'global' })).toContain('iv:global');
-        expect(secretAt({ repositoryId: 'repo-1' })).toContain('iv:repo-1');
-        expect(secretAt({ repositoryId: 'repo-1' })).not.toContain('iv:global');
+        expect(secretAt({})).toContain('kcs1:iv:global:t');
+        expect(secretAt({ repositoryId: 'global' })).toContain(
+            'kcs1:iv:global:t',
+        );
+        expect(secretAt({ repositoryId: 'repo-1' })).toContain(
+            'kcs1:iv:repo-1:t',
+        );
+        expect(secretAt({ repositoryId: 'repo-1' })).not.toContain(
+            'kcs1:iv:global:t',
+        );
         expect(
             secretAt({ repositoryId: 'repo-1', directoryId: 'dir-1' }),
-        ).toContain('iv:dir-1');
+        ).toContain('kcs1:iv:dir-1:t');
         expect(
             secretAt({
                 repositoryId: 'repo-1',
                 directoryPaths: ['src/ledger'],
             }),
-        ).toContain('iv:dir-1');
+        ).toContain('kcs1:iv:dir-1:t');
         expect(
             storedCustomAgentsAtLevel(config, { repositoryId: 'repo-2' }),
         ).toEqual([]);
