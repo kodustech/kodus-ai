@@ -17,7 +17,10 @@ import {
     dedupEmbeddingText,
 } from '@libs/code-review/infrastructure/agents/engine/dedup-prompt';
 import { buildPlatformEmbedder } from '@libs/common/utils/document';
-import { resolveSuggestionTitle } from '@libs/common/utils/codeManagement/suggestion-title';
+import {
+    fullSuggestionTitle,
+    MAX_TITLE_CHARS,
+} from '@libs/common/utils/codeManagement/suggestion-title';
 import { stripReviewScaffolding } from '@libs/code-review/infrastructure/agents/engine/strip-review-scaffolding';
 import { resolveWritingGuidelines } from '@libs/common/utils/writing-guidelines';
 import { formatAndShapeSuggestions } from '@libs/code-review/infrastructure/agents/engine/format-and-shape-suggestions';
@@ -90,6 +93,10 @@ import {
     ignoredFilesForCustomAgents,
 } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import type { CustomAgentConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import {
+    isSameSpot,
+    preferSpecificKeep,
+} from '@libs/code-review/infrastructure/agents/engine/prefer-specific-keep';
 import {
     bothFromAnalyzers,
     restatesAnalyzerFinding,
@@ -1332,19 +1339,20 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 );
             }
 
-            // Every finding renders under a bounded title: the model's summary,
-            // or the first sentence of the body when the model left it out.
-            // Resolved before formatting and shaping, so both see the title the
-            // reader sees and neither repeats it as the body's opening.
+            // Every finding renders under a title: the model's summary, or the
+            // first sentence of the body when the model left it out. Resolved
+            // before formatting and shaping, so neither repeats it as the
+            // body's opening. Not bounded yet: the formatter rewrites a title
+            // over the ceiling, and formatAndShapeSuggestions bounds the rest.
             const titleCounts = {
                 fromSummary: 0,
                 fromBody: 0,
-                cut: 0,
+                overCeiling: 0,
                 empty: 0,
             };
             for (const s of deduped) {
                 const hadSummary = !!s.oneSentenceSummary?.trim();
-                s.oneSentenceSummary = resolveSuggestionTitle({
+                s.oneSentenceSummary = fullSuggestionTitle({
                     summary: s.oneSentenceSummary,
                     body: (
                         s.fullExplanation ||
@@ -1355,10 +1363,12 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 if (!s.oneSentenceSummary) titleCounts.empty++;
                 else if (hadSummary) titleCounts.fromSummary++;
                 else titleCounts.fromBody++;
-                if (s.oneSentenceSummary.endsWith('…')) titleCounts.cut++;
+                if (s.oneSentenceSummary.length > MAX_TITLE_CHARS) {
+                    titleCounts.overCeiling++;
+                }
             }
             this.logger.log({
-                message: `[AGENT] Titled ${deduped.length} suggestions (from summary ${titleCounts.fromSummary}, from body ${titleCounts.fromBody}, cut ${titleCounts.cut}, empty ${titleCounts.empty})`,
+                message: `[AGENT] Titled ${deduped.length} suggestions (from summary ${titleCounts.fromSummary}, from body ${titleCounts.fromBody}, over the ceiling ${titleCounts.overCeiling}, empty ${titleCounts.empty})`,
                 context: this.stageName,
                 metadata: {
                     organizationAndTeamData: context.organizationAndTeamData,
@@ -1405,7 +1415,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 });
             }
             this.logger.log({
-                message: `[AGENT] Shaped ${shapeCounts.shaped} suggestion bodies (fences removed ${shapeCounts.removedFences}, title repeat dropped ${shapeCounts.droppedTitleRepeat}, capped ${shapeCounts.capped})`,
+                message: `[AGENT] Shaped ${shapeCounts.shaped} suggestion bodies (fences removed ${shapeCounts.removedFences}, title repeat dropped ${shapeCounts.droppedTitleRepeat}, capped ${shapeCounts.capped}, titles rewritten ${shapeCounts.titleRewritten}, titles cut ${shapeCounts.titleCut})`,
                 context: this.stageName,
                 metadata: {
                     organizationAndTeamData: context.organizationAndTeamData,
@@ -2739,16 +2749,22 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             ) as any;
 
             // The model ranks `keep` by how a finding reads, which always
-            // favours its own prose over a scanner's. Re-seat the roles so a
-            // deterministic finding survives the group it was merged into.
+            // favours its own prose over a scanner's, and the longest text over
+            // the one on the defective lines. Re-seat the roles so a
+            // deterministic finding survives the group it was merged into, and
+            // otherwise the finding anchored on the lines at fault.
             const groups: Array<{
                 keep: number;
                 duplicates: number[];
             }> = keepOwnFindingsApart(
                 preferCustomAgentKeep(
-                    preferAnalyzerKeep(
-                        normalizedDedup?.groups || [],
+                    preferSpecificKeep(
+                        preferAnalyzerKeep(
+                            normalizedDedup?.groups || [],
+                            suggestions,
+                        ),
                         suggestions,
+                        normalizedDedup?.unique || [],
                     ),
                     suggestions,
                 ),
@@ -2885,6 +2901,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                                     }
                                     continue;
                                 }
+                                // No content guard on this branch, so a
+                                // nested range may be a different bug: only
+                                // the same location is left out of the list.
                                 const loc = `${dup.relevantFile}:${dup.relevantLinesStart}-${dup.relevantLinesEnd}`;
                                 const keptLoc = `${suggestions[keepIdx].relevantFile}:${suggestions[keepIdx].relevantLinesStart}-${suggestions[keepIdx].relevantLinesEnd}`;
                                 if (loc !== keptLoc) {
@@ -2967,11 +2986,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     classifiedIndices.add(dupIdx);
                     const dup = suggestions[dupIdx];
                     duplicateSummaries.push(this.summarizeDedupSuggestion(dup));
-                    const dupLocation = `${dup.relevantFile}:${dup.relevantLinesStart}-${dup.relevantLinesEnd}`;
-                    const keptLocation = `${kept.relevantFile}:${kept.relevantLinesStart}-${kept.relevantLinesEnd}`;
-
-                    if (dupLocation !== keptLocation) {
-                        otherLocations.push(dupLocation);
+                    // The content guard above judged these the same bug, so a
+                    // range around or inside the kept one is the same place,
+                    // not another location.
+                    if (!isSameSpot(dup, kept)) {
+                        otherLocations.push(
+                            `${dup.relevantFile}:${dup.relevantLinesStart}-${dup.relevantLinesEnd}`,
+                        );
                     }
 
                     this.logger.log({

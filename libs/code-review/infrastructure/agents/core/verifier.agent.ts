@@ -240,6 +240,22 @@ export function extractVerdict(
         });
         return { ...fromText, toolCalls, parseMode: 'text' };
     }
+    // A run that did not finish (out of steps, stopped by a policy) and left
+    // no verdict judged nothing: unavailable, as an errored run is. One that
+    // completed and answered without a readable verdict keeps the default.
+    if (state.status !== 'completed') {
+        logger.warn({
+            message: `verifier run ended ${state.status} without a verdict, finding left unverified`,
+            context: 'VerifierAgent',
+            metadata: { parseMode: 'verify-error', ...telemetry },
+        });
+        return {
+            keep: true,
+            rationale: `verification unavailable: verifier ended ${state.status} without a verdict`,
+            toolCalls,
+            parseMode: 'verify-error',
+        };
+    }
     return {
         keep: true,
         rationale: 'no parseable verdict — kept by default',

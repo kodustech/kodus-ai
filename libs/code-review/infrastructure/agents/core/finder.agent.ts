@@ -482,7 +482,10 @@ const RECOVERY_SCHEMA = z.object({
             improvedCode: z.string(),
             language: z.string().nullable(),
             label: z.string().nullable(),
-            oneSentenceSummary: z.string().nullable(),
+            oneSentenceSummary: z
+                .string()
+                .nullable()
+                .describe(TITLE_PROMPT_SPEC),
             relevantLinesStart: z.number().nullable(),
             relevantLinesEnd: z.number().nullable(),
             severity: z.string().nullable(),
@@ -540,10 +543,11 @@ export async function recoverFindingsFromProse(
             schema: previousDecisions?.length
                 ? REVISION_RECOVERY_SCHEMA
                 : RECOVERY_SCHEMA,
-            // Original instruction text is untouched — only the trailing
-            // sentence is new. It must literally contain the word "json"
-            // somewhere: OpenAI (and OpenAI-compatible providers) reject a
-            // `json_object` response-format request outright otherwise —
+            // The title rule (#2157) mirrors the finder's own schema. The
+            // "Respond with a JSON object" sentence must stay: the text must
+            // literally contain the word "json" somewhere: OpenAI (and
+            // OpenAI-compatible providers) reject a `json_object`
+            // response-format request outright otherwise —
             // their own error is "'messages' must contain the word 'json'
             // in some form" — which is exactly the json_schema→json_object
             // fallback LLM.run owns for this call (prod incident,
@@ -563,7 +567,8 @@ export async function recoverFindingsFromProse(
                 'the structured schema — one entry per distinct issue, ' +
                 'using the file paths and line numbers mentioned. Do NOT ' +
                 'invent findings; only extract what is explicitly ' +
-                `described.\n\nRespond with a JSON object.\n\nANALYSIS:\n${prose}` +
+                `described. oneSentenceSummary: ${TITLE_PROMPT_SPEC}.` +
+                `\n\nRespond with a JSON object.\n\nANALYSIS:\n${prose}` +
                 (previousDecisions?.length
                     ? `\n\n${formatPreviousDecisions(previousDecisions)}\nPreserve the earlier suggestion's Id in revisesSuggestionId when the analysis revises it. Do not invent a relationship absent from the analysis; omit the field for unrelated findings.`
                     : ''),

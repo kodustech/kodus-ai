@@ -1,6 +1,10 @@
 import type { CodeSuggestion } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { shapeSuggestionBodyWithReport } from '@libs/common/utils/codeManagement/suggestion-body-shape';
+import {
+    boundSuggestionTitle,
+    MAX_TITLE_CHARS,
+} from '@libs/common/utils/codeManagement/suggestion-title';
 import { isAnalyzerSuggestion } from '@libs/code-review/infrastructure/analyzers/analyzer-findings-to-suggestions';
 import {
     impactAndActionFallback,
@@ -17,6 +21,10 @@ export interface SuggestionShapeCounts {
     droppedTitleRepeat: number;
     capped: number;
     impactActionFallback: number;
+    /** Titles over the ceiling the formatter rewrote. */
+    titleRewritten: number;
+    /** Titles still over the ceiling, cut at a word boundary. */
+    titleCut: number;
 }
 
 export interface FormatAndShapeResult {
@@ -32,7 +40,9 @@ export interface FormatAndShapeResult {
 /**
  * The text each finding ships with: the formatter's rewrite (WHAT/WHY/HOW
  * labels merged into prose), then the shape the comment needs whether or not
- * the model complied. Rewrites `suggestionContent` in place. AgentReviewStage
+ * the model complied. Rewrites `suggestionContent` in place, and bounds
+ * `oneSentenceSummary`: a title over MAX_TITLE_CHARS is rewritten by the
+ * formatter, and cut only when it is still too long after it. AgentReviewStage
  * runs it on its findings; evals/format runs it on recorded findings, so both
  * run this code.
  */
@@ -54,6 +64,23 @@ export async function formatAndShapeSuggestions(
 ): Promise<FormatAndShapeResult> {
     const { writingGuidelines } = options;
     const formattedTargets = new Set<Partial<CodeSuggestion>>();
+    const rewrittenTitles = new Set<Partial<CodeSuggestion>>();
+    const isOverCeiling = (s: Partial<CodeSuggestion>): boolean =>
+        (s.oneSentenceSummary || '').length > MAX_TITLE_CHARS;
+    // Only a title that was offered for rewriting: a model that retitles a
+    // finding unasked does not change it. The prompt's example quotes its
+    // title, so a quoted answer loses the quotes.
+    const acceptTitle = (
+        s: Partial<CodeSuggestion>,
+        raw: string | undefined,
+    ): void => {
+        const title = (raw ?? '')
+            .trim()
+            .replace(/^["\u201c](.+)["\u201d]$/s, '$1');
+        if (!boundSuggestionTitle(title) || !isOverCeiling(s)) return;
+        s.oneSentenceSummary = title;
+        rewrittenTitles.add(s);
+    };
     // Deterministic findings skip the pass. Their body is already the
     // structured list the builder produced, and a polish pass reflowed it into
     // one paragraph — losing the per-package lines and appending remediation
@@ -85,6 +112,7 @@ export async function formatAndShapeSuggestions(
             const formatted = await formatSuggestionContent(
                 voiceTargets.map((i) => ({
                     title: suggestions[i].oneSentenceSummary || '',
+                    rewriteTitle: isOverCeiling(suggestions[i]),
                     suggestionContent: suggestions[i].suggestionContent || '',
                     existingCode: suggestions[i].existingCode || '',
                     improvedCode: suggestions[i].improvedCode || '',
@@ -116,6 +144,7 @@ export async function formatAndShapeSuggestions(
                     formattedTargets.add(suggestions[target]);
                     suggestions[target].suggestionContent =
                         fmt.suggestionContent;
+                    acceptTitle(suggestions[target], fmt.title);
                 }
             }
             count += formatted.size;
@@ -135,7 +164,19 @@ export async function formatAndShapeSuggestions(
         droppedTitleRepeat: 0,
         capped: 0,
         impactActionFallback: 0,
+        titleRewritten: rewrittenTitles.size,
+        titleCut: 0,
     };
+    // Every finding renders under a bounded title, the analyzers' included;
+    // bounded before shaping so the body is compared with the title shown.
+    for (const s of suggestions) {
+        if (s.oneSentenceSummary == null) continue;
+        const bounded = boundSuggestionTitle(s.oneSentenceSummary);
+        if (bounded.endsWith('…') && bounded !== s.oneSentenceSummary) {
+            shapeCounts.titleCut++;
+        }
+        s.oneSentenceSummary = bounded;
+    }
     for (const s of suggestions) {
         if (isAnalyzerSuggestion(s)) continue;
         const fallback =

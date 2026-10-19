@@ -26,6 +26,7 @@ describe('AutomationCodeReviewService', () => {
     let organizationService: { findOne: jest.Mock };
     let codeReviewHandlerService: Record<string, jest.Mock>;
     let distributedLockService: { acquire: jest.Mock };
+    let enqueueImplementationCheckUseCase: { execute: jest.Mock };
     let lock: { release: jest.Mock; isReleased: jest.Mock };
 
     beforeEach(() => {
@@ -54,6 +55,9 @@ describe('AutomationCodeReviewService', () => {
             notifyCommandReviewRefused: jest.fn().mockResolvedValue(undefined),
         };
         distributedLockService = { acquire: jest.fn().mockResolvedValue(lock) };
+        enqueueImplementationCheckUseCase = {
+            execute: jest.fn().mockResolvedValue('job-1'),
+        };
 
         service = new AutomationCodeReviewService(
             teamAutomationService as any,
@@ -62,6 +66,7 @@ describe('AutomationCodeReviewService', () => {
             organizationService as any,
             codeReviewHandlerService as any,
             distributedLockService as any,
+            enqueueImplementationCheckUseCase as any,
         );
     });
 
@@ -330,6 +335,105 @@ describe('AutomationCodeReviewService', () => {
             expect(
                 codeReviewHandlerService.handlePullRequest,
             ).toHaveBeenCalled();
+        });
+    });
+
+    // A commit pushed while the review ran was checked before the review
+    // stored its suggestions, so they stayed not_implemented (#2182).
+    describe('when the review finishes', () => {
+        const reviewResult = (overrides: Record<string, unknown> = {}) => ({
+            statusInfo: { status: 'success' },
+            lastAnalyzedCommit: { sha: 'reviewed-sha' },
+            ...overrides,
+        });
+
+        it.each([
+            ['success', {}],
+            ['partial_error', { errors: [{ severity: 'partial' }] }],
+        ])(
+            'checks implementation against the reviewed commit (%s)',
+            async (_status, overrides) => {
+                codeReviewHandlerService.handlePullRequest.mockResolvedValue(
+                    reviewResult(overrides),
+                );
+
+                await service.run!(makePayload());
+
+                expect(
+                    enqueueImplementationCheckUseCase.execute,
+                ).toHaveBeenCalledWith({
+                    organizationAndTeamData: {
+                        organizationId: 'org-1',
+                        teamId: 'team-1',
+                    },
+                    repository: { id: 'repo-1', name: 'repo-name' },
+                    pullRequestNumber: 42,
+                    commitSha: 'reviewed-sha',
+                    trigger: 'review_completed',
+                    platformType: 'github',
+                });
+            },
+        );
+
+        it('enqueues only after the execution is persisted', async () => {
+            codeReviewHandlerService.handlePullRequest.mockResolvedValue(
+                reviewResult(),
+            );
+
+            await service.run!(makePayload());
+
+            const persistedAt =
+                automationExecutionService.updateCodeReview.mock
+                    .invocationCallOrder.at(-1);
+            const enqueuedAt =
+                enqueueImplementationCheckUseCase.execute.mock
+                    .invocationCallOrder[0];
+            expect(enqueuedAt).toBeGreaterThan(persistedAt!);
+        });
+
+        it.each([
+            ['error', { errors: [{ severity: 'critical' }] }],
+            ['skipped', { statusInfo: { status: 'skipped' } }],
+            ['no reviewed commit', { lastAnalyzedCommit: undefined }],
+        ])('does not check when %s', async (_case, overrides) => {
+            codeReviewHandlerService.handlePullRequest.mockResolvedValue(
+                reviewResult(overrides),
+            );
+
+            await service.run!(makePayload());
+
+            expect(
+                enqueueImplementationCheckUseCase.execute,
+            ).not.toHaveBeenCalled();
+        });
+
+        // Without a SUCCESS row the check would diff from an older review.
+        it('does not check when the execution could not be persisted', async () => {
+            codeReviewHandlerService.handlePullRequest.mockResolvedValue(
+                reviewResult(),
+            );
+            automationExecutionService.updateCodeReview.mockRejectedValue(
+                new Error('postgres unreachable'),
+            );
+
+            await service.run!(makePayload());
+
+            expect(
+                enqueueImplementationCheckUseCase.execute,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('a failed enqueue does not fail the review', async () => {
+            codeReviewHandlerService.handlePullRequest.mockResolvedValue(
+                reviewResult(),
+            );
+            enqueueImplementationCheckUseCase.execute.mockRejectedValue(
+                new Error('queue down'),
+            );
+
+            await expect(service.run!(makePayload())).resolves.toBe(
+                'Automation executed successfully',
+            );
         });
     });
 });

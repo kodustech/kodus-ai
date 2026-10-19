@@ -151,6 +151,149 @@ describe('#2171 — finder run that ends without a submitted result', () => {
         expect(out.incompleteReason).toBeUndefined();
     });
 
+    // PR #2173 review: the runner turns every REQUESTED result call into an
+    // artifact, executed or not. A turn cut while writing submitResult leaves
+    // its input as unparseable JSON; that artifact must not count as a
+    // submitted result.
+    it('reports truncated when the provider cut the turn inside submitResult', async () => {
+        const cut = JSON.stringify(findings).slice(0, 60);
+        useModel(async () => ({
+            content: [
+                {
+                    type: 'tool-call',
+                    toolCallId: `submitResult-${Math.random()}`,
+                    toolName: 'submitResult',
+                    input: cut,
+                },
+            ],
+            finishReason: { unified: 'length', raw: 'max_tokens' },
+            usage,
+            warnings: [],
+        }));
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(out.incompleteReason).toBe('truncated');
+    });
+
+    // PR #2173 review: `{}` parses as an object but is not a findings result
+    // (sanitizeFindingsResult rejects it), so it is not a submission either.
+    it('reports truncated when the cut submitResult holds no findings result', async () => {
+        useModel(async () =>
+            toolCall(
+                'submitResult',
+                {},
+                { unified: 'length', raw: 'max_tokens' },
+            ),
+        );
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(out.incompleteReason).toBe('truncated');
+    });
+
+    // PR #2173 review: partial recovery drops every invalid item, so a
+    // non-empty list that lost them all comes back as `suggestions: []`.
+    it('reports truncated when recovery dropped every item of a cut submitResult', async () => {
+        useModel(async () =>
+            toolCall(
+                'submitResult',
+                { reasoning: 'one candidate', suggestions: [{}] },
+                { unified: 'length', raw: 'max_tokens' },
+            ),
+        );
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(out.incompleteReason).toBe('truncated');
+    });
+
+    // PR #2173 review: on a cut turn, recovery that drops any item means the
+    // result was damaged; the valid items still ship, the review is partial.
+    it('reports truncated when recovery dropped one of the items of a cut submitResult', async () => {
+        useModel(async (opts) =>
+            isVerifierCall(opts)
+                ? toolCall(
+                      'submitVerdict',
+                      { keep: true, rationale: 'ok' },
+                      SAFE,
+                  )
+                : toolCall(
+                      'submitResult',
+                      {
+                          reasoning: 'two candidates',
+                          suggestions: [findings.suggestions[0], {}],
+                      },
+                      { unified: 'length', raw: 'max_tokens' },
+                  ),
+        );
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(out.incompleteReason).toBe('truncated');
+        expect(
+            out.findings.suggestions.map((s: any) => s.relevantFile),
+        ).toEqual(['a.ts']);
+    });
+
+    // The stricter reading applies to a cut turn only: a finished turn whose
+    // result lost a malformed item is a format problem, not an unfinished run.
+    it('a finished turn whose submitResult lost a malformed item is not incomplete', async () => {
+        useModel(async (opts) =>
+            isVerifierCall(opts)
+                ? toolCall(
+                      'submitVerdict',
+                      { keep: true, rationale: 'ok' },
+                      SAFE,
+                  )
+                : toolCall(
+                      'submitResult',
+                      {
+                          reasoning: 'two candidates',
+                          suggestions: [findings.suggestions[0], {}],
+                      },
+                      SAFE,
+                  ),
+        );
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(out.incompleteReason).toBeUndefined();
+    });
+
+    it('an explicit empty findings list on a cut turn is a submitted result', async () => {
+        useModel(async () =>
+            toolCall(
+                'submitResult',
+                { reasoning: 'nothing found', suggestions: [] },
+                { unified: 'length', raw: 'max_tokens' },
+            ),
+        );
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(out.incompleteReason).toBeUndefined();
+    });
+
+    it('a complete submitResult on a cut turn is a submitted result', async () => {
+        useModel(async (opts) =>
+            isVerifierCall(opts)
+                ? toolCall(
+                      'submitVerdict',
+                      { keep: true, rationale: 'ok' },
+                      SAFE,
+                  )
+                : toolCall('submitResult', findings, {
+                      unified: 'length',
+                      raw: 'max_tokens',
+                  }),
+        );
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(out.incompleteReason).toBeUndefined();
+    });
+
     it('a finder that ends with prose and no tool call is not incomplete (prose recovery owns it)', async () => {
         useModel(async () => ({
             content: [
@@ -180,6 +323,23 @@ describe('#2171 — verify call that fails', () => {
 
         expect(out.findings.suggestions).toEqual([]);
         expect(out.droppedByVerify).toEqual([]);
+        expect(
+            (out.unverifiedByVerify ?? []).map((s: any) => s.relevantFile),
+        ).toEqual(['a.ts', 'b.ts']);
+    });
+
+    // PR #2173 review: a verifier that runs out of steps without a verdict
+    // judged nothing either; its candidates must not be published as kept.
+    it('does not keep candidates whose verifier ran out of steps without a verdict', async () => {
+        useModel(async (opts) =>
+            isVerifierCall(opts)
+                ? toolCall('readFile', { path: 'a.ts' }, SAFE)
+                : toolCall('submitResult', findings, SAFE),
+        );
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(out.findings.suggestions).toEqual([]);
         expect(
             (out.unverifiedByVerify ?? []).map((s: any) => s.relevantFile),
         ).toEqual(['a.ts', 'b.ts']);
@@ -239,5 +399,29 @@ describe('#2171 — extractVerdict on a failed verify run', () => {
         // what an unverified candidate means — see runFinderWithVerify.
         expect(v.keep).toBe(true);
         expect(v.rationale).toContain('429 Too Many Requests');
+    });
+
+    const ended = (status: RunState['status']): RunState => ({
+        ...errored('unused'),
+        status,
+        stopReason: status,
+        trace: [],
+    });
+
+    it.each(['budget-exhausted', 'stopped'] as const)(
+        'is a verify-error when the run %s without a verdict',
+        (status) => {
+            const v = extractVerdict(ended(status));
+
+            expect(v.parseMode).toBe('verify-error');
+            expect(v.keep).toBe(true);
+            expect(v.rationale).toContain(status);
+        },
+    );
+
+    it('stays a default keep when the run completed without a verdict', () => {
+        expect(extractVerdict(ended('completed')).parseMode).toBe(
+            'default-keep',
+        );
     });
 });

@@ -758,6 +758,43 @@ describe('recoverFindingsFromProse — request assembly (the LLM.run boundary)',
         expect(arg.runName).toBe('code-review-recovery');
     });
 
+    // #2157: recovery returned a 170-character title the stage then cut
+    // inside inline code. The finder's own schema states the title rule;
+    // recovery stated none, in the prompt or in the schema.
+    it.each([
+        ['without history', undefined],
+        [
+            'with history',
+            [
+                {
+                    suggestionId: 'round-a',
+                    suggestionContent: 'Earlier.',
+                    label: 'bug',
+                    outcome: 'pending' as const,
+                    decidedAt: '2026-10-03T10:00:00Z',
+                },
+            ],
+        ],
+    ])('asks for a bounded title, %s', async (_name, previous) => {
+        const spy = jest
+            .spyOn(LLM, 'run')
+            .mockResolvedValue({ suggestions: [] } as any);
+        await recoverFindingsFromProse(
+            prose,
+            undefined,
+            'org-9',
+            undefined,
+            previous,
+        );
+        const arg = spy.mock.calls[0][0] as any;
+        expect(arg.user).toContain(TITLE_PROMPT_SPEC);
+        expect(
+            arg.schema.shape.suggestions.element.shape.oneSentenceSummary
+                .description,
+        ).toBe(TITLE_PROMPT_SPEC);
+        expect(arg.user).toMatch(/json/i);
+    });
+
     it('suffixes usageRunName with -recovery when provided', async () => {
         const spy = jest
             .spyOn(LLM, 'run')

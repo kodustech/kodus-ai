@@ -31,6 +31,7 @@ import { estimateOverheadTokens } from '@libs/agent-harness/infrastructure/compr
 import { DiffCoverageLedger } from '@libs/code-review/infrastructure/agents/adapters/diff-coverage-ledger.adapter';
 import { buildFinderToolRegistry } from '@libs/code-review/infrastructure/agents/adapters/finder-tools.adapter';
 import {
+    FINDER_DONE_TOOL,
     buildFinderAgentSpec,
     runFinderWithVerify,
     recoverFindingsFromProse,
@@ -40,6 +41,11 @@ import {
     buildFindingsFromVerify,
     summarizeFunnel,
 } from '@libs/code-review/infrastructure/agents/core/review-finding';
+import {
+    sanitizeFindingsResult,
+    type FindingsOutput,
+} from '@libs/code-review/infrastructure/agents/core/findings-schema';
+import { normalizeEnvelope } from '@libs/llm/structured-output-repair';
 import { createLogger } from '@libs/core/log/logger';
 import {
     type AgentLoopInput,
@@ -206,6 +212,28 @@ export function finderRunEnvironment(
             usageRunName: input.usageRunName,
         },
     };
+}
+
+/**
+ * A submitResult payload that arrived whole: the findings schema accepts it
+ * and recovery dropped none of its items. On a cut turn a dropped item means
+ * the result was damaged; the valid items still ship, the run is partial.
+ */
+function isWholeResult(
+    payload: unknown,
+    telemetryMetadata?: { organizationId?: string },
+): boolean {
+    const clean = sanitizeFindingsResult(
+        payload as FindingsOutput,
+        telemetryMetadata,
+    );
+    if (!clean) return false;
+    const raw = normalizeEnvelope(payload, 'suggestions', [
+        'findings',
+        'codeSuggestions',
+    ]) as { suggestions?: unknown };
+    const sent = Array.isArray(raw?.suggestions) ? raw.suggestions.length : 0;
+    return clean.suggestions.length === sent;
 }
 
 export async function runAgentLoopViaCore(
@@ -472,7 +500,17 @@ export async function runAgentLoopViaCore(
     // looking: it ran out of steps, or the provider cut its turn so the tools
     // it asked for never ran (the runner records that as `tool.skipped`). A run
     // that answered in prose is not incomplete; prose recovery owns it (#2171).
-    const submitted = r.finderState.artifacts.length > 0;
+    // The runner makes an artifact of every requested result call, executed or
+    // not, so a turn cut while writing submitResult leaves one holding raw,
+    // unparseable input, an object that is no findings result (`{}`), or items
+    // recovery had to drop: only a result that arrived whole counts.
+    // The submitResult the review publishes: extractFindings reads the last.
+    const published = [...r.finderState.artifacts]
+        .reverse()
+        .find((a) => a.type === FINDER_DONE_TOOL);
+    const submitted =
+        !!published &&
+        isWholeResult(published.payload, input.telemetryMetadata);
     const incompleteReason: AgentLoopOutput['incompleteReason'] =
         r.finderState.status === 'budget-exhausted'
             ? 'budget-exhausted'
