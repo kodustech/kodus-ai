@@ -1,8 +1,7 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Badge } from "@components/ui/badge";
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -12,12 +11,12 @@ import {
     BreadcrumbSeparator,
 } from "@components/ui/breadcrumb";
 import { Button } from "@components/ui/button";
+import { ConfirmModal } from "@components/ui/confirm-modal";
 import { Page } from "@components/ui/page";
 import { Spinner } from "@components/ui/spinner";
 import { toast } from "@components/ui/toaster/use-toast";
 import {
     agentNameError,
-    pullRequestPlan,
     withoutAgent,
     withoutSecretValues,
 } from "@services/custom-agents/drafts";
@@ -33,6 +32,7 @@ import { Trash2Icon } from "lucide-react";
 import { useUnsavedChangesGuard } from "src/core/hooks/use-unsaved-changes-guard";
 
 import {
+    agentsListHref,
     skillsPageHref,
     useCustomAgentsForm,
 } from "../../_custom-agents/use-custom-agents-form";
@@ -41,12 +41,10 @@ import { getCentralizedPrToastPayload } from "../../../_utils/centralized-pr-fee
 import { customAgentsSaveErrorMessage } from "../../../_utils/settings-save-conflict";
 import { useFeatureFlags } from "../../../../_components/context";
 import {
-    HowItComments,
-    Models,
-    RunsOn,
-    WhatItDoes,
+    CommentsAndModel,
+    FilesAndKnowledge,
+    InstructionsCard,
 } from "./_components/agent-sections";
-import { KnowledgeCard } from "./_components/knowledge-card";
 import { StatusStrip } from "./_components/status-strip";
 import { ToolsCard } from "./_components/tools-card";
 import { TryIt } from "./_components/try-it";
@@ -74,6 +72,7 @@ function AgentContent() {
         ResourceType.CodeReviewSettings,
         repositoryId,
     );
+    const [confirmingDelete, setConfirmingDelete] = useState(false);
     const agent = agents.find((entry) => entry.id === agentId);
     // Two agents with one command name can't be told apart; the server
     // refuses the save, so the page does too.
@@ -97,17 +96,7 @@ function AgentContent() {
         enabled: !!draft,
     });
 
-    const named =
-        resolve.data?.knowledge.status === "ok"
-            ? [
-                  ...resolve.data.knowledge.items,
-                  ...(resolve.data.knowledge.candidates ?? []),
-              ]
-            : [];
-
-    const reviewScopeHref = `/settings/code-review/${repositoryId}/review-scope${
-        directoryId ? `?directoryId=${directoryId}` : ""
-    }`;
+    const listHref = agentsListHref(repositoryId, directoryId);
 
     useUnsavedChangesGuard({
         id: "custom-agent",
@@ -149,18 +138,13 @@ function AgentContent() {
 
     const onDelete = async () => {
         if (!agent) return;
-        if (
-            !window.confirm(
-                `Delete "${agent.name}"? Its findings stay on past pull requests.`,
-            )
-        ) {
-            return;
-        }
         try {
             await save(withoutAgent(agents, knowledge, agent.id));
-            router.push(reviewScopeHref);
+            setConfirmingDelete(false);
+            router.push(listHref);
         } catch (error) {
             console.error("Error deleting custom agent:", error);
+            setConfirmingDelete(false);
             toast({
                 title: "Error",
                 description: customAgentsSaveErrorMessage(
@@ -188,39 +172,36 @@ function AgentContent() {
     const patch = (change: (current: CustomAgent) => CustomAgent) =>
         updateAgent(agentId, change);
 
+    const tryIt = agent && (
+        <TryIt
+            teamId={teamId}
+            repositoryId={repositoryId}
+            agent={agent}
+            knowledge={knowledge}
+            canEdit={canEdit}
+        />
+    );
+
     return (
         <Page.Root>
             <Page.Header sticky>
                 <Page.TitleContainer>
-                    {/* Not in the sidebar: reached from "What to review". */}
                     <Breadcrumb className="mb-1">
                         <BreadcrumbList>
                             <BreadcrumbItem>
-                                <BreadcrumbLink href={reviewScopeHref}>
-                                    What to review
-                                </BreadcrumbLink>
-                            </BreadcrumbItem>
-                            <BreadcrumbSeparator />
-                            <BreadcrumbItem>
-                                <BreadcrumbLink href={reviewScopeHref}>
+                                <BreadcrumbLink href={listHref}>
                                     Custom agents
                                 </BreadcrumbLink>
                             </BreadcrumbItem>
                             <BreadcrumbSeparator />
                             <BreadcrumbItem>
                                 <BreadcrumbPage>
-                                    {agent?.name ?? agentId}
+                                    {agent?.name || agentId}
                                 </BreadcrumbPage>
                             </BreadcrumbItem>
                         </BreadcrumbList>
                     </Breadcrumb>
-                    <Page.Title>
-                        {agent?.name || "Custom agent"} <Badge>Beta</Badge>
-                    </Page.Title>
-                    <Page.Description>
-                        A reviewer your team defines. It runs next to Kody on
-                        the pull requests its files match.
-                    </Page.Description>
+                    <Page.Title>{agent?.name || "Custom agent"}</Page.Title>
                 </Page.TitleContainer>
 
                 {agent && (
@@ -243,9 +224,6 @@ function AgentContent() {
                     </p>
                 ) : (
                     <>
-                        <p className="text-text-secondary text-sm">
-                            {pullRequestPlan(agent, knowledge, named)}
-                        </p>
                         <StatusStrip
                             agent={agent}
                             status={status.data?.agents.find(
@@ -255,65 +233,80 @@ function AgentContent() {
                             isLoading={status.isLoading && !isGlobal}
                             report={resolve.data}
                             isGlobal={isGlobal}
-                        />
-                        <WhatItDoes
-                            agent={agent}
-                            knowledge={knowledge}
-                            report={resolve.data}
                             canEdit={canEdit}
-                            onChange={patch}
-                            nameError={nameError}
+                            onEnabledChange={(on) =>
+                                patch((current) => ({
+                                    ...current,
+                                    enabled: on,
+                                }))
+                            }
                         />
-                        <RunsOn
-                            agent={agent}
-                            canEdit={canEdit}
-                            onChange={patch}
-                        />
-                        <KnowledgeCard
-                            agentId={agent.id}
-                            knowledge={knowledge}
-                            report={resolve.data}
-                            canEdit={canEdit}
-                            skillsHref={skillsPageHref(
-                                repositoryId,
-                                directoryId,
-                            )}
-                            onChange={setKnowledge}
-                        />
-                        <ToolsCard
-                            agent={agent}
-                            report={resolve.data}
-                            loading={resolve.isLoading}
-                            canEdit={canEdit}
-                            onChange={patch}
-                        />
-                        <HowItComments
-                            agent={agent}
-                            canEdit={canEdit}
-                            onChange={patch}
-                        />
-                        <Models
-                            agent={agent}
-                            canEdit={canEdit}
-                            onChange={patch}
-                        />
-                        <TryIt
-                            teamId={teamId}
-                            repositoryId={repositoryId}
-                            agent={agent}
-                            knowledge={knowledge}
-                            canEdit={canEdit}
-                        />
-                        <div>
-                            <Button
-                                size="sm"
-                                variant="cancel"
-                                leftIcon={<Trash2Icon />}
-                                disabled={!canEdit || isSubmitting}
-                                onClick={onDelete}>
-                                Delete agent
-                            </Button>
+                        {/* Config on the left, Try it pinned on the right
+                            from lg up; one column below, Try it right after
+                            the instructions. */}
+                        <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(20rem,26rem)] lg:items-start">
+                            <div className="flex flex-col gap-6 lg:col-start-1 lg:row-start-1">
+                                <InstructionsCard
+                                    agent={agent}
+                                    canEdit={canEdit}
+                                    onChange={patch}
+                                    nameError={nameError}
+                                />
+                            </div>
+                            <aside
+                                data-testid="try-it-panel"
+                                className="lg:sticky lg:top-24 lg:col-start-2 lg:row-span-2 lg:row-start-1">
+                                {tryIt}
+                            </aside>
+                            <div className="flex flex-col gap-6 lg:col-start-1 lg:row-start-2">
+                                <FilesAndKnowledge
+                                    agent={agent}
+                                    knowledge={knowledge}
+                                    report={resolve.data}
+                                    canEdit={canEdit}
+                                    onChange={patch}
+                                    onKnowledgeChange={setKnowledge}
+                                    skillsHref={skillsPageHref(
+                                        repositoryId,
+                                        directoryId,
+                                    )}
+                                />
+                                <ToolsCard
+                                    agent={agent}
+                                    report={resolve.data}
+                                    loading={resolve.isLoading}
+                                    canEdit={canEdit}
+                                    onChange={patch}
+                                />
+                                <CommentsAndModel
+                                    agent={agent}
+                                    canEdit={canEdit}
+                                    onChange={patch}
+                                />
+                                <div>
+                                    <Button
+                                        size="sm"
+                                        variant="cancel"
+                                        className="[--button-foreground:var(--color-danger)]"
+                                        leftIcon={<Trash2Icon />}
+                                        disabled={!canEdit || isSubmitting}
+                                        onClick={() =>
+                                            setConfirmingDelete(true)
+                                        }>
+                                        Delete agent
+                                    </Button>
+                                </div>
+                            </div>
                         </div>
+                        <ConfirmModal
+                            open={confirmingDelete}
+                            title={`Delete ${agent.name || "this agent"}?`}
+                            description="Its findings stay on past pull requests."
+                            confirmText="Delete agent"
+                            loading={isSubmitting}
+                            onConfirm={onDelete}
+                            onCancel={() => setConfirmingDelete(false)}
+                        />
                     </>
                 )}
             </Page.Content>

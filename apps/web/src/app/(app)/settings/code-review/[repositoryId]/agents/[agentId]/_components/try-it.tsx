@@ -72,21 +72,28 @@ export const TryIt = ({
     const isStale = ranWith !== null && ranWith !== onScreen;
 
     return (
-        <Card color="lv1" className="flex flex-col gap-3 px-5 py-4">
+        <Card
+            id="try-it"
+            color="lv1"
+            role="region"
+            aria-labelledby="try-it-title"
+            className="flex scroll-mt-24 flex-col gap-3 px-5 py-4">
             <span className="flex flex-col">
-                <span className="text-text-primary text-sm font-medium">
+                <span
+                    id="try-it-title"
+                    className="text-text-primary text-sm font-medium">
                     Try it
                 </span>
                 <span className="text-text-secondary text-xs">
-                    Runs this agent as it is on screen, saved or not, on a pull
-                    request of this repository, the way a review runs it: same
-                    sandbox, CLIs and checks. Nothing is posted.
+                    Runs the agent as it is on screen, saved or not, on one pull
+                    request of this repository. Nothing is posted.
                 </span>
             </span>
             <div className="flex items-center gap-2">
                 <div className="min-w-0 flex-1">
                     <Input
                         size="md"
+                        aria-label="Pull request link"
                         placeholder="Pull request link"
                         value={prUrl}
                         onChange={(e) => setPrUrl(e.target.value)}

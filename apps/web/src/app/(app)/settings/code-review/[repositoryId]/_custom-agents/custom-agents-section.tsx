@@ -2,214 +2,181 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Badge } from "@components/ui/badge";
+import { useRouter } from "next/navigation";
 import { Button } from "@components/ui/button";
+import { ConfirmModal } from "@components/ui/confirm-modal";
 import {
-    Collapsible,
-    CollapsibleContent,
-    CollapsibleIndicator,
-    CollapsibleTrigger,
-} from "@components/ui/collapsible";
-import { Heading } from "@components/ui/heading";
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@components/ui/dropdown-menu";
 import { Switch } from "@components/ui/switch";
-import TagInput from "@components/ui/tag-input";
-import { Textarea } from "@components/ui/textarea";
+import { toast } from "@components/ui/toaster/use-toast";
 import {
+    agentChips,
     agentUsageLine,
-    CUSTOM_AGENT_LIMITS,
     describeAgent,
-    followsLine,
-    settingsSummary,
     withoutAgent,
-    withoutSecretValues,
 } from "@services/custom-agents/drafts";
-import {
-    useCustomAgentsStatus,
-    useResolveCustomAgent,
-    useSettled,
-} from "@services/custom-agents/hooks";
+import { useCustomAgentsStatus } from "@services/custom-agents/hooks";
 import type { CustomAgent } from "@services/custom-agents/types";
-import { ArrowRightIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import {
+    EllipsisIcon,
+    FlaskConicalIcon,
+    PencilIcon,
+    PlusIcon,
+    TrashIcon,
+} from "lucide-react";
 import { cn } from "src/core/utils/components";
 
-import { useByokModels } from "../agents/[agentId]/_components/agent-sections";
-import { Chip, Field } from "../agents/[agentId]/_components/field";
-import { AgentKnowledgeField } from "../agents/[agentId]/_components/knowledge-card";
+import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedback";
+import { customAgentsSaveErrorMessage } from "../../_utils/settings-save-conflict";
+import { Chip } from "../agents/[agentId]/_components/field";
 import { NewAgentDialog } from "./new-agent-dialog";
-import {
-    agentPageHref,
-    skillsPageHref,
-    useCustomAgentsForm,
-} from "./use-custom-agents-form";
+import { agentPageHref, useCustomAgentsForm } from "./use-custom-agents-form";
 
-/**
- * What most teams set on an agent, folded under its row: instructions, what
- * it follows and where it runs. Tools, models and color are summarized and
- * edited on the agent's page. Mounted only while the row is open, so only
- * an open agent is checked against the branch.
- */
-const AgentInlineConfig = ({
+type Save = ReturnType<typeof useCustomAgentsForm>["save"];
+
+/** Runs a list save and says how it went, as the agent page does. */
+const saveWithToast = async (
+    save: Save,
+    next: Parameters<Save>[0],
+    { done, failed }: { done: string; failed: string },
+) => {
+    try {
+        const result = await save(next);
+        if (result?.centralizedPr) {
+            toast(
+                getCentralizedPrToastPayload(
+                    result.centralizedPr,
+                    "Change proposed through centralized pull request.",
+                ),
+            );
+            return;
+        }
+        toast({ description: done, variant: "success" });
+    } catch (error) {
+        console.error("Error saving custom agents:", error);
+        toast({
+            title: "Error",
+            description: customAgentsSaveErrorMessage(
+                error,
+                failed,
+                next?.agents,
+            ),
+            variant: "danger",
+        });
+    }
+};
+
+const AgentRow = ({
     agent,
+    href,
+    chips,
+    usage,
     canEdit,
+    busy,
+    onToggle,
+    onDelete,
 }: {
     agent: CustomAgent;
+    href: string;
+    chips: string[];
+    usage: string;
     canEdit: boolean;
+    busy: boolean;
+    onToggle: (enabled: boolean) => void;
+    onDelete: () => void;
 }) => {
-    const {
-        teamId,
-        repositoryId,
-        directoryId,
-        agents,
-        knowledge,
-        setAgents,
-        setKnowledge,
-        updateAgent,
-    } = useCustomAgentsForm();
-    const byok = useByokModels();
-    // A form edit like any other: it lands on Save settings and Reset undoes it.
-    const remove = () => {
-        const next = withoutAgent(agents, knowledge, agent.id);
-        setAgents(next.agents);
-        setKnowledge(next.knowledge);
-    };
-    // Typed secrets never go to the draft check, only the fact they exist.
-    const draft = useSettled(withoutSecretValues(agent));
-    const settledKnowledge = useSettled(knowledge);
-    const resolve = useResolveCustomAgent({
-        teamId,
-        repositoryId,
-        agent: draft,
-        knowledge: settledKnowledge,
-        discover: true,
-    });
-    const patch = (change: (current: CustomAgent) => CustomAgent) =>
-        updateAgent(agent.id, change);
-    const ids = {
-        instructions: `agent-${agent.id}-instructions`,
-        include: `agent-${agent.id}-include`,
-        exclude: `agent-${agent.id}-exclude`,
-    };
-    const integrations =
-        resolve.data?.mcp.status === "ok" ? resolve.data.mcp.integrations : [];
-    const summary = settingsSummary(agent, {
-        pluginName: (id) =>
-            integrations.find((entry) => entry.integrationId === id)?.name,
-        modelName: byok.nameOf,
-    });
-
+    const router = useRouter();
     return (
-        <div className="border-card-lv3/60 flex flex-col gap-5 border-t py-4 pr-4 pl-14">
-            <Field
-                label="Instructions"
-                htmlFor={ids.instructions}
-                hint="What this reviewer looks for and how it decides. It reads the change, the skills and docs it follows, and its tools.">
-                <Textarea
-                    id={ids.instructions}
-                    className="min-h-28 text-sm"
-                    value={agent.instructions}
-                    disabled={!canEdit}
-                    maxLength={CUSTOM_AGENT_LIMITS.maxInstructionsLength}
-                    onChange={(e) =>
-                        patch((current) => ({
-                            ...current,
-                            instructions: e.target.value,
-                        }))
-                    }
-                />
-            </Field>
-
-            <div className="flex flex-col gap-1.5">
-                <span className="text-text-primary text-xs font-medium">
-                    Follows
-                </span>
-                <span className="text-text-tertiary text-xs">
-                    The team&apos;s skills and docs this reviewer follows. A
-                    skill opens when the change needs it; a doc loads whole.
-                </span>
-                <AgentKnowledgeField
-                    agentId={agent.id}
-                    knowledge={knowledge}
-                    report={resolve.data}
-                    canEdit={canEdit}
-                    onChange={setKnowledge}
-                />
+        <li
+            className={cn(
+                "hover:bg-card-lv2/60 relative flex items-center gap-4 px-4 py-3 transition-colors",
+                !agent.enabled && "opacity-70",
+            )}>
+            <span
+                aria-hidden
+                className="size-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: agent.presentation.tag.color }}
+            />
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+                {/* The name stretches over the row: a click anywhere that is
+                    not the switch or the menu opens the agent. */}
+                <Link
+                    href={href}
+                    className="text-text-primary truncate text-sm font-medium after:absolute after:inset-0 hover:underline">
+                    {agent.name}
+                </Link>
+                <p className="text-text-secondary truncate text-xs">
+                    {describeAgent(agent)}
+                </p>
+                {chips.length > 0 && (
+                    <ul
+                        aria-label="Setup"
+                        className="flex flex-wrap items-center gap-1.5">
+                        {chips.map((chip) => (
+                            <li key={chip}>
+                                <Chip>{chip}</Chip>
+                            </li>
+                        ))}
+                    </ul>
+                )}
             </div>
-
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <Field
-                    label="Runs on"
-                    htmlFor={ids.include}
-                    hint="Globs over the files a pull request changes, e.g. src/payments/**. Empty runs on every pull request.">
-                    <TagInput
-                        id={ids.include}
-                        tags={agent.scope.include ?? []}
-                        disabled={!canEdit}
-                        placeholder="Add a glob and press Enter"
-                        onTagsChange={(include) =>
-                            patch((current) => ({
-                                ...current,
-                                scope: { ...current.scope, include },
-                            }))
-                        }
-                    />
-                </Field>
-                <Field
-                    label="Except"
-                    htmlFor={ids.exclude}
-                    hint="e.g. **/*.test.ts, **/generated/**">
-                    <TagInput
-                        id={ids.exclude}
-                        tags={agent.scope.exclude ?? []}
-                        disabled={!canEdit}
-                        placeholder="Add a glob and press Enter"
-                        onTagsChange={(exclude) =>
-                            patch((current) => ({
-                                ...current,
-                                scope: { ...current.scope, exclude },
-                            }))
-                        }
-                    />
-                </Field>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <span className="flex flex-wrap items-center gap-1.5">
-                    {summary.map((chip) => (
-                        <Chip key={chip}>{chip}</Chip>
-                    ))}
-                </span>
-                <span className="ml-auto flex items-center gap-3">
-                    {canEdit && (
-                        <Button
-                            size="xs"
-                            variant="cancel"
-                            leftIcon={<Trash2Icon />}
-                            onClick={remove}>
-                            Delete
-                        </Button>
-                    )}
-                    <Link
-                        href={agentPageHref(
-                            repositoryId,
-                            agent.id,
-                            directoryId,
-                        )}
-                        className="text-text-secondary hover:text-text-primary flex items-center gap-1.5 text-xs">
-                        More settings
-                        <ArrowRightIcon className="size-3.5" />
-                    </Link>
-                </span>
-            </div>
-        </div>
+            <span className="text-text-tertiary hidden shrink-0 text-xs sm:block">
+                {usage}
+            </span>
+            <Switch
+                size="sm"
+                className="relative z-10 shrink-0"
+                aria-label={`${agent.name} enabled`}
+                checked={agent.enabled}
+                disabled={!canEdit || busy}
+                onCheckedChange={onToggle}
+            />
+            <DropdownMenu modal={false}>
+                <DropdownMenuTrigger asChild>
+                    <Button
+                        size="icon-xs"
+                        variant="cancel"
+                        className="relative z-10 shrink-0"
+                        aria-label={`More actions for ${agent.name}`}
+                        title="More actions">
+                        <EllipsisIcon aria-hidden />
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                    <DropdownMenuItem onSelect={() => router.push(href)}>
+                        <PencilIcon className="size-4" aria-hidden />
+                        Edit
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                        onSelect={() => router.push(`${href}#try-it`)}>
+                        <FlaskConicalIcon className="size-4" aria-hidden />
+                        Try it
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                        disabled={!canEdit || busy}
+                        className="[--button-foreground:var(--color-danger)]"
+                        onSelect={onDelete}>
+                        <TrashIcon className="size-4" aria-hidden />
+                        Delete
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
+        </li>
     );
 };
 
 /**
- * "Custom agents" on What to review: one row per agent with its switch and
- * what it looks for, configured inline under the row like the categories
- * above it. Everything saves with the rest of this page.
+ * The custom agents of this level, one compact row each. A row opens the
+ * agent's page, where everything about it is set; the list itself only
+ * turns agents on and off and deletes them, each saved right away.
  */
-export const CustomAgentsSection = ({ canEdit }: { canEdit: boolean }) => {
+export const CustomAgentsList = ({ canEdit }: { canEdit: boolean }) => {
     const {
         teamId,
         repositoryId,
@@ -217,174 +184,145 @@ export const CustomAgentsSection = ({ canEdit }: { canEdit: boolean }) => {
         agents,
         knowledge,
         inheritedAgentCount,
-        updateAgent,
+        listNote,
+        isSubmitting,
+        save,
     } = useCustomAgentsForm();
     const [dialogOpen, setDialogOpen] = useState(false);
-    const [openIds, setOpenIds] = useState<string[]>([]);
+    const [deleting, setDeleting] = useState<CustomAgent | null>(null);
+    const isGlobal = repositoryId === "global";
     const status = useCustomAgentsStatus({
         teamId,
         repositoryId,
-        enabled: repositoryId !== "global" && agents.length > 0,
+        enabled: !isGlobal && agents.length > 0,
     });
-    // Skill names from their frontmatter, for the "Follows" line of each row.
-    const discovered = useResolveCustomAgent({
-        teamId,
-        repositoryId,
-        discover: true,
-        enabled: repositoryId !== "global" && agents.length > 0,
-    });
-    const named =
-        discovered.data?.knowledge.status === "ok"
-            ? [
-                  ...discovered.data.knowledge.items,
-                  ...(discovered.data.knowledge.candidates ?? []),
-              ]
-            : [];
     const windowDays = status.data?.windowDays ?? 30;
-    const statusOf = (agentId: string) =>
-        status.data?.agents.find((entry) => entry.agentId === agentId);
-    const setOpen = (agentId: string, open: boolean) =>
-        setOpenIds((current) =>
-            open
-                ? [...current.filter((id) => id !== agentId), agentId]
-                : current.filter((id) => id !== agentId),
+
+    const toggle = (agent: CustomAgent, enabled: boolean) =>
+        saveWithToast(
+            save,
+            {
+                agents: agents.map((entry) =>
+                    entry.id === agent.id ? { ...entry, enabled } : entry,
+                ),
+            },
+            {
+                done: `${agent.name} turned ${enabled ? "on" : "off"}`,
+                failed: "Couldn't save the agent. Try again.",
+            },
         );
+
+    const confirmDelete = async () => {
+        if (!deleting) return;
+        await saveWithToast(
+            save,
+            withoutAgent(agents, knowledge, deleting.id),
+            {
+                done: `${deleting.name} deleted`,
+                failed: "Couldn't delete the agent. Try again.",
+            },
+        );
+        setDeleting(null);
+    };
 
     return (
         <div className="flex flex-col gap-4" data-field-name="customAgents">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-                <div className="flex flex-col gap-1">
-                    <Heading variant="h2">
-                        Custom agents <Badge>Beta</Badge>
-                    </Heading>
-                    <p className="text-text-secondary text-sm">
-                        Reviewers your team defines, each with its own
-                        instructions, files, tools and way of commenting. They
-                        run next to Kody on the pull requests their files match.{" "}
-                        <Link
-                            className="text-primary-light hover:underline"
-                            href={skillsPageHref(repositoryId, directoryId)}>
-                            Skills &amp; docs for the main review
-                        </Link>
+            {listNote && (
+                <p role="note" className="text-text-secondary text-sm">
+                    {listNote}
+                </p>
+            )}
+            {inheritedAgentCount > 0 && (
+                <p role="note" className="text-text-secondary text-sm">
+                    Also runs the repository&apos;s{" "}
+                    {inheritedAgentCount === 1
+                        ? "agent"
+                        : `${inheritedAgentCount} agents`}
+                    .
+                </p>
+            )}
+
+            {agents.length === 0 ? (
+                <div className="border-card-lv3/60 flex flex-col items-center gap-3 rounded-xl border border-dashed px-4 py-10 text-center">
+                    <p className="text-text-primary text-sm font-medium">
+                        No custom agents yet
                     </p>
-                    {inheritedAgentCount > 0 && (
-                        <p className="text-text-secondary text-sm">
-                            Also runs the repository&apos;s{" "}
-                            {inheritedAgentCount === 1
-                                ? "agent"
-                                : `${inheritedAgentCount} agents`}
-                            .
-                        </p>
-                    )}
-                </div>
-                <div className="flex items-center gap-3">
+                    <p className="text-text-secondary max-w-md text-sm">
+                        An agent is a reviewer with its own instructions, files
+                        and tools. Start from a template, or turn one of the
+                        team&apos;s skills into one.
+                    </p>
                     <Button
                         size="sm"
-                        variant="secondary"
+                        variant="primary"
                         leftIcon={<PlusIcon />}
                         disabled={!canEdit}
                         onClick={() => setDialogOpen(true)}>
                         New agent
                     </Button>
                 </div>
-            </div>
-
-            {agents.length === 0 ? (
-                <div className="border-card-lv3/60 text-text-secondary rounded-xl border border-dashed px-4 py-6 text-center text-sm">
-                    No custom agents yet. Start from a template, or turn one of
-                    the team&apos;s skills into a reviewer that follows it.
-                </div>
             ) : (
-                <div className="border-card-lv3/60 bg-card-lv1 divide-card-lv3/60 flex flex-col divide-y overflow-hidden rounded-xl border">
-                    {agents.map((agent) => {
-                        const switchId = `custom-agent-${agent.id}`;
-                        const open = openIds.includes(agent.id);
-                        const follows = followsLine(knowledge, agent.id, named);
-                        return (
-                            <Collapsible
-                                key={agent.id}
-                                open={open}
-                                onOpenChange={(next) => setOpen(agent.id, next)}
-                                className={cn(
-                                    "group/collapsible",
-                                    !agent.enabled && !open && "opacity-70",
-                                )}>
-                                <div className="flex flex-wrap items-start gap-x-4 gap-y-2 px-4 py-3">
-                                    <Switch
-                                        id={switchId}
-                                        size="sm"
-                                        className="mt-0.5"
-                                        checked={agent.enabled}
-                                        disabled={!canEdit}
-                                        onCheckedChange={(enabled) =>
-                                            updateAgent(
-                                                agent.id,
-                                                (current) => ({
-                                                    ...current,
-                                                    enabled,
-                                                }),
-                                            )
-                                        }
-                                    />
-                                    <div className="flex min-w-[10rem] flex-1 flex-col gap-0.5">
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <span
-                                                className="size-2.5 rounded-full"
-                                                style={{
-                                                    backgroundColor:
-                                                        agent.presentation.tag
-                                                            .color,
-                                                }}
-                                            />
-                                            <label
-                                                htmlFor={switchId}
-                                                className="text-text-primary cursor-pointer text-sm font-medium">
-                                                {agent.name}
-                                            </label>
-                                        </div>
-                                        <p className="text-text-secondary text-xs">
-                                            {describeAgent(agent)}
-                                        </p>
-                                        {follows && (
-                                            <p className="text-text-secondary text-xs">
-                                                {follows}
-                                            </p>
-                                        )}
-                                        <p className="text-text-tertiary text-xs">
-                                            {repositoryId === "global"
-                                                ? "Usage shows per repository"
-                                                : agentUsageLine(
-                                                      statusOf(agent.id),
-                                                      windowDays,
-                                                  )}
-                                        </p>
-                                    </div>
-                                    <CollapsibleTrigger asChild>
-                                        <button
-                                            type="button"
-                                            className="text-text-secondary hover:text-text-primary ml-auto flex shrink-0 items-center gap-2 self-center text-xs">
-                                            Configure
-                                            <CollapsibleIndicator />
-                                        </button>
-                                    </CollapsibleTrigger>
-                                </div>
-                                <CollapsibleContent className="pb-0">
-                                    <AgentInlineConfig
-                                        agent={agent}
-                                        canEdit={canEdit}
-                                    />
-                                </CollapsibleContent>
-                            </Collapsible>
-                        );
-                    })}
-                </div>
+                <ul
+                    aria-label="Custom agents"
+                    className="border-card-lv3/60 bg-card-lv1 divide-card-lv3/60 flex flex-col divide-y overflow-hidden rounded-xl border">
+                    {agents.map((agent) => (
+                        <AgentRow
+                            key={agent.id}
+                            agent={agent}
+                            href={agentPageHref(
+                                repositoryId,
+                                agent.id,
+                                directoryId,
+                            )}
+                            chips={agentChips(agent, knowledge)}
+                            usage={
+                                isGlobal
+                                    ? "Usage shows per repository"
+                                    : agentUsageLine(
+                                          status.data?.agents.find(
+                                              (entry) =>
+                                                  entry.agentId === agent.id,
+                                          ),
+                                          windowDays,
+                                      )
+                            }
+                            canEdit={canEdit}
+                            busy={isSubmitting}
+                            onToggle={(enabled) => toggle(agent, enabled)}
+                            onDelete={() => setDeleting(agent)}
+                        />
+                    ))}
+                </ul>
             )}
 
-            <NewAgentDialog
-                open={dialogOpen}
-                onOpenChange={setDialogOpen}
-                onCreated={(agentId) => setOpen(agentId, true)}
+            <NewAgentDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+            <ConfirmModal
+                open={!!deleting}
+                title={`Delete ${deleting?.name ?? "agent"}?`}
+                description="Its findings stay on past pull requests."
+                confirmText="Delete agent"
+                loading={isSubmitting}
+                onConfirm={confirmDelete}
+                onCancel={() => setDeleting(null)}
             />
         </div>
+    );
+};
+
+/** The header's "New agent" button, with the dialog it opens. */
+export const NewAgentButton = ({ canEdit }: { canEdit: boolean }) => {
+    const [open, setOpen] = useState(false);
+    return (
+        <>
+            <Button
+                size="sm"
+                variant="primary"
+                leftIcon={<PlusIcon />}
+                disabled={!canEdit}
+                onClick={() => setOpen(true)}>
+                New agent
+            </Button>
+            <NewAgentDialog open={open} onOpenChange={setOpen} />
+        </>
     );
 };

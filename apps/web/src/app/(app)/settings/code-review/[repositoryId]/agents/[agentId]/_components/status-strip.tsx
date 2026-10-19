@@ -2,17 +2,14 @@
 
 import { Card } from "@components/ui/card";
 import { Skeleton } from "@components/ui/skeleton";
+import { Switch } from "@components/ui/switch";
+import { agentStatusLine } from "@services/custom-agents/drafts";
 import type {
     CustomAgent,
     CustomAgentResolveReport,
     CustomAgentStatus,
 } from "@services/custom-agents/types";
-import {
-    CircleAlertIcon,
-    CircleCheckIcon,
-    CircleDashedIcon,
-    PauseCircleIcon,
-} from "lucide-react";
+import { CircleAlertIcon } from "lucide-react";
 import { cn } from "src/core/utils/components";
 
 /** Problems with the draft that would stop or degrade a run. */
@@ -40,8 +37,10 @@ export const draftProblems = (report?: CustomAgentResolveReport) => {
 };
 
 /**
- * Is the agent running, and how it did. How a review went belongs to the
- * pull request; this answers the person setting the agent up.
+ * The agent page's one status line: the switch that turns the agent on,
+ * where it runs and how it did lately, and anything that would stop a run.
+ * How a review went belongs to the pull request; this answers the person
+ * setting the agent up.
  */
 export const StatusStrip = ({
     agent,
@@ -50,6 +49,8 @@ export const StatusStrip = ({
     isLoading,
     report,
     isGlobal,
+    canEdit,
+    onEnabledChange,
 }: {
     agent: CustomAgent;
     status?: CustomAgentStatus;
@@ -57,53 +58,47 @@ export const StatusStrip = ({
     isLoading: boolean;
     report?: CustomAgentResolveReport;
     isGlobal: boolean;
+    canEdit: boolean;
+    onEnabledChange: (enabled: boolean) => void;
 }) => {
-    if (isLoading) return <Skeleton className="h-14 w-full rounded-xl" />;
-
     const problems = draftProblems(report);
-    const idle = !status || status.pullRequests === 0;
-
-    const headline = !agent.enabled
-        ? "Off · this agent doesn't run"
-        : problems.length
-          ? `Needs attention · ${problems.length} ${problems.length === 1 ? "problem" : "problems"}`
-          : isGlobal
-            ? "On · runs on every repository that inherits it"
-            : idle
-              ? `No findings in the last ${windowDays} days`
-              : "Posting";
 
     return (
         <Card
             color="lv1"
+            data-testid="agent-status"
             className={cn(
                 "flex flex-col gap-1.5 px-5 py-3.5",
                 problems.length > 0 && "ring-warning/40 ring-1",
             )}>
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-                {!agent.enabled ? (
-                    <PauseCircleIcon className="text-text-tertiary size-4" />
-                ) : problems.length ? (
-                    <CircleAlertIcon className="text-warning size-4" />
-                ) : idle ? (
-                    <CircleDashedIcon className="text-text-tertiary size-4" />
-                ) : (
-                    <CircleCheckIcon className="text-success size-4" />
-                )}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                <Switch
+                    size="sm"
+                    aria-label="Agent enabled"
+                    checked={agent.enabled}
+                    disabled={!canEdit}
+                    onCheckedChange={onEnabledChange}
+                />
                 <span className="text-text-primary font-medium">
-                    {headline}
+                    {agent.enabled ? "On" : "Off"}
                 </span>
-                {!idle && status && (
-                    <span className="text-text-secondary">
-                        · {status.pullRequests}{" "}
-                        {status.pullRequests === 1 ? "PR" : "PRs"} ·{" "}
-                        {status.posted} posted · {status.dropped} dropped in{" "}
-                        {windowDays} days
+                {problems.length > 0 && (
+                    <span className="text-warning flex items-center gap-1">
+                        <CircleAlertIcon className="size-4" aria-hidden />
+                        {problems.length}{" "}
+                        {problems.length === 1 ? "problem" : "problems"}
+                    </span>
+                )}
+                {isLoading ? (
+                    <Skeleton className="h-4 w-64" />
+                ) : (
+                    <span className="text-text-secondary min-w-0">
+                        {agentStatusLine(agent, status, windowDays, isGlobal)}
                     </span>
                 )}
             </div>
             {problems.slice(0, 5).map((problem) => (
-                <p key={problem} className="text-warning pl-6 text-xs">
+                <p key={problem} className="text-warning pl-12 text-xs">
                     {problem}
                 </p>
             ))}

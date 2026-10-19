@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Input } from "@components/ui/input";
 import {
     Select,
@@ -25,111 +26,70 @@ import type {
 import { getBYOK } from "@services/organizationParameters/fetch";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "src/core/utils/components";
+import { formatModelLabel } from "src/features/ee/byok/_data/model-label";
 import type { BYOKConfig } from "src/features/ee/byok/_types";
 
-import { Chip, Choice, Field, Section } from "./field";
+import { Choice, Field, Section } from "./field";
+import { AgentKnowledgeField } from "./knowledge-card";
 
 type Patch = (patch: (agent: CustomAgent) => CustomAgent) => void;
 
-export const WhatItDoes = ({
+export const InstructionsCard = ({
     agent,
-    knowledge,
-    report,
     canEdit,
     onChange,
     nameError,
 }: {
     agent: CustomAgent;
-    knowledge: KnowledgeItem[];
-    report?: CustomAgentResolveReport;
     canEdit: boolean;
     onChange: Patch;
     /** Why the name can't be saved (another agent has its command name). */
     nameError?: string | null;
-}) => {
-    const linked = knowledge.filter((item) =>
-        item.linkedTo.some(
-            (target) =>
-                typeof target === "object" && target.agentId === agent.id,
-        ),
-    );
-    const skills = linked.filter((item) => item.kind === "skill").length;
-    const docs = linked.filter((item) => item.kind === "doc").length;
-    const plugins = agent.tools.mcp?.length ?? 0;
-    const clis = agent.tools.cli?.length ?? 0;
-    const rules = report?.astGrep.ruleCount ?? 0;
-
-    return (
-        <Section
-            title="What this agent does"
-            description="Write it like a brief to a reviewer who knows the codebase: what to look for, what to ignore, and what proof a finding needs.">
-            <Field
-                label="Name"
-                htmlFor="agent-name"
-                hint={nameCollisionHint(agent.name) ?? undefined}
-                error={nameError ?? undefined}>
-                <Input
-                    id="agent-name"
-                    size="md"
-                    value={agent.name}
-                    aria-invalid={nameError ? true : undefined}
-                    aria-describedby={
-                        nameError ? "agent-name-error" : undefined
-                    }
-                    disabled={!canEdit}
-                    maxLength={60}
-                    onChange={(e) =>
-                        onChange((current) => ({
-                            ...current,
-                            name: e.target.value,
-                        }))
-                    }
-                />
-            </Field>
-            <Field
-                label="Instructions"
-                htmlFor="agent-instructions"
-                hint={`${agent.instructions.length} / ${CUSTOM_AGENT_LIMITS.maxInstructionsLength}`}>
-                <Textarea
-                    id="agent-instructions"
-                    className="min-h-40 font-mono text-xs"
-                    value={agent.instructions}
-                    disabled={!canEdit}
-                    maxLength={CUSTOM_AGENT_LIMITS.maxInstructionsLength}
-                    onChange={(e) =>
-                        onChange((current) => ({
-                            ...current,
-                            instructions: e.target.value,
-                        }))
-                    }
-                />
-            </Field>
-            <div className="flex flex-wrap gap-1.5">
-                <Chip>
-                    {skills} {skills === 1 ? "skill" : "skills"}
-                </Chip>
-                <Chip>
-                    {docs} {docs === 1 ? "doc" : "docs"}
-                </Chip>
-                {agent.tools.astGrepConfig?.trim() && (
-                    <Chip>
-                        ast-grep · {rules} {rules === 1 ? "rule" : "rules"}
-                    </Chip>
-                )}
-                {plugins > 0 && (
-                    <Chip>
-                        {plugins} {plugins === 1 ? "plugin" : "plugins"}
-                    </Chip>
-                )}
-                {clis > 0 && (
-                    <Chip>
-                        {clis} {clis === 1 ? "CLI" : "CLIs"}
-                    </Chip>
-                )}
-            </div>
-        </Section>
-    );
-};
+}) => (
+    <Section
+        title="Instructions"
+        description="A brief to a reviewer who knows the codebase: what to look for, what to ignore, what proof a finding needs.">
+        <Field
+            label="Name"
+            htmlFor="agent-name"
+            hint={nameCollisionHint(agent.name) ?? undefined}
+            error={nameError ?? undefined}>
+            <Input
+                id="agent-name"
+                size="md"
+                value={agent.name}
+                aria-invalid={nameError ? true : undefined}
+                aria-describedby={nameError ? "agent-name-error" : undefined}
+                disabled={!canEdit}
+                maxLength={60}
+                onChange={(e) =>
+                    onChange((current) => ({
+                        ...current,
+                        name: e.target.value,
+                    }))
+                }
+            />
+        </Field>
+        <Field
+            label="Instructions"
+            htmlFor="agent-instructions"
+            hint={`${agent.instructions.length} / ${CUSTOM_AGENT_LIMITS.maxInstructionsLength}`}>
+            <Textarea
+                id="agent-instructions"
+                className="min-h-40 font-mono text-xs"
+                value={agent.instructions}
+                disabled={!canEdit}
+                maxLength={CUSTOM_AGENT_LIMITS.maxInstructionsLength}
+                onChange={(e) =>
+                    onChange((current) => ({
+                        ...current,
+                        instructions: e.target.value,
+                    }))
+                }
+            />
+        </Field>
+    </Section>
+);
 
 /** Globs holding `(` or `[`, which are glob syntax as well as path text. */
 const globsWithBrackets = (agent: CustomAgent) =>
@@ -137,46 +97,64 @@ const globsWithBrackets = (agent: CustomAgent) =>
         (glob) => /[([]/.test(glob),
     );
 
-export const RunsOn = ({
+export const FilesAndKnowledge = ({
     agent,
+    knowledge,
+    report,
     canEdit,
     onChange,
+    onKnowledgeChange,
+    skillsHref,
 }: {
     agent: CustomAgent;
+    knowledge: KnowledgeItem[];
+    report?: CustomAgentResolveReport;
     canEdit: boolean;
     onChange: Patch;
+    onKnowledgeChange: (next: KnowledgeItem[]) => void;
+    skillsHref: string;
 }) => {
     const bracketed = globsWithBrackets(agent);
     return (
         <Section
-            title="Runs on"
-            description="Globs over the files a pull request changes. The agent runs only when one matches; with no include it runs on every pull request.">
-            <Field label="Include" hint="e.g. src/payments/**, **/*.sql">
-                <TagInput
-                    tags={agent.scope.include ?? []}
-                    disabled={!canEdit}
-                    placeholder="Add a glob and press Enter"
-                    onTagsChange={(include) =>
-                        onChange((current) => ({
-                            ...current,
-                            scope: { ...current.scope, include },
-                        }))
-                    }
-                />
-            </Field>
-            <Field label="Exclude" hint="e.g. **/*.test.ts, **/generated/**">
-                <TagInput
-                    tags={agent.scope.exclude ?? []}
-                    disabled={!canEdit}
-                    placeholder="Add a glob and press Enter"
-                    onTagsChange={(exclude) =>
-                        onChange((current) => ({
-                            ...current,
-                            scope: { ...current.scope, exclude },
-                        }))
-                    }
-                />
-            </Field>
+            title="Files & knowledge"
+            description="The agent runs when a pull request changes a matching file, and reads the skills and docs it follows.">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Field
+                    label="Files"
+                    htmlFor="agent-include"
+                    hint="e.g. src/payments/**. Empty runs on every pull request.">
+                    <TagInput
+                        id="agent-include"
+                        tags={agent.scope.include ?? []}
+                        disabled={!canEdit}
+                        placeholder="Add a glob and press Enter"
+                        onTagsChange={(include) =>
+                            onChange((current) => ({
+                                ...current,
+                                scope: { ...current.scope, include },
+                            }))
+                        }
+                    />
+                </Field>
+                <Field
+                    label="Except"
+                    htmlFor="agent-exclude"
+                    hint="e.g. **/*.test.ts, **/generated/**">
+                    <TagInput
+                        id="agent-exclude"
+                        tags={agent.scope.exclude ?? []}
+                        disabled={!canEdit}
+                        placeholder="Add a glob and press Enter"
+                        onTagsChange={(exclude) =>
+                            onChange((current) => ({
+                                ...current,
+                                scope: { ...current.scope, exclude },
+                            }))
+                        }
+                    />
+                </Field>
+            </div>
             {bracketed.length > 0 && (
                 <p role="note" className="text-text-secondary text-xs">
                     {bracketed.join(", ")}: parentheses and brackets are glob
@@ -184,6 +162,27 @@ export const RunsOn = ({
                     Next.js route folders like (shop) or [id].
                 </p>
             )}
+            <div className="flex flex-col gap-1.5">
+                <span className="text-text-primary text-xs font-medium">
+                    Skills &amp; docs
+                </span>
+                <span className="text-text-tertiary text-xs">
+                    Read from the target branch: a skill opens when the change
+                    needs it, a doc loads whole.{" "}
+                    <Link
+                        href={skillsHref}
+                        className="text-primary-light hover:underline">
+                        Manage skills &amp; docs
+                    </Link>
+                </span>
+                <AgentKnowledgeField
+                    agentId={agent.id}
+                    knowledge={knowledge}
+                    report={report}
+                    canEdit={canEdit}
+                    onChange={onKnowledgeChange}
+                />
+            </div>
         </Section>
     );
 };
@@ -228,7 +227,7 @@ export const TagColorPicker = ({
     </div>
 );
 
-export const HowItComments = ({
+export const CommentsAndModel = ({
     agent,
     canEdit,
     onChange,
@@ -246,7 +245,7 @@ export const HowItComments = ({
 
     return (
         <Section
-            title="How it comments"
+            title="Comments & model"
             description="Comments carry the agent's tag, so the team knows who is speaking.">
             <Field label="Tag">
                 <div className="flex items-center gap-3">
@@ -357,6 +356,7 @@ export const HowItComments = ({
                     }
                 />
             </Field>
+            <ModelsFields agent={agent} canEdit={canEdit} onChange={onChange} />
         </Section>
     );
 };
@@ -376,11 +376,15 @@ export const useByokModels = () => {
         models,
         routing: byok.data?.routing,
         isLoading: byok.isLoading,
-        nameOf: (id?: string) => models.find((model) => model.id === id)?.model,
+        /** A model's readable name, never its raw id. */
+        nameOf: (id?: string) => {
+            const model = models.find((entry) => entry.id === id)?.model;
+            return model ? formatModelLabel(model) : undefined;
+        },
     };
 };
 
-/** Run and check model pickers, without the card around them. */
+/** The model picker, without a card around it. */
 export const ModelsFields = ({
     agent,
     canEdit,
@@ -417,7 +421,7 @@ export const ModelsFields = ({
                 </SelectItem>
                 {models.map((model) => (
                     <SelectItem key={model.id} value={model.id}>
-                        {model.model}
+                        {formatModelLabel(model.model)}
                     </SelectItem>
                 ))}
             </SelectContent>
@@ -434,21 +438,9 @@ export const ModelsFields = ({
             )}
             <Field
                 label="Model"
-                hint="Reviews the change and verifies its findings, as the main review does.">
+                hint="Reviews the change and verifies its findings. The default follows the routing table.">
                 {selector}
             </Field>
         </>
     );
 };
-
-export const Models = (props: {
-    agent: CustomAgent;
-    canEdit: boolean;
-    onChange: Patch;
-}) => (
-    <Section
-        title="Models"
-        description="By default the routing table decides, under Custom Agents. Pin a model here to override it for this agent only.">
-        <ModelsFields {...props} />
-    </Section>
-);

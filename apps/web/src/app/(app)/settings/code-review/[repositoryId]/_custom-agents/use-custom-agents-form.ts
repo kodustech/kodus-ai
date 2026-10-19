@@ -26,7 +26,13 @@ import {
  * (see settings-save-conflict.ts).
  */
 type FieldNode<T> =
-    | { value?: T; level?: string; revision?: string; overriddenValue?: T }
+    | {
+          value?: T;
+          level?: string;
+          revision?: string;
+          overriddenValue?: T;
+          overriddenLevel?: string;
+      }
     | undefined;
 
 /**
@@ -40,6 +46,21 @@ const ownList = <T>(node: FieldNode<T[]>, level: string): T[] =>
     node?.level !== FormattedConfigLevel.DIRECTORY
         ? []
         : (node?.value ?? []);
+
+/**
+ * Said when the agents list saved at a repository replaces the global one:
+ * that repository no longer gets the global agents. Null anywhere else; a
+ * directory adds its agents to the repository's instead of replacing them.
+ */
+export const ownListNote = (
+    saved: FieldNode<unknown[]>,
+    level: string,
+): string | null =>
+    level === FormattedConfigLevel.REPOSITORY &&
+    saved?.level === FormattedConfigLevel.REPOSITORY &&
+    saved.overriddenLevel === FormattedConfigLevel.GLOBAL
+        ? "This repository has its own agents list. Changes to the global agents don't reach it."
+        : null;
 
 /**
  * The custom agents and the skills and docs they link, read from and written
@@ -78,6 +99,7 @@ export const useCustomAgentsForm = () => {
     const loadedAgents = (
         form.control._defaultValues as Record<string, unknown>
     )?.customAgents as FieldNode<CustomAgent[]>;
+    const listNote = ownListNote(loadedAgents, level);
     const inheritedAgentCount =
         level === FormattedConfigLevel.DIRECTORY
             ? ((loadedAgents?.level === FormattedConfigLevel.DIRECTORY
@@ -210,6 +232,7 @@ export const useCustomAgentsForm = () => {
         knowledge,
         inheritedAgentCount,
         level,
+        listNote,
         isDirty,
         otherFieldsDirty,
         isSubmitting,
@@ -227,6 +250,11 @@ export const agentPageHref = (
     directoryId?: string,
 ) =>
     `/settings/code-review/${repositoryId}/agents/${encodeURIComponent(agentId)}${
+        directoryId ? `?directoryId=${directoryId}` : ""
+    }`;
+
+export const agentsListHref = (repositoryId: string, directoryId?: string) =>
+    `/settings/code-review/${repositoryId}/agents${
         directoryId ? `?directoryId=${directoryId}` : ""
     }`;
 
