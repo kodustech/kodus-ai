@@ -1321,6 +1321,84 @@ describe('contract matrix — E. N-model policy (strict json_schema vs fallback)
         ]);
     });
 
+    // Lane check (#2172): AgentLoopInput.laneFocus reaches the verifier, which
+    // drops a custom agent's finding outside its focus in the verify run the
+    // finding already takes; it is counted with the verify drops.
+    it('threads laneFocus to the verifier, which drops a finding outside the focus', async () => {
+        const runWith = async (over: Record<string, unknown>) => {
+            const doGenerate = (async (opts: any) => {
+                const sys = JSON.stringify(opts?.prompt ?? opts ?? '');
+                if (sys.includes('REFUTE')) {
+                    const outOfFocus =
+                        sys.includes('AgentFocus') &&
+                        sys.includes('end-to-end test');
+                    return {
+                        content: [
+                            {
+                                type: 'tool-call',
+                                toolCallId: 'v',
+                                toolName: 'submitVerdict',
+                                input: JSON.stringify(
+                                    outOfFocus
+                                        ? {
+                                              keep: false,
+                                              rationale:
+                                                  'OUT OF FOCUS: a pagination bug',
+                                          }
+                                        : { keep: true, rationale: 'kept' },
+                                ),
+                            },
+                        ],
+                        finishReason: 'tool-calls',
+                        usage: { inputTokens: 5, outputTokens: 5 },
+                        warnings: [],
+                    };
+                }
+                return {
+                    content: [
+                        {
+                            type: 'tool-call',
+                            toolCallId: 'f',
+                            toolName: 'submitResult',
+                            input: JSON.stringify({
+                                reasoning: 'one candidate',
+                                suggestions: [
+                                    {
+                                        relevantFile: 'a.ts',
+                                        suggestionContent:
+                                            'The last page is skipped.',
+                                        existingCode: 'const x=1;',
+                                        improvedCode: 'const x=2;',
+                                        severity: 'high',
+                                    },
+                                ],
+                            }),
+                        },
+                    ],
+                    finishReason: 'tool-calls',
+                    usage: { inputTokens: 5, outputTokens: 5 },
+                    warnings: [],
+                };
+            }) as any;
+            return runAgentLoopViaCore(
+                makeInput(new MockLanguageModelV3({ doGenerate }), over),
+                secrets,
+            );
+        };
+
+        const lane = await runWith({
+            laneFocus:
+                'Reviewer: "Booking E2E"\nInstructions:\nEvery booking screen needs an end-to-end test.',
+        });
+        const noLane = await runWith({});
+
+        expect(lane.findings.suggestions).toHaveLength(0);
+        expect(lane.droppedByVerify.map((s: any) => s.relevantFile)).toEqual([
+            'a.ts',
+        ]);
+        expect(noLane.findings.suggestions).toHaveLength(1);
+    });
+
     // The evidence gate's forceFull re-verify (finder.agent.ts's second,
     // unevidenced-only LlmVerifier instance) is a one-line duplicate of the
     // first pass's `previousDecisions` forwarding, but was never itself

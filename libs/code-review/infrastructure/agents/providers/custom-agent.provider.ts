@@ -95,8 +95,11 @@ ${files
     Read any other file for context, but report findings only on these files. A renamed file with no diff still counts: check what the move breaks, such as its relative imports.
   </Scope>`
         : '';
+    // Opted into general bugs: the defect hunt is part of its mission, so
+    // the instructions no longer bound what it reports.
+    const generalBugs = agent.reportGeneralBugs === true;
     return `  <Mission>
-    You are the team's "${agent.name}" reviewer. Find the problems the team's instructions below ask you to look for, in the code this pull request changes. Investigate the codebase before reporting, and back each finding with evidence from the code.
+    You are the team's "${agent.name}" reviewer. Find the problems the team's instructions below ask you to look for, in the code this pull request changes. Investigate the codebase before reporting, and back each finding with evidence from the code.${generalBugs ? '\n    Also report the general correctness bugs you find in the changed code, even when the instructions do not ask for them.' : ''}
   </Mission>
 
   <TeamInstructions>
@@ -104,11 +107,37 @@ ${instructions}
   </TeamInstructions>
 
   <DoNotReport>
-    Do not report:
-    - issues outside what the team's instructions ask for (other reviewers cover them)
+    Do not report:${generalBugs ? '' : "\n    - issues outside what the team's instructions ask for (other reviewers cover them)"}
     - style or cosmetic issues, unless the instructions ask for them
     - speculative concerns without evidence in the code
   </DoNotReport>${scope}${teamSystems}`;
+}
+
+/**
+ * What a custom agent kept to its lane may report, for the verifier (#2172):
+ * its name, the team's instructions, and the guides and tools that extend
+ * them. A finding none of these asks for is outside its lane.
+ */
+export function buildCustomAgentLaneFocus(
+    agent: Pick<CustomAgentConfig, 'name' | 'instructions' | 'tools'>,
+    guides: readonly string[] = [],
+): string {
+    const instructions = (agent.instructions || '').trim();
+    const tools = [
+        agent.tools?.astGrepConfig?.trim() ? "the team's ast-grep rules" : '',
+        ...(agent.tools?.mcp ?? [])
+            .filter((s) => s?.integrationId && s.tools?.length)
+            .map((s) => `${s.integrationId} (${s.tools.join(', ')})`),
+        ...(agent.tools?.cli ?? []).map((cli) => `the ${cli.name} CLI`),
+    ].filter(Boolean);
+    return [
+        `Reviewer: "${agent.name}"`,
+        `Instructions:\n${instructions || '(none)'}`,
+        guides.length ? `Linked guides and skills: ${guides.join(', ')}` : '',
+        tools.length ? `Tools: ${tools.join('; ')}` : '',
+    ]
+        .filter(Boolean)
+        .join('\n');
 }
 
 const logger = createLogger('CustomAgentProvider');
@@ -194,6 +223,20 @@ export class CustomAgentProvider extends BaseCodeReviewAgentProvider {
 
     protected getTeamInstructions(): string | undefined {
         return this.agent.instructions || undefined;
+    }
+
+    protected reportsGeneralBugs(): boolean {
+        return this.agent.reportGeneralBugs === true;
+    }
+
+    /** Unset when the team opted it into general bugs: then nothing is
+     *  dropped for being outside its instructions. */
+    protected getLaneFocus(input: ReviewAgentInput): string | undefined {
+        if (this.reportsGeneralBugs()) return undefined;
+        return buildCustomAgentLaneFocus(
+            this.agent,
+            this.getConventionGuides(input),
+        );
     }
 
     protected getRunToolCache(): RunToolCache {

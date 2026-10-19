@@ -454,6 +454,13 @@ export interface AgentLoopInput {
     /** Custom agents only: the team's instructions, the text a rule cited
      *  from `TeamInstructions` is quote-checked against. */
     teamInstructions?: string;
+    /** Custom agents kept to their lane only: the focus (name, instructions,
+     *  linked guides) the verifier checks each finding against. A finding
+     *  outside it is dropped by the verification it already takes, and the
+     *  synthesis rescue asks only for missed findings within it. Unset for
+     *  every other agent and for a custom agent that also reports general
+     *  bugs. */
+    laneFocus?: string;
     /** Custom agents only: the names of its team system (read-only MCP)
      *  tools. Set → the recall pass also asks whether a system it consulted
      *  states a requirement the change breaks. Unset for every other agent. */

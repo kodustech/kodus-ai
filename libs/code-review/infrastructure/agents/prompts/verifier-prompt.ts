@@ -66,6 +66,21 @@ Output JSON:
 }
 
 /**
+ * Added to the verifier run of a custom agent kept to its lane (#2172), after
+ * the evidence — never to the system prompt, so every other agent verifies
+ * exactly as before. The lane is what the agent was asked to review, not a
+ * kind of finding: a security agent's vulnerability is in its lane. A closing
+ * tag inside the focus cannot end the block.
+ */
+export function verifierLaneRule(focus: string): string {
+    const text = focus.replace(/<\/?AgentFocus>/gi, '').trim();
+    return `<AgentFocus>
+${text}
+</AgentFocus>
+This finding comes from a team-defined reviewer whose focus is above; a generalist reviewer covers general correctness bugs on the same pull request. Also DROP the finding when it is outside that focus — a defect the focus does not ask this reviewer to look for, however real. Start the rationale with "OUT OF FOCUS:" when that is why you drop it. A finding is within the focus when the instructions, a linked guide or skill, or one of the reviewer's tools asks for exactly this kind of problem, whatever its kind (a security reviewer's vulnerability, a performance reviewer's slowdown).`;
+}
+
+/**
  * Added to a verifier run only when the PR has earlier suggestions, right
  * after its <PreviousReviewDecisions> block — never to the system prompt, so a
  * review with no history verifies exactly as before (#2020, repeats).

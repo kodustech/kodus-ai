@@ -65,6 +65,9 @@ export type CustomAgent = {
     };
     /** BYOK model ids; absent means the routing table decides. */
     models?: { run?: string; check?: string };
+    /** Also report the general bugs the main review covers; absent means
+     *  false: the agent reports only what its instructions ask for. */
+    reportGeneralBugs?: boolean;
     presentation: CustomAgentPresentation;
 };
 
