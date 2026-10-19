@@ -162,6 +162,24 @@ const Probe = () => {
                 }>
                 edit again
             </button>
+            <button
+                onClick={() =>
+                    updateAgent("ledger", (agent) => ({
+                        ...agent,
+                        scope: { ...agent.scope, include: ["src/**"] },
+                    }))
+                }>
+                add glob
+            </button>
+            <button
+                onClick={() =>
+                    updateAgent("ledger", (agent) => ({
+                        ...agent,
+                        scope: { ...agent.scope, include: [] },
+                    }))
+                }>
+                remove glob
+            </button>
             <button onClick={reset}>reset</button>
         </div>
     );
@@ -278,6 +296,49 @@ describe("useCustomAgentsForm — undo by hand", () => {
         expect(formRef.getValues("customAgents")).toEqual(
             formRef.control._defaultValues.customAgents,
         );
+    });
+});
+
+describe("useCustomAgentsForm — files undone by hand", () => {
+    it("is not unsaved once the only glob added to an agent with none is removed", async () => {
+        // The saved agent has no include list; removing the last glob left
+        // an empty one, which compared as a change.
+        renderProbe();
+        fireEvent.click(screen.getByText("add glob"));
+        await flush();
+        expect(screen.getByTestId("dirty")).toHaveTextContent("unsaved");
+
+        fireEvent.click(screen.getByText("remove glob"));
+        await flush();
+        expect(screen.getByTestId("dirty")).toHaveTextContent("saved");
+        expect(formRef.getValues("customAgents")).toEqual(
+            formRef.control._defaultValues.customAgents,
+        );
+    });
+
+    it("at a directory too", async () => {
+        mockLevel = "directory";
+        try {
+            renderProbe({
+                customAgents: {
+                    value: [ledger],
+                    level: "directory",
+                    overriddenValue: [audit],
+                    overriddenLevel: "repository",
+                },
+                knowledge: { value: [], level: "repository" },
+            });
+            fireEvent.click(screen.getByText("add glob"));
+            await flush();
+            fireEvent.click(screen.getByText("remove glob"));
+            await flush();
+            expect(screen.getByTestId("dirty")).toHaveTextContent("saved");
+            expect(formRef.getValues("customAgents")).toEqual(
+                formRef.control._defaultValues.customAgents,
+            );
+        } finally {
+            mockLevel = "repository";
+        }
     });
 });
 

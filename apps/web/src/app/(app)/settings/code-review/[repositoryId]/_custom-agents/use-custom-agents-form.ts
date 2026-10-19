@@ -75,6 +75,17 @@ const addOrReplace = <T>(
 ];
 
 /**
+ * An agent's empty `include` or `exclude` reads as the list left out: both
+ * mean every file, and removing the last glob leaves the empty one.
+ */
+const withoutEmptyGlobs = (key: string, value: unknown) =>
+    (key === "include" || key === "exclude") &&
+    Array.isArray(value) &&
+    value.length === 0
+        ? undefined
+        : value;
+
+/**
  * Said when the agents list saved at a repository replaces the global one:
  * that repository no longer gets the global agents. Null anywhere else; a
  * directory adds its agents to the repository's instead of replacing them.
@@ -165,7 +176,8 @@ export const useCustomAgentsForm = () => {
                 form.control._defaultValues as Record<string, unknown>
             )?.[field] as FieldNode<unknown[]>;
             const same = (a: unknown, b: unknown) =>
-                JSON.stringify(a ?? []) === JSON.stringify(b ?? []);
+                JSON.stringify(a ?? [], withoutEmptyGlobs) ===
+                JSON.stringify(b ?? [], withoutEmptyGlobs);
             form.setValue(
                 field as never,
                 (saved && same(ownList(saved, level), next)
