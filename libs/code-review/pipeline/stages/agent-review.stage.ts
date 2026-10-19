@@ -2409,7 +2409,10 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             let followupError: string | undefined;
             if (leftOut.length > 0) {
                 try {
-                    const followup = (await LLM.run({
+                    // The same shape recovery as the first answer (#1786): a
+                    // wrapped, bare-array or stringified answer still counts,
+                    // and one with no assignments fails like a failed call.
+                    const followupOutput = await LLM.run({
                         byokConfig: resolvedSlot,
                         schema: jsonSchema(DEDUP_FOLLOWUP_SCHEMA as any),
                         user: buildDedupFollowupPrompt(
@@ -2429,15 +2432,30 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                                 ? { teamId: telemetryMeta.teamId }
                                 : {}),
                         },
-                    })) as any;
+                    });
+                    const followup = normalizeEnvelope(
+                        followupOutput,
+                        'assignments',
+                        [],
+                        {
+                            onRecover: (reason) =>
+                                this.logger.warn({
+                                    message: `${LLM_ENVELOPE_TAG} recovered off-schema dedup follow-up output (${reason}) for PR#${prNumber}`,
+                                    context: this.stageName,
+                                }),
+                        },
+                    ) as any;
+                    if (!Array.isArray(followup?.assignments)) {
+                        throw new Error(
+                            'the follow-up answer has no assignments',
+                        );
+                    }
                     ({ groups, unique } = applyDedupFollowup(
                         suggestions.length,
                         groups,
                         unique,
                         leftOut,
-                        Array.isArray(followup?.assignments)
-                            ? followup.assignments
-                            : [],
+                        followup.assignments,
                     ));
                     // The follow-up's new groups get the same re-seat.
                     groups = preferAnalyzerKeep(groups, suggestions);

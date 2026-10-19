@@ -297,13 +297,13 @@ export function buildDedupFollowupPrompt(
 ): string {
     const ok = (i: number) => Number.isInteger(i) && i >= 0 && i < suggestions.length;
     const line = (i: number) => dedupSummaryLine(suggestions[i], i);
-    const grupos = (groups || [])
+    const groupLines = (groups || [])
         .filter((g) => ok(g?.keep))
         .map((g) => {
             const dups = (g.duplicates || []).filter(ok);
             return `${line(g.keep)}${dups.length ? `\n    duplicates already in this group: ${dups.map((d) => `[${d}]`).join(', ')}` : ''}`;
         });
-    const unicos = (unique || []).filter(ok).map(line);
+    const uniqueLines = (unique || []).filter(ok).map(line);
     return `You grouped the duplicate code review suggestions of a PR, but your answer left out ${leftOut.length} of them: ${leftOut.map((i) => `[${i}]`).join(', ')}. Classify ONLY those now.
 
 For each left-out suggestion give joinWith:
@@ -313,10 +313,10 @@ For each left-out suggestion give joinWith:
 ${DEDUP_CONSERVATIVE}${DEDUP_CRITERIA}Every left-out index must appear EXACTLY ONCE in assignments.
 
 Groups already formed (kept suggestion):
-${grupos.join('\n') || '(none)'}
+${groupLines.join('\n') || '(none)'}
 
 Suggestions left unique:
-${unicos.join('\n') || '(none)'}
+${uniqueLines.join('\n') || '(none)'}
 
 Left-out suggestions to classify:
 ${leftOut.map(line).join('\n')}`;
