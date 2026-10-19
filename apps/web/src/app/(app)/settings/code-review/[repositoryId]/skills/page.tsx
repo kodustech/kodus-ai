@@ -17,8 +17,8 @@ import { Page } from "@components/ui/page";
 import { Spinner } from "@components/ui/spinner";
 import { toast } from "@components/ui/toaster/use-toast";
 import {
-    CUSTOM_AGENT_LIMITS,
     isLinked,
+    knowledgeBudgetNote,
     knowledgeItemFromPath,
     setKnowledgeLink,
 } from "@services/custom-agents/drafts";
@@ -85,6 +85,11 @@ function SkillsContent() {
     const candidates = (knowledgeReport?.candidates ?? []).filter(
         (candidate) => !registered.has(candidate.path),
     );
+    // Doc tokens are only known by reading the docs on the branch, so a save
+    // keeps a target over its budget and a review cuts its docs to it.
+    const overBudget = (knowledgeReport?.budgets ?? []).filter(
+        (budget) => budget.over.length > 0,
+    );
     const targets: Array<{
         target: KnowledgeLinkTarget;
         label: string;
@@ -131,7 +136,18 @@ function SkillsContent() {
                 );
                 return;
             }
-            toast({ description: "Settings saved", variant: "success" });
+            toast(
+                overBudget.length
+                    ? {
+                          description: `Saved. ${overBudget
+                              .map((budget) =>
+                                  knowledgeBudgetNote(budget, linkableAgents),
+                              )
+                              .join(" ")}`,
+                          variant: "warning",
+                      }
+                    : { description: "Settings saved", variant: "success" },
+            );
         } catch (error) {
             console.error("Error saving skills and docs:", error);
             toast({
@@ -331,24 +347,11 @@ function SkillsContent() {
                             </div>
                         );
                     })}
-                    {knowledgeReport?.budgets
-                        .filter((budget) => budget.over.length > 0)
-                        .map((budget) => (
-                            <p
-                                key={budget.target}
-                                className="text-warning text-xs">
-                                {budget.target === KNOWLEDGE_MAIN_REVIEW_TARGET
-                                    ? "Main review"
-                                    : (linkableAgents.find(
-                                          (agent) => agent.id === budget.target,
-                                      )?.name ?? budget.target)}{" "}
-                                is over its limit ({budget.over.join(", ")}): up
-                                to {CUSTOM_AGENT_LIMITS.maxSkills} skills,{" "}
-                                {CUSTOM_AGENT_LIMITS.maxDocs} docs and{" "}
-                                {CUSTOM_AGENT_LIMITS.maxDocTokens.toLocaleString()}{" "}
-                                doc tokens.
-                            </p>
-                        ))}
+                    {overBudget.map((budget) => (
+                        <p key={budget.target} className="text-warning text-xs">
+                            {knowledgeBudgetNote(budget, linkableAgents)}
+                        </p>
+                    ))}
                 </Card>
 
                 <Card color="lv1" className="flex flex-col gap-3 px-5 py-4">

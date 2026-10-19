@@ -20,6 +20,8 @@ import { toast } from "@components/ui/toaster/use-toast";
 import {
     agentNameError,
     deleteAgentNote,
+    knowledgeBudgetNote,
+    knowledgeTargetKey,
     withoutAgent,
     withoutSecretValues,
 } from "@services/custom-agents/drafts";
@@ -140,7 +142,25 @@ function AgentContent() {
                 );
                 return;
             }
-            toast({ description: "Agent saved", variant: "success" });
+            // Doc tokens are only known by reading the docs on the branch, so
+            // the save keeps an agent over its budget; a review cuts its docs.
+            const budget =
+                resolve.data?.knowledge.status === "ok"
+                    ? resolve.data.knowledge.budgets.find(
+                          (entry) =>
+                              entry.target ===
+                                  knowledgeTargetKey({ agentId }) &&
+                              entry.over.length > 0,
+                      )
+                    : undefined;
+            toast(
+                budget
+                    ? {
+                          description: `Agent saved. ${knowledgeBudgetNote(budget, linkableAgents)}`,
+                          variant: "warning",
+                      }
+                    : { description: "Agent saved", variant: "success" },
+            );
         } catch (error) {
             console.error("Error saving custom agent:", error);
             toast({

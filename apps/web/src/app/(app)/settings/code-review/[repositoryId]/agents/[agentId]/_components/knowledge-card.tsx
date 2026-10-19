@@ -5,8 +5,10 @@ import { Button } from "@components/ui/button";
 import { Input } from "@components/ui/input";
 import {
     followedBy,
+    KNOWLEDGE_LIMIT_LABELS,
     knowledgeChoices,
     knowledgeItemFromPath,
+    knowledgeTargetKey,
     setAgentKnowledge,
     skillFolderName,
 } from "@services/custom-agents/drafts";
@@ -125,7 +127,9 @@ export const AgentKnowledgeField = ({
     const available = knowledgeChoices(knowledge, candidates, agentId).filter(
         (choice) => !choice.linked,
     );
-    const budget = resolved?.budgets.find((entry) => entry.target === agentId);
+    const budget = resolved?.budgets.find(
+        (entry) => entry.target === knowledgeTargetKey({ agentId }),
+    );
     const follow = (item: Pick<KnowledgeItem, "path" | "kind">, on: boolean) =>
         onChange(setAgentKnowledge(knowledge, item, agentId, on));
     const descriptionOf = (item: Pick<KnowledgeItem, "path" | "kind">) =>
@@ -204,8 +208,11 @@ export const AgentKnowledgeField = ({
             )}
             {budget && budget.over.length > 0 && (
                 <p className="text-warning text-xs">
-                    Over the limit for this agent ({budget.over.join(", ")}):{" "}
-                    {budget.skills} skills, {budget.docs} docs,{" "}
+                    Over the limit for this agent (
+                    {budget.over
+                        .map((limit) => KNOWLEDGE_LIMIT_LABELS[limit])
+                        .join(", ")}
+                    ): {budget.skills} skills, {budget.docs} docs,{" "}
                     {budget.docTokens.toLocaleString()} doc tokens.
                 </p>
             )}

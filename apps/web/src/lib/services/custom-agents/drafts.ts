@@ -1,12 +1,14 @@
-import type {
-    CliToolConfig,
-    CliToolSecret,
-    CustomAgent,
-    CustomAgentResolveReport,
-    CustomAgentStatus,
-    KnowledgeCandidate,
-    KnowledgeItem,
-    KnowledgeLinkTarget,
+import {
+    KNOWLEDGE_MAIN_REVIEW_TARGET,
+    type CliToolConfig,
+    type CliToolSecret,
+    type CustomAgent,
+    type CustomAgentResolveReport,
+    type CustomAgentStatus,
+    type KnowledgeCandidate,
+    type KnowledgeItem,
+    type KnowledgeLinkTarget,
+    type KnowledgeTargetBudget,
 } from "./types";
 
 /** Mirrors CUSTOM_AGENT_LIMITS on the backend. */
@@ -431,6 +433,42 @@ export const deleteAgentNote = (agentId: string, inherited: CustomAgent[]) => {
     return restored
         ? `The repository's ${restored.name || "agent"} runs here again, with the skills and docs this directory links to it. Its findings stay on past pull requests.`
         : "Its findings stay on past pull requests.";
+};
+
+/** Mirrors `knowledgeTargetKey` on the backend: how a budget names its target. */
+export const knowledgeTargetKey = (target: KnowledgeLinkTarget): string =>
+    typeof target === "string" ? target : `agent:${target.agentId}`;
+
+export const KNOWLEDGE_LIMIT_LABELS: Record<
+    KnowledgeTargetBudget["over"][number],
+    string
+> = {
+    skills: "skills",
+    docs: "docs",
+    docTokens: "doc tokens",
+};
+
+/**
+ * What a target over its skills and docs limits is told, by the name the
+ * page shows it with: the main review, or the agent's name.
+ */
+export const knowledgeBudgetNote = (
+    budget: KnowledgeTargetBudget,
+    agents: Pick<CustomAgent, "id" | "name">[],
+): string => {
+    const name =
+        budget.target === KNOWLEDGE_MAIN_REVIEW_TARGET
+            ? "Main review"
+            : (agents.find(
+                  (agent) =>
+                      knowledgeTargetKey({ agentId: agent.id }) ===
+                      budget.target,
+              )?.name ?? "An agent");
+    return `${name} is over its limit (${budget.over
+        .map((limit) => KNOWLEDGE_LIMIT_LABELS[limit])
+        .join(
+            ", ",
+        )}): up to ${CUSTOM_AGENT_LIMITS.maxSkills} skills, ${CUSTOM_AGENT_LIMITS.maxDocs} docs and ${CUSTOM_AGENT_LIMITS.maxDocTokens.toLocaleString()} doc tokens.`;
 };
 
 /**
