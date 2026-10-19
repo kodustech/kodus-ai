@@ -368,6 +368,73 @@ describe("CustomAgentsList — at a directory", () => {
         mockLevel = "repository";
     });
 
+    it("lists the repository's agents too, marked as the repository's and opened to view", async () => {
+        const audit = { ...agent, id: "audit", name: "Audit reviewer" };
+        const drip = { ...agent, id: "drip", name: "Drip reviewer" };
+        renderList(
+            {
+                value: [zoneLedger, drip],
+                level: "directory",
+                overriddenValue: [agent, { ...audit, enabled: false }],
+                overriddenLevel: "repository",
+            },
+            zoneKnowledge,
+        );
+        await flush();
+
+        // In the order a review runs them: the repository's, the
+        // directory's agent in place of the one it replaces, then its own.
+        const names = within(
+            screen.getByRole("list", { name: "Custom agents" }),
+        )
+            .getAllByRole("link")
+            .map((link) => link.textContent);
+        expect(names).toEqual([
+            "Zone ledger reviewer",
+            "Audit reviewer",
+            "Drip reviewer",
+        ]);
+        expect(
+            screen.getByRole("link", { name: "Audit reviewer" }),
+        ).toHaveAttribute(
+            "href",
+            "/settings/code-review/repo-1/agents/audit?directoryId=dir-1",
+        );
+        expect(screen.getByText("From repository, off")).toBeInTheDocument();
+        expect(screen.getAllByText(/^From repository/)).toHaveLength(1);
+        expect(
+            screen.queryByRole("switch", { name: "Audit reviewer enabled" }),
+        ).toBeNull();
+        expect(
+            screen.getByRole("switch", { name: "Drip reviewer enabled" }),
+        ).toBeInTheDocument();
+        // The rows say it: no separate count of the repository's agents.
+        expect(screen.queryByText(/Also runs the repository/)).toBeNull();
+
+        fireEvent.keyDown(
+            screen.getByRole("button", {
+                name: "More actions for Audit reviewer",
+            }),
+            { key: "Enter" },
+        );
+        const view = await screen.findByRole("menuitem", { name: "View" });
+        expect(
+            screen.getByRole("menuitem", { name: "Try it" }),
+        ).toBeInTheDocument();
+        expect(screen.queryByRole("menuitem", { name: "Delete" })).toBeNull();
+        fireEvent.click(view);
+        expect(push).toHaveBeenLastCalledWith(
+            "/settings/code-review/repo-1/agents/audit?directoryId=dir-1",
+        );
+    });
+
+    it("lists the repository's agents when the directory has none of its own", async () => {
+        renderList({ value: [agent], level: "repository" });
+        await flush();
+        expect(screen.queryByText("No custom agents yet")).toBeNull();
+        expect(screen.getByText("From repository")).toBeInTheDocument();
+    });
+
     it("keeps the directory's links when deleting an agent that replaced the repository's", async () => {
         renderList(
             {
