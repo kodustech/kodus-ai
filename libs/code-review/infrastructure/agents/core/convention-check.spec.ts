@@ -306,6 +306,60 @@ describe('checkConventionQuotes', () => {
             );
         });
 
+        it.each([
+            ['the reviewed file, no guides linked', 'src/valves/open.ts', [] as string[], { 'src/valves/open.ts': 'export const open = () => {};\n' }],
+            ['the reviewed file, outside the linked guides', 'src/valves/open.ts', [GUIDE], {}],
+            ['a guide that does not hold the quote', GUIDE, [GUIDE], { [GUIDE]: '# Guide\n\nUnrelated rule.\n' }],
+            ['a file missing on the target branch', 'src/valves/gone.ts', [] as string[], {}],
+        ])(
+            're-points an instructions quote cited to %s at the instructions',
+            async (_label, file, guides, files) => {
+                // The model quoted the instructions but named the file it was
+                // reviewing as the source; every such finding was dropped.
+                const quote = 'Close valves in a finally block.';
+                const r = await checkConventionQuotes(
+                    [conv(quote, { source: { file, section: '', quote } })],
+                    reader(files),
+                    guides,
+                    undefined,
+                    INSTRUCTIONS,
+                );
+                expect(r.rejected).toEqual([]);
+                expect(r.passed[0].sectionText).toBe(INSTRUCTIONS);
+                expect(r.passed[0].finding.source).toEqual({
+                    file: 'TeamInstructions',
+                    section: '',
+                    quote,
+                });
+            },
+        );
+
+        it('keeps the file citation when the cited file holds the quote', async () => {
+            const quote = 'Close valves in a finally block.';
+            const file = 'src/valves/RULES.md';
+            const r = await checkConventionQuotes(
+                [conv(quote, { source: { file, section: '', quote } })],
+                reader({ [file]: `# Rules\n\n${quote}\n` }),
+                [],
+                undefined,
+                INSTRUCTIONS,
+            );
+            expect(r.passed[0].finding.source?.file).toBe(file);
+        });
+
+        it('still drops a quote held by neither the cited file nor the instructions', async () => {
+            const quote = 'Valves must emit a metric on each opening.';
+            const r = await checkConventionQuotes(
+                [conv(quote, { source: { file: 'src/valves/open.ts', section: '', quote } })],
+                reader({ 'src/valves/open.ts': 'export const open = () => {};\n' }),
+                [],
+                undefined,
+                INSTRUCTIONS,
+            );
+            expect(r.passed).toEqual([]);
+            expect(r.rejected[0].detail).toContain('quote not found in src/valves/open.ts');
+        });
+
         it('judges a convention finding with no source against the instructions', async () => {
             // The model marked the finding as a convention and cited nothing;
             // dropping it lost every finding of an instructions-only agent.

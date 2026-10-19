@@ -282,13 +282,37 @@ export async function checkConventionQuotes(
             }
             continue;
         }
+        // The model quotes the agent's instructions but names the file it
+        // reviewed as the source. The quote is still the team's rule, so the
+        // finding is re-pointed at the instructions instead of being lost to a
+        // wrong file name; the file is only tried when the quote is not there.
+        const instructionsSection = teamInstructions?.trim()
+            ? findQuoteSection(teamInstructions, quote)
+            : null;
+        const passFromInstructions = () => {
+            if (instructionsSection == null) {
+                return false;
+            }
+            passed.push({
+                finding: {
+                    ...finding,
+                    source: { file: 'TeamInstructions', section: '', quote },
+                },
+                sectionText: teamInstructions!,
+            });
+            return true;
+        };
         if (guideFiles.length > 0 && !isLinkedGuide(file, guideFiles)) {
-            reject(finding, `${file} is not a guide linked to this review`);
+            if (!passFromInstructions()) {
+                reject(finding, `${file} is not a guide linked to this review`);
+            }
             continue;
         }
         const content = await read(file);
         if (content == null) {
-            reject(finding, `${file} not found on the target branch`);
+            if (!passFromInstructions()) {
+                reject(finding, `${file} not found on the target branch`);
+            }
             continue;
         }
         const sectionText = findQuoteSection(content, quote);
@@ -305,6 +329,9 @@ export async function checkConventionQuotes(
                 },
                 sectionText: inSkill.sectionText,
             });
+            continue;
+        }
+        if (passFromInstructions()) {
             continue;
         }
         reject(finding, `quote not found in ${file} on the target branch`);
