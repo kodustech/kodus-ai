@@ -2,9 +2,11 @@
 import "@testing-library/jest-dom";
 
 import type { CustomAgentTryTrace } from "@services/custom-agents/types";
-import { render, screen } from "@testing-library/react";
+import { createAgentFromTemplate } from "@services/custom-agents/drafts";
+import { useTryCustomAgent } from "@services/custom-agents/hooks";
+import { fireEvent, render, screen } from "@testing-library/react";
 
-import { TryResult } from "./try-it";
+import { TryIt, TryResult } from "./try-it";
 
 jest.mock("@services/custom-agents/hooks", () => ({
     useTryCustomAgent: jest.fn(),
@@ -68,5 +70,44 @@ describe("TryResult", () => {
         render(<TryResult trace={trace()} />);
 
         expect(screen.queryByText("Warnings")).not.toBeInTheDocument();
+    });
+});
+
+describe("TryIt", () => {
+    const STALE = /from an earlier version of the agent/;
+
+    it("says the result belongs to an earlier agent after an edit, and not once it is back", () => {
+        (useTryCustomAgent as jest.Mock).mockReturnValue({
+            data: trace(),
+            isPending: false,
+            isError: false,
+            mutate: jest.fn(),
+            reset: jest.fn(),
+        });
+        const agent = createAgentFromTemplate("blank", []);
+        const props = {
+            teamId: "team",
+            repositoryId: "repo",
+            knowledge: [],
+            canEdit: true,
+        };
+        const { rerender } = render(<TryIt {...props} agent={agent} />);
+        fireEvent.change(screen.getByPlaceholderText("Pull request link"), {
+            target: { value: "https://github.com/acme/ledger/pull/7" },
+        });
+        fireEvent.click(screen.getByText("Run agent"));
+        expect(screen.queryByText(STALE)).not.toBeInTheDocument();
+
+        rerender(
+            <TryIt
+                {...props}
+                agent={{ ...agent, instructions: "Temporary instructions." }}
+            />,
+        );
+        expect(screen.getByText(STALE)).toBeInTheDocument();
+
+        // Reset puts the original agent back on screen.
+        rerender(<TryIt {...props} agent={agent} />);
+        expect(screen.queryByText(STALE)).not.toBeInTheDocument();
     });
 });

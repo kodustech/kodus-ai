@@ -49,10 +49,18 @@ export const TryIt = ({
     canEdit: boolean;
 }) => {
     const [prUrl, setPrUrl] = useState("");
+    // The agent as it was when the run started: a result stays on screen
+    // after an edit or a reset, and must say it no longer matches.
+    const [ranWith, setRanWith] = useState<string | null>(null);
     const run = useTryCustomAgent();
     const canRun = canEdit && !!prUrl.trim() && repositoryId !== "global";
+    const onScreen = JSON.stringify({
+        agent: prepareAgentsForSave([agent])[0],
+        knowledge,
+    });
     const start = () => {
         run.reset();
+        setRanWith(onScreen);
         run.mutate({
             teamId,
             repositoryId,
@@ -61,6 +69,7 @@ export const TryIt = ({
             knowledge,
         });
     };
+    const isStale = ranWith !== null && ranWith !== onScreen;
 
     return (
         <Card color="lv1" className="flex flex-col gap-3 px-5 py-4">
@@ -114,6 +123,12 @@ export const TryIt = ({
             )}
             {run.isError && (
                 <p className="text-danger text-sm">{errorMessage(run.error)}</p>
+            )}
+            {run.data && !run.isPending && isStale && (
+                <p className="text-warning text-xs">
+                    This result is from an earlier version of the agent. Run
+                    it again to see what the agent on screen does.
+                </p>
             )}
             {run.data && !run.isPending && <TryResult trace={run.data} />}
         </Card>
