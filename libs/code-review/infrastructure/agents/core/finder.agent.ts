@@ -37,6 +37,7 @@ import { LlmVerifier } from '@libs/code-review/infrastructure/agents/core/verifi
 import { ConventionVerifier } from '@libs/code-review/infrastructure/agents/core/convention-verifier.agent';
 import {
     checkConventionQuotes,
+    isToolSource,
     isProvenByAstGrep,
     type AstGrepOutputLog,
     type ConventionCheckRejected,
@@ -323,6 +324,21 @@ export function buildFinderAgentSpec(params: BuildFinderSpecParams): AgentSpec {
  *  submitResult call into RunState.artifacts in step order). The LAST artifact
  *  is the finder's final output. Falls back to [] if the agent never finalized
  *  (budget-exhausted). No hand re-scan of steps — that is the runner's job. */
+/** The findings of the submits before `latest`, in the order they came. */
+function earlierSubmittedFindings(
+    state: RunState,
+    latest: RunState['artifacts'][number],
+    telemetryMetadata?: { organizationId?: string },
+): FinderSuggestion[] {
+    return state.artifacts
+        .filter((a) => a.type === FINDER_DONE_TOOL && a !== latest)
+        .flatMap(
+            (a) =>
+                (sanitizeFindingsResult(a.payload as any, telemetryMetadata)
+                    ?.suggestions ?? []) as FinderSuggestion[],
+        );
+}
+
 export function extractFindings(
     state: RunState,
     // Purely for the [LLM_ENVELOPE] logs sanitizeFindingsResult emits — see
@@ -352,9 +368,21 @@ export function extractFindings(
             telemetryMetadata,
         );
         if (clean) {
+            const suggestions = (clean.suggestions ?? []) as FinderSuggestion[];
+            // A model that submits its findings and then submits again with
+            // none ("already recorded") still means the first ones. Reading
+            // only the last submit lost them, and the prose recovery then
+            // re-extracted them under new titles, posting each twice.
             return {
                 reasoning: clean.reasoning ?? '',
-                suggestions: (clean.suggestions ?? []) as FinderSuggestion[],
+                suggestions:
+                    suggestions.length > 0
+                        ? suggestions
+                        : earlierSubmittedFindings(
+                              state,
+                              artifact,
+                              telemetryMetadata,
+                          ),
             };
         }
         // Artifact present but unusable — either empty args (e.g. Gemini
@@ -1067,8 +1095,18 @@ async function routeByKind(
     sectionOf: Map<FinderSuggestion, string>;
     rejected: ConventionCheckRejected[];
 }> {
-    const bugs = suggestions.filter((s) => s.kind !== 'convention');
-    const candidates = suggestions.filter((s) => s.kind === 'convention');
+    // A "convention" sourced from a tool's output (e.g. a CLI) quotes no
+    // rule, so the quote gate would drop it: it is checked as a bug instead.
+    const toolSourced = suggestions.filter(
+        (s) => s.kind === 'convention' && isToolSource(s),
+    );
+    const bugs = [
+        ...suggestions.filter((s) => s.kind !== 'convention'),
+        ...toolSourced.map((s) => ({ ...s, kind: 'bug' as const, source: undefined })),
+    ];
+    const candidates = suggestions.filter(
+        (s) => s.kind === 'convention' && !isToolSource(s),
+    );
     if (candidates.length === 0) {
         return {
             bugs,

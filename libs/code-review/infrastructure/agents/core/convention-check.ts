@@ -339,6 +339,19 @@ export async function checkConventionQuotes(
     return { passed, rejected };
 }
 
+/** A convention finding whose source names a tool (a CLI such as `jscpd`)
+ *  instead of a document: what it cites is the tool's output, not a rule the
+ *  team wrote, so there is no quote to check. It is a finding about the code
+ *  and is checked as one. */
+export function isToolSource(finding: FinderSuggestion): boolean {
+    const file = (finding.source?.file ?? '').trim();
+    return (
+        /^[A-Za-z0-9_-]+$/.test(file) &&
+        !isTeamInstructionsSource(file) &&
+        astGrepRuleIdOf(finding) == null
+    );
+}
+
 /** The model cites a rule written in the agent's instructions by the name the
  *  prompt gives them (`<TeamInstructions>`). */
 export function isTeamInstructionsSource(file: string): boolean {

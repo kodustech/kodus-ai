@@ -137,6 +137,8 @@ const FINDINGS = {
 
 /** Prompts the convention judge received (to check it saw the guide). */
 let conventionPrompts: string[] = [];
+/** What the finder submits; a test may swap it. */
+let submitted: { reasoning: string; suggestions: unknown[] } = FINDINGS;
 /** Finder steps so far — module level: a fresh mock model is built per call. */
 let finderStep = 0;
 
@@ -174,7 +176,7 @@ function model() {
                 input: { rule: 'no-bare-boolean' },
             };
         } else {
-            tc = { id: 'f', name: 'submitResult', input: FINDINGS };
+            tc = { id: 'f', name: 'submitResult', input: submitted };
         }
         return {
             content: [
@@ -195,6 +197,7 @@ function model() {
 
 const mockResolve = resolveModelConfig as jest.Mock;
 beforeEach(() => {
+    submitted = FINDINGS;
     conventionPrompts = [];
     finderStep = 0;
     mockResolve.mockReset();
@@ -338,6 +341,31 @@ describe('convention findings: HV2 path vs convention path (same findings)', () 
         expect(logPrompt).not.toContain('Test helpers may skip logging');
         const astIdx = r.kept.findIndex((f) => tagOf(f) === 'CONV-AST');
         expect(r.keptParseMode[astIdx]).toBe('proof');
+    });
+});
+
+describe('convention findings sourced from a tool', () => {
+    it('checks a finding that cites a CLI as a bug instead of dropping it at the quote gate', async () => {
+        // The model marked jscpd's duplicate report "convention" with the CLI
+        // as its source: no rule to quote, so the quote gate dropped all four.
+        const TOOL = {
+            relevantFile: 'src/valves/drain-valve.handler.ts',
+            suggestionContent:
+                'TOOL-DUP: drain and open repeat the same 30-line retry block.',
+            existingCode: 'for (let i = 0; i < 3; i++) {',
+            improvedCode: 'await withRetry(() => valve.drain(zone));',
+            oneSentenceSummary: 'Extract the duplicated retry block',
+            kind: 'convention',
+            source: { file: 'jscpd', quote: 'Clone found (typescript)' },
+        };
+        submitted = { reasoning: 'one clone', suggestions: [TOOL, BUG] };
+        const { r, readGuide } = await run(true);
+        expect(r.droppedByQuoteCheck).toEqual([]);
+        expect(r.kept.map(tagOf)).toEqual(['BUG', 'TOOL-DUP']);
+        const tool = r.kept.find((f) => tagOf(f) === 'TOOL-DUP')!;
+        expect(tool.kind).toBe('bug');
+        expect(tool.source).toBeUndefined();
+        expect(readGuide).not.toHaveBeenCalled();
     });
 });
 

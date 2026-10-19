@@ -201,6 +201,32 @@ describe('prose-findings recovery', () => {
         expect(out.suggestions).toEqual([]);
     });
 
+    it('keeps the findings of an earlier submit when the last one is empty, without recovering them from prose', async () => {
+        // The model submitted its findings, then submitted again with none,
+        // saying they were already recorded. Recovering them from that prose
+        // posted every finding twice under a new title.
+        const resubmitted = {
+            ...reasoningOnlyState,
+            artifacts: [
+                { type: 'submitResult', payload: sampleFindings },
+                {
+                    type: 'submitResult',
+                    payload: {
+                        reasoning: 'Findings already recorded above.',
+                        suggestions: [],
+                    },
+                },
+            ],
+        } as any;
+        const recover = jest.fn().mockResolvedValue(recovered);
+        const out = await extractFindingsWithRecovery(resubmitted, recover);
+        expect(recover).not.toHaveBeenCalled();
+        expect(out.suggestions).toHaveLength(1);
+        expect(out.suggestions[0].relevantFile).toBe(
+            sampleFindings.suggestions[0].relevantFile,
+        );
+    });
+
     it('is a no-op (never throws) when no recoverer is injected', async () => {
         const out = await extractFindingsWithRecovery(
             reasoningOnlyState,
