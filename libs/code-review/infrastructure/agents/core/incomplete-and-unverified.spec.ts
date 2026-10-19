@@ -151,6 +151,50 @@ describe('#2171 — finder run that ends without a submitted result', () => {
         expect(out.incompleteReason).toBeUndefined();
     });
 
+    // PR #2173 review: the runner turns every REQUESTED result call into an
+    // artifact, executed or not. A turn cut while writing submitResult leaves
+    // its input as unparseable JSON; that artifact must not count as a
+    // submitted result.
+    it('reports truncated when the provider cut the turn inside submitResult', async () => {
+        const cut = JSON.stringify(findings).slice(0, 60);
+        useModel(async () => ({
+            content: [
+                {
+                    type: 'tool-call',
+                    toolCallId: `submitResult-${Math.random()}`,
+                    toolName: 'submitResult',
+                    input: cut,
+                },
+            ],
+            finishReason: { unified: 'length', raw: 'max_tokens' },
+            usage,
+            warnings: [],
+        }));
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(out.incompleteReason).toBe('truncated');
+    });
+
+    it('a complete submitResult on a cut turn is a submitted result', async () => {
+        useModel(async (opts) =>
+            isVerifierCall(opts)
+                ? toolCall(
+                      'submitVerdict',
+                      { keep: true, rationale: 'ok' },
+                      SAFE,
+                  )
+                : toolCall('submitResult', findings, {
+                      unified: 'length',
+                      raw: 'max_tokens',
+                  }),
+        );
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(out.incompleteReason).toBeUndefined();
+    });
+
     it('a finder that ends with prose and no tool call is not incomplete (prose recovery owns it)', async () => {
         useModel(async () => ({
             content: [

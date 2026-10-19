@@ -31,6 +31,7 @@ import { estimateOverheadTokens } from '@libs/agent-harness/infrastructure/compr
 import { DiffCoverageLedger } from '@libs/code-review/infrastructure/agents/adapters/diff-coverage-ledger.adapter';
 import { buildFinderToolRegistry } from '@libs/code-review/infrastructure/agents/adapters/finder-tools.adapter';
 import {
+    FINDER_DONE_TOOL,
     buildFinderAgentSpec,
     runFinderWithVerify,
     recoverFindingsFromProse,
@@ -370,8 +371,7 @@ export async function runAgentLoopViaCore(
                           verifierEvidence: d.verifierEvidence,
                       })),
                       ...r.unverified.map((u, i) => ({
-                          index:
-                              r.kept.length + r.droppedByVerify.length + i,
+                          index: r.kept.length + r.droppedByVerify.length + i,
                           relevantFile: u.finding.relevantFile,
                           action: 'drop' as const,
                           parseMode: 'verify-error' as const,
@@ -385,7 +385,15 @@ export async function runAgentLoopViaCore(
     // looking: it ran out of steps, or the provider cut its turn so the tools
     // it asked for never ran (the runner records that as `tool.skipped`). A run
     // that answered in prose is not incomplete; prose recovery owns it (#2171).
-    const submitted = r.finderState.artifacts.length > 0;
+    // The runner makes an artifact of every requested result call, executed or
+    // not, so a turn cut while writing submitResult leaves one holding the raw,
+    // unparseable input: only a parsed object counts as submitted.
+    const submitted = r.finderState.artifacts.some(
+        (a) =>
+            a.type === FINDER_DONE_TOOL &&
+            a.payload !== null &&
+            typeof a.payload === 'object',
+    );
     const incompleteReason: AgentLoopOutput['incompleteReason'] =
         r.finderState.status === 'budget-exhausted'
             ? 'budget-exhausted'
