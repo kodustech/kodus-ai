@@ -348,15 +348,9 @@ describe('rendered prompt snapshots', () => {
                 {
                   "label": "bug|security|performance",
                   "relevantFile": "path/to/file.ext",
-                  "language": "the file language",
-                  "suggestionContent": "WHAT: one sentence naming the exact problem. WHY: one sentence on the real impact. HOW: concrete fix if clear from the code — omit if speculative.",
-                  "existingCode": "problematic code snippet from the diff",
-                  "improvedCode": "fixed code snippet (only if fix is clear from context)",
-                  "oneSentenceSummary": "Title of the finding: one line, 80 characters or fewer, names the problem (not the fix), no trailing period",
                   "relevantLinesStart": 10,
                   "relevantLinesEnd": 15,
-                  "severity": "critical|high|medium|low",
-                  "confidence": 8
+                  "suggestionContent": "the ONE problem: what is wrong and why it matters"
                 }
               ]
             }
@@ -444,15 +438,9 @@ describe('rendered prompt snapshots', () => {
                 {
                   "label": "bug|security|performance",
                   "relevantFile": "path/to/file.ext",
-                  "language": "the file language",
-                  "suggestionContent": "WHAT: one sentence naming the exact problem. WHY: one sentence on the real impact. HOW: concrete fix if clear from the code — omit if speculative.",
-                  "existingCode": "problematic code snippet from the diff",
-                  "improvedCode": "fixed code snippet (only if fix is clear from context)",
-                  "oneSentenceSummary": "Title of the finding: one line, 80 characters or fewer, names the problem (not the fix), no trailing period",
                   "relevantLinesStart": 10,
                   "relevantLinesEnd": 15,
-                  "severity": "critical|high|medium|low",
-                  "confidence": 8
+                  "suggestionContent": "the ONE problem: what is wrong and why it matters"
                 }
               ]
             }
@@ -626,15 +614,9 @@ describe('rendered prompt snapshots', () => {
                 {
                   "label": "bug|security|performance",
                   "relevantFile": "path/to/file.ext",
-                  "language": "the file language",
-                  "suggestionContent": "WHAT: one sentence naming the exact problem. WHY: one sentence on the real impact visible from the diff. HOW: concrete fix if clear.",
-                  "existingCode": "problematic code snippet from the diff",
-                  "improvedCode": "fixed code snippet",
-                  "oneSentenceSummary": "Title of the finding: one line, 80 characters or fewer, names the problem (not the fix), no trailing period",
                   "relevantLinesStart": 10,
                   "relevantLinesEnd": 15,
-                  "severity": "critical|high|medium|low",
-                  "confidence": 6
+                  "suggestionContent": "the ONE problem: what is wrong and why it matters"
                 }
               ]
             }

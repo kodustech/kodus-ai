@@ -12,7 +12,6 @@ import { FileChange } from '@libs/core/infrastructure/config/types/general/codeR
 import { CheckEvidence } from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
 import { AnalyzerFinding } from '@libs/code-review/infrastructure/analyzers/analyzer-finding.type';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
-import { TITLE_PROMPT_SPEC } from '@libs/common/utils/codeManagement/suggestion-title';
 import {
     currentDefaultWritingGuidelines,
     isDefaultWritingGuidelines,
@@ -726,16 +725,12 @@ export function buildUserPrompt(input: ReviewAgentInput, meta: PromptAgentMeta):
             ? `
     - Deliver file by file: every changed file gets a verdict in "reasoning", and every issue named in a verdict MUST also be an entry in "suggestions" — an issue that is only in the reasoning is lost.`
             : '';
+        // Each finding carries only what finding the bug needs; fix, snippets,
+        // severity and confidence are added by a later enrichment stage.
         const suggestionFields = `      ${outputLabelLine}"relevantFile": "path/to/file.ext",
-      "language": "the file language",
-      "suggestionContent": "WHAT: one sentence naming the exact problem. WHY: one sentence on the real impact. HOW: concrete fix if clear from the code — omit if speculative.",
-      "existingCode": "problematic code snippet from the diff",
-      "improvedCode": "fixed code snippet (only if fix is clear from context)",
-      "oneSentenceSummary": "${TITLE_PROMPT_SPEC}",
       "relevantLinesStart": 10,
       "relevantLinesEnd": 15,
-      "severity": "critical|high|medium|low",
-      "confidence": 8`;
+      "suggestionContent": "the ONE problem: what is wrong and why it matters"`;
         const importanceRule = input.noImportanceFilter
             ? `
     - Do not decide on your own that a real defect is too minor to report. If you concluded something is a real defect, it goes in "suggestions"; a later stage decides what is posted. Style and naming issues stay out.`
@@ -1025,15 +1020,9 @@ ${fileContentsSection}
   "suggestions": [
     {
       ${outputLabelLine}"relevantFile": "path/to/file.ext",
-      "language": "the file language",
-      "suggestionContent": "WHAT: one sentence naming the exact problem. WHY: one sentence on the real impact visible from the diff. HOW: concrete fix if clear.",
-      "existingCode": "problematic code snippet from the diff",
-      "improvedCode": "fixed code snippet",
-      "oneSentenceSummary": "${TITLE_PROMPT_SPEC}",
       "relevantLinesStart": 10,
       "relevantLinesEnd": 15,
-      "severity": "critical|high|medium|low",
-      "confidence": 6
+      "suggestionContent": "the ONE problem: what is wrong and why it matters"
     }
   ]
 }

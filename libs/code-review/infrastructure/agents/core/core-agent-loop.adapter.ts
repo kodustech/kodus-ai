@@ -292,10 +292,8 @@ const AGENT_LOOP_OUTPUT_FORMAT_REMINDER = `
   array — writing "reported" or "confirmed" in your reasoning without a matching suggestions
   entry means the finding is LOST, not submitted.
 
-  Each suggestion needs: relevantFile, language, suggestionContent (WHAT the problem is, WHY
-  it matters, HOW to fix if clear), existingCode, improvedCode (if a fix is clear),
-  relevantLinesStart/relevantLinesEnd, severity (critical|high|medium|low), and confidence
-  (1-10, honest — 9-10 only when you verified both caller and callee).
+  Each suggestion has exactly: label, relevantFile, relevantLinesStart/relevantLinesEnd and
+  suggestionContent (the ONE problem: what is wrong and why it matters).
 </OutputFormat>`;
 
 /**

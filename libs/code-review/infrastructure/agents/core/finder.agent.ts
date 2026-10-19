@@ -15,7 +15,6 @@ import type {
     AgentRunner,
     AgentSpec,
 } from '@libs/agent-harness/domain/contracts/agent.contract';
-import { TITLE_PROMPT_SPEC } from '@libs/common/utils/codeManagement/suggestion-title';
 import type { Compressor } from '@libs/agent-harness/domain/contracts/compression.contract';
 import type { ProgressLedger } from '@libs/agent-harness/domain/contracts/progress.contract';
 import type { JSONSchema } from '@libs/agent-harness/domain/contracts/json-schema.contract';
@@ -145,10 +144,9 @@ const REASON_DESCRIPTION_EVIDENCE =
 const DEV_LEVEL_DESCRIPTION =
     'The LEAST experienced reviewer who would have caught this: junior if it is visible in the changed lines themselves, pleno if you had to follow the value somewhere else, senior if it only appears when you compare the change against what the code guaranteed before, expert if it only appears on a run that is not the simple one (a second execution, a concurrent one, a retry, a cold cache, or an API contract that disagrees with how the call reads), qa if it only showed up when a quality analyst exercised a concrete test case. This is not severity.';
 
-/** The finder's output schema. Optional `reason` / `developerLevel` are opt-in
- *  knobs (eval only); the rest is the production schema. `label` and the line
- *  range are required too because parseFinderSchema discards a finder
- *  suggestion without them. */
+/** The finder's output: exactly the fields the prompt asks for, all required.
+ *  Snippet, fix, severity and confidence are not part of it at all; a later
+ *  enrichment stage adds them. */
 function buildSubmitResultSchema(
     requireFindingReason = false,
     claudeSafeWording = false,
@@ -161,8 +159,7 @@ function buildSubmitResultSchema(
     return {
         type: 'object',
         // additionalProperties:false on every object is required by provider strict
-        // tool use / structured output modes. Harmless in best-effort mode; optional
-        // properties are still allowed.
+        // tool use / structured output modes.
         additionalProperties: false,
         properties: {
             reasoning: { type: 'string' },
@@ -172,27 +169,14 @@ function buildSubmitResultSchema(
                     type: 'object',
                     additionalProperties: false,
                     properties: {
-                        relevantFile: { type: 'string' },
-                        language: { type: 'string' },
                         label: {
                             type: 'string',
                             enum: ['bug', 'security', 'performance'],
                         },
-                        suggestionContent: { type: 'string' },
-                        existingCode: { type: 'string' },
-                        improvedCode: { type: 'string' },
-                        oneSentenceSummary: {
-                            type: 'string',
-                            description: TITLE_PROMPT_SPEC,
-                        },
+                        relevantFile: { type: 'string' },
                         relevantLinesStart: { type: 'number' },
                         relevantLinesEnd: { type: 'number' },
-                        severity: {
-                            type: 'string',
-                            enum: ['critical', 'high', 'medium', 'low'],
-                        },
-                        confidence: { type: 'number' },
-                        ruleUuid: { type: 'string' },
+                        suggestionContent: { type: 'string' },
                         ...(requireFindingReason
                             ? {
                                   reason: {
@@ -219,9 +203,6 @@ function buildSubmitResultSchema(
                         'relevantLinesStart',
                         'relevantLinesEnd',
                         'suggestionContent',
-                        'existingCode',
-                        'improvedCode',
-                        'oneSentenceSummary',
                         ...(requireFindingReason ? ['reason'] : []),
                         ...(requireDevLevel ? ['developerLevel'] : []),
                     ],
