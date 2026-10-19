@@ -95,11 +95,13 @@ function allFailed(original, out, want, shownTitle) {
     if (!text.trim()) return ['empty'];
     const failed = [];
     if (LABEL.test(text)) failed.push('labels');
+    // The title the reader sees: the shipped one when the caller has it.
+    const readerTitle = shownTitle ?? original.title;
     const cited = identifiers(original.suggestionContent);
-    const shown = `${original.title || ''}\n${text}`;
+    const shown = `${readerTitle || ''}\n${text}`;
     if (cited.length && cited.filter((x) => shown.includes(x)).length < cited.length / 2) failed.push('identifiers');
     if (FENCE.test(text)) failed.push('no-code');
-    const title = words4(original.title);
+    const title = words4(readerTitle);
     const first = words4(sentences(text)[0]);
     if (title.size >= 3 && [...title].filter((w) => first.has(w)).length / title.size >= 0.8) failed.push('title');
     if (sentences(text).length > want.maxSentences) failed.push('length');

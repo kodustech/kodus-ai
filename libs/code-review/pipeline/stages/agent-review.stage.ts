@@ -2538,10 +2538,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                                     }
                                     continue;
                                 }
-                                if (!isSameSpot(dup, suggestions[keepIdx])) {
-                                    locations.push(
-                                        `${dup.relevantFile}:${dup.relevantLinesStart}-${dup.relevantLinesEnd}`,
-                                    );
+                                // No content guard on this branch, so a
+                                // nested range may be a different bug: only
+                                // the same location is left out of the list.
+                                const loc = `${dup.relevantFile}:${dup.relevantLinesStart}-${dup.relevantLinesEnd}`;
+                                const keptLoc = `${suggestions[keepIdx].relevantFile}:${suggestions[keepIdx].relevantLinesStart}-${suggestions[keepIdx].relevantLinesEnd}`;
+                                if (loc !== keptLoc) {
+                                    locations.push(loc);
                                 }
                             }
                         }
@@ -2620,8 +2623,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     classifiedIndices.add(dupIdx);
                     const dup = suggestions[dupIdx];
                     duplicateSummaries.push(this.summarizeDedupSuggestion(dup));
-                    // A range around the kept one is the same bug at the same
-                    // place, not another location.
+                    // The content guard above judged these the same bug, so a
+                    // range around or inside the kept one is the same place,
+                    // not another location.
                     if (!isSameSpot(dup, kept)) {
                         otherLocations.push(
                             `${dup.relevantFile}:${dup.relevantLinesStart}-${dup.relevantLinesEnd}`,
