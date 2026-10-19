@@ -52,16 +52,28 @@ export function summarizeCustomAgentRuns(
     /** Findings the review set aside, the severity filter's among them. */
     discarded: ReadonlyArray<Partial<CodeSuggestion>> = [],
 ): CustomAgentRunSummary[] {
+    const countByAgent = (
+        findings: ReadonlyArray<Partial<CodeSuggestion>>,
+    ): Map<string, number> => {
+        const counts = new Map<string, number>();
+        for (const s of findings) {
+            const id = s.customAgent?.id;
+            if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
+        }
+        return counts;
+    };
+    const postedBy = countByAgent(posted);
+    const belowSeverityBy = countByAgent(
+        discarded.filter(
+            (s) => s.priorityStatus === PriorityStatus.DISCARDED_BY_SEVERITY,
+        ),
+    );
     return (runs ?? []).map((run) => {
-        const belowSeverity = discarded.filter(
-            (s) =>
-                s.customAgent?.id === run.id &&
-                s.priorityStatus === PriorityStatus.DISCARDED_BY_SEVERITY,
-        ).length;
+        const belowSeverity = belowSeverityBy.get(run.id) ?? 0;
         return {
             ...run,
             status: notRunReason(run, ignored),
-            posted: posted.filter((s) => s.customAgent?.id === run.id).length,
+            posted: postedBy.get(run.id) ?? 0,
             ...(belowSeverity > 0 && { belowSeverity }),
         };
     });

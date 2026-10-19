@@ -1098,14 +1098,14 @@ async function routeByKind(
     // A "convention" sourced from a tool's output (e.g. a CLI) quotes no
     // rule, so the quote gate would drop it: it is checked as a bug instead.
     const toolSourced = suggestions.filter(
-        (s) => s.kind === 'convention' && isToolSource(s),
+        (s) => s.kind === 'convention' && isToolSource(s, check.guideFiles),
     );
     const bugs = [
         ...suggestions.filter((s) => s.kind !== 'convention'),
         ...toolSourced.map((s) => ({ ...s, kind: 'bug' as const, source: undefined })),
     ];
     const candidates = suggestions.filter(
-        (s) => s.kind === 'convention' && !isToolSource(s),
+        (s) => s.kind === 'convention' && !isToolSource(s, check.guideFiles),
     );
     if (candidates.length === 0) {
         return {

@@ -295,8 +295,9 @@ const CONFIG_FILE_KEYS_SET_IN_APP: Record<string, string> = {
 export function buildConfigFileKeysIgnoredWarning(
     fileKeys: readonly string[] | undefined,
 ): ReviewWarning | undefined {
+    const inFile = new Set(fileKeys ?? []);
     const lines = Object.keys(CONFIG_FILE_KEYS_SET_IN_APP)
-        .filter((key) => fileKeys?.includes(key))
+        .filter((key) => inFile.has(key))
         .map((key) => CONFIG_FILE_KEYS_SET_IN_APP[key]);
     if (!lines.length) return undefined;
     return {

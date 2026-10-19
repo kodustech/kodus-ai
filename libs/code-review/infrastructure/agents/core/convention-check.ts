@@ -25,7 +25,8 @@ import type { FinderSuggestion } from '@libs/code-review/infrastructure/agents/c
  *  file does not exist there (or cannot be read). */
 export type GuideFileReader = (file: string) => Promise<string | null>;
 
-/** Lists the files under a directory on the PR's target branch. */
+/** Lists the files under a directory on the PR's target branch; rejects
+ *  when the listing itself fails. */
 export type GuideDirLister = (dir: string) => Promise<string[]>;
 
 /** Skill files a rule can be quoted from: prose, not scripts or data. */
@@ -320,7 +321,20 @@ export async function checkConventionQuotes(
             passed.push({ finding, sectionText });
             continue;
         }
-        const inSkill = await findInSkillFiles(file, quote, read, listGuideDir);
+        let inSkill: { file: string; sectionText: string } | null;
+        try {
+            inSkill = await findInSkillFiles(file, quote, read, listGuideDir);
+        } catch {
+            // The skill's other files could not be listed: the quote may be
+            // in one of them, so the finding is not called a misquote.
+            if (!passFromInstructions()) {
+                reject(
+                    finding,
+                    `could not list the files of ${file}'s skill on the target branch`,
+                );
+            }
+            continue;
+        }
         if (inSkill) {
             passed.push({
                 finding: {
@@ -342,12 +356,17 @@ export async function checkConventionQuotes(
 /** A convention finding whose source names a tool (a CLI such as `jscpd`)
  *  instead of a document: what it cites is the tool's output, not a rule the
  *  team wrote, so there is no quote to check. It is a finding about the code
- *  and is checked as one. */
-export function isToolSource(finding: FinderSuggestion): boolean {
+ *  and is checked as one. A linked guide without an extension (`CONTRIBUTING`)
+ *  is a document, not a tool. */
+export function isToolSource(
+    finding: FinderSuggestion,
+    guideFiles: readonly string[] = [],
+): boolean {
     const file = (finding.source?.file ?? '').trim();
     return (
         /^[A-Za-z0-9_-]+$/.test(file) &&
         !isTeamInstructionsSource(file) &&
+        !isLinkedGuide(file, guideFiles) &&
         astGrepRuleIdOf(finding) == null
     );
 }
@@ -375,7 +394,7 @@ async function findInSkillFiles(
     if (!listGuideDir || !/(^|\/)SKILL\.md$/i.test(cited)) return null;
     const dir = cited.replace(/\/?SKILL\.md$/i, '');
     if (!dir) return null;
-    const files = await listGuideDir(dir).catch(() => [] as string[]);
+    const files = await listGuideDir(dir);
     let reads = 0;
     for (const raw of files) {
         const file = stripLeading(raw);
@@ -439,7 +458,12 @@ export function makeTargetBranchGuideLister(
             // octal-escapes non-ASCII paths (core.quotePath).
             `git ls-tree -r --name-only -z ${shellQuote(`refs/remotes/origin/${baseBranch}`)} -- ${shellQuote(`${path}/`)}`,
         );
-        return r.exitCode === 0 ? r.stdout.split('\0').filter(Boolean) : [];
+        // A path missing on the branch lists nothing and exits 0; anything
+        // else is a failure, not an empty skill.
+        if (r.exitCode !== 0) {
+            throw new Error(`git ls-tree exited ${r.exitCode}`);
+        }
+        return r.stdout.split('\0').filter(Boolean);
     };
 }
 

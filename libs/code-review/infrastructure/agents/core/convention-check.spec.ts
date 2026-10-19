@@ -15,6 +15,7 @@ import {
     findQuoteSection,
     isLinkedGuide,
     isProvenByAstGrep,
+    isToolSource,
     makeTargetBranchGuideLister,
     makeTargetBranchGuideReader,
     normalizeQuoteText,
@@ -187,6 +188,27 @@ describe('checkConventionQuotes in a skill with rule files', () => {
         );
         expect(r.passed).toEqual([]);
         expect(read.mock.calls.length).toBeLessThanOrEqual(1 + 40);
+    });
+
+    it('says the skill could not be listed, not that the quote is missing, when listing fails', async () => {
+        const r = await checkConventionQuotes(
+            [
+                conv('A valve opens only after its zone lock is held.', {
+                    source: {
+                        file: SKILL,
+                        section: 'Opening',
+                        quote: 'A valve opens only after its zone lock is held.',
+                    },
+                }),
+            ],
+            reader(files),
+            [SKILL],
+            jest.fn(async () => {
+                throw new Error('git ls-tree exited 128');
+            }),
+        );
+        expect(r.passed).toEqual([]);
+        expect(r.rejected[0].detail).toMatch(/could not list the files/);
     });
 
     it('keeps rejecting without a lister', async () => {
@@ -855,6 +877,13 @@ describe('makeTargetBranchGuideLister', () => {
                 '.claude/skills/valve-rules/rules/zones.md',
             ]);
             expect(await list('../etc')).toEqual([]);
+            // A path missing on the branch is an empty skill...
+            expect(await list('.claude/skills/none')).toEqual([]);
+            // ...a failed listing is not.
+            const broken = makeTargetBranchGuideLister({ exec } as any, 'gone')!;
+            await expect(broken('.claude/skills/valve-rules')).rejects.toThrow(
+                /git ls-tree exited/,
+            );
         } finally {
             fs.rmSync(repo, { recursive: true, force: true });
         }
@@ -862,5 +891,22 @@ describe('makeTargetBranchGuideLister', () => {
 
     it('is undefined without exec or base branch', () => {
         expect(makeTargetBranchGuideLister(undefined, 'main')).toBeUndefined();
+    });
+});
+
+describe('isToolSource', () => {
+    const cites = (file: string) =>
+        ({
+            kind: 'convention',
+            source: { file, section: '', quote: 'Clone found' },
+        }) as unknown as FinderSuggestion;
+
+    it('takes a bare name for a tool, unless it is a linked guide', () => {
+        expect(isToolSource(cites('jscpd'))).toBe(true);
+        expect(isToolSource(cites('CONTRIBUTING'), ['CONTRIBUTING'])).toBe(
+            false,
+        );
+        expect(isToolSource(cites('docs/style.md'))).toBe(false);
+        expect(isToolSource(cites('TeamInstructions'))).toBe(false);
     });
 });

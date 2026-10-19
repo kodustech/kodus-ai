@@ -473,12 +473,14 @@ function withoutRepeats(suggestions: Partial<CodeSuggestion>[]): {
         const end = Number(s.relevantLinesEnd ?? s.relevantLinesStart);
         return [start, Number.isFinite(end) ? end : start];
     };
+    // Only findings on the same file can repeat each other.
+    const keptByFile = new Map<string | undefined, Partial<CodeSuggestion>[]>();
     for (const s of suggestions) {
         const [start, end] = range(s);
-        const repeat = kept.some((k) => {
+        const sameFile = keptByFile.get(s.relevantFile) ?? [];
+        const repeat = sameFile.some((k) => {
             const [kStart, kEnd] = range(k);
             return (
-                k.relevantFile === s.relevantFile &&
                 Number.isFinite(start) &&
                 Number.isFinite(kStart) &&
                 start <= kEnd &&
@@ -486,7 +488,12 @@ function withoutRepeats(suggestions: Partial<CodeSuggestion>[]): {
                 contentSimilarity(k, s) >= DEDUP_CONTENT_THRESHOLD
             );
         });
-        (repeat ? repeats : kept).push(s);
+        if (repeat) {
+            repeats.push(s);
+        } else {
+            kept.push(s);
+            keptByFile.set(s.relevantFile, [...sameFile, s]);
+        }
     }
     return { kept, repeats };
 }
