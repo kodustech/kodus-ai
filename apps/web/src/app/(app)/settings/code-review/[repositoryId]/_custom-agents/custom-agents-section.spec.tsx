@@ -6,7 +6,7 @@ import { newCliTool } from "@services/custom-agents/drafts";
 import type { CustomAgent } from "@services/custom-agents/types";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
-import { FormProvider, useForm } from "react-hook-form";
+import { FormProvider, useForm, useFormContext } from "react-hook-form";
 
 import { shouldBlockCodeReviewLayoutNavigation } from "../_utils/layout-dirty-state";
 import {
@@ -244,6 +244,46 @@ describe("CustomAgentsList", () => {
         expect(push).toHaveBeenLastCalledWith(
             "/settings/code-review/repo-1/agents/ledger#try-it",
         );
+    });
+
+    it("holds the switch while another edit on the page is unsaved", async () => {
+        // A list save writes only the agents, and the page would then treat
+        // the other edit as saved.
+        const EditElsewhere = () => {
+            const form = useFormContext();
+            return (
+                <button
+                    onClick={() =>
+                        form.setValue("summary" as never, "edited" as never, {
+                            shouldDirty: true,
+                        })
+                    }>
+                    edit elsewhere
+                </button>
+            );
+        };
+        render(
+            <QueryClientProvider client={new QueryClient()}>
+                <Form>
+                    <CustomAgentsList canEdit />
+                    <EditElsewhere />
+                </Form>
+            </QueryClientProvider>,
+        );
+        await flush();
+        expect(
+            screen.getByRole("switch", { name: "Ledger reviewer enabled" }),
+        ).toBeEnabled();
+
+        fireEvent.click(screen.getByText("edit elsewhere"));
+        await flush();
+
+        expect(
+            screen.getByRole("switch", { name: "Ledger reviewer enabled" }),
+        ).toBeDisabled();
+        expect(
+            screen.getByText(/Save or discard the other changes/),
+        ).toBeInTheDocument();
     });
 
     it("deletes from the ⋯ menu only after the confirm dialog", async () => {

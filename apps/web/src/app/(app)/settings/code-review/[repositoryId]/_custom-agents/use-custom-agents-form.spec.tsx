@@ -289,6 +289,20 @@ describe("customAgentsSaveErrorMessage", () => {
         ).toBe("Audit reviewer: tools.astGrepConfig allows at most 64000 bytes");
     });
 
+    it("names each agent when the server joined several refusals in one message", () => {
+        expect(
+            customAgentsSaveErrorMessage(
+                new CodeReviewSettingsValidationError([
+                    "configValue.customAgents.0.name should not be empty, configValue.customAgents.1.instructions must be shorter than or equal to 8000 characters",
+                ]),
+                "Couldn't save.",
+                [ledger, audit],
+            ),
+        ).toBe(
+            "Ledger reviewer: name should not be empty · Audit reviewer: instructions must be shorter than or equal to 8000 characters",
+        );
+    });
+
     it("falls back to the caller's message for a refusal about something else", () => {
         expect(
             customAgentsSaveErrorMessage(

@@ -37,15 +37,22 @@ export const customAgentsSaveErrorMessage = (
     }
     // "configValue.customAgents.5.tools.astGrepConfig allows at most …": one
     // agent the server refuses fails the whole save, so the toast says which.
+    // The server joins several refusals with ", " into one message, so each
+    // is read on its own.
     const refused =
         error instanceof CodeReviewSettingsValidationError
-            ? error.messages.flatMap((message) => {
-                  const match = /customAgents\.(\d+)\.(.+)$/.exec(message);
-                  if (!match) return [];
-                  const index = Number(match[1]);
-                  const name = agents?.[index]?.name ?? `Agent ${index + 1}`;
-                  return [`${name}: ${match[2]}`];
-              })
+            ? error.messages
+                  .flatMap((message) =>
+                      message.split(/,\s+(?=\S*customAgents\.\d+\.)/),
+                  )
+                  .flatMap((message) => {
+                      const match = /customAgents\.(\d+)\.(.+)$/.exec(message);
+                      if (!match) return [];
+                      const index = Number(match[1]);
+                      const name =
+                          agents?.[index]?.name ?? `Agent ${index + 1}`;
+                      return [`${name}: ${match[2]}`];
+                  })
             : [];
     return refused.length ? refused.join(" · ") : fallback;
 };

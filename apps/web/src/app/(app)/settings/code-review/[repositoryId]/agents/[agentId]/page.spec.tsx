@@ -82,8 +82,9 @@ jest.mock("@services/permissions/hooks", () => ({
     usePermission: () => true,
 }));
 
+let mockCustomAgentsFlag = true;
 jest.mock("../../../../_components/context", () => ({
-    useFeatureFlags: () => ({ customAgents: true }),
+    useFeatureFlags: () => ({ customAgents: mockCustomAgentsFlag }),
 }));
 
 jest.mock("src/core/hooks/use-unsaved-changes-guard", () => ({
@@ -115,6 +116,20 @@ describe("Custom agent page", () => {
         save.mockReset();
         save.mockResolvedValue({});
         updateAgent.mockReset();
+    });
+
+    it("shows no editor and no Try it while the organization's flag is off", async () => {
+        mockCustomAgentsFlag = false;
+        try {
+            await renderPage();
+            expect(
+                screen.getByText(/Custom agents are in beta and not enabled/),
+            ).toBeInTheDocument();
+            expect(screen.queryByLabelText("Instructions")).toBeNull();
+            expect(screen.queryByText("Run agent")).toBeNull();
+        } finally {
+            mockCustomAgentsFlag = true;
+        }
     });
 
     it("leads back to What to review, where the agents are listed", async () => {

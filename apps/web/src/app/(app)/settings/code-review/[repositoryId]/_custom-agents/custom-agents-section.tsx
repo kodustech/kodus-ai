@@ -49,6 +49,8 @@ const saveWithToast = async (
     save: Save,
     next: Parameters<Save>[0],
     { done, failed }: { done: string; failed: string },
+    /** Where the save was made, for the log; never the agents' content. */
+    scope: { teamId?: string; repositoryId: string; directoryId?: string },
 ) => {
     try {
         const result = await save(next);
@@ -63,7 +65,7 @@ const saveWithToast = async (
         }
         toast({ description: done, variant: "success" });
     } catch (error) {
-        console.error("Error saving custom agents:", error);
+        console.error("Error saving custom agents:", { ...scope, error });
         toast({
             title: "Error",
             description: customAgentsSaveErrorMessage(
@@ -194,8 +196,10 @@ export const CustomAgentsList = ({ canEdit }: { canEdit: boolean }) => {
         inheritedAgentCount,
         listNote,
         isSubmitting,
+        otherFieldsDirty,
         save,
     } = useCustomAgentsForm();
+    const scope = { teamId, repositoryId, directoryId };
     const [dialogOpen, setDialogOpen] = useState(false);
     const [deleting, setDeleting] = useState<CustomAgent | null>(null);
     const isGlobal = repositoryId === "global";
@@ -218,6 +222,7 @@ export const CustomAgentsList = ({ canEdit }: { canEdit: boolean }) => {
                 done: `${agent.name} turned ${enabled ? "on" : "off"}`,
                 failed: "Couldn't save the agent. Try again.",
             },
+            scope,
         );
 
     const confirmDelete = async () => {
@@ -229,12 +234,19 @@ export const CustomAgentsList = ({ canEdit }: { canEdit: boolean }) => {
                 done: `${deleting.name} deleted`,
                 failed: "Couldn't delete the agent. Try again.",
             },
+            scope,
         );
         setDeleting(null);
     };
 
     return (
         <div className="flex flex-col gap-4" data-field-name="customAgents">
+            {otherFieldsDirty && agents.length > 0 && (
+                <p role="note" className="text-warning text-sm">
+                    Save or discard the other changes on this page to turn
+                    agents on or off or delete them.
+                </p>
+            )}
             {listNote && (
                 <p role="note" className="text-text-secondary text-sm">
                     {listNote}
@@ -296,7 +308,9 @@ export const CustomAgentsList = ({ canEdit }: { canEdit: boolean }) => {
                                       )
                             }
                             canEdit={canEdit}
-                            busy={isSubmitting}
+                            // A list save writes only the agents and would
+                            // mark the page's other edits as saved.
+                            busy={isSubmitting || otherFieldsDirty}
                             onToggle={(enabled) => toggle(agent, enabled)}
                             onDelete={() => setDeleting(agent)}
                         />
