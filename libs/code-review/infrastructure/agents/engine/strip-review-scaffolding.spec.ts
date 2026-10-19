@@ -23,9 +23,9 @@ describe('stripReviewScaffolding', () => {
 
         expect(out).not.toMatch(/WHAT:|WHY:|HOW:/);
         // Every part survives — this removes labels, it does not summarise.
-        expect(out).toContain('the new dedup marks the job FAILED');
+        expect(out).toContain('The new dedup marks the job FAILED');
         expect(out).toContain('permanently suppresses the customer-facing');
-        expect(out).toContain("gate the skip on a persisted 'notified' marker");
+        expect(out).toContain("Gate the skip on a persisted 'notified' marker");
         // One paragraph, not three orphaned fragments.
         expect(out.split('\n')).toHaveLength(1);
     });
@@ -89,7 +89,7 @@ describe('stripReviewScaffolding', () => {
             '**WHAT:** the guard is missing\n**WHY:** it throws on null',
         );
 
-        expect(out).toBe('the guard is missing. it throws on null.');
+        expect(out).toBe('The guard is missing. It throws on null.');
     });
 
     it('handles the numbered form the prompt actually asks for', () => {
@@ -98,8 +98,8 @@ describe('stripReviewScaffolding', () => {
         );
 
         expect(out).not.toMatch(/^\s*\d\./);
-        expect(out).toContain('null is passed to processItem');
-        expect(out).toContain('guard the call');
+        expect(out).toContain('Null is passed to processItem');
+        expect(out).toContain('Guard the call');
     });
 
     it('handles the numbered list flattened onto one line', () => {
@@ -113,7 +113,7 @@ describe('stripReviewScaffolding', () => {
         expect(out).not.toMatch(/WHAT:|WHY:|HOW:/);
         expect(out).not.toMatch(/\b[23]\.\s/);
         // Each part is closed off, the same as every other form.
-        expect(out).toBe('a. b. c.');
+        expect(out).toBe('A. b. c.');
     });
 
     it('keeps a number that ends the sentence before a label', () => {
@@ -141,7 +141,7 @@ describe('stripReviewScaffolding', () => {
         );
 
         expect(out).toBe(
-            'the collection can be empty. the caller dereferences it.',
+            'The collection can be empty. The caller dereferences it.',
         );
     });
 
@@ -164,7 +164,35 @@ describe('stripReviewScaffolding', () => {
     it('keeps sentences separated when the model omitted the full stop', () => {
         const out = stripReviewScaffolding('WHAT: a is null\nWHY: b throws');
 
-        expect(out).toBe('a is null. b throws.');
+        expect(out).toBe('A is null. b throws.');
+    });
+
+    it('starts every joined part with a capital letter (#2157)', () => {
+        const out = stripReviewScaffolding(
+            'WHAT: the comparator is reversed. WHY: surfaces the least urgent tickets at the top. HOW: return `a - b` so the oldest comes first.',
+        );
+
+        expect(out).toBe(
+            'The comparator is reversed. Surfaces the least urgent tickets at the top. Return `a - b` so the oldest comes first.',
+        );
+    });
+
+    it('does not capitalise what may be an identifier', () => {
+        expect(
+            stripReviewScaffolding(
+                'WHAT: `retries` is ignored. WHY: config.retries is read as a string. HOW: x must be parsed. WHY: useEffect runs twice',
+            ),
+        ).toBe(
+            '`retries` is ignored. config.retries is read as a string. x must be parsed. useEffect runs twice.',
+        );
+    });
+
+    it('capitalises in languages other than English', () => {
+        expect(
+            stripReviewScaffolding(
+                'WHAT: é chamado duas vezes. WHY: o retry dispara sem espera',
+            ),
+        ).toBe('É chamado duas vezes. O retry dispara sem espera.');
     });
 
     it('returns the original rather than emptying a suggestion', () => {
@@ -200,6 +228,13 @@ describe('impact and action fallback', () => {
         'WHAT: Missing guard. WHY: Requests fail. WHY: Different impact. HOW: Add a guard.',
     ])('does not infer an action for %s', (raw) => {
         expect(impactAndActionFallback(raw)).toBeUndefined();
+    });
+    it('starts the impact and the action with a capital letter (#2157)', () => {
+        expect(
+            impactAndActionFallback(
+                'WHAT: missing guard. WHY: requests fail. HOW: add a guard.',
+            ),
+        ).toBe('Requests fail. Add a guard.');
     });
     it('ignores labels in quoted code', () => {
         expect(

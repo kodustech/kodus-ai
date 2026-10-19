@@ -37,7 +37,7 @@ describe('formatSuggestionContent — nothing raw ships, whatever failed', () =>
 
         expect(out.size).toBe(2);
         expect(out.get(0)?.suggestionContent).not.toMatch(/WHAT:|WHY:|HOW:/);
-        expect(out.get(0)?.suggestionContent).toContain('problem 0');
+        expect(out.get(0)?.suggestionContent).toContain('Problem 0');
     });
 
     it('strips locally when the account is suspended', async () => {
@@ -72,7 +72,7 @@ describe('formatSuggestionContent — nothing raw ships, whatever failed', () =>
 
         expect(out.get(0)?.suggestionContent).toBe('Model prose.');
         expect(out.get(1)?.suggestionContent).not.toMatch(/WHAT:/);
-        expect(out.get(1)?.suggestionContent).toContain('problem 1');
+        expect(out.get(1)?.suggestionContent).toContain('Problem 1');
     });
 
     it('fills a gap the model hid behind an out-of-range index', async () => {
@@ -91,7 +91,7 @@ describe('formatSuggestionContent — nothing raw ships, whatever failed', () =>
 
         expect(out.get(1)?.suggestionContent).toBeDefined();
         expect(out.get(1)?.suggestionContent).not.toMatch(/WHAT:/);
-        expect(out.get(1)?.suggestionContent).toContain('problem 1');
+        expect(out.get(1)?.suggestionContent).toContain('Problem 1');
     });
 
     it('does not touch a suggestion that was already prose', async () => {
@@ -191,7 +191,7 @@ describe('formatSuggestionContent — nothing raw ships, whatever failed', () =>
 
             // Falls back to the local strip, never to a fabricated empty parse.
             expect(result.get(0)?.suggestionContent).not.toMatch(/WHAT:/);
-            expect(result.get(0)?.suggestionContent).toContain('problem 0');
+            expect(result.get(0)?.suggestionContent).toContain('Problem 0');
         });
     });
 

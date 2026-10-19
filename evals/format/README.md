@@ -26,7 +26,9 @@ only the findings and the team's settings.
 - `checks.js`: what a shipped comment owes the reader, each a rule of the
   formatter prompt (`format-prompt.ts`) or of the configuration — no labels, at
   least half the cited code names still in the text or the title above it, no
-  code block, the title not repeated, the sentence limit, the language.
+  code block, the title not repeated, the sentence limit, the word limit where
+  the team set none (#2157), no line number, a title over the ceiling
+  rewritten rather than cut, the language.
 
 A finding counts as right when it passes every check. The checks read the text;
 none judges whether the claim is still the same one.
