@@ -881,6 +881,11 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
         platformType: PlatformType,
         codeReviewConfig?: CodeReviewConfig,
         pullRequestMessages?: IPullRequestMessages,
+        existingCommentData?: {
+            commentId?: number;
+            noteId?: number;
+            threadId?: number;
+        },
     ): Promise<{ commentId: number; noteId: number; threadId?: number }> {
         try {
             let commentBody: string;
@@ -923,6 +928,70 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                     '<!-- kody-codereview -->',
                     '&#8203;',
                 ].join('\n');
+            }
+
+            // GitLab re-run (every-push): edit the existing status note in
+            // place so the MR keeps a single status note instead of piling up
+            // one per push (#1721). A plain note is identified by its id in
+            // `commentId`; `noteId` stays null (see the ID extraction below).
+            // Legacy status discussions persisted a numeric `noteId` instead,
+            // so the reuse only fires for notes created after this fix — a
+            // stale discussion is left for the next create to supersede.
+            const reuseNoteId =
+                platformType === PlatformType.GITLAB &&
+                existingCommentData?.noteId == null &&
+                Number.isFinite(Number(existingCommentData?.commentId))
+                    ? Number(existingCommentData?.commentId)
+                    : undefined;
+
+            if (reuseNoteId !== undefined) {
+                try {
+                    await this.codeManagementService.updateIssueComment(
+                        {
+                            organizationAndTeamData,
+                            prNumber,
+                            repository: {
+                                name: repository.name,
+                                id: repository.id,
+                            },
+                            body: commentBody,
+                            commentId: reuseNoteId,
+                        },
+                        undefined,
+                    );
+
+                    this.logger.log({
+                        message: `Updated existing start-of-review note for PR#${prNumber}`,
+                        context: CommentManagerService.name,
+                        metadata: {
+                            organizationAndTeamData,
+                            prNumber,
+                            repository: repository.name,
+                            commentId: reuseNoteId,
+                        },
+                    });
+
+                    return {
+                        commentId: reuseNoteId,
+                        noteId: null,
+                        threadId: existingCommentData?.threadId,
+                    };
+                } catch (error) {
+                    // The previous note may have been deleted on GitLab (404).
+                    // Fall through and create a new one so the review still
+                    // runs instead of failing on a missing note.
+                    this.logger.warn({
+                        message: `Failed to reuse existing start-of-review note for PR#${prNumber}; creating a new one`,
+                        context: CommentManagerService.name,
+                        error: error?.message,
+                        metadata: {
+                            organizationAndTeamData,
+                            prNumber,
+                            repository: repository.name,
+                            commentId: reuseNoteId,
+                        },
+                    });
+                }
             }
 
             // Status note, not a finding: on GitLab it must be a plain MR
