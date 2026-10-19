@@ -100,13 +100,25 @@ export const useCustomAgentsForm = () => {
         form.control._defaultValues as Record<string, unknown>
     )?.customAgents as FieldNode<CustomAgent[]>;
     const listNote = ownListNote(loadedAgents, level);
-    const inheritedAgentCount =
+    const inheritedAgents =
         level === FormattedConfigLevel.DIRECTORY
             ? ((loadedAgents?.level === FormattedConfigLevel.DIRECTORY
                   ? loadedAgents.overriddenValue
-                  : loadedAgents?.value
-              )?.length ?? 0)
-            : 0;
+                  : loadedAgents?.value) ?? [])
+            : [];
+    // What a skill or doc at this level can link to: the agents a review
+    // here runs, so at a directory the repository's too, a directory agent
+    // with an inherited id in its place (as the server merges them).
+    const linkableAgents = [
+        ...inheritedAgents.map(
+            (inherited) =>
+                agents.find((agent) => agent.id === inherited.id) ?? inherited,
+        ),
+        ...agents.filter(
+            (agent) =>
+                !inheritedAgents.some((inherited) => inherited.id === agent.id),
+        ),
+    ];
     const dirtyKeys = Object.keys(dirtyFields ?? {});
     const isDirty = dirtyKeys.some(
         (key) => key === "customAgents" || key === "knowledge",
@@ -230,7 +242,8 @@ export const useCustomAgentsForm = () => {
         directoryId,
         agents,
         knowledge,
-        inheritedAgentCount,
+        linkableAgents,
+        inheritedAgentCount: inheritedAgents.length,
         level,
         listNote,
         isDirty,

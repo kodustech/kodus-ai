@@ -35,6 +35,7 @@ import { deepDifference, deepMerge } from '@libs/common/utils/deep';
 import { encrypt } from '@libs/common/utils/crypto';
 import {
     CliSecretMissingError,
+    effectiveStoredCustomAgents,
     maskCliSecrets,
     sealCustomAgentSecrets,
     storedCustomAgentsAtLevel,
@@ -50,6 +51,7 @@ import { IntegrationConfigKey, ParametersKey } from '@libs/core/domain/enums';
 import {
     CodeReviewConfigWithoutLLMProvider,
     CodeReviewVersion,
+    knowledgeLinkProblems,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import {
     CodeReviewParameter,
@@ -229,6 +231,31 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             const codeRepositories = await this.getFormattedRepositories(
                 organizationAndTeamData,
             );
+
+            // A knowledge link must name an agent the saved level runs: one
+            // this save configures or, at a directory, one of the repository's
+            // agents the directory adds to. A dangling link would never load,
+            // and would start loading if an agent with that id were created.
+            // The screen saves agents and knowledge together; a payload
+            // without agents is not checked.
+            if (
+                Array.isArray(configValue?.knowledge) &&
+                Array.isArray(configValue?.customAgents)
+            ) {
+                const atDirectory =
+                    !!repositoryId && (!!directoryId || !!resolvedPaths);
+                const problems = knowledgeLinkProblems(configValue.knowledge, [
+                    ...(atDirectory
+                        ? effectiveStoredCustomAgents(codeReviewConfigs, {
+                              repositoryId,
+                          })
+                        : []),
+                    ...configValue.customAgents,
+                ]);
+                if (problems.length > 0) {
+                    throw new BadRequestException(problems.join('; '));
+                }
+            }
 
             // The custom agents and knowledge are written as whole lists: a
             // save made from a copy someone else replaced since would drop

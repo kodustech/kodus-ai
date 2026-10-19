@@ -103,6 +103,7 @@ const Form = ({
 const Probe = () => {
     const {
         agents,
+        linkableAgents,
         inheritedAgentCount,
         setAgents,
         updateAgent,
@@ -117,6 +118,9 @@ const Probe = () => {
             <button onClick={() => setAgents([...agents, sprinkler])}>add</button>
             <span data-testid="names">
                 {agents.map((agent) => agent.name).join(",")}
+            </span>
+            <span data-testid="linkable">
+                {linkableAgents.map((agent) => agent.name).join(",")}
             </span>
             <button
                 onClick={() =>
@@ -369,10 +373,30 @@ describe("useCustomAgentsForm — at a directory", () => {
         expect(screen.getByTestId("inherited")).toHaveTextContent("2");
     });
 
+    it("offers the repository's agents as link targets, a directory agent in place of the one it replaces", () => {
+        const zoneLedger = { ...ledger, name: "Zone ledger reviewer" };
+        renderProbe({
+            customAgents: {
+                value: [zoneLedger, drip],
+                level: "directory",
+                overriddenValue: [ledger, audit],
+                overriddenLevel: "repository",
+            },
+            knowledge: { value: [], level: "repository" },
+        });
+
+        expect(screen.getByTestId("linkable")).toHaveTextContent(
+            "Zone ledger reviewer,Audit reviewer,Drip reviewer",
+        );
+    });
+
     it("leaves the repository level as it was", async () => {
         mockLevel = "repository";
         renderProbe();
         expect(screen.getByTestId("inherited")).toHaveTextContent("0");
+        expect(screen.getByTestId("linkable")).toHaveTextContent(
+            "Ledger reviewer",
+        );
 
         fireEvent.click(screen.getByText("add"));
         fireEvent.click(screen.getByText("save"));
