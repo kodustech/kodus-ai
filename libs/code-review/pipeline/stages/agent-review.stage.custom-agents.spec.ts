@@ -214,6 +214,52 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
         ).toMatchObject({ priorityStatus: 'discarded-by-severity' });
     });
 
+    it('logs each agent outcome with the review ids, counts and the disabled agents', async () => {
+        const { stage } = makeStage(
+            output([
+                finding(),
+                finding({
+                    relevantLinesStart: 9,
+                    relevantLinesEnd: 9,
+                    severity: 'low',
+                    suggestionContent: 'Rounding note.',
+                }),
+            ]),
+        );
+        const log = jest
+            .spyOn((stage as any).logger, 'log')
+            .mockImplementation(() => undefined);
+
+        await run(
+            stage,
+            makeContext([
+                agent({ presentation: { minSeverity: 'high' } }),
+                agent({ id: 'off', name: 'Off', enabled: false }),
+            ]),
+        );
+
+        const entry = log.mock.calls
+            .map(([e]: any[]) => e)
+            .find((e: any) =>
+                String(e?.message).startsWith('[AGENT] Custom agents outcome'),
+            );
+        expect(entry?.metadata).toMatchObject({
+            organizationId: expect.any(String),
+            disabled: ['off'],
+            agents: [
+                {
+                    id: 'agent-ledger',
+                    slug: 'ledger-rules',
+                    status: 'ran',
+                    kept: 1,
+                    droppedByChecks: 2,
+                    discarded: { 'discarded-by-severity': 1 },
+                },
+            ],
+        });
+        expect(JSON.stringify(entry)).not.toContain('Rounding note.');
+    });
+
     it('keeps the most severe findings up to maxComments', async () => {
         const { stage } = makeStage(
             output([
