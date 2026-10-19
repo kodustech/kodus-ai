@@ -35,6 +35,10 @@ import { resolveReviewKnowledge } from '@libs/code-review/infrastructure/agents/
 import { ReviewOrchestratorService } from '@libs/code-review/infrastructure/agents/review-orchestrator.service';
 import { resolveAdaptiveProfile } from '@libs/code-review/infrastructure/agents/engine/adaptive-fit';
 import {
+    contentSimilarity,
+    DEDUP_CONTENT_THRESHOLD,
+} from '@libs/code-review/infrastructure/agents/engine/dedup-prompt';
+import {
     buildSandboxUnavailableWarning,
     dedupReviewWarnings,
     type ReviewWarning,
@@ -390,7 +394,7 @@ export function buildTryTrace(params: {
     const minRank = agent.presentation?.minSeverity
         ? rankOf(agent.presentation.minSeverity)
         : Infinity;
-    const kept = output.suggestions ?? [];
+    const { kept, repeats } = withoutRepeats(output.suggestions ?? []);
     const eligible = kept
         .map((s, i) => ({ s, i }))
         .filter(({ s }) => rankOf(s.severity) <= minRank)
@@ -431,6 +435,9 @@ export function buildTryTrace(params: {
         })),
         findings: [
             ...kept.map((s) => finding(s, 'kept')),
+            ...repeats.map((s) =>
+                finding(s, 'dropped', 'repeats a finding on the same lines'),
+            ),
             ...(output.discardedByVerify ?? []).map((s) =>
                 finding(s, 'dropped', 'refuted by the check'),
             ),
@@ -443,6 +450,41 @@ export function buildTryTrace(params: {
         ],
         durationMs: Date.now() - params.startedAt,
     };
+}
+
+/**
+ * A review dedups the agent's findings before posting; Try it skips that
+ * stage, so two findings about the same lines both read "would post". The
+ * same lines and enough shared words (the review's lexical tier) mark the
+ * later one as a repeat. Its semantic tiers are not run here.
+ */
+function withoutRepeats(suggestions: Partial<CodeSuggestion>[]): {
+    kept: Partial<CodeSuggestion>[];
+    repeats: Partial<CodeSuggestion>[];
+} {
+    const kept: Partial<CodeSuggestion>[] = [];
+    const repeats: Partial<CodeSuggestion>[] = [];
+    const range = (s: Partial<CodeSuggestion>) => {
+        const start = Number(s.relevantLinesStart);
+        const end = Number(s.relevantLinesEnd ?? s.relevantLinesStart);
+        return [start, Number.isFinite(end) ? end : start];
+    };
+    for (const s of suggestions) {
+        const [start, end] = range(s);
+        const repeat = kept.some((k) => {
+            const [kStart, kEnd] = range(k);
+            return (
+                k.relevantFile === s.relevantFile &&
+                Number.isFinite(start) &&
+                Number.isFinite(kStart) &&
+                start <= kEnd &&
+                kStart <= end &&
+                contentSimilarity(k, s) >= DEDUP_CONTENT_THRESHOLD
+            );
+        });
+        (repeat ? repeats : kept).push(s);
+    }
+    return { kept, repeats };
 }
 
 /** The PR's source branch, from the provider's own pull request shape. */

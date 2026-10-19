@@ -408,6 +408,49 @@ describe('buildTryTrace', () => {
     });
 });
 
+describe('buildTryTrace — repeated findings', () => {
+    it('shows a second finding on the same lines as a repeat, not as another post', () => {
+        // Try it skips the review's dedup: two near-identical findings on one
+        // line both read "would post", while the review would post one.
+        const at = (summary: string, file = 'src/trace.ts') => ({
+            relevantFile: file,
+            relevantLinesStart: 2,
+            relevantLinesEnd: 2,
+            severity: 'medium',
+            oneSentenceSummary: summary,
+            suggestionContent: summary,
+        });
+        const trace = buildTryTrace({
+            agent: agent(),
+            output: {
+                suggestions: [
+                    at('Use the shared logger instead of console.log in trace'),
+                    at('Use the shared logger instead of console.log here'),
+                    at('Use the shared logger instead of console.log', 'src/sync.ts'),
+                ],
+                agentName: 'x',
+                turnsUsed: 1,
+                durationMs: 1,
+            } as any,
+            events: [],
+            startedAt: Date.now(),
+        });
+
+        expect(
+            trace.findings.map((f) => [f.file, f.verdict, f.wouldPost, f.reason]),
+        ).toEqual([
+            ['src/trace.ts', 'kept', true, undefined],
+            ['src/sync.ts', 'kept', true, undefined],
+            [
+                'src/trace.ts',
+                'dropped',
+                false,
+                'repeats a finding on the same lines',
+            ],
+        ]);
+    });
+});
+
 describe('CustomAgentKnowledgeReaderService', () => {
     const repository = { id: 'repo-1', name: 'acme/ledger', branch: 'main' };
 
