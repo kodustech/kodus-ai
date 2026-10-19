@@ -1,11 +1,13 @@
 import {
     BadRequestException,
+    ForbiddenException,
     NotFoundException,
     ServiceUnavailableException,
 } from '@nestjs/common';
 
 import { decrypt } from '@libs/common/utils/crypto';
 import { CLI_SECRET_MASK } from '@libs/code-review/domain/custom-agents/cli-secrets';
+import { CUSTOM_AGENTS_PLAN_REQUIRED } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agents-plan';
 
 import {
     GetCustomAgentsStatusUseCase,
@@ -29,6 +31,15 @@ const ledgerAgent = (overrides: Record<string, unknown> = {}) => ({
         suggestedFix: 'when-confident',
     },
     ...overrides,
+});
+
+const TEAMS = {
+    valid: true,
+    subscriptionStatus: 'active',
+    planType: 'teams_byok',
+};
+const licenseService = (license: unknown) => ({
+    validateOrganizationLicense: jest.fn().mockResolvedValue(license),
 });
 
 const parametersService = (configValue: Record<string, unknown>) => ({
@@ -338,6 +349,7 @@ describe('TryCustomAgentUseCase', () => {
                     ],
                 }),
             ) as any,
+            licenseService(TEAMS) as any,
             runner,
         );
         const cli = {
@@ -417,6 +429,7 @@ describe('TryCustomAgentUseCase', () => {
         });
         const useCase = new TryCustomAgentUseCase(
             parametersService(config) as any,
+            licenseService(TEAMS) as any,
             runner,
         );
         const cli = {
@@ -467,6 +480,7 @@ describe('TryCustomAgentUseCase', () => {
         };
         const useCase = new TryCustomAgentUseCase(
             parametersService(config) as any,
+            licenseService(TEAMS) as any,
             runner,
         );
 
@@ -505,6 +519,7 @@ describe('TryCustomAgentUseCase', () => {
         const runner = { runCustomAgentOnPullRequest: jest.fn() };
         const useCase = new TryCustomAgentUseCase(
             parametersService(storedConfig()) as any,
+            licenseService(TEAMS) as any,
             runner,
         );
 
@@ -522,6 +537,7 @@ describe('TryCustomAgentUseCase', () => {
     it('says so when no runner is bound', async () => {
         const useCase = new TryCustomAgentUseCase(
             parametersService(storedConfig()) as any,
+            licenseService(TEAMS) as any,
         );
 
         await expect(
@@ -532,6 +548,65 @@ describe('TryCustomAgentUseCase', () => {
                 agent: ledgerAgent(),
             }),
         ).rejects.toBeInstanceOf(ServiceUnavailableException);
+    });
+
+    it.each([
+        [
+            'free',
+            {
+                valid: true,
+                subscriptionStatus: 'active',
+                planType: 'free_byok',
+            },
+        ],
+        ['an unreadable license', new Error('billing down')],
+    ])('refuses on %s without running the agent', async (_, license) => {
+        const runner = { runCustomAgentOnPullRequest: jest.fn() };
+        const useCase = new TryCustomAgentUseCase(
+            parametersService(storedConfig()) as any,
+            {
+                validateOrganizationLicense:
+                    license instanceof Error
+                        ? jest.fn().mockRejectedValue(license)
+                        : jest.fn().mockResolvedValue(license),
+            } as any,
+            runner,
+        );
+
+        const run = useCase.execute({
+            organizationAndTeamData,
+            repositoryId: 'repo-1',
+            prUrl: 'https://git.example.test/ledger/pull/7',
+            agent: ledgerAgent(),
+        });
+
+        await expect(run).rejects.toBeInstanceOf(ForbiddenException);
+        await expect(run).rejects.toThrow(CUSTOM_AGENTS_PLAN_REQUIRED);
+        expect(runner.runCustomAgentOnPullRequest).not.toHaveBeenCalled();
+    });
+
+    it('runs on a trial', async () => {
+        const runner = {
+            runCustomAgentOnPullRequest: jest.fn().mockResolvedValue(trace),
+        };
+        const useCase = new TryCustomAgentUseCase(
+            parametersService(storedConfig()) as any,
+            licenseService({
+                valid: true,
+                subscriptionStatus: 'trial',
+                planType: 'teams_managed',
+            }) as any,
+            runner,
+        );
+
+        await expect(
+            useCase.execute({
+                organizationAndTeamData,
+                repositoryId: 'repo-1',
+                prUrl: 'https://git.example.test/ledger/pull/7',
+                agent: ledgerAgent(),
+            }),
+        ).resolves.toEqual(trace);
     });
 });
 

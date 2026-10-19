@@ -9,6 +9,7 @@ export type GateFeature =
     | "mcp_plugins"
     | "kody_rules"
     | "linked_repositories"
+    | "custom_agents"
     | "sso"
     | "activity_logs";
 

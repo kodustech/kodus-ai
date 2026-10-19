@@ -1,5 +1,6 @@
 import {
     BadRequestException,
+    ForbiddenException,
     Inject,
     Injectable,
     Optional,
@@ -18,11 +19,19 @@ import {
     type ICustomAgentTryRunner,
 } from '@libs/code-review/domain/custom-agents/contracts';
 import {
+    CUSTOM_AGENTS_PLAN_REQUIRED,
+    isCustomAgentsPlanAllowed,
+} from '@libs/code-review/infrastructure/agents/custom-agents/custom-agents-plan';
+import {
     type CustomAgentConfig,
     customAgentConfigSchema,
     type KnowledgeItem,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+import {
+    type ILicenseService,
+    LICENSE_SERVICE_TOKEN,
+} from '@libs/ee/license/interfaces/license.interface';
 import {
     type IParametersService,
     PARAMETERS_SERVICE_TOKEN,
@@ -40,6 +49,8 @@ export class TryCustomAgentUseCase {
     constructor(
         @Inject(PARAMETERS_SERVICE_TOKEN)
         private readonly parametersService: IParametersService,
+        @Inject(LICENSE_SERVICE_TOKEN)
+        private readonly licenseService: ILicenseService,
         @Optional()
         @Inject(CUSTOM_AGENT_TRY_RUNNER_TOKEN)
         private readonly runner?: ICustomAgentTryRunner,
@@ -52,6 +63,16 @@ export class TryCustomAgentUseCase {
         agent: unknown;
         knowledge?: KnowledgeItem[];
     }): Promise<CustomAgentTryTrace> {
+        // A try runs the agent as a review would: same plan as the review.
+        if (
+            !(await isCustomAgentsPlanAllowed(
+                this.licenseService,
+                params.organizationAndTeamData,
+                TryCustomAgentUseCase.name,
+            ))
+        ) {
+            throw new ForbiddenException(CUSTOM_AGENTS_PLAN_REQUIRED);
+        }
         if (!/^https?:\/\/\S+$/i.test(params.prUrl ?? '')) {
             throw new BadRequestException('prUrl must be a pull request URL');
         }

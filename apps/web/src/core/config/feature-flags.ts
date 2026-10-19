@@ -14,10 +14,6 @@ export const FEATURE_FLAGS = {
      *  settings section; the pipeline gates the feature itself and fails
      *  closed, so without this the toggles save but nothing would run. */
     deterministicEvidence: "deterministic-evidence",
-    /** Custom review agents — beta. Gates the "Custom agents" section,
-     *  the agent page and the Skills & docs page; the pipeline gates the
-     *  agents themselves per organization. */
-    customAgents: "custom-agents",
 } as const;
 
 export type FeatureFlagKey = (typeof FEATURE_FLAGS)[keyof typeof FEATURE_FLAGS];

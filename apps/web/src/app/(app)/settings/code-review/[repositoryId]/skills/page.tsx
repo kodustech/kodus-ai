@@ -32,6 +32,7 @@ import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { BookOpenIcon, PlusIcon, SparklesIcon, Trash2Icon } from "lucide-react";
 import { useUnsavedChangesGuard } from "src/core/hooks/use-unsaved-changes-guard";
+import { CustomAgentsPageGate } from "src/features/ee/custom-agents/custom-agents-plan-gate";
 
 import {
     reviewScopeHref,
@@ -40,11 +41,9 @@ import {
 import { CentralizedConfigReadOnlyAlert } from "../../_components/centralized-config-readonly-alert";
 import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedback";
 import { customAgentsSaveErrorMessage } from "../../_utils/settings-save-conflict";
-import { useFeatureFlags } from "../../../_components/context";
 import { KnowledgeStatusChips } from "../agents/[agentId]/_components/knowledge-card";
 
 function SkillsContent() {
-    const enabled = useFeatureFlags().customAgents === true;
     const {
         teamId,
         repositoryId,
@@ -69,7 +68,6 @@ function SkillsContent() {
         repositoryId,
         knowledge,
         discover: true,
-        enabled,
     });
     const isGlobal = repositoryId === "global";
     const knowledgeReport =
@@ -161,19 +159,6 @@ function SkillsContent() {
             });
         }
     };
-
-    if (!enabled) {
-        return (
-            <Page.Root>
-                <Page.Content>
-                    <p className="text-text-secondary text-sm">
-                        Skills &amp; docs are part of the custom agents beta,
-                        which is not enabled for this organization.
-                    </p>
-                </Page.Content>
-            </Page.Root>
-        );
-    }
 
     return (
         <Page.Root>
@@ -453,13 +438,15 @@ function SkillsContent() {
 
 export default function SkillsAndDocsPage() {
     return (
-        <Suspense
-            fallback={
-                <div className="flex h-full w-full items-center justify-center py-10">
-                    <Spinner className="size-6" />
-                </div>
-            }>
-            <SkillsContent />
-        </Suspense>
+        <CustomAgentsPageGate title="Skills & docs">
+            <Suspense
+                fallback={
+                    <div className="flex h-full w-full items-center justify-center py-10">
+                        <Spinner className="size-6" />
+                    </div>
+                }>
+                <SkillsContent />
+            </Suspense>
+        </CustomAgentsPageGate>
     );
 }

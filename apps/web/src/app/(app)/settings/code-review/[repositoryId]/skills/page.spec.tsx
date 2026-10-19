@@ -60,8 +60,15 @@ jest.mock("@services/permissions/hooks", () => ({
     usePermission: () => true,
 }));
 
-jest.mock("../../../_components/context", () => ({
-    useFeatureFlags: () => ({ customAgents: true }),
+const TRIAL = { valid: true, subscriptionStatus: "trial", planType: "teams_managed" };
+let mockLicense: Record<string, unknown> = TRIAL;
+jest.mock("src/features/ee/subscription/_providers/subscription-context", () => ({
+    useSubscriptionContext: () => ({ license: mockLicense }),
+}));
+
+jest.mock("src/core/utils/gate-hit", () => ({
+    captureGateHit: jest.fn(),
+    captureGateCtaClick: jest.fn(),
 }));
 
 jest.mock("src/core/hooks/use-unsaved-changes-guard", () => ({
@@ -147,5 +154,25 @@ describe("Skills & docs page over a limit", () => {
         expect(toast).not.toHaveBeenCalledWith(
             expect.objectContaining({ description: "Settings saved" }),
         );
+    });
+});
+
+describe("Skills & docs page on free", () => {
+    afterEach(() => {
+        mockLicense = TRIAL;
+    });
+
+    it("is locked with the upgrade card and lists none of the docs", () => {
+        mockLicense = {
+            valid: true,
+            subscriptionStatus: "active",
+            planType: "free_byok",
+        };
+        render(<SkillsAndDocsPage />);
+
+        expect(
+            screen.getByRole("heading", { name: "Unlock custom agents" }),
+        ).toBeInTheDocument();
+        expect(screen.queryByText("docs/irrigation.md")).toBeNull();
     });
 });
