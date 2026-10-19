@@ -193,7 +193,10 @@ export function buildE2BRemoteCommands(
             // including files it had just read — sibling-file retrieval then told
             // the judge a test was missing when it was there (issue #1826).
             resolveRepoPath(path);
-            const safeRelativePath = path.replace(/'/g, "'\\''");
+            // A path starting with "-" is anchored so find reads it as a path.
+            const safeRelativePath = (
+                path.startsWith('-') ? `./${path}` : path
+            ).replace(/'/g, "'\\''");
             // `find` exits 1 both for "that path is not there" and for
             // "I could not read it", so the exit code alone cannot separate a
             // real absence from a broken lookup — and `RepoLookup.exists` must

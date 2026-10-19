@@ -92,4 +92,36 @@ describe('agent tools — model input is never an option', () => {
         expect(fd).toContain(`-- '-x*' './-delete'`);
         expect(find).toContain(`find './-delete' `);
     });
+
+    // A directory named like a find expression, committed in the PR: listing
+    // it must list it, not run `find -delete` over the checkout.
+    it('lists a local directory whose name is a find expression without running it', async () => {
+        fs.mkdirSync(path.join(dir, '-delete'));
+        fs.writeFileSync(path.join(dir, '-delete', 'inside.txt'), 'x\n');
+
+        const out = await rc.listDir('-delete', 2);
+
+        expect(out).toContain('-delete/inside.txt');
+        expect(fs.existsSync(path.join(dir, 'plain.txt'))).toBe(true);
+        expect(fs.existsSync(path.join(dir, '-delete', 'inside.txt'))).toBe(
+            true,
+        );
+    });
+
+    it('anchors a checkTypes path starting with "-" before it reaches find', async () => {
+        const commands: string[] = [];
+        await buildAgentTools({
+            grep: async () => '',
+            read: async () => '',
+            listDir: async () => '',
+            exec: async (cmd: string) => {
+                commands.push(cmd);
+                return { stdout: '', stderr: '', exitCode: 0 };
+            },
+        }).checkTypes.execute({ path: '-delete' });
+
+        const listing = commands.find((cmd) => cmd.includes('find '));
+        expect(listing).toContain(`find './-delete' `);
+        expect(commands.join('\n')).not.toMatch(/find '-delete'/);
+    });
 });

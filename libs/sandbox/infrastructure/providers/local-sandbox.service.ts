@@ -489,7 +489,9 @@ export class LocalSandboxService implements ISandboxProvider {
                     const { stdout } = await execFileAsync(
                         'find',
                         [
-                            path,
+                            // A path starting with "-" is anchored so find
+                            // reads it as a path, not an expression.
+                            path.startsWith('-') ? `./${path}` : path,
                             '-maxdepth',
                             String(maxDepth),
                             '-type',

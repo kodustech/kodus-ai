@@ -473,6 +473,19 @@ describe('buildE2BRemoteCommands', () => {
             );
         });
 
+        it('anchors a path starting with "-" so find reads it as a path', async () => {
+            const run = jest.fn().mockResolvedValue({
+                stdout: '',
+                stderr: '',
+                exitCode: 0,
+            });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            await rc.listDir('-delete', 2);
+            expect(run.mock.calls[0][0]).toBe(
+                `cd ${REPO_DIR} && [ -e './-delete' ] && find './-delete' -maxdepth 2 -type f`,
+            );
+        });
+
         it('answers an empty listing for a path that is simply not there', async () => {
             // The `[ -e ]` guard short-circuits: exit 1, and NO stderr.
             const run = jest.fn().mockResolvedValue({

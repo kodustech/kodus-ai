@@ -98,6 +98,11 @@ function normalizeRepoPath(value: string): string {
     return value.replace(/^\/+/, '').replace(/\/+/g, '/').replace(/\/$/, '');
 }
 
+/** A repo path starting with "-" is anchored so `find` reads it as a path. */
+function anchorRepoPath(value: string): string {
+    return value.startsWith('-') ? `./${value}` : value;
+}
+
 function truncateShellOutput(output: string): string {
     if (output.length <= MAX_SHELL_OUTPUT) return output;
     return output.substring(0, MAX_SHELL_OUTPUT) + '\n... (truncated)';
@@ -1010,7 +1015,9 @@ export function buildAgentTools(
             exactNames: string[] = [],
             globPattern?: string,
         ): Promise<string | null> => {
-            const normalizedTarget = normalizeRepoPath(targetPath || '.');
+            const normalizedTarget = anchorRepoPath(
+                normalizeRepoPath(targetPath || '.'),
+            );
             const exactChecks = exactNames
                 .map(
                     (name) =>
@@ -1063,7 +1070,9 @@ ${exactNames
             extension: string,
             maxFiles: number,
         ): Promise<string[]> => {
-            const normalizedTarget = normalizeRepoPath(targetPath || '.');
+            const normalizedTarget = anchorRepoPath(
+                normalizeRepoPath(targetPath || '.'),
+            );
             const safeTarget = shellQuote(normalizedTarget || '.');
             const safePattern = shellQuote(`*${extension}`);
             const script = `
@@ -1101,7 +1110,9 @@ fi
                 },
             },
             async (args: any) => {
-                const target = normalizeRepoPath(args.path || '.') || '.';
+                const target = anchorRepoPath(
+                    normalizeRepoPath(args.path || '.') || '.',
+                );
                 const safeTarget = shellQuote(target);
 
                 // Detect which languages exist
