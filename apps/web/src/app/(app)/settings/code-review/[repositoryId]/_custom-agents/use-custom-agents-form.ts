@@ -131,7 +131,9 @@ export const useCustomAgentsForm = () => {
         (field: RevisionedListField, next: unknown[]) => {
             // An edit undone by hand puts back the saved node as it was
             // loaded: the edited node carries a revision and drops the
-            // override fields, so the same list still read as unsaved.
+            // override fields, so the same list still read as unsaved. At a
+            // directory the saved node can be the repository's, which the
+            // directory owns none of.
             const saved = (
                 form.control._defaultValues as Record<string, unknown>
             )?.[field] as FieldNode<unknown[]>;
@@ -139,7 +141,7 @@ export const useCustomAgentsForm = () => {
                 JSON.stringify(a ?? []) === JSON.stringify(b ?? []);
             form.setValue(
                 field as never,
-                (saved && same(saved.value, next)
+                (saved && same(ownList(saved, level), next)
                     ? saved
                     : {
                           value: next,
