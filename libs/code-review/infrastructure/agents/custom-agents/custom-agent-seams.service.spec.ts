@@ -1,3 +1,13 @@
+const mockWarn = jest.fn();
+jest.mock('@libs/core/log/logger', () => ({
+    createLogger: () => ({
+        log: jest.fn(),
+        warn: (...args: unknown[]) => mockWarn(...args),
+        error: jest.fn(),
+        debug: jest.fn(),
+    }),
+}));
+
 import { BadRequestException } from '@nestjs/common';
 
 import type { CustomAgentConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
@@ -373,7 +383,17 @@ describe('CustomAgentTryRunnerService', () => {
 
         expect(trace.status).toBe('failed');
         expect(trace.reason).toBe('model refused the key');
-        expect(sandbox.cleanup).toHaveBeenCalled();
+        expect(sandbox.cleanup).toHaveBeenCalled();        expect(mockWarn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: 'Custom agent Try it run did not complete',
+                metadata: expect.objectContaining({
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                    agentId: 'ledger-agent',
+                    reason: 'agent failed',
+                }),
+            }),
+        );
     });
 });
 

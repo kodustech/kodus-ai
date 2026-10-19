@@ -584,7 +584,22 @@ export class CustomAgentTryRunnerService implements ICustomAgentTryRunner {
             repository,
             prNumber,
         });
+        const earlyLog = (reason: string) =>
+            logger.log({
+                message: `Custom agent Try it not run: ${reason}`,
+                context: CustomAgentTryRunnerService.name,
+                metadata: {
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
+                    repositoryId: repository.id,
+                    repositoryName: repository.name,
+                    prNumber,
+                    agentId: agent.id,
+                    reason,
+                },
+            });
         if (!pr) {
+            earlyLog('pull request not found');
             return this.failed(startedAt, 'Pull request not found');
         }
         const files =
@@ -600,6 +615,7 @@ export class CustomAgentTryRunnerService implements ICustomAgentTryRunner {
                 : undefined,
         }));
         if (!filesInAgentScope(agent, changedFiles).length) {
+            earlyLog('no changed file in the agent scope');
             return {
                 status: 'skipped',
                 reason: 'No changed file matches the agent scope',
@@ -665,6 +681,15 @@ export class CustomAgentTryRunnerService implements ICustomAgentTryRunner {
         context = await this.createSandboxStage.execute(context);
         const sandbox = context.sandboxHandle;
 
+        const tryLogContext = {
+            organizationId: organizationAndTeamData.organizationId,
+            teamId: organizationAndTeamData.teamId,
+            repositoryId: repository.id,
+            repositoryName: repository.name,
+            prNumber,
+            agentId: agent.id,
+            agentSlug: slug,
+        };
         const events: AgentProgressEvent[] = [];
         const cliRuns: CustomAgentCliRun[] = [];
         const warnings: ReviewWarning[] = [
@@ -746,6 +771,18 @@ export class CustomAgentTryRunnerService implements ICustomAgentTryRunner {
                     .find(
                         (event) => event.errorFriendlyMessage,
                     )?.errorFriendlyMessage;
+                logger.warn({
+                    message: 'Custom agent Try it run did not complete',
+                    context: CustomAgentTryRunnerService.name,
+                    error: failure?.error,
+                    metadata: {
+                        ...tryLogContext,
+                        reason: failure
+                            ? 'agent failed'
+                            : (result.customAgentRuns?.[0]?.status ??
+                              'no agent result'),
+                    },
+                });
                 return {
                     ...this.failed(
                         startedAt,
@@ -772,11 +809,7 @@ export class CustomAgentTryRunnerService implements ICustomAgentTryRunner {
                 message: 'Custom agent Try it run failed',
                 context: CustomAgentTryRunnerService.name,
                 error,
-                metadata: {
-                    organizationId: organizationAndTeamData.organizationId,
-                    repositoryId: repository.id,
-                    prNumber,
-                },
+                metadata: tryLogContext,
             });
             return {
                 ...this.failed(
@@ -792,12 +825,7 @@ export class CustomAgentTryRunnerService implements ICustomAgentTryRunner {
                     message: 'Could not release the Try it sandbox',
                     context: CustomAgentTryRunnerService.name,
                     error,
-                    metadata: {
-                        organizationId: organizationAndTeamData.organizationId,
-                        teamId: organizationAndTeamData.teamId,
-                        repositoryId: repository.id,
-                        prNumber,
-                    },
+                    metadata: tryLogContext,
                 }),
             );
         }
