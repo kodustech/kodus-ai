@@ -474,6 +474,50 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
             ).toEqual([]);
         });
 
+        it('reviews a PR whose changed files are all ignored with the agent naming one', async () => {
+            const { stage, reviewOrchestrator } = makeStage(
+                output([
+                    finding({
+                        relevantFile: 'package.json',
+                        suggestionContent: 'The new dependency is unpinned.',
+                    }),
+                ]),
+            );
+
+            const result = await run(
+                stage,
+                makeContext([ledgerAndManifest], {
+                    changedFiles: [],
+                    ignoredFileChanges,
+                }),
+            );
+
+            const call = reviewOrchestrator.execute.mock.calls[0][0];
+            expect(call.changedFiles).toEqual([]);
+            expect(
+                call.ignoredChangedFiles.map((f: any) => f.filename),
+            ).toEqual(['package.json']);
+            expect(contents(result.validSuggestions)).toEqual([
+                'The new dependency is unpinned.',
+            ]);
+        });
+
+        it('does not review an all-ignored PR no agent names a file of', async () => {
+            const { stage, reviewOrchestrator } = makeStage(output([]));
+
+            for (const customAgents of [[], [agent({ scope: {} })]]) {
+                await run(
+                    stage,
+                    makeContext(customAgents, {
+                        changedFiles: [],
+                        ignoredFileChanges,
+                    }),
+                );
+            }
+
+            expect(reviewOrchestrator.execute).not.toHaveBeenCalled();
+        });
+
         it("anchors an agent's finding on an ignored file to that file's hunks", async () => {
             const { stage } = makeStage(
                 output([

@@ -202,5 +202,44 @@ describe('FetchChangedFilesStage', () => {
                 expect(result.ignoredFileChanges).toEqual([files[1], files[2]]);
             }
         });
+
+        it('reviews a PR whose changed files are all ignored when an agent names one', async () => {
+            mockPullRequestManagerService.getChangedFilesMetadata.mockResolvedValue(
+                files.slice(1),
+            );
+            context.codeReviewConfig.customAgents = [
+                agent(['package.json']),
+            ] as any;
+
+            const result = await stage.execute(context);
+
+            expect(result.statusInfo).toBeUndefined();
+            expect(result.changedFiles).toEqual([]);
+            expect(
+                result.ignoredFileChanges.find(
+                    (f) => f.filename === 'package.json',
+                ),
+            ).toMatchObject({ fileContent: 'content of package.json' });
+        });
+
+        it('still skips an all-ignored PR no agent names a file of', async () => {
+            mockPullRequestManagerService.getChangedFilesMetadata.mockResolvedValue(
+                files.slice(1),
+            );
+            for (const customAgents of [undefined, [agent(['**/*.json'])]]) {
+                const result = await stage.execute({
+                    ...context,
+                    codeReviewConfig: {
+                        ...context.codeReviewConfig,
+                        customAgents: customAgents as any,
+                    },
+                });
+
+                expect(result.statusInfo).toMatchObject({
+                    status: AutomationStatus.SKIPPED,
+                    message: expect.stringContaining('package.json'),
+                });
+            }
+        });
     });
 });

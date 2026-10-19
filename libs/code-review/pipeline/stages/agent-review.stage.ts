@@ -84,7 +84,7 @@ import {
 import { summarizeCustomAgentRuns } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-summary';
 import {
     customAgentSlug,
-    ignoredFilesNamedByAgents,
+    ignoredFilesForCustomAgents,
 } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import type { CustomAgentConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import {
@@ -521,9 +521,16 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         context: CodeReviewPipelineContext,
     ): Promise<CodeReviewPipelineContext> {
         const prNumber = context.pullRequest?.number;
-        const changedFiles = context.changedFiles;
+        const changedFiles = context.changedFiles ?? [];
+        // The ignored files a custom agent names explicitly (#2172), with the
+        // content and line numbers FetchChangedFilesStage gave them; they are
+        // a review of their own when every changed file is ignored.
+        const ignoredChangedFiles = ignoredFilesForCustomAgents(
+            context,
+            context.ignoredFileChanges,
+        );
 
-        if (!changedFiles?.length) {
+        if (!changedFiles.length && !ignoredChangedFiles.length) {
             return context;
         }
 
@@ -782,15 +789,6 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 changedFiles,
             );
             stageWarnings.push(...reviewKnowledge.warnings);
-            // The ignored files a custom agent names explicitly (#2172),
-            // with the content and line numbers FetchChangedFilesStage gave
-            // them; none without custom agents.
-            const ignoredChangedFiles = ignoredFilesNamedByAgents(
-                customAgents,
-                (context.ignoredFileChanges ?? []).filter(
-                    (file) => file?.filename && file.status !== 'removed',
-                ),
-            );
             const result = await this.reviewOrchestrator.execute({
                 ...buildOrchestratorInput(context, {
                     changedFiles,

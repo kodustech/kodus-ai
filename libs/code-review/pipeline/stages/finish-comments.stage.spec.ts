@@ -452,4 +452,43 @@ describe('UpdateCommentsAndGenerateSummaryStage - frozen-context error recording
             ctx.codeReviewConfig.byokConfig,
         );
     });
+
+    it('writes no summary when only a custom agent reviewed the ignored files (#2172)', async () => {
+        const { stage, commentManagerService } = makeStage();
+        const ignoredFileChanges = [
+            { filename: 'package.json', status: 'modified' },
+        ];
+        const config = (customAgents: unknown[]) => ({
+            languageResultPrompt: 'en-US',
+            summary: { generatePRSummary: true },
+            customAgents,
+        });
+
+        await (stage as any).executeStage(
+            frozenContext({
+                ...summaryFailContext(),
+                ignoredFileChanges,
+                codeReviewConfig: config([
+                    {
+                        id: 'agent-1',
+                        name: 'Manifest',
+                        enabled: true,
+                        scope: { include: ['package.json'] },
+                    },
+                ]),
+            } as any),
+        );
+        expect(commentManagerService.generateSummaryPR).not.toHaveBeenCalled();
+
+        await (stage as any).executeStage(
+            frozenContext({
+                ...summaryFailContext(),
+                ignoredFileChanges,
+                codeReviewConfig: config([]),
+            } as any),
+        );
+        expect(commentManagerService.generateSummaryPR).toHaveBeenCalledTimes(
+            1,
+        );
+    });
 });
