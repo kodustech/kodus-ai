@@ -835,7 +835,9 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
                             : filters[key];
 
                     queryBuilder.andWhere(
-                        `automation_execution.${key} = :${key}`,
+                        Array.isArray(value)
+                            ? `automation_execution.${key} IN (:...${key})`
+                            : `automation_execution.${key} = :${key}`,
                         { [key]: value },
                     );
                 });
