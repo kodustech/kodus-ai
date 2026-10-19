@@ -34,7 +34,7 @@ import { BookOpenIcon, PlusIcon, SparklesIcon, Trash2Icon } from "lucide-react";
 import { useUnsavedChangesGuard } from "src/core/hooks/use-unsaved-changes-guard";
 
 import {
-    agentsListHref,
+    reviewScopeHref,
     useCustomAgentsForm,
 } from "../_custom-agents/use-custom-agents-form";
 import { CentralizedConfigReadOnlyAlert } from "../../_components/centralized-config-readonly-alert";
@@ -96,7 +96,7 @@ function SkillsContent() {
             color: agent.presentation.tag.color,
         })),
     ];
-    const listHref = agentsListHref(repositoryId, directoryId);
+    const backHref = reviewScopeHref(repositoryId, directoryId);
 
     useUnsavedChangesGuard({
         id: "skills-and-docs",
@@ -165,8 +165,8 @@ function SkillsContent() {
                     <Breadcrumb className="mb-1">
                         <BreadcrumbList>
                             <BreadcrumbItem>
-                                <BreadcrumbLink href={listHref}>
-                                    Custom agents
+                                <BreadcrumbLink href={backHref}>
+                                    What to review
                                 </BreadcrumbLink>
                             </BreadcrumbItem>
                             <BreadcrumbSeparator />

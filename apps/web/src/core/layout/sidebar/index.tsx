@@ -18,7 +18,6 @@ import {
 } from "react";
 import NextLink from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Badge } from "@components/ui/badge";
 import {
     Command,
     CommandEmpty,
@@ -60,7 +59,6 @@ import {
     ActivityIcon,
     BellIcon,
     BookOpenCheckIcon,
-    BotIcon,
     Building2Icon,
     ChartColumnIcon,
     CheckIcon,
@@ -87,7 +85,6 @@ import {
 } from "lucide-react";
 import { useQueryState } from "nuqs";
 import { ErrorBoundary } from "react-error-boundary";
-import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
 import { useAllTeams } from "src/core/providers/all-teams-context";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { TEAM_STATUS } from "src/core/types";
@@ -717,20 +714,10 @@ const CODE_REVIEW_PAGES: Array<{
     label: string;
     icon: LucideIcon;
     repoOnly?: boolean;
-    /** Shown only while the organization has this feature flag on. */
-    flag?: "customAgents";
-    beta?: boolean;
 }> = [
     { href: "general", label: "General", icon: Settings2Icon },
     { href: "review-scope", label: "What to review", icon: ScanSearchIcon },
     { href: "kody-rules", label: "Kody Rules", icon: BookOpenCheckIcon },
-    {
-        href: "agents",
-        label: "Custom agents",
-        icon: BotIcon,
-        flag: "customAgents",
-        beta: true,
-    },
     {
         href: "output",
         label: "What Kody writes",
@@ -777,7 +764,6 @@ const CodeReviewGroup = () => {
         directoryId: (match && queryDirectoryId) || undefined,
     };
     const currentPage = match?.[2];
-    const featureFlags = useFeatureFlags();
     const isRepositoryLevel =
         scope.repositoryId !== "global" && !scope.directoryId;
 
@@ -841,9 +827,7 @@ const CodeReviewGroup = () => {
                 />
             </li>
             {CODE_REVIEW_PAGES.filter(
-                (page) =>
-                    (!page.repoOnly || isRepositoryLevel) &&
-                    (!page.flag || featureFlags[page.flag] === true),
+                (page) => !page.repoOnly || isRepositoryLevel,
             ).map((page) => (
                 <SidebarItem
                     key={page.href}
@@ -851,15 +835,10 @@ const CodeReviewGroup = () => {
                     icon={page.icon}
                     label={page.label}
                     active={currentPage === page.href}
-                    badge={
-                        <>
-                            {page.beta && <Badge>Beta</Badge>}
-                            {renderOverrideCount?.({
-                                scope,
-                                pages: [page.href],
-                            })}
-                        </>
-                    }
+                    badge={renderOverrideCount?.({
+                        scope,
+                        pages: [page.href],
+                    })}
                     // Full-route prefetch, as the settings tabs had: the
                     // pages are client components over one shared layout,
                     // so a switch is instant rather than a round trip.

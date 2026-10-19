@@ -40,8 +40,8 @@ jest.mock("next/link", () => ({
 }));
 
 jest.mock("../../_custom-agents/use-custom-agents-form", () => ({
-    agentsListHref: (repositoryId: string) =>
-        `/settings/code-review/${repositoryId}/agents`,
+    reviewScopeHref: (repositoryId: string) =>
+        `/settings/code-review/${repositoryId}/review-scope`,
     skillsPageHref: (repositoryId: string) =>
         `/settings/code-review/${repositoryId}/skills`,
     useCustomAgentsForm: () => ({
@@ -117,12 +117,11 @@ describe("Custom agent page", () => {
         updateAgent.mockReset();
     });
 
-    it("leads back to the agents list from the breadcrumb", async () => {
+    it("leads back to What to review, where the agents are listed", async () => {
         await renderPage();
         expect(
-            screen.getByRole("link", { name: "Custom agents" }),
-        ).toHaveAttribute("href", "/settings/code-review/repo-1/agents");
-        expect(screen.queryByText("What to review")).toBeNull();
+            screen.getByRole("link", { name: "What to review" }),
+        ).toHaveAttribute("href", "/settings/code-review/repo-1/review-scope");
         expect(screen.queryByText("Beta")).toBeNull();
     });
 
@@ -164,7 +163,7 @@ describe("Custom agent page", () => {
         ).toBeInTheDocument();
     });
 
-    it("deletes only after the confirm dialog, then goes to the list", async () => {
+    it("deletes only after the confirm dialog, then goes back to What to review", async () => {
         await renderPage();
         fireEvent.click(screen.getByRole("button", { name: "Delete agent" }));
         const dialog = await screen.findByRole("dialog");
@@ -177,7 +176,7 @@ describe("Custom agent page", () => {
 
         expect(save).toHaveBeenCalledWith({ agents: [], knowledge: [] });
         expect(push).toHaveBeenCalledWith(
-            "/settings/code-review/repo-1/agents",
+            "/settings/code-review/repo-1/review-scope",
         );
     });
 });

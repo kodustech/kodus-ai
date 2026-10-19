@@ -32,7 +32,7 @@ import { Trash2Icon } from "lucide-react";
 import { useUnsavedChangesGuard } from "src/core/hooks/use-unsaved-changes-guard";
 
 import {
-    agentsListHref,
+    reviewScopeHref,
     skillsPageHref,
     useCustomAgentsForm,
 } from "../../_custom-agents/use-custom-agents-form";
@@ -96,7 +96,7 @@ function AgentContent() {
         enabled: !!draft,
     });
 
-    const listHref = agentsListHref(repositoryId, directoryId);
+    const backHref = reviewScopeHref(repositoryId, directoryId);
 
     useUnsavedChangesGuard({
         id: "custom-agent",
@@ -141,7 +141,7 @@ function AgentContent() {
         try {
             await save(withoutAgent(agents, knowledge, agent.id));
             setConfirmingDelete(false);
-            router.push(listHref);
+            router.push(backHref);
         } catch (error) {
             console.error("Error deleting custom agent:", error);
             setConfirmingDelete(false);
@@ -189,8 +189,8 @@ function AgentContent() {
                     <Breadcrumb className="mb-1">
                         <BreadcrumbList>
                             <BreadcrumbItem>
-                                <BreadcrumbLink href={listHref}>
-                                    Custom agents
+                                <BreadcrumbLink href={backHref}>
+                                    What to review
                                 </BreadcrumbLink>
                             </BreadcrumbItem>
                             <BreadcrumbSeparator />

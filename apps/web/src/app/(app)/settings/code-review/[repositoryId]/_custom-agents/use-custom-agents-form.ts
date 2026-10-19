@@ -253,8 +253,9 @@ export const agentPageHref = (
         directoryId ? `?directoryId=${directoryId}` : ""
     }`;
 
-export const agentsListHref = (repositoryId: string, directoryId?: string) =>
-    `/settings/code-review/${repositoryId}/agents${
+/** The "What to review" page, where the agents are listed. */
+export const reviewScopeHref = (repositoryId: string, directoryId?: string) =>
+    `/settings/code-review/${repositoryId}/review-scope${
         directoryId ? `?directoryId=${directoryId}` : ""
     }`;
 
