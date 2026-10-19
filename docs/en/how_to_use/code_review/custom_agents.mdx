@@ -169,7 +169,7 @@ Kody runs that agent alone, on the whole pull request, even while the agent is o
 
 <Steps>
   <Step title="Pick the agents">
-    Every enabled agent whose globs match at least one changed file runs. An agent with no matching file is listed as not run.
+    Every enabled agent whose globs match at least one changed file runs. An agent with no matching file doesn't run.
   </Step>
   <Step title="Review">
     Each agent reviews only its files, beside Kody's own review, and reports only what its instructions ask for. It reads skills and docs from the target branch and uses its tools.
@@ -188,7 +188,7 @@ Kody runs that agent alone, on the whole pull request, even while the agent is o
   </Step>
 </Steps>
 
-The review's closing comment has a collapsible **Custom agents** section: a table with each agent that ran, its status, **Posted** and **Dropped by checks** (plus **Below minimum severity** when any finding was held back by severity), and one line for agents that did not run, with the reason.
+Each agent's comments carry its tag, so the pull request shows which agent said what. The agent's page shows what it did in the last 30 days: the pull requests it reviewed and the comments it posted.
 
 ## Limits
 
@@ -209,8 +209,8 @@ The review's closing comment has a collapsible **Custom agents** section: a tabl
     Check, in order:
 
     - It is **off**. New agents start off. `@kody -v <name>` runs it anyway.
-    - No changed file matches its **Files** globs, or every match is in **Except**. The closing comment lists it as "Not run: … (no matching files)".
-    - Its files are in the repository's ignored paths and its globs don't name them. The closing comment says "its files are in the ignored paths". Name the files explicitly (see [Files & knowledge](#files--knowledge)).
+    - No changed file matches its **Files** globs, or every match is in **Except**.
+    - Its files are in the repository's ignored paths and its globs don't name them. Name the files explicitly (see [Files & knowledge](#files--knowledge)).
     - Its files were deleted in the pull request.
     - At a repository with its own list, an agent added at the global level later doesn't reach it.
     - At a directory, the review used the repository's settings (for example, the pull request touched two configured directories).

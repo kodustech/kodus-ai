@@ -840,7 +840,6 @@ describe('CommentManagerService — pure helpers', () => {
                 undefined,
                 undefined,
                 undefined,
-                '\n\n<details><summary>Custom agents</summary></details>',
                 singleAgentRun,
             );
 
@@ -849,7 +848,6 @@ describe('CommentManagerService — pure helpers', () => {
 
             expect(body).not.toContain('No issues were found');
             expect(body).toContain('Code Review Completed');
-            expect(body).toContain('Custom agents');
         });
 
         it('keeps the no-issues summary for a full review', async () => {

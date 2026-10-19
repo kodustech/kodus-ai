@@ -1626,7 +1626,6 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             ),
                     ),
                 },
-                allDiscarded,
             );
             this.logCustomAgentOutcome(
                 context,
@@ -1806,9 +1805,6 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         draft.validSuggestionsByPR = [];
                     }
                     draft.validSuggestionsByPR.push(...singleComments.prLevel);
-                }
-                if (customAgentSummaries.length > 0) {
-                    draft.customAgentRuns = customAgentSummaries;
                 }
 
                 draft.dedupTrace = dedupTrace;
@@ -3776,7 +3772,7 @@ function customAgentSlugOf(event: AgentProgressEvent): string | undefined {
         : undefined;
 }
 
-/** The statuses the agents table counts as "Dropped by checks". */
+/** The statuses the outcome log counts as dropped by the checks. */
 const CHECK_DROPS = new Set<PriorityStatus | undefined>([
     PriorityStatus.DISCARDED_BY_SAFEGUARD,
     PriorityStatus.DISCARDED_BY_VERIFY_ERROR,

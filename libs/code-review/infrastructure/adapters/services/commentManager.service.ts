@@ -1066,8 +1066,6 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
         reviewErrorCustomMessage?: string,
         linkedRepositoriesMetadata?: LinkedRepositoriesReviewMetadata,
         reviewWarnings?: ReviewWarning[],
-        /** End-review section on custom agents (#2172); empty when none ran. */
-        customAgentsSection?: string,
         /** `@kody -v <agent>`: one agent re-checked the pull request. */
         singleAgentRun?: boolean,
     ): Promise<void> {
@@ -1100,7 +1098,6 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                     reviewErrorCustomMessage,
                     linkedRepositoriesMetadata,
                     reviewWarnings,
-                    customAgentsSection,
                     singleAgentRun,
                 );
             } else {
@@ -1131,9 +1128,6 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                     commentBody = `${commentBody}${skippedNotice}`;
                 }
                 commentBody = `${commentBody}${formatConfigFileNotice(reviewWarnings)}`;
-                if (customAgentsSection) {
-                    commentBody = `${commentBody}${customAgentsSection}`;
-                }
             }
 
             await this.codeManagementService.updateIssueComment(
@@ -1189,8 +1183,6 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
         reviewErrorCustomMessage?: string,
         linkedRepositoriesMetadata?: LinkedRepositoriesReviewMetadata,
         reviewWarnings?: ReviewWarning[],
-        /** End-review section on custom agents (#2172); empty when none ran. */
-        customAgentsSection?: string,
         /** `@kody -v <agent>`: one agent re-checked the pull request. */
         singleAgentRun?: boolean,
     ): Promise<string> {
@@ -1206,7 +1198,6 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
             reviewErrorCustomMessage,
             linkedRepositoriesMetadata,
             reviewWarnings,
-            customAgentsSection,
             singleAgentRun,
         );
 
@@ -1924,8 +1915,6 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
         reviewErrorCustomMessage?: string,
         linkedRepositoriesMetadata?: LinkedRepositoriesReviewMetadata,
         reviewWarnings?: ReviewWarning[],
-        /** End-review section on custom agents (#2172); empty when none ran. */
-        customAgentsSection?: string,
         /** `@kody -v <agent>`: one agent re-checked the pull request. */
         singleAgentRun?: boolean,
     ): Promise<string> {
@@ -2071,7 +2060,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
             // Add unique tag with timestamp to identify this comment as completed
             const uniqueId = `completed-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-            return `${resultText}${linkedReposLine}${customAgentsSection ?? ''}\n\n${await this.generateConfigReviewMarkdown(organizationAndTeamData, prNumber, codeReviewConfig)}\n\n<!-- kody-codereview-${uniqueId} -->\n<!-- kody-codereview -->\n&#8203;`;
+            return `${resultText}${linkedReposLine}\n\n${await this.generateConfigReviewMarkdown(organizationAndTeamData, prNumber, codeReviewConfig)}\n\n<!-- kody-codereview-${uniqueId} -->\n<!-- kody-codereview -->\n&#8203;`;
         } catch (error) {
             this.logger.error({
                 message:

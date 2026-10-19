@@ -169,7 +169,7 @@ Kody ejecuta solo ese agente, sobre todo el pull request, aunque el agente esté
 
 <Steps>
   <Step title="Selección de agentes">
-    Se ejecuta todo agente activado cuyos globs coincidan con al menos un archivo cambiado. Un agente sin archivos coincidentes aparece como no ejecutado.
+    Se ejecuta todo agente activado cuyos globs coincidan con al menos un archivo cambiado. Un agente sin archivos coincidentes no se ejecuta.
   </Step>
   <Step title="Revisión">
     Cada agente revisa solo sus archivos, junto a la revisión de Kody, y reporta solo lo que piden sus instrucciones. Lee skills y docs de la rama de destino y usa sus herramientas.
@@ -188,7 +188,7 @@ Kody ejecuta solo ese agente, sobre todo el pull request, aunque el agente esté
   </Step>
 </Steps>
 
-El comentario final de la revisión tiene una sección desplegable **Custom agents**: una tabla con cada agente que se ejecutó, su estado, **Posted** y **Dropped by checks** (más **Below minimum severity** cuando algún hallazgo quedó retenido por severidad), y una línea para los agentes que no se ejecutaron, con el motivo.
+Los comentarios de cada agente llevan su etiqueta, así el pull request muestra qué agente dijo qué. La página del agente muestra lo que hizo en los últimos 30 días: los pull requests que revisó y los comentarios que publicó.
 
 ## Límites
 
@@ -209,8 +209,8 @@ El comentario final de la revisión tiene una sección desplegable **Custom agen
     Revisa, en este orden:
 
     - Está **apagado**. Los agentes nuevos empiezan apagados. `@kody -v <nombre>` lo ejecuta igualmente.
-    - Ningún archivo cambiado coincide con sus globs de **Files**, o todas las coincidencias están en **Except**. El comentario final lo muestra como "Not run: … (no matching files)".
-    - Sus archivos están en las rutas ignoradas del repositorio y sus globs no los nombran. El comentario final dice "its files are in the ignored paths". Nombra los archivos explícitamente (consulta [Files & knowledge](#files--knowledge)).
+    - Ningún archivo cambiado coincide con sus globs de **Files**, o todas las coincidencias están en **Except**.
+    - Sus archivos están en las rutas ignoradas del repositorio y sus globs no los nombran. Nombra los archivos explícitamente (consulta [Files & knowledge](#files--knowledge)).
     - Sus archivos se borraron en el pull request.
     - En un repositorio con lista propia, un agente agregado después en el nivel global no le llega.
     - En un directorio, la revisión usó la configuración del repositorio (por ejemplo, el pull request tocó dos directorios configurados).

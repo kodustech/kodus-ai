@@ -1,7 +1,3 @@
-import {
-    formatCustomAgentsSummary,
-    withDeliveredCounts,
-} from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-summary';
 import { reviewsOnlyIgnoredFiles } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import { Injectable, Inject } from '@nestjs/common';
 import {
@@ -364,13 +360,6 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 reviewErrorCustomMessage,
                 context.linkedRepositoriesMetadata,
                 context.reviewWarnings,
-                formatCustomAgentsSummary(
-                    withDeliveredCounts(
-                        context.customAgentRuns,
-                        context.lineComments,
-                        context.prLevelCommentResults,
-                    ),
-                ),
                 !!context.onlyCustomAgent,
             );
             return context;
@@ -443,13 +432,6 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 reviewErrorCustomMessage,
                 context.linkedRepositoriesMetadata,
                 context.reviewWarnings,
-                formatCustomAgentsSummary(
-                    withDeliveredCounts(
-                        context.customAgentRuns,
-                        context.lineComments,
-                        context.prLevelCommentResults,
-                    ),
-                ),
                 !!context.onlyCustomAgent,
             );
             return context;
@@ -470,13 +452,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     PullRequestMessageStatus.ONLY_WHEN_OPENED &&
                     context.lastExecution))
         ) {
-            const finalCommentBody = `${endReviewMessage.content ?? ''}${formatCustomAgentsSummary(
-                withDeliveredCounts(
-                    context.customAgentRuns,
-                    context.lineComments,
-                    context.prLevelCommentResults,
-                ),
-            )}`;
+            const finalCommentBody = endReviewMessage.content;
 
             await this.commentManagerService.createComment(
                 organizationAndTeamData,
