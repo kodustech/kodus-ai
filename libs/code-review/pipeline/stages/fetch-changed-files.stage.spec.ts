@@ -241,5 +241,32 @@ describe('FetchChangedFilesStage', () => {
                 });
             }
         });
+
+        it('counts the ignored files an agent names toward the file ceiling', async () => {
+            const reviewed = Array.from({ length: 1999 }, (_, i) => ({
+                filename: `src/file-${i}.ts`,
+                status: 'modified',
+                patch: PATCH,
+            }));
+            mockPullRequestManagerService.getChangedFilesMetadata.mockResolvedValue(
+                [...reviewed, ...files.slice(1)],
+            );
+            context.codeReviewConfig.customAgents = [
+                agent(['package.json', 'infra/**/*.tf']),
+            ] as any;
+
+            const result = await stage.execute(context);
+
+            expect(result.statusInfo).toEqual({
+                status: AutomationStatus.SKIPPED,
+                message: StageMessageHelper.skippedWithReason(
+                    PipelineReasons.FILES.TOO_MANY,
+                    'Count: 2001, Limit: 2000',
+                ),
+            });
+            expect(
+                mockPullRequestManagerService.enrichFilesWithContent,
+            ).not.toHaveBeenCalled();
+        });
     });
 });

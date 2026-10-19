@@ -112,7 +112,7 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
             ) || [];
         const filesToAnalyze = filteredFiles;
         // Ignored files a custom agent still reviews (#2172): they keep a
-        // review alive on their own.
+        // review alive on their own and count toward its ceiling.
         const filesForCustomAgents = ignoredFilesForCustomAgents(
             context,
             ignoredList,
@@ -263,18 +263,19 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
             };
         }
 
-        if (filteredFiles.length > maxFilesToAnalyze) {
+        const count = filteredFiles.length + filesForCustomAgents.length;
+        if (count > maxFilesToAnalyze) {
             return {
                 canProceed: false,
                 details: {
                     reasonCode: AutomationMessage.TOO_MANY_FILES,
                     message: StageMessageHelper.skippedWithReason(
                         PipelineReasons.FILES.TOO_MANY,
-                        `Count: ${filteredFiles.length}, Limit: ${maxFilesToAnalyze}`,
+                        `Count: ${count}, Limit: ${maxFilesToAnalyze}`,
                     ),
-                    technicalReason: `Count: ${filteredFiles.length}, Limit: ${maxFilesToAnalyze}`,
+                    technicalReason: `Count: ${count}, Limit: ${maxFilesToAnalyze}`,
                     metadata: {
-                        count: filteredFiles.length,
+                        count,
                         limit: maxFilesToAnalyze,
                     },
                 },
