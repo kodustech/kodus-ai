@@ -169,7 +169,7 @@ A Kody roda só esse agente, no pull request inteiro, mesmo que ele esteja desli
 
 <Steps>
   <Step title="Escolha dos agentes">
-    Roda todo agente ligado cujos globs batem com pelo menos um arquivo alterado. Um agente sem arquivo correspondente aparece como não executado.
+    Roda todo agente ligado cujos globs batem com pelo menos um arquivo alterado. Um agente sem arquivo correspondente não roda.
   </Step>
   <Step title="Revisão">
     Cada agente revisa só os seus arquivos, ao lado da revisão da Kody, e reporta só o que as instruções pedem. Ele lê skills e docs da branch de destino e usa as suas ferramentas.
@@ -188,7 +188,7 @@ A Kody roda só esse agente, no pull request inteiro, mesmo que ele esteja desli
   </Step>
 </Steps>
 
-O comentário final da revisão tem uma seção recolhível **Custom agents**: uma tabela com cada agente que rodou, o status, **Posted** e **Dropped by checks** (mais **Below minimum severity** quando algum apontamento ficou retido pela severidade), e uma linha para os agentes que não rodaram, com o motivo.
+Os comentários de cada agente levam a tag dele, então o pull request mostra qual agente disse o quê. A página do agente mostra o que ele fez nos últimos 30 dias: os pull requests que revisou e os comentários que postou.
 
 ## Limites
 
@@ -209,8 +209,8 @@ O comentário final da revisão tem uma seção recolhível **Custom agents**: u
     Confira, nesta ordem:
 
     - Ele está **desligado**. Agentes novos começam desligados. `@kody -v <nome>` roda mesmo assim.
-    - Nenhum arquivo alterado bate com os globs de **Files**, ou todos caem em **Except**. O comentário final mostra "Not run: … (no matching files)".
-    - Os arquivos dele estão nos caminhos ignorados do repositório e os globs não os nomeiam. O comentário final diz "its files are in the ignored paths". Nomeie os arquivos explicitamente (veja [Files & knowledge](#files--knowledge)).
+    - Nenhum arquivo alterado bate com os globs de **Files**, ou todos caem em **Except**.
+    - Os arquivos dele estão nos caminhos ignorados do repositório e os globs não os nomeiam. Nomeie os arquivos explicitamente (veja [Files & knowledge](#files--knowledge)).
     - Os arquivos dele foram apagados no pull request.
     - Num repositório com lista própria, um agente criado depois no nível global não chega nele.
     - Num diretório, a revisão usou as configurações do repositório (por exemplo, o pull request tocou dois diretórios configurados).

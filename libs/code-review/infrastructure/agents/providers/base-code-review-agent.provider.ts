@@ -119,6 +119,13 @@ export abstract class BaseCodeReviewAgentProvider {
 
     protected abstract getIdentity(): ReviewAgentIdentity;
     /**
+     * How the review warnings name this agent: its run name, unless the
+     * agent has a name people gave it (a custom agent).
+     */
+    protected getWarningName(runName: string): string {
+        return runName;
+    }
+    /**
      * Return the category-specific chunk that gets embedded in the system
      * prompt. Receives `input` so subclasses can include per-request data
      * (e.g. the kody-rules agent renders the current team rules) without
@@ -332,7 +339,7 @@ export abstract class BaseCodeReviewAgentProvider {
                 contextWindowTokens: contextWindow,
                 modelName,
                 detail,
-                agentName: identity.name,
+                agentName: this.getWarningName(identity.name),
             });
         };
         // Fail fast when the configured model's context window cannot
@@ -448,7 +455,7 @@ export abstract class BaseCodeReviewAgentProvider {
                         contextWindowTokens: contextWindow,
                         modelName,
                         detail: `${filesBefore - filteredFiles.length} files dropped (tests/md/css) to fit a large pull request`,
-                        agentName: identity.name,
+                        agentName: this.getWarningName(identity.name),
                     });
                 }
             }
@@ -818,7 +825,7 @@ export abstract class BaseCodeReviewAgentProvider {
                     buildPathMismatchWarning({
                         count: mapped.droppedForPath,
                         modelName,
-                        agentName: this.getIdentity().name,
+                        agentName: this.getWarningName(this.getIdentity().name),
                     }),
                 );
             }
@@ -828,7 +835,7 @@ export abstract class BaseCodeReviewAgentProvider {
                     buildVerifyUnavailableWarning({
                         count: mapped.discardedByVerifyError.length,
                         modelName,
-                        agentName: this.getIdentity().name,
+                        agentName: this.getWarningName(this.getIdentity().name),
                     }),
                 );
             }

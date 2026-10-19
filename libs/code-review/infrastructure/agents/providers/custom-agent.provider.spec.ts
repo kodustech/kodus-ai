@@ -166,6 +166,39 @@ describe('CustomAgentProvider', () => {
         expect(out.discardedByVerify?.[0].customAgent?.id).toBe('agent-ledger');
     });
 
+    it("names itself by the agent's name in the review warnings", async () => {
+        const result = harnessResult();
+        runLoopMock.mockResolvedValue({
+            ...result,
+            findings: {
+                ...result.findings,
+                suggestions: [
+                    ...result.findings.suggestions,
+                    {
+                        ...result.findings.suggestions[0],
+                        relevantFile: 'src/not-in-the-pr.ts',
+                    },
+                ],
+            },
+            unverifiedByVerify: [result.droppedByVerify[0]],
+        });
+
+        const out = await provider().execute(input());
+
+        const details = (out.warnings ?? [])
+            .filter((w) =>
+                [
+                    'SUGGESTIONS_DROPPED_PATH_MISMATCH',
+                    'VERIFY_UNAVAILABLE',
+                ].includes(w.kind),
+            )
+            .map((w) => [w.agentName, w.detail?.split(':')[0]]);
+        expect(details).toEqual([
+            ['Ledger Rules', 'Ledger Rules'],
+            ['Ledger Rules', 'Ledger Rules'],
+        ]);
+    });
+
     it('routes the run through its task and verifies on the same model', async () => {
         await provider().execute(input());
 
@@ -772,4 +805,3 @@ describe('CustomAgentProvider — lane', () => {
         ]);
     });
 });
-

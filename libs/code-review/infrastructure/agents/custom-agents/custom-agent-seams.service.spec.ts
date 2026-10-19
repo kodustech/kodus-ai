@@ -383,7 +383,8 @@ describe('CustomAgentTryRunnerService', () => {
 
         expect(trace.status).toBe('failed');
         expect(trace.reason).toBe('model refused the key');
-        expect(sandbox.cleanup).toHaveBeenCalled();        expect(mockWarn).toHaveBeenCalledWith(
+        expect(sandbox.cleanup).toHaveBeenCalled();
+        expect(mockWarn).toHaveBeenCalledWith(
             expect.objectContaining({
                 message: 'Custom agent Try it run did not complete',
                 metadata: expect.objectContaining({
@@ -427,6 +428,55 @@ describe('buildTryTrace', () => {
             ['c', false],
         ]);
     });
+
+    it('lists the skill files the run read, not the whole folder', () => {
+        const call = (tool: string, args: object) => ({
+            tool,
+            args: JSON.stringify(args),
+            durationMs: 1,
+        });
+        const trace = buildTryTrace({
+            agent: agent(),
+            output: {
+                suggestions: [],
+                agentName: 'x',
+                turnsUsed: 1,
+                durationMs: 1,
+            } as any,
+            events: [
+                {
+                    status: 'completed',
+                    toolCalls: [
+                        call('loadSkill', { name: 'audit' }),
+                        call('readSkillFile', {
+                            skill: 'audit',
+                            path: 'references/sqli.md',
+                        }),
+                        call('readSkillFile', {
+                            skill: 'audit',
+                            path: 'references/sqli.md',
+                        }),
+                        call('readSkillFile', {
+                            skill: 'audit',
+                            path: 'not-a-file.md',
+                        }),
+                    ],
+                } as any,
+            ],
+            startedAt: Date.now(),
+            skills: [
+                {
+                    name: 'audit',
+                    path: '.skills/audit/SKILL.md',
+                    files: ['LICENSE', 'NOTICE', 'references/sqli.md'],
+                },
+            ],
+        });
+
+        expect(trace.skillsOpened).toEqual([
+            { path: '.skills/audit/SKILL.md', files: ['references/sqli.md'] },
+        ]);
+    });
 });
 
 describe('buildTryTrace — repeated findings', () => {
@@ -447,7 +497,10 @@ describe('buildTryTrace — repeated findings', () => {
                 suggestions: [
                     at('Use the shared logger instead of console.log in trace'),
                     at('Use the shared logger instead of console.log here'),
-                    at('Use the shared logger instead of console.log', 'src/sync.ts'),
+                    at(
+                        'Use the shared logger instead of console.log',
+                        'src/sync.ts',
+                    ),
                 ],
                 agentName: 'x',
                 turnsUsed: 1,
@@ -458,7 +511,12 @@ describe('buildTryTrace — repeated findings', () => {
         });
 
         expect(
-            trace.findings.map((f) => [f.file, f.verdict, f.wouldPost, f.reason]),
+            trace.findings.map((f) => [
+                f.file,
+                f.verdict,
+                f.wouldPost,
+                f.reason,
+            ]),
         ).toEqual([
             ['src/trace.ts', 'kept', true, undefined],
             ['src/sync.ts', 'kept', true, undefined],
@@ -491,8 +549,14 @@ describe('buildTryTrace — severity floor before repeats', () => {
             }),
             output: {
                 suggestions: [
-                    at('The entry is posted to one side of the ledger only', 'low'),
-                    at('The entry is posted to one side of the ledger only here', 'critical'),
+                    at(
+                        'The entry is posted to one side of the ledger only',
+                        'low',
+                    ),
+                    at(
+                        'The entry is posted to one side of the ledger only here',
+                        'critical',
+                    ),
                 ],
                 agentName: 'x',
                 turnsUsed: 1,
@@ -521,7 +585,8 @@ describe('buildTryTrace — what the check saw', () => {
                         relevantFile: 'src/billing/refund.ts',
                         customAgent: { id: 'ledger-agent', name: 'Ledger' },
                         oneSentenceSummary: 'Refund repeats the charge parser',
-                        suggestionContent: 'The parser is copied from charge.ts.',
+                        suggestionContent:
+                            'The parser is copied from charge.ts.',
                         kind: 'convention',
                         source: {
                             file: 'TeamInstructions',

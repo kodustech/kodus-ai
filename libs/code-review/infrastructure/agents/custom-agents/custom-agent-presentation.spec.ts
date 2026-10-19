@@ -20,10 +20,6 @@ import {
     preferCustomAgentKeep,
     stripCustomAgentFixes,
 } from './custom-agent-presentation';
-import {
-    formatCustomAgentsSummary,
-    summarizeCustomAgentRuns,
-} from './custom-agent-summary';
 
 const agent = (
     id: string,
@@ -349,7 +345,7 @@ describe('findingCitation', () => {
         );
     });
 
-    it('does not cite a line naming another directory\'s file of the same name', () => {
+    it("does not cite a line naming another directory's file of the same name", () => {
         const citation = findingCitation(finding(), [
             run(
                 'src/api/refund.ts:3 unused import\n/work/repo/src/billing/refund.ts:9 dead branch\n./billing/refund.ts:12 shadowed name',
@@ -392,7 +388,9 @@ describe('findingCitation', () => {
                 }),
                 [run('ledger/ post.ts:4-9 ~ book.ts:4-9')],
             ),
-        ).toBe("\n\n**Rule** (agent's instructions):\n> Every posting balances.");
+        ).toBe(
+            "\n\n**Rule** (agent's instructions):\n> Every posting balances.",
+        );
     });
 });
 
@@ -537,75 +535,5 @@ describe('collectSingleComments', () => {
         expect(comment.suggestionContent).toContain(
             '2. `src/ledger/post.ts:12`',
         );
-    });
-});
-
-describe('custom agents summary', () => {
-    it('renders one row per agent that ran and one line for those that did not', () => {
-        const summary = summarizeCustomAgentRuns(
-            [
-                {
-                    id: 'p',
-                    name: 'Ledger | Rules',
-                    slug: 'ledger-rules',
-                    status: 'ran',
-                    droppedByVerify: 1,
-                },
-                {
-                    id: 's',
-                    name: 'Docs',
-                    slug: 'docs',
-                    status: 'no-matching-files',
-                    droppedByVerify: 0,
-                },
-            ],
-            [finding('p'), finding('p')],
-        );
-
-        const markdown = formatCustomAgentsSummary(summary);
-
-        expect(markdown).toContain('| Ledger \\| Rules | ran | 2 | 1 |');
-        expect(markdown).not.toContain('| Docs |');
-        expect(markdown).toContain('Not run: Docs (no matching files)');
-    });
-
-    it('escapes a trailing backslash so it cannot unescape the pipe', () => {
-        const markdown = formatCustomAgentsSummary([
-            {
-                id: 'p',
-                name: 'Ledger\\| Rules',
-                slug: 'ledger-rules',
-                status: 'ran',
-                droppedByVerify: 0,
-                posted: 0,
-            },
-        ]);
-
-        expect(markdown).toContain('| Ledger\\\\\\| Rules | ran | 0 | 0 |');
-    });
-
-    it('renders nothing when no agent was configured', () => {
-        expect(formatCustomAgentsSummary([])).toBe('');
-    });
-
-    it('has no mode or shadow column', () => {
-        const markdown = formatCustomAgentsSummary(
-            summarizeCustomAgentRuns(
-                [
-                    {
-                        id: 'p',
-                        name: 'Docs',
-                        slug: 'docs',
-                        status: 'ran',
-                        droppedByVerify: 0,
-                    },
-                ],
-                [],
-            ),
-        );
-        expect(markdown).toContain(
-            '| Agent | Status | Posted | Dropped by checks |',
-        );
-        expect(markdown).not.toMatch(/shadow|mode/i);
     });
 });

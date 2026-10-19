@@ -35,7 +35,10 @@ import {
 import { cn } from "src/core/utils/components";
 
 import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedback";
-import { customAgentsSaveErrorMessage } from "../../_utils/settings-save-conflict";
+import {
+    customAgentsSaveErrorToast,
+    logCustomAgentsSaveError,
+} from "../../_utils/settings-save-conflict";
 import { Chip } from "../agents/[agentId]/_components/field";
 import { NewAgentDialog } from "./new-agent-dialog";
 import {
@@ -67,16 +70,8 @@ const saveWithToast = async (
         }
         toast({ description: done, variant: "success" });
     } catch (error) {
-        console.error("Error saving custom agents:", { ...scope, error });
-        toast({
-            title: "Error",
-            description: customAgentsSaveErrorMessage(
-                error,
-                failed,
-                next?.agents,
-            ),
-            variant: "danger",
-        });
+        logCustomAgentsSaveError("Error saving custom agents:", error, scope);
+        toast(customAgentsSaveErrorToast(error, failed, next?.agents));
     }
 };
 

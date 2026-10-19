@@ -28,7 +28,10 @@ import {
     type KnowledgeCodeManagementPort,
 } from '@libs/code-review/infrastructure/agents/knowledge/base-branch-reader';
 import { locateSkill } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-resolver';
-import { LOAD_SKILL_TOOL } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-tools';
+import {
+    LOAD_SKILL_TOOL,
+    READ_SKILL_FILE_TOOL,
+} from '@libs/code-review/infrastructure/agents/knowledge/knowledge-tools';
 import { RepositorySkillDetectionService } from '@libs/code-review/infrastructure/agents/knowledge/skill-detection.service';
 import { parseSkillMarkdown } from '@libs/code-review/infrastructure/agents/knowledge/skill-validator';
 import { resolveReviewKnowledge } from '@libs/code-review/infrastructure/agents/knowledge/review-knowledge';
@@ -381,17 +384,30 @@ export function buildTryTrace(params: {
     const skillPaths = new Map(
         (params.skills ?? []).map((skill) => [skill.name, skill]),
     );
-    const skillsOpened = new Map<string, { path: string; files?: string[] }>();
+    // Each opened skill with the files the run read from it, not the folder.
+    const skillsOpened = new Map<string, { path: string; files: string[] }>();
     for (const call of calls) {
-        if (call.tool !== LOAD_SKILL_TOOL) continue;
+        if (call.tool !== LOAD_SKILL_TOOL && call.tool !== READ_SKILL_FILE_TOOL)
+            continue;
         try {
-            const name = JSON.parse(call.args)?.name;
+            const args = JSON.parse(call.args);
+            const name =
+                call.tool === LOAD_SKILL_TOOL ? args?.name : args?.skill;
             if (typeof name !== 'string') continue;
             const skill = skillPaths.get(name);
-            skillsOpened.set(name, {
+            const opened = skillsOpened.get(name) ?? {
                 path: skill?.path ?? name,
-                ...(skill?.files?.length ? { files: skill.files } : {}),
-            });
+                files: [],
+            };
+            skillsOpened.set(name, opened);
+            const file = args?.path;
+            if (
+                call.tool === READ_SKILL_FILE_TOOL &&
+                skill?.files?.includes(file) &&
+                !opened.files.includes(file)
+            ) {
+                opened.files.push(file);
+            }
         } catch {
             // Arguments are cut at 100 chars for progress; skip unreadable ones.
         }
@@ -442,11 +458,16 @@ export function buildTryTrace(params: {
     return {
         status: 'completed',
         models: { run: agent.models?.run },
-        skillsOpened: [...skillsOpened.values()],
+        skillsOpened: [...skillsOpened.values()].map(({ path, files }) => ({
+            path,
+            ...(files.length ? { files } : {}),
+        })),
         toolCalls: calls.map((call) => {
             // runCli calls read back in the order they ran.
             const run =
-                call.tool === RUN_CLI_TOOL_NAME ? cliOutputs.shift() : undefined;
+                call.tool === RUN_CLI_TOOL_NAME
+                    ? cliOutputs.shift()
+                    : undefined;
             return {
                 tool: call.tool,
                 input: call.args,
@@ -460,7 +481,11 @@ export function buildTryTrace(params: {
                 finding(s, 'dropped', 'repeats a finding on the same lines'),
             ),
             ...(output.discardedByVerify ?? []).map((s) =>
-                finding(s, 'dropped', s.discardReason ?? 'refuted by the check'),
+                finding(
+                    s,
+                    'dropped',
+                    s.discardReason ?? 'refuted by the check',
+                ),
             ),
             ...(output.discardedBySeverity ?? []).map((s) =>
                 finding(s, 'dropped', 'below the severity floor'),

@@ -6,6 +6,10 @@ import type { CustomAgent, KnowledgeItem } from "@services/custom-agents/types";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 
+import {
+    CodeReviewSettingsConflictError,
+    STALE_CUSTOM_AGENTS_MESSAGE,
+} from "../../../_utils/settings-save-conflict";
 import CustomAgentPage from "./page";
 
 const agent: CustomAgent = {
@@ -97,11 +101,18 @@ jest.mock("@services/permissions/hooks", () => ({
     usePermission: () => true,
 }));
 
-const TRIAL = { valid: true, subscriptionStatus: "trial", planType: "teams_managed" };
+const TRIAL = {
+    valid: true,
+    subscriptionStatus: "trial",
+    planType: "teams_managed",
+};
 let mockLicense: Record<string, unknown> = TRIAL;
-jest.mock("src/features/ee/subscription/_providers/subscription-context", () => ({
-    useSubscriptionContext: () => ({ license: mockLicense }),
-}));
+jest.mock(
+    "src/features/ee/subscription/_providers/subscription-context",
+    () => ({
+        useSubscriptionContext: () => ({ license: mockLicense }),
+    }),
+);
 
 const captureGateHit = jest.fn();
 jest.mock("src/core/utils/gate-hit", () => ({
@@ -154,10 +165,9 @@ describe("Custom agent page", () => {
             expect(
                 screen.getByRole("heading", { name: "Unlock custom agents" }),
             ).toBeInTheDocument();
-            expect(screen.getByRole("link", { name: "See plans" })).toHaveAttribute(
-                "href",
-                "/choose-plan",
-            );
+            expect(
+                screen.getByRole("link", { name: "See plans" }),
+            ).toHaveAttribute("href", "/choose-plan");
             expect(captureGateHit).toHaveBeenCalledWith(
                 expect.objectContaining({
                     feature: "custom_agents",
@@ -409,5 +419,26 @@ describe("Custom agent page over its docs budget", () => {
                 ),
             }),
         );
+    });
+
+    it("keeps the stale-save toast up until dismissed, without logging an error", async () => {
+        // A refused stale save logged with console.error, which the dev
+        // overlay showed as an issue, and its toast closed in 5 seconds.
+        save.mockRejectedValue(new CodeReviewSettingsConflictError());
+        const error = jest.spyOn(console, "error").mockImplementation(() => {});
+        await renderPage();
+
+        fireEvent.click(screen.getByRole("button", { name: /save/i }));
+        await act(async () => {});
+
+        expect(toast).toHaveBeenCalledWith(
+            expect.objectContaining({
+                variant: "danger",
+                description: STALE_CUSTOM_AGENTS_MESSAGE,
+                duration: Infinity,
+            }),
+        );
+        expect(error).not.toHaveBeenCalled();
+        error.mockRestore();
     });
 });

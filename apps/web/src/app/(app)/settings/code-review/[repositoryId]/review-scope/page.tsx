@@ -20,7 +20,10 @@ import GeneratingConfig from "../../_components/generating-config";
 import { useCodeReviewSettingsMutation } from "../../_hooks/use-code-review-settings-mutation";
 import { type CodeReviewFormType } from "../../_types";
 import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedback";
-import { customAgentsSaveErrorMessage } from "../../_utils/settings-save-conflict";
+import {
+    customAgentsSaveErrorToast,
+    logCustomAgentsSaveError,
+} from "../../_utils/settings-save-conflict";
 import {
     useDefaultCodeReviewConfig,
     useFeatureFlags,
@@ -106,20 +109,17 @@ function ReviewScopeContent() {
 
             toast({ description: "Settings saved", variant: "success" });
         } catch (error) {
-            console.error("Error saving settings:", error);
-            toast({
-                title: "Error",
-                description: customAgentsSaveErrorMessage(
+            logCustomAgentsSaveError("Error saving settings:", error);
+            toast(
+                customAgentsSaveErrorToast(
                     error,
                     "An error occurred while saving the settings. Please try again.",
                     (
                         form.getValues("customAgents" as never) as
-                            | { value?: { name: string }[] }
-                            | undefined
+                            { value?: { name: string }[] } | undefined
                     )?.value,
                 ),
-                variant: "danger",
-            });
+            );
         }
     });
 

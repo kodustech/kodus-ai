@@ -26,7 +26,10 @@ import type {
 import { FolderGit2Icon } from "lucide-react";
 import { cn } from "src/core/utils/components";
 
-import { customAgentsSaveErrorMessage } from "../../_utils/settings-save-conflict";
+import {
+    customAgentsSaveErrorToast,
+    logCustomAgentsSaveError,
+} from "../../_utils/settings-save-conflict";
 import { agentPageHref, useCustomAgentsForm } from "./use-custom-agents-form";
 
 /**
@@ -89,15 +92,13 @@ export const NewAgentDialog = ({
             else
                 router.push(agentPageHref(repositoryId, agent.id, directoryId));
         } catch (error) {
-            console.error("Error creating custom agent:", error);
-            toast({
-                title: "Error",
-                description: customAgentsSaveErrorMessage(
+            logCustomAgentsSaveError("Error creating custom agent:", error);
+            toast(
+                customAgentsSaveErrorToast(
                     error,
                     "Couldn't create the agent. Try again.",
                 ),
-                variant: "danger",
-            });
+            );
         } finally {
             setSaving(false);
         }
@@ -119,8 +120,8 @@ export const NewAgentDialog = ({
                 <DialogHeader>
                     <DialogTitle>New agent</DialogTitle>
                     <DialogDescription>
-                        It starts off. Try it on a pull request, then turn
-                        it on to comment on the ones its files match.
+                        It starts off. Try it on a pull request, then turn it on
+                        to comment on the ones its files match.
                     </DialogDescription>
                 </DialogHeader>
 

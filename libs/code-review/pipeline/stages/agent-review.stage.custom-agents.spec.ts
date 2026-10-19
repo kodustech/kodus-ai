@@ -137,6 +137,19 @@ const output = (suggestions: any[], over: Record<string, unknown> = {}) => ({
 const run = (stage: AgentReviewStage, ctx: CodeReviewPipelineContext) =>
     (stage as any).executeStage(ctx) as Promise<any>;
 
+/** Reads each agent's entry in the review's outcome log line. */
+const watchOutcome = (stage: AgentReviewStage) => {
+    const log = jest
+        .spyOn((stage as any).logger, 'log')
+        .mockImplementation(() => undefined);
+    return (): any[] | undefined =>
+        log.mock.calls
+            .map(([e]: any[]) => e)
+            .find((e: any) =>
+                String(e?.message).startsWith('[AGENT] Custom agents outcome'),
+            )?.metadata.agents;
+};
+
 const contents = (list: any[] | undefined) =>
     (list ?? []).map((s: any) => s.suggestionContent);
 
@@ -172,17 +185,18 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
         ).toEqual(['agent-ledger']);
     });
 
-    it('posts a finding inline and counts it in the summary', async () => {
+    it('posts a finding inline and counts it in the outcome log', async () => {
         const { stage } = makeStage(output([finding()]));
+        const outcome = watchOutcome(stage);
 
         const result = await run(stage, makeContext([agent()]));
 
         expect(contents(result.validSuggestions)).toEqual([
             'The entry is booked on one side only.',
         ]);
-        expect(result.customAgentRuns[0]).toMatchObject({
-            posted: 1,
-            droppedByVerify: 2,
+        expect(outcome()?.[0]).toMatchObject({
+            kept: 1,
+            droppedByChecks: 2,
         });
     });
 
@@ -260,6 +274,52 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
         expect(JSON.stringify(entry)).not.toContain('Rounding note.');
     });
 
+    it('logs why the checks dropped each finding', async () => {
+        const dropped = (over: Record<string, any>) => ({
+            relevantFile: 'src/ledger.ts',
+            relevantLinesStart: 5,
+            suggestionContent: 'Not logged.',
+            customAgent: { id: 'agent-ledger' },
+            ...over,
+        });
+        const { stage } = makeStage(
+            output([finding()], {
+                agentResults: [
+                    {
+                        suggestions: [],
+                        discardedByVerify: [
+                            dropped({
+                                discardReason: 'Line 4 already balances it.',
+                            }),
+                        ],
+                        discardedByVerifyError: [
+                            dropped({ relevantLinesStart: 8 }),
+                        ],
+                    },
+                ],
+            }),
+        );
+        const log = jest
+            .spyOn((stage as any).logger, 'log')
+            .mockImplementation(() => undefined);
+
+        await run(stage, makeContext([agent()]));
+
+        const entry = log.mock.calls
+            .map(([e]: any[]) => e)
+            .find((e: any) =>
+                String(e?.message).startsWith('[AGENT] Custom agents outcome'),
+            );
+        expect(entry?.metadata.agents[0].checkDrops).toEqual([
+            {
+                at: 'src/ledger.ts:5',
+                reason: 'Line 4 already balances it.',
+            },
+            { at: 'src/ledger.ts:8', reason: 'the check could not run' },
+        ]);
+        expect(JSON.stringify(entry)).not.toContain('Not logged.');
+    });
+
     it('keeps the most severe findings up to maxComments', async () => {
         const { stage } = makeStage(
             output([
@@ -316,6 +376,7 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
             ]),
         );
 
+        const outcome = watchOutcome(stage);
         const result = await run(
             stage,
             makeContext([
@@ -334,7 +395,7 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
         expect(result.validSuggestionsByPR[0].suggestionContent).toContain(
             'Second entry also unbalanced.',
         );
-        expect(result.customAgentRuns[0].posted).toBe(2);
+        expect(outcome()?.[0].kept).toBe(2);
     });
 
     it("cites the CLI output that names the finding's file in the posted comment", async () => {
@@ -421,6 +482,7 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
             ]),
         );
 
+        const outcome = watchOutcome(stage);
         const result = await run(
             stage,
             makeContext([
@@ -440,7 +502,7 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
         expect(result.validSuggestionsByPR[0].suggestionContent).toContain(
             'The new route has no e2e test.',
         );
-        expect(result.customAgentRuns[0].posted).toBe(1);
+        expect(outcome()?.[0].kept).toBe(1);
     });
 
     it("keeps the agent's own severity: Kody's bug-centric reclassification never pushes it under the agent floor", async () => {
@@ -705,6 +767,32 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
                     'Rule: debit needs a credit.\n\n**Rule** (`docs/ledger.md`):\n> Debits equal credits.',
                 ].sort(),
             );
+        });
+
+        it('logs a finding the agent lost to dedup', async () => {
+            // Its bug merged into the main review's comment read "0 dropped",
+            // as if the agent never raised it.
+            (hasManagedModelKey as jest.Mock).mockReturnValue(true);
+            runSpy.mockImplementation(async (args: any) =>
+                args?.runName === 'code-review-dedup'
+                    ? { groups: [{ keep: 1, duplicates: [0] }], unique: [] }
+                    : { groups: [], unique: [] },
+            );
+            const { stage } = makeStage(
+                output([native(), finding({ kind: 'bug' })]),
+            );
+            honorEveryMerge(stage);
+            const outcome = watchOutcome(stage);
+
+            const result = await run(stage, makeContext([agent()]));
+
+            expect(contents(result.validSuggestions)).toEqual([
+                'Native: the entry is one-sided.',
+            ]);
+            expect(outcome()?.[0]).toMatchObject({
+                kept: 0,
+                mergedInDedup: 1,
+            });
         });
 
         // A finding in the agent's lane keeps a group it shares with a native

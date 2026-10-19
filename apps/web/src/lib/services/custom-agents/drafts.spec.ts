@@ -76,6 +76,14 @@ describe("custom agent drafts", () => {
         expect(agent.presentation).not.toHaveProperty("mode");
     });
 
+    it("names a blank agent's id after its name, not a generic word", () => {
+        const first = createAgentFromTemplate("blank", []);
+        const second = createAgentFromTemplate("blank", [first]);
+
+        expect(first.id).toBe("new-agent");
+        expect(second).toMatchObject({ id: "new-agent-2", name: "New agent 2" });
+    });
+
     it("imports a repository skill as an agent linked to it", () => {
         const { agent, link } = agentFromSkill(
             {
