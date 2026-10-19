@@ -364,6 +364,14 @@ describe('CreateOrUpdateCodeReviewParameterDto — custom agents', () => {
         );
     });
 
+    it('reports a non-string agent name as a validation error, not a crash', async () => {
+        const flat = await validateConfig({
+            customAgents: [agent({ name: ['Ledger'] }), agent({ id: 'b' })],
+        });
+        expect(flat).toContain('"property":"name"');
+        expect(flat).toContain('isString');
+    });
+
     it('rejects an empty agent id', async () => {
         const flat = await validateConfig({
             customAgents: [agent({ id: '' })],

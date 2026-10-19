@@ -500,6 +500,8 @@ export function customAgentSlugClash(
 ): { slug: string; names: [string, string] } | undefined {
     const firstBySlug = new Map<string, string>();
     for (const agent of agents ?? []) {
+        // A malformed name is left to the field's own validation.
+        if (agent?.name != null && typeof agent.name !== 'string') continue;
         const name = agent?.name ?? '';
         const slug = customAgentSlug(name);
         const earlier = firstBySlug.get(slug);
