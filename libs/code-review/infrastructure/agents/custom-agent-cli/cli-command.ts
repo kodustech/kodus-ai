@@ -398,14 +398,23 @@ export function buildNetworkScript(params: {
     return inSubshell(lines);
 }
 
+/** Shared temp directories a CLI might write to despite TMPDIR. */
+const SHARED_TMP_DIRS = ['/tmp', '/var/tmp', '/dev/shm'];
+
 /**
  * The command that runs one CLI call, as root through the sandbox's root
  * channel. Secrets are named in `--preserve-env` and arrive through that
  * root process's env, so their values are never part of this string, and no
  * process of the review user ever holds them (only root can read a root
- * process's env). After the call, timed out or not, every process the CLI
- * user still owns is killed, so nothing it started (a daemon, a forked
- * child) outlives the call; the call's exit code is kept.
+ * process's env).
+ *
+ * Files the CLI writes stay its own: each call gets a fresh private temp
+ * directory inside the CLI user's home (0700, as TMPDIR/TMP/TEMP) and runs
+ * under umask 077, so even a file it drops in /tmp is unreadable to the
+ * review user. After the call, timed out or not, every process the CLI user
+ * still owns is killed (nothing it started outlives the call), its temp
+ * directory is removed, and so is anything it left in the shared temp
+ * directories. The call's exit code is kept.
  */
 export function buildRunCommand(params: {
     identity: CliSandboxIdentity;
@@ -419,10 +428,17 @@ export function buildRunCommand(params: {
         ? ` --preserve-env=${secretEnvNames.join(',')}`
         : '';
     const user = shSingleQuote(identity.user);
+    const tmpTemplate = shSingleQuote(`${identity.home}/.run-XXXXXXXX`);
+    // umask is set inside the CLI user's process: sudo may apply its own.
+    const withUmask = `/bin/sh -c ${shSingleQuote('umask 077; exec "$@"')} sh`;
     return [
         ROOT_SAFE_PATH_LINE,
-        `sudo -n -u ${user} -H${preserve} -- /usr/bin/env -C ${shSingleQuote(CLI_REPO_DIR)} /usr/bin/timeout -k 5 ${timeoutSec} ${shellJoin([binaryPath, ...args])}; rc=$?`,
+        `T=$(mktemp -d ${tmpTemplate}) || exit 125`,
+        `chown ${user}: "$T" && chmod 700 "$T" || { rm -rf "$T"; exit 125; }`,
+        `sudo -n -u ${user} -H${preserve} -- /usr/bin/env -C ${shSingleQuote(CLI_REPO_DIR)} TMPDIR="$T" TMP="$T" TEMP="$T" ${withUmask} /usr/bin/timeout -k 5 ${timeoutSec} ${shellJoin([binaryPath, ...args])}; rc=$?`,
         `pkill -KILL -u ${user} >/dev/null 2>&1`,
+        'rm -rf "$T"',
+        `find ${SHARED_TMP_DIRS.join(' ')} -xdev -mindepth 1 -user ${user} -exec rm -rf {} + >/dev/null 2>&1`,
         'exit $rc',
     ].join('\n');
 }

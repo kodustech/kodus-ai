@@ -57,6 +57,11 @@ const withStubs = (
     write('tee', 'cat >/dev/null');
     write('id', 'echo 4242');
     write('pkill', 'exit 0');
+    write('mktemp', `echo '${dir}/run-tmp'`);
+    write('chown', 'exit 0');
+    write('chmod', 'exit 0');
+    write('rm', 'exit 0');
+    write('find', 'exit 0');
     for (const [name, body] of Object.entries(stubs)) write(name, body);
     try {
         run(dir, () =>
@@ -195,6 +200,64 @@ describe('runCli command', () => {
     });
 });
 
+describe('runCli command temp files', () => {
+    const identity = cliSandboxIdentity('agent-1', 'lintkit');
+    const command = buildRunCommand({
+        identity,
+        binaryPath: `${identity.home}/.local/bin/lintkit`,
+        args: ['check'],
+        secretEnvNames: ['LINTKIT_TOKEN'],
+        timeoutSec: 5,
+    });
+    const tmp = `${identity.home}/.run-abc12345`;
+    const stubs = {
+        mktemp: `echo '${tmp}'`,
+        chown: 'exit 0',
+        chmod: 'exit 0',
+        rm: 'exit 0',
+        find: 'exit 0',
+        env: 'exit 0',
+    };
+
+    it('gives the CLI a private temp directory and umask 077', () => {
+        withStubs(stubs, (dir, log) => {
+            expect(runBash(dir, command).status).toBe(0);
+            const calls = log();
+            expect(calls).toContain(`mktemp -d ${identity.home}/.run-XXXXXXXX`);
+            expect(calls).toContain(`chown ${identity.user}: ${tmp}`);
+            expect(calls).toContain(`chmod 700 ${tmp}`);
+            const envCall = calls.find((c) => c.startsWith('env '));
+            expect(envCall).toContain(
+                `TMPDIR=${tmp} TMP=${tmp} TEMP=${tmp} /bin/sh -c umask 077; exec "$@" sh /usr/bin/timeout`,
+            );
+        });
+    });
+
+    it('removes what the CLI wrote once its processes are gone', () => {
+        withStubs({ ...stubs, env: 'exit 9' }, (dir, log) => {
+            expect(runBash(dir, command).status).toBe(9);
+            const calls = log();
+            const kill = calls.indexOf(`pkill -KILL -u ${identity.user}`);
+            const rmTmp = calls.indexOf(`rm -rf ${tmp}`);
+            const sweep = calls.findIndex(
+                (c) =>
+                    c.startsWith('find /tmp /var/tmp /dev/shm') &&
+                    c.includes(`-user ${identity.user}`),
+            );
+            expect(kill).toBeGreaterThanOrEqual(0);
+            expect(rmTmp).toBeGreaterThan(kill);
+            expect(sweep).toBeGreaterThan(kill);
+        });
+    });
+
+    it('does not run the CLI when its temp directory cannot be made private', () => {
+        withStubs({ ...stubs, chown: 'exit 1' }, (dir, log) => {
+            expect(runBash(dir, command).status).toBe(125);
+            expect(log().some((c) => c.startsWith('env '))).toBe(false);
+        });
+    });
+});
+
 describe('install script', () => {
     const identity = cliSandboxIdentity('agent-1', 'semver');
 
@@ -265,7 +328,10 @@ describe('scripts are written for the root channel', () => {
             argv: ['npm', 'i', '-g', 'lintkit@2.4.1'],
             binary: 'lintkit',
         }),
-        fence: buildNetworkScript({ identity, domains: ['api.lintkit.example'] }),
+        fence: buildNetworkScript({
+            identity,
+            domains: ['api.lintkit.example'],
+        }),
         run: buildRunCommand({
             identity,
             binaryPath: `${identity.home}/.local/bin/lintkit`,
