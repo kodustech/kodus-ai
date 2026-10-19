@@ -122,6 +122,8 @@ go install github.com/acme/ledgerctl@v1.4.2
 
 **Cómo se ejecutan las llamadas.** El agente pasa argumentos, nunca un comando de shell: pipes, redirecciones, globs y variables se pasan literalmente. Una llamada que no empieza con un prefijo permitido se rechaza. Cada CLI se ejecuta con su propio usuario, con un timeout, y su salida tiene un tamaño máximo.
 
+**Cómo se guardan los secretos.** Un secreto se cifra al guardarlo y nunca vuelve al navegador, que muestra **Stored · hidden**. Queda ligado a la CLI para la que se guardó, en ese nivel de configuración: cualquier cambio en la CLI (nombre, install, binario, prefijos permitidos, dominios permitidos, **Runs project code** o los nombres de sus secretos) vuelve a pedir todos sus secretos, al guardar y en **Try it**. Solo las notas de uso y el timeout cambian sin eso. **Try it** usa solo los secretos guardados en el nivel que estás editando, nunca los heredados. Un secreto llega solo al proceso de esa CLI, nunca a su install, a las otras CLIs ni al prompt del agente. En la salida de la CLI, cada secreto se reemplaza por `***`, también cuando se imprime en base64 o URL-encoded, antes de que lo vean el agente, **Try it**, un comentario en el pull request o un log. El enmascarado solo conoce esas grafías, así que no permitas un prefijo que imprima la credencial de otra forma (hex, partida, parcial). La CLI aún puede enviar datos a los hosts de sus dominios permitidos: permite solo los hosts que necesita.
+
 Cuando un hallazgo viene de una CLI, el comentario muestra las líneas de salida de la CLI que nombran el archivo:
 
 ```markdown

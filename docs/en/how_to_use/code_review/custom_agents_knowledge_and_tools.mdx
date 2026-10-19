@@ -122,6 +122,8 @@ go install github.com/acme/ledgerctl@v1.4.2
 
 **How calls run.** The agent passes arguments, never a shell command: pipes, redirects, globs and variables are passed literally. A call that doesn't start with an allowed prefix is refused. Each CLI runs as its own user, with a timeout, and its output is capped.
 
+**How secrets are kept.** A secret is encrypted when saved and never sent back to the browser, which shows **Stored · hidden**. It stays bound to the CLI it was saved for, at that settings level: any change to the CLI (name, install, binary, allowed prefixes, allowed domains, **Runs project code** or the names of its secrets) asks for all of its secrets again, on save and in **Try it**. Only the usage notes and the timeout can change without that. **Try it** uses only the secrets stored at the level you are editing, never inherited ones. A secret reaches only that CLI's process, never its install, the other CLIs or the agent's prompt. In the CLI's output, every secret is replaced by `***`, also when printed in base64 or URL-encoded, before the agent, **Try it**, a pull request comment or a log sees it. The masking knows only those spellings, so don't allow a prefix that prints the credential some other way (hex, split, partial). A CLI can still send data to the hosts in its allowed domains: allow only the hosts it needs.
+
 When a finding comes from a CLI, the comment shows the CLI output lines that name the file:
 
 ```markdown
