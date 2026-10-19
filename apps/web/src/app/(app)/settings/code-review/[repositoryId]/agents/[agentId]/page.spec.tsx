@@ -94,9 +94,16 @@ jest.mock("@services/permissions/hooks", () => ({
     usePermission: () => true,
 }));
 
-let mockCustomAgentsFlag = true;
-jest.mock("../../../../_components/context", () => ({
-    useFeatureFlags: () => ({ customAgents: mockCustomAgentsFlag }),
+const TRIAL = { valid: true, subscriptionStatus: "trial", planType: "teams_managed" };
+let mockLicense: Record<string, unknown> = TRIAL;
+jest.mock("src/features/ee/subscription/_providers/subscription-context", () => ({
+    useSubscriptionContext: () => ({ license: mockLicense }),
+}));
+
+const captureGateHit = jest.fn();
+jest.mock("src/core/utils/gate-hit", () => ({
+    captureGateHit: (...args: unknown[]) => captureGateHit(...args),
+    captureGateCtaClick: jest.fn(),
 }));
 
 jest.mock("src/core/hooks/use-unsaved-changes-guard", () => ({
@@ -133,18 +140,40 @@ describe("Custom agent page", () => {
         mockForm = formAt();
     });
 
-    it("shows no editor and no Try it while the organization's flag is off", async () => {
-        mockCustomAgentsFlag = false;
+    it("on free, is locked with the upgrade card and shows nothing of the agent", async () => {
+        mockLicense = {
+            valid: true,
+            subscriptionStatus: "active",
+            planType: "free_byok",
+        };
         try {
             await renderPage();
             expect(
-                screen.getByText(/Custom agents are in beta and not enabled/),
+                screen.getByRole("heading", { name: "Unlock custom agents" }),
             ).toBeInTheDocument();
+            expect(screen.getByRole("link", { name: "See plans" })).toHaveAttribute(
+                "href",
+                "/choose-plan",
+            );
+            expect(captureGateHit).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    feature: "custom_agents",
+                    surface: "locked_preview",
+                    planType: "free_byok",
+                }),
+            );
+            expect(screen.queryByText("Ledger reviewer")).toBeNull();
             expect(screen.queryByLabelText("Instructions")).toBeNull();
             expect(screen.queryByText("Run agent")).toBeNull();
         } finally {
-            mockCustomAgentsFlag = true;
+            mockLicense = TRIAL;
         }
+    });
+
+    it("on a trial, opens the agent", async () => {
+        await renderPage();
+        expect(screen.queryByText("Unlock custom agents")).toBeNull();
+        expect(screen.getByLabelText("Instructions")).toBeInTheDocument();
     });
 
     it("leads back to What to review, where the agents are listed", async () => {

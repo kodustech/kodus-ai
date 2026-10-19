@@ -75,8 +75,6 @@ export const getLayoutData = cache(async (teamId: string) => {
             githubEnterpriseServerPat: githubEnterpriseServerPatFeatureFlag,
             kodusProvider: kodusProviderFeatureFlag,
             deterministicEvidence: deterministicEvidenceFeatureFlag,
-            // Custom agents are on for every organization.
-            customAgents: true,
         },
     };
 });

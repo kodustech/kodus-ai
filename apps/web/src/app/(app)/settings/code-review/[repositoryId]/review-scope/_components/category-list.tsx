@@ -15,14 +15,12 @@ import { useQuery } from "@tanstack/react-query";
 import { Controller, useFormContext, useWatch } from "react-hook-form";
 import { useCurrentConfigLevel } from "src/app/(app)/settings/_hooks";
 import { cn } from "src/core/utils/components";
+import { CustomAgentsSectionGate } from "src/features/ee/custom-agents/custom-agents-plan-gate";
 
 import { CustomAgentsSection } from "../../_custom-agents/custom-agents-section";
 import { OverrideIndicatorForm } from "../../../_components/override";
 import { type CodeReviewFormType } from "../../../_types";
-import {
-    useDefaultCodeReviewConfig,
-    useFeatureFlags,
-} from "../../../../_components/context";
+import { useDefaultCodeReviewConfig } from "../../../../_components/context";
 import { PromptEditorField } from "../../custom-prompts/_components/prompt-editor-field";
 import {
     getPromptFieldText,
@@ -198,7 +196,6 @@ export const CategoryList = ({
             ?.business_logic?.value,
     );
     const { data: labels = [], isLoading } = useGetCodeReviewLabels("v2");
-    const customAgentsEnabled = useFeatureFlags().customAgents === true;
 
     // Same gating as the General page: only look up MCP plugins when the
     // business-logic category is on, since that is the only row it affects.
@@ -314,14 +311,12 @@ export const CategoryList = ({
         />
     );
 
-    // Beta: the pipeline gates custom agents per organization too, so
-    // without the flag the section would save agents that never run.
-    if (!customAgentsEnabled) return categories;
-
     return (
         <div className="flex flex-col gap-8">
             {categories}
-            <CustomAgentsSection canEdit={canEdit} />
+            <CustomAgentsSectionGate>
+                <CustomAgentsSection canEdit={canEdit} />
+            </CustomAgentsSectionGate>
         </div>
     );
 };

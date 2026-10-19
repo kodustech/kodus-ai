@@ -33,6 +33,7 @@ import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { Trash2Icon } from "lucide-react";
 import { useUnsavedChangesGuard } from "src/core/hooks/use-unsaved-changes-guard";
+import { CustomAgentsPageGate } from "src/features/ee/custom-agents/custom-agents-plan-gate";
 
 import {
     agentPageHref,
@@ -43,7 +44,6 @@ import {
 import { CentralizedConfigReadOnlyAlert } from "../../../_components/centralized-config-readonly-alert";
 import { getCentralizedPrToastPayload } from "../../../_utils/centralized-pr-feedback";
 import { customAgentsSaveErrorMessage } from "../../../_utils/settings-save-conflict";
-import { useFeatureFlags } from "../../../../_components/context";
 import {
     CommentsAndModel,
     FilesAndKnowledge,
@@ -57,7 +57,6 @@ function AgentContent() {
     const router = useRouter();
     const { agentId: rawAgentId } = useParams<{ agentId: string }>();
     const agentId = decodeURIComponent(rawAgentId ?? "");
-    const enabled = useFeatureFlags().customAgents === true;
     const {
         teamId,
         repositoryId,
@@ -172,19 +171,6 @@ function AgentContent() {
             });
         }
     };
-
-    if (!enabled) {
-        return (
-            <Page.Root>
-                <Page.Content>
-                    <p className="text-text-secondary text-sm">
-                        Custom agents are in beta and not enabled for this
-                        organization.
-                    </p>
-                </Page.Content>
-            </Page.Root>
-        );
-    }
 
     const patch = (change: (current: CustomAgent) => CustomAgent) =>
         updateAgent(agentId, change);
@@ -374,13 +360,15 @@ function AgentContent() {
 
 export default function CustomAgentPage() {
     return (
-        <Suspense
-            fallback={
-                <div className="flex h-full w-full items-center justify-center py-10">
-                    <Spinner className="size-6" />
-                </div>
-            }>
-            <AgentContent />
-        </Suspense>
+        <CustomAgentsPageGate title="Custom agent">
+            <Suspense
+                fallback={
+                    <div className="flex h-full w-full items-center justify-center py-10">
+                        <Spinner className="size-6" />
+                    </div>
+                }>
+                <AgentContent />
+            </Suspense>
+        </CustomAgentsPageGate>
     );
 }
