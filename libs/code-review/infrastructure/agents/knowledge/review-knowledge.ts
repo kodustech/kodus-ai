@@ -89,6 +89,16 @@ export async function resolveReviewKnowledge(params: {
                 repositoryId: repository?.id,
             },
         });
-        return { warnings: [] };
+        return {
+            warnings: [
+                {
+                    kind: 'KNOWLEDGE_UNAVAILABLE',
+                    reason: 'knowledge',
+                    contextWindowTokens: 0,
+                    modelName: '',
+                    detail: 'the linked skills and docs could not be read from the target branch; the review ran without them',
+                },
+            ],
+        };
     }
 }

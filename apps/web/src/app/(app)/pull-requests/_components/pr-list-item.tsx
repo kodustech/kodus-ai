@@ -1240,6 +1240,7 @@ const WARNING_KIND_LABEL: Record<ReviewWarningKind, string> = {
         "Skill or doc edited in this PR (target-branch version used)",
     DOC_NOT_FOUND: "Linked doc not found on the target branch",
     KNOWLEDGE_TRUNCATED: "Skills or docs cut to fit their budget",
+    KNOWLEDGE_UNAVAILABLE: "Reviewed without skills and docs (could not be read)",
     SKILL_COMPATIBILITY: "Skill requirements may not be met by the reviewer",
     CLI_INSTALL_FAILED: "Custom agent ran without a CLI",
     CROSS_REPO_UNAVAILABLE:

@@ -54,6 +54,8 @@ export type ReviewWarningKind =
     | 'DOC_NOT_FOUND'
     /** A skill body or the linked docs were cut to fit their budget. */
     | 'KNOWLEDGE_TRUNCATED'
+    /** No linked skill or doc could be read; the review ran without them. */
+    | 'KNOWLEDGE_UNAVAILABLE'
     /** A skill declares requirements the reviewer may not meet. */
     | 'SKILL_COMPATIBILITY'
     /** A custom agent's CLI could not be installed or fenced in the sandbox,
