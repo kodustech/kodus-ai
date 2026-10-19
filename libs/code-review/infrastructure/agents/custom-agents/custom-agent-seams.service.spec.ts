@@ -451,6 +451,45 @@ describe('buildTryTrace — repeated findings', () => {
     });
 });
 
+describe('buildTryTrace — severity floor before repeats', () => {
+    it('lets a severe finding post when the one it repeats is under the floor, as the review does', () => {
+        const at = (summary: string, severity: string) => ({
+            relevantFile: 'src/ledger/post.ts',
+            relevantLinesStart: 4,
+            relevantLinesEnd: 4,
+            severity,
+            oneSentenceSummary: summary,
+            suggestionContent: summary,
+        });
+        const trace = buildTryTrace({
+            agent: agent({
+                presentation: {
+                    ...agent().presentation,
+                    minSeverity: 'high' as any,
+                },
+            }),
+            output: {
+                suggestions: [
+                    at('The entry is posted to one side of the ledger only', 'low'),
+                    at('The entry is posted to one side of the ledger only here', 'critical'),
+                ],
+                agentName: 'x',
+                turnsUsed: 1,
+                durationMs: 1,
+            } as any,
+            events: [],
+            startedAt: Date.now(),
+        });
+
+        expect(
+            trace.findings.map((f) => [f.severity, f.verdict, f.wouldPost]),
+        ).toEqual([
+            ['low', 'kept', false],
+            ['critical', 'kept', true],
+        ]);
+    });
+});
+
 describe('CustomAgentKnowledgeReaderService', () => {
     const repository = { id: 'repo-1', name: 'acme/ledger', branch: 'main' };
 

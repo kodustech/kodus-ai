@@ -394,17 +394,21 @@ export function buildTryTrace(params: {
     const minRank = agent.presentation?.minSeverity
         ? rankOf(agent.presentation.minSeverity)
         : Infinity;
-    const { kept, repeats } = withoutRepeats(output.suggestions ?? []);
-    const eligible = kept
+    // The review's order: the agent's severity floor and comment limit, then
+    // the dedup. Deduping first let a finding under the floor mark a severe
+    // one on the same lines as its repeat, so neither read "would post".
+    const suggestions = output.suggestions ?? [];
+    const eligible = suggestions
         .map((s, i) => ({ s, i }))
         .filter(({ s }) => rankOf(s.severity) <= minRank)
         .sort(
             (a, b) => rankOf(a.s.severity) - rankOf(b.s.severity) || a.i - b.i,
         );
     const max = agent.presentation?.maxComments;
-    const posting = new Set(
-        (max ? eligible.slice(0, max) : eligible).map(({ s }) => s),
-    );
+    const capped = (max ? eligible.slice(0, max) : eligible).map(({ s }) => s);
+    const repeats = new Set(withoutRepeats(capped).repeats);
+    const kept = suggestions.filter((s) => !repeats.has(s));
+    const posting = new Set(capped.filter((s) => !repeats.has(s)));
 
     const finding = (
         s: Partial<CodeSuggestion>,
@@ -435,7 +439,7 @@ export function buildTryTrace(params: {
         })),
         findings: [
             ...kept.map((s) => finding(s, 'kept')),
-            ...repeats.map((s) =>
+            ...[...repeats].map((s) =>
                 finding(s, 'dropped', 'repeats a finding on the same lines'),
             ),
             ...(output.discardedByVerify ?? []).map((s) =>
