@@ -30,6 +30,7 @@ export const resolveCustomAgent = (body: {
 export const tryCustomAgent = (body: {
     teamId: string;
     repositoryId: string;
+    directoryId?: string;
     prUrl: string;
     agent: CustomAgent;
     knowledge?: KnowledgeItem[];

@@ -18,13 +18,16 @@ export type IncomingCliSecret = {
     value?: string;
 };
 
+type CliLike = {
+    name: string;
+    install?: string;
+    binary?: string;
+    allowedDomains?: string[];
+    secrets?: IncomingCliSecret[];
+};
+
 type AgentLike = Pick<CustomAgentConfig, 'id'> & {
-    tools?: {
-        cli?: Array<{
-            name: string;
-            secrets?: IncomingCliSecret[];
-        }>;
-    };
+    tools?: { cli?: CliLike[] };
 };
 
 function isSecretLike(value: unknown): value is IncomingCliSecret {
@@ -92,9 +95,22 @@ export function maskCodeReviewConfigSecrets<T>(configValue: T): T {
 const secretKey = (agentId: string, cliName: string, env: string) =>
     `${agentId}\u0000${cliName}\u0000${env}`;
 
+/**
+ * What a stored secret is bound to: the package installed, the binary run and
+ * the hosts it may reach. A kept secret only goes back to the same ones.
+ */
+const cliDestination = (cli: CliLike) =>
+    JSON.stringify([
+        cli.install ?? '',
+        cli.binary ?? '',
+        [...new Set(cli.allowedDomains ?? [])].sort(),
+    ]);
+
+type StoredSecret = { ciphertext: string; destination: string };
+
 /** Every stored ciphertext, keyed by agent id, CLI name and env name. */
 const indexStoredSecrets = (stored: AgentLike[] | undefined) => {
-    const index = new Map<string, string>();
+    const index = new Map<string, StoredSecret>();
     for (const agent of stored ?? []) {
         for (const cli of agent?.tools?.cli ?? []) {
             for (const secret of cli?.secrets ?? []) {
@@ -102,10 +118,10 @@ const indexStoredSecrets = (stored: AgentLike[] | undefined) => {
                     secret?.ciphertext &&
                     secret.ciphertext !== CLI_SECRET_MASK
                 ) {
-                    index.set(
-                        secretKey(agent.id, cli.name, secret.env),
-                        secret.ciphertext,
-                    );
+                    index.set(secretKey(agent.id, cli.name, secret.env), {
+                        ciphertext: secret.ciphertext,
+                        destination: cliDestination(cli),
+                    });
                 }
             }
         }
@@ -117,9 +133,13 @@ export class CliSecretMissingError extends Error {
     constructor(
         readonly env: string,
         readonly cliName: string,
+        /** The CLI's install, binary or allowed domains changed since it was stored. */
+        readonly cliChanged = false,
     ) {
         super(
-            `Secret ${env} of CLI "${cliName}" has no value at this level: send the value to set it`,
+            cliChanged
+                ? `Secret ${env} of CLI "${cliName}" must be typed again: the CLI's install, binary or allowed domains changed`
+                : `Secret ${env} of CLI "${cliName}" has no value at this level: send the value to set it`,
         );
         this.name = 'CliSecretMissingError';
     }
@@ -132,7 +152,9 @@ export class CliSecretMissingError extends Error {
  * repository or level must not be reachable from another one.
  * - a typed `value` is encrypted;
  * - the mask (or an empty ciphertext) keeps the ciphertext stored for the
- *   same agent, CLI and env name, and fails when there is none;
+ *   same agent, CLI and env name, and fails when there is none or when the
+ *   CLI's install, binary or allowed domains changed: a new destination
+ *   needs the value typed again;
  * - a ciphertext equal to the one stored in that same slot is kept;
  * - any other ciphertext is a plaintext from an API client and is encrypted,
  *   so a client can never plant a ciphertext of its choosing.
@@ -161,15 +183,20 @@ export function sealCustomAgentSecrets<T extends AgentLike>(
                                 ciphertext: encrypt(secret.value),
                             };
                         }
-                        const kept = storedSecrets.get(
+                        const stored = storedSecrets.get(
                             secretKey(agent.id, tool.name, secret?.env),
                         );
+                        const kept =
+                            stored?.destination === cliDestination(tool)
+                                ? stored.ciphertext
+                                : undefined;
                         const sent = secret?.ciphertext;
                         if (!sent || sent === CLI_SECRET_MASK) {
                             if (!kept) {
                                 throw new CliSecretMissingError(
                                     secret?.env,
                                     tool.name,
+                                    !!stored,
                                 );
                             }
                             return { env: secret.env, ciphertext: kept };
@@ -273,6 +300,28 @@ export function storedCustomAgentsAtLevel(
     }
 
     return agentsOf(repository.configs);
+}
+
+/**
+ * The stored agents that can lend a kept secret to a Try it run: those of the
+ * level the caller edits, as a save there would use. At a directory, an agent
+ * the directory does not define is edited at its repository, so that is where
+ * its secret comes from. Never the global config: a global agent tried from a
+ * repository needs its secrets typed again.
+ */
+export function storedCustomAgentsForTry(
+    configValue: CodeReviewConfigValueLike | undefined,
+    level: { repositoryId: string; directoryId?: string },
+): AgentLike[] {
+    const own = storedCustomAgentsAtLevel(configValue, level);
+    if (!level.directoryId) return own;
+    const ownIds = new Set(own.map((agent) => agent?.id));
+    return [
+        ...own,
+        ...storedCustomAgentsAtLevel(configValue, {
+            repositoryId: level.repositoryId,
+        }).filter((agent) => !ownIds.has(agent?.id)),
+    ];
 }
 
 /**

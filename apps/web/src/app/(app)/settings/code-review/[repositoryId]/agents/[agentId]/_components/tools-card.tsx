@@ -414,6 +414,21 @@ const CliEditor = ({
     const issues = cliIssues(cli);
     const set = (patch: Partial<CliToolConfig>) =>
         onChange({ ...cli, ...patch });
+    // A stored secret only goes back to the package, binary and hosts it was
+    // set for: changing one of them asks for every stored value again.
+    const setDestination = (
+        patch: Partial<
+            Pick<CliToolConfig, "install" | "binary" | "allowedDomains">
+        >,
+    ) =>
+        set({
+            ...patch,
+            secrets: cli.secrets?.map((secret) =>
+                secret.ciphertext && secret.value === undefined
+                    ? { env: secret.env, value: "" }
+                    : secret,
+            ),
+        });
 
     return (
         <div className="flex flex-col gap-3">
@@ -438,7 +453,9 @@ const CliEditor = ({
                         value={cli.binary}
                         disabled={!canEdit}
                         placeholder="ledgerctl"
-                        onChange={(e) => set({ binary: e.target.value })}
+                        onChange={(e) =>
+                            setDestination({ binary: e.target.value })
+                        }
                     />
                 </Field>
             </div>
@@ -453,7 +470,9 @@ const CliEditor = ({
                     value={cli.install}
                     disabled={!canEdit}
                     placeholder="npm i -g ledgerctl@1.4.2"
-                    onChange={(e) => set({ install: e.target.value })}
+                    onChange={(e) =>
+                        setDestination({ install: e.target.value })
+                    }
                 />
             </Field>
             <Field
@@ -473,7 +492,9 @@ const CliEditor = ({
                     tags={cli.allowedDomains}
                     disabled={!canEdit}
                     placeholder="api.ledger.example"
-                    onTagsChange={(allowedDomains) => set({ allowedDomains })}
+                    onTagsChange={(allowedDomains) =>
+                        setDestination({ allowedDomains })
+                    }
                 />
             </Field>
             <Field

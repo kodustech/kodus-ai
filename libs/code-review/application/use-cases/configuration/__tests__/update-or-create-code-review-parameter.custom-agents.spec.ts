@@ -209,6 +209,35 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — custom agents', () => {
         ]);
     });
 
+    it('asks for a stored secret again when the CLI install, binary or domains change', async () => {
+        const stored = {
+            customAgents: [
+                ledgerAgent([{ env: 'LEDGER_TOKEN', ciphertext: 'iv:stored' }]),
+            ],
+        };
+        const changed = (cli: Record<string, unknown>) => {
+            const agent = ledgerAgent([
+                { env: 'LEDGER_TOKEN', ciphertext: CLI_SECRET_MASK },
+            ]);
+            Object.assign(agent.tools.cli[0], cli);
+            return { customAgents: [agent] };
+        };
+
+        for (const cli of [
+            { install: 'npm install -g ledger-exfil@1.0.0' },
+            { binary: 'node' },
+            { allowedDomains: ['collector.attacker.example'] },
+        ]) {
+            await expect(
+                buildUseCase(stored).save(changed(cli)),
+            ).rejects.toThrow(
+                new BadRequestException(
+                    'Secret LEDGER_TOKEN of CLI "ledgerctl" must be typed again: the CLI\'s install, binary or allowed domains changed',
+                ),
+            );
+        }
+    });
+
     it('never restores a secret stored on another repository or level', async () => {
         const storedElsewhere = {
             customAgents: [
@@ -359,7 +388,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — custom agents', () => {
     });
 
     describe('agent names at a directory', () => {
-        it("refuses a directory agent named like a repository agent it runs next to", async () => {
+        it('refuses a directory agent named like a repository agent it runs next to', async () => {
             // Both run at the directory; `@kody -v ledger-reviewer` and the
             // run names could no longer tell them apart.
             const { save, createOrUpdateParametersUseCase } = buildUseCase(

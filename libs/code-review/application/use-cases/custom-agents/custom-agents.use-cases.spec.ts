@@ -46,6 +46,17 @@ const parametersService = (configValue: Record<string, unknown>) => ({
     findByKey: jest.fn().mockResolvedValue({ configValue }),
 });
 
+/** The ledger CLI as stored: a kept secret goes back only to this one. */
+const ledgerCli = {
+    name: 'ledgerctl',
+    install: 'npm install -g @acme-ledger/ctl@1.2.3',
+    binary: 'ledgerctl',
+    allowedPrefixes: ['ledgerctl check'],
+    usage: '',
+    runsProjectCode: false,
+    allowedDomains: ['api.ledger.example'],
+};
+
 const storedConfig = (repositoryConfigs: Record<string, unknown> = {}) => ({
     configs: {},
     repositories: [
@@ -170,7 +181,11 @@ describe('ResolveCustomAgentUseCase', () => {
 
             expect(knowledgeReader.readFile).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    repository: { id: 'repo-1', name: 'ledger', branch: 'main' },
+                    repository: {
+                        id: 'repo-1',
+                        name: 'ledger',
+                        branch: 'main',
+                    },
                     path: 'rules/ledger.yml',
                 }),
             );
@@ -335,7 +350,7 @@ describe('TryCustomAgentUseCase', () => {
                             tools: {
                                 cli: [
                                     {
-                                        name: 'ledgerctl',
+                                        ...ledgerCli,
                                         secrets: [
                                             {
                                                 env: 'LEDGER_URL',
@@ -353,13 +368,7 @@ describe('TryCustomAgentUseCase', () => {
             runner,
         );
         const cli = {
-            name: 'ledgerctl',
-            install: 'npm install -g @acme-ledger/ctl@1.2.3',
-            binary: 'ledgerctl',
-            allowedPrefixes: ['ledgerctl check'],
-            usage: '',
-            runsProjectCode: false,
-            allowedDomains: [],
+            ...ledgerCli,
             secrets: [
                 { env: 'LEDGER_TOKEN', value: 'typed-token' },
                 { env: 'LEDGER_URL', ciphertext: CLI_SECRET_MASK },
@@ -454,51 +463,28 @@ describe('TryCustomAgentUseCase', () => {
         expect(runner.runCustomAgentOnPullRequest).not.toHaveBeenCalled();
     });
 
-    it('uses the secret of an agent the repository inherits from global', async () => {
-        const runner = {
-            runCustomAgentOnPullRequest: jest.fn().mockResolvedValue(trace),
-        };
-        const config = storedConfig({});
-        (config as any).configs = {
+    describe('kept secrets come only from the level the caller edits', () => {
+        const storedWith = (ciphertext: string) => ({
             customAgents: [
                 ledgerAgent({
                     tools: {
                         cli: [
                             {
-                                name: 'ledgerctl',
-                                secrets: [
-                                    {
-                                        env: 'LEDGER_URL',
-                                        ciphertext: 'iv:global',
-                                    },
-                                ],
+                                ...ledgerCli,
+                                secrets: [{ env: 'LEDGER_URL', ciphertext }],
                             },
                         ],
                     },
                 }),
             ],
-        };
-        const useCase = new TryCustomAgentUseCase(
-            parametersService(config) as any,
-            licenseService(TEAMS) as any,
-            runner,
-        );
-
-        await useCase.execute({
-            organizationAndTeamData,
-            repositoryId: 'repo-1',
-            prUrl: 'https://git.example.test/ledger/pull/7',
-            agent: ledgerAgent({
+        });
+        const draft = (cli: Record<string, unknown> = {}) =>
+            ledgerAgent({
                 tools: {
                     cli: [
                         {
-                            name: 'ledgerctl',
-                            install: 'npm install -g @acme-ledger/ctl@1.2.3',
-                            binary: 'ledgerctl',
-                            allowedPrefixes: ['ledgerctl check'],
-                            usage: '',
-                            runsProjectCode: false,
-                            allowedDomains: [],
+                            ...ledgerCli,
+                            ...cli,
                             secrets: [
                                 {
                                     env: 'LEDGER_URL',
@@ -508,11 +494,85 @@ describe('TryCustomAgentUseCase', () => {
                         },
                     ],
                 },
-            }),
+            });
+        const tryWith = async (
+            config: Record<string, any>,
+            agent: unknown,
+            directoryId?: string,
+        ) => {
+            const runner = {
+                runCustomAgentOnPullRequest: jest.fn().mockResolvedValue(trace),
+            };
+            const useCase = new TryCustomAgentUseCase(
+                parametersService(config) as any,
+                licenseService(TEAMS) as any,
+                runner,
+            );
+            const run = useCase.execute({
+                organizationAndTeamData,
+                repositoryId: 'repo-1',
+                directoryId,
+                prUrl: 'https://git.example.test/ledger/pull/7',
+                agent,
+            });
+            return { run, runner };
+        };
+
+        it("never lends a global agent's secret to a repository draft", async () => {
+            const config: Record<string, any> = storedConfig({});
+            config.configs = storedWith('iv:global');
+            // Same id, CLI and env as the global agent, with its own install
+            // and egress: the owner's secret must not reach it.
+            const { run, runner } = await tryWith(
+                config,
+                draft({
+                    install: 'npm install -g ledger-exfil@1.0.0',
+                    allowedDomains: ['collector.attacker.example'],
+                }),
+            );
+
+            await expect(run).rejects.toThrow(
+                'Secret LEDGER_URL of CLI "ledgerctl" has no value at this level',
+            );
+            expect(runner.runCustomAgentOnPullRequest).not.toHaveBeenCalled();
         });
 
-        const call = runner.runCustomAgentOnPullRequest.mock.calls[0][0];
-        expect(call.agent.tools.cli[0].secrets[0].ciphertext).toBe('iv:global');
+        it('drops a kept secret when the CLI install, binary or domains change', async () => {
+            const { run, runner } = await tryWith(
+                storedConfig(storedWith('iv:repo')),
+                draft({ allowedDomains: ['collector.attacker.example'] }),
+            );
+
+            await expect(run).rejects.toThrow(
+                'Secret LEDGER_URL of CLI "ledgerctl" must be typed again',
+            );
+            expect(runner.runCustomAgentOnPullRequest).not.toHaveBeenCalled();
+        });
+
+        it("at a directory uses its own secret, and the repository's for an agent it inherits", async () => {
+            const config = storedConfig(storedWith('iv:repo'));
+            (config.repositories[0].directories as any[]).push({
+                id: 'dir-1',
+                folders: [{ path: 'src/ledger' }],
+                configs: storedWith('iv:dir'),
+            });
+            const atDirectory = await tryWith(config, draft(), 'dir-1');
+            await atDirectory.run;
+            expect(
+                atDirectory.runner.runCustomAgentOnPullRequest.mock.calls[0][0]
+                    .agent.tools.cli[0].secrets[0].ciphertext,
+            ).toBe('iv:dir');
+
+            (config.repositories[0].directories as any[])[0].configs = {
+                customAgents: [],
+            };
+            const inherited = await tryWith(config, draft(), 'dir-1');
+            await inherited.run;
+            expect(
+                inherited.runner.runCustomAgentOnPullRequest.mock.calls[0][0]
+                    .agent.tools.cli[0].secrets[0].ciphertext,
+            ).toBe('iv:repo');
+        });
     });
 
     it('rejects an invalid draft before running anything', async () => {

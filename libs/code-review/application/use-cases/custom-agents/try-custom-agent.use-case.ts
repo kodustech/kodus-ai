@@ -10,8 +10,8 @@ import {
 import { encrypt } from '@libs/common/utils/crypto';
 import {
     CliSecretMissingError,
-    effectiveStoredCustomAgents,
     sealCustomAgentSecrets,
+    storedCustomAgentsForTry,
 } from '@libs/code-review/domain/custom-agents/cli-secrets';
 import {
     CUSTOM_AGENT_TRY_RUNNER_TOKEN,
@@ -59,6 +59,8 @@ export class TryCustomAgentUseCase {
     async execute(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryId: string;
+        /** Set when the agent is tried from a directory's settings. */
+        directoryId?: string;
         prUrl: string;
         agent: unknown;
         knowledge?: KnowledgeItem[];
@@ -92,13 +94,15 @@ export class TryCustomAgentUseCase {
             this.parametersService,
             params.organizationAndTeamData,
         );
-        // Only the agents this repository would run can lend a kept secret.
+        // Only the level the caller edits can lend a kept secret, as on a
+        // save: never the global config a repository inherits.
         let sealed: CustomAgentConfig;
         try {
             [sealed] = sealCustomAgentSecrets(
                 [params.agent as CustomAgentConfig],
-                effectiveStoredCustomAgents(configValue, {
+                storedCustomAgentsForTry(configValue, {
                     repositoryId: params.repositoryId,
+                    directoryId: params.directoryId,
                 }),
                 encrypt,
             );

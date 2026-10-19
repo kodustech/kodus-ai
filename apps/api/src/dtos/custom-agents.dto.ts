@@ -47,6 +47,12 @@ export class ResolveCustomAgentDto extends CustomAgentScopeDto {
 
 /** Body of `POST /code-review/custom-agents/try` (#2172). */
 export class TryCustomAgentDto extends CustomAgentScopeDto {
+    /** Set when the agent is tried from a directory's settings. */
+    @IsOptional()
+    @IsString()
+    @ApiPropertyOptional()
+    directoryId?: string;
+
     @Transform(trim)
     @IsString()
     @IsNotEmpty()

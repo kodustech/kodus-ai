@@ -2,7 +2,7 @@
 import "@testing-library/jest-dom";
 
 import { useState } from "react";
-import { newCliTool } from "@services/custom-agents/drafts";
+import { CLI_SECRET_MASK, newCliTool } from "@services/custom-agents/drafts";
 import type { CustomAgent } from "@services/custom-agents/types";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 
@@ -32,8 +32,8 @@ const agent: CustomAgent = {
 };
 
 /** Holds the agent like the page's form does. */
-const Harness = () => {
-    const [current, setCurrent] = useState(agent);
+const Harness = ({ initial = agent }: { initial?: CustomAgent }) => {
+    const [current, setCurrent] = useState(initial);
     return (
         <>
             <ClisField
@@ -41,6 +41,9 @@ const Harness = () => {
                 canEdit
                 onChange={(patch) => setCurrent(patch)}
             />
+            <span data-testid="secrets">
+                {JSON.stringify(current.tools.cli?.[0]?.secrets ?? [])}
+            </span>
             <span data-testid="names">
                 {(current.tools.cli ?? []).map((cli) => cli.name).join(",")}
             </span>
@@ -72,6 +75,66 @@ describe("ClisField", () => {
             target: { value: "semver2" },
         });
         expect(screen.getByTestId("names")).toHaveTextContent("semver2");
+    });
+
+    it.each([
+        ["Install", "npm i -g semver-fork@1.0.0"],
+        ["Binary", "node"],
+    ])("asks for a stored secret again when the %s changes", (label, value) => {
+        const withSecret: CustomAgent = {
+            ...agent,
+            tools: {
+                cli: [
+                    {
+                        ...agent.tools.cli![0],
+                        secrets: [
+                            { env: "NPM_TOKEN", ciphertext: CLI_SECRET_MASK },
+                        ],
+                    },
+                ],
+            },
+        };
+        render(<Harness initial={withSecret} />);
+        fireEvent.click(screen.getByRole("button", { name: "Edit semver" }));
+        const sheet = screen.getByRole("dialog");
+        expect(within(sheet).getByText("Stored · hidden")).toBeInTheDocument();
+
+        fireEvent.change(within(sheet).getByLabelText(label), {
+            target: { value },
+        });
+
+        expect(within(sheet).queryByText("Stored · hidden")).toBeNull();
+        expect(
+            within(sheet).getByPlaceholderText("Value (write-only)"),
+        ).toHaveValue("");
+        expect(screen.getByTestId("secrets")).toHaveTextContent(
+            JSON.stringify([{ env: "NPM_TOKEN", value: "" }]),
+        );
+    });
+
+    it("keeps a stored secret when the name or usage change", () => {
+        const withSecret: CustomAgent = {
+            ...agent,
+            tools: {
+                cli: [
+                    {
+                        ...agent.tools.cli![0],
+                        secrets: [
+                            { env: "NPM_TOKEN", ciphertext: CLI_SECRET_MASK },
+                        ],
+                    },
+                ],
+            },
+        };
+        render(<Harness initial={withSecret} />);
+        fireEvent.click(screen.getByRole("button", { name: "Edit semver" }));
+        fireEvent.change(
+            within(screen.getByRole("dialog")).getByLabelText("Name"),
+            { target: { value: "semver2" } },
+        );
+        expect(
+            within(screen.getByRole("dialog")).getByText("Stored · hidden"),
+        ).toBeInTheDocument();
     });
 
     it("removes a CLI from its row", () => {

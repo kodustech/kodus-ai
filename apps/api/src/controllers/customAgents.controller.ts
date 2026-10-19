@@ -110,6 +110,7 @@ export class CustomAgentsController {
                 teamId: body.teamId,
             },
             repositoryId: body.repositoryId,
+            directoryId: body.directoryId,
             prUrl: body.prUrl,
             agent: body.agent,
             knowledge: body.knowledge,
