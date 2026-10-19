@@ -41,6 +41,10 @@ import {
     buildFindingsFromVerify,
     summarizeFunnel,
 } from '@libs/code-review/infrastructure/agents/core/review-finding';
+import {
+    sanitizeFindingsResult,
+    type FindingsOutput,
+} from '@libs/code-review/infrastructure/agents/core/findings-schema';
 import { createLogger } from '@libs/core/log/logger';
 import {
     type AgentLoopInput,
@@ -386,13 +390,16 @@ export async function runAgentLoopViaCore(
     // it asked for never ran (the runner records that as `tool.skipped`). A run
     // that answered in prose is not incomplete; prose recovery owns it (#2171).
     // The runner makes an artifact of every requested result call, executed or
-    // not, so a turn cut while writing submitResult leaves one holding the raw,
-    // unparseable input: only a parsed object counts as submitted.
+    // not, so a turn cut while writing submitResult leaves one holding raw,
+    // unparseable input, or an object that is no findings result (`{}`): only
+    // what the findings schema accepts counts as submitted.
     const submitted = r.finderState.artifacts.some(
         (a) =>
             a.type === FINDER_DONE_TOOL &&
-            a.payload !== null &&
-            typeof a.payload === 'object',
+            sanitizeFindingsResult(
+                a.payload as FindingsOutput,
+                input.telemetryMetadata,
+            ) !== null,
     );
     const incompleteReason: AgentLoopOutput['incompleteReason'] =
         r.finderState.status === 'budget-exhausted'

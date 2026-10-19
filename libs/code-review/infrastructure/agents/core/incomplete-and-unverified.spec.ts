@@ -176,6 +176,22 @@ describe('#2171 — finder run that ends without a submitted result', () => {
         expect(out.incompleteReason).toBe('truncated');
     });
 
+    // PR #2173 review: `{}` parses as an object but is not a findings result
+    // (sanitizeFindingsResult rejects it), so it is not a submission either.
+    it('reports truncated when the cut submitResult holds no findings result', async () => {
+        useModel(async () =>
+            toolCall(
+                'submitResult',
+                {},
+                { unified: 'length', raw: 'max_tokens' },
+            ),
+        );
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(out.incompleteReason).toBe('truncated');
+    });
+
     it('a complete submitResult on a cut turn is a submitted result', async () => {
         useModel(async (opts) =>
             isVerifierCall(opts)
@@ -224,6 +240,23 @@ describe('#2171 — verify call that fails', () => {
 
         expect(out.findings.suggestions).toEqual([]);
         expect(out.droppedByVerify).toEqual([]);
+        expect(
+            (out.unverifiedByVerify ?? []).map((s: any) => s.relevantFile),
+        ).toEqual(['a.ts', 'b.ts']);
+    });
+
+    // PR #2173 review: a verifier that runs out of steps without a verdict
+    // judged nothing either; its candidates must not be published as kept.
+    it('does not keep candidates whose verifier ran out of steps without a verdict', async () => {
+        useModel(async (opts) =>
+            isVerifierCall(opts)
+                ? toolCall('readFile', { path: 'a.ts' }, SAFE)
+                : toolCall('submitResult', findings, SAFE),
+        );
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(out.findings.suggestions).toEqual([]);
         expect(
             (out.unverifiedByVerify ?? []).map((s: any) => s.relevantFile),
         ).toEqual(['a.ts', 'b.ts']);
@@ -283,5 +316,29 @@ describe('#2171 — extractVerdict on a failed verify run', () => {
         // what an unverified candidate means — see runFinderWithVerify.
         expect(v.keep).toBe(true);
         expect(v.rationale).toContain('429 Too Many Requests');
+    });
+
+    const ended = (status: RunState['status']): RunState => ({
+        ...errored('unused'),
+        status,
+        stopReason: status,
+        trace: [],
+    });
+
+    it.each(['budget-exhausted', 'stopped'] as const)(
+        'is a verify-error when the run %s without a verdict',
+        (status) => {
+            const v = extractVerdict(ended(status));
+
+            expect(v.parseMode).toBe('verify-error');
+            expect(v.keep).toBe(true);
+            expect(v.rationale).toContain(status);
+        },
+    );
+
+    it('stays a default keep when the run completed without a verdict', () => {
+        expect(extractVerdict(ended('completed')).parseMode).toBe(
+            'default-keep',
+        );
     });
 });
