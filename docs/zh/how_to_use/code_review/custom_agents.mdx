@@ -1,0 +1,234 @@
+---
+title: "自定义智能体"
+description: "由您的团队定义的审查者，每个都有自己的指令、文件、知识和工具。它们在与其文件匹配的拉取请求上与 Kody 并行运行。"
+tag: 'beta'
+---
+
+<Callout icon="alien" iconType="regular">自定义智能体目前处于 beta 阶段。行为和界面仍可能变化。</Callout>
+
+## 概述
+
+自定义智能体是您的团队为某一个关注点编写的审查者：架构边界、重复代码、安全策略、端到端测试覆盖。每个智能体包含：
+
+- **Instructions**：要查找什么、要忽略什么，以及一条发现需要什么证据
+- **Files**：它审查的 glob。只有当拉取请求修改了其中某个文件时它才会运行
+- **Skills & docs**：它遵循的代码库中的指南
+- **Tools**：只读插件、团队的 CLI 和 ast-grep 规则
+- **Comments & model**：标签、格式、最低严重程度、评论上限、写作风格和模型
+
+智能体与 Kody 自己的审查并行运行。每个智能体只报告自己关注的内容，它的评论带有一个写着其名称的标签，团队可以知道是谁在说话。
+
+<CardGroup cols={2}>
+  <Card title="Skills、docs 和工具" icon="toolbox" href="/zh/how_to_use/code_review/custom_agents_knowledge_and_tools">
+    关联代码库指南、插件、团队 CLI 和 ast-grep 规则。
+  </Card>
+  <Card title="最佳实践" icon="list-check" href="/zh/how_to_use/code_review/custom_agents_best_practices">
+    编写能发现真实问题、其余时候保持安静的智能体。
+  </Card>
+</CardGroup>
+
+## 在哪里找到
+
+打开 **Code review → What to review**。**Custom agents** 部分位于审查类别下方，带有 **New agent** 按钮和指向 **Skills & docs** 的链接。
+
+每一行显示智能体的开关、标签颜色、指令的第一行、表示其文件、skills、docs 和工具的标签，以及它最近做了什么（例如 `9 PRs · 15 posted · 30 days`）。点击一行打开智能体页面。**⋯** 菜单包含 **Edit**、**Try it** 和 **Delete**。
+
+<Note>
+  自定义智能体只能在应用中配置。`kodus-config.yml` 中的 `customAgents` 和 `knowledge` 键会被忽略，审查会在结束评论中说明这一点。参见 [FAQ](#faq)。
+</Note>
+
+## 级别
+
+智能体与其他设置一样，跟随 **Code review** 分组顶部的范围选择器。
+
+| 级别 | 作用 |
+| --- | --- |
+| **全局** | 适用于所有没有自己列表的代码库。 |
+| **代码库** | 列表一开始与全局相同。在此保存的第一次更改会让该代码库拥有自己的列表，并**替换**全局列表。此后，对全局智能体的更改不会再影响它，界面会提示："This repository has its own agents list. Changes to the global agents don't reach it." |
+| **目录** | 将自己的智能体**添加**到代码库的智能体中。代码库的智能体显示为 **From repository**（或 **From repository, off**），在此处只读。 |
+
+在目录中，继承的智能体以只读方式打开，并提供 **Override at this directory**。覆盖会以相同的 id 将智能体复制到该目录，副本在该目录中替换代码库的智能体：可以修改它的指令，或将其关闭。删除覆盖后，代码库的智能体会重新生效。
+
+<Note>
+  当审查使用某个目录的设置时，该目录的智能体才会运行。拉取请求如何选择设置，请参阅[目录级设置](/zh/how_to_use/code_review/configs/directory_level)。
+</Note>
+
+## 创建智能体
+
+<Steps>
+  <Step title="点击 New agent">
+    在 **What to review → Custom agents** 中，点击 **New agent**。
+  </Step>
+  <Step title="选择起点">
+    **Templates** 从已写好的指令开始：
+
+    | 模板 | 关注点 |
+    | --- | --- |
+    | **Architecture** | 层边界、依赖方向，以及新代码应该放在哪里。 |
+    | **E2E coverage** | 面向用户的变更在发布时没有覆盖该流程的端到端测试。 |
+    | **Regression & hallucination** | 悄然改变的行为，以及对不存在的 API 的调用。 |
+    | **Security reviewer** | 注入、鉴权和租户检查、密钥以及不安全的输入处理。 |
+    | **Blank** | 从零开始，编写自己的指令。 |
+
+    **Import from repository** 列出在代码库默认分支上找到的 skills，并把其中一个变成在每次审查中加载它的审查者。全局级别不可用，因为 skills 存在于各个代码库中。
+  </Step>
+  <Step title="在智能体页面中完善">
+    智能体会立即保存并打开其页面。设置它的文件、关联 skills 和 docs、添加工具。
+  </Step>
+  <Step title="先 Try it，再开启">
+    新智能体默认**关闭**。使用 [Try it](#try-it) 在真实的拉取请求上运行它。评论看起来合适后，再将其开启。
+  </Step>
+</Steps>
+
+<Tip>
+  智能体的名称也是它的命令名："Data Contracts" 对应 `@kody -v data-contracts`。名称生成相同命令名的两个智能体不能在同一级别保存。
+</Tip>
+
+## 智能体页面
+
+页面包含一行状态（开/关、它运行的文件，以及过去 30 天发布了多少评论）、四张卡片和 **Try it** 面板。页面上的更改通过 **Save** 保存。
+
+### Instructions
+
+| 字段 | 说明 |
+| --- | --- |
+| **Name** | 显示在智能体的标签上。避免与 Kody 的类别重名（Bug、Performance、Security、Business Logic）；页面会建议一个不同的名称。 |
+| **Instructions** | 最多 8,000 个字符。写给一位熟悉代码库的审查者的简报：要查找什么、要忽略什么、一条发现需要什么证据。 |
+
+### Files & knowledge
+
+| 字段 | 说明 |
+| --- | --- |
+| **Files** | 智能体审查的 glob，例如 `src/payments/**`。留空则在每个拉取请求上运行。 |
+| **Except** | 它跳过的 glob，例如 `**/*.test.ts`、`**/generated/**`。 |
+| **Skills & docs** | 该智能体遵循的指南，从拉取请求的目标分支读取。参见 [Skills、docs 和工具](/zh/how_to_use/code_review/custom_agents_knowledge_and_tools)。 |
+
+在所有级别（包括目录级别），glob 都与从代码库根目录开始的路径进行匹配。
+
+**被忽略的文件。** 代码库的忽略路径（在 **General** 中）仍然有效，但有一个例外：**点名**某个文件的 glob 即使该文件被代码库忽略也能覆盖到它。当 glob 的某个路径段是字面量时，它就点名了文件：
+
+| Glob | 能覆盖被忽略的文件吗？ |
+| --- | --- |
+| `package.json`、`apps/web/package.json`、`**/Dockerfile`、`infra/**/*.tf`、`src/**` | 能 |
+| `**`、`**/*`、`**/*.ts`、`*.{ts,tsx}` | 不能 |
+
+如果一个拉取请求修改的文件全部被忽略，点名其中某个文件的智能体仍会审查它，而且只有它会审查：Kody 自己的审查没有可看的内容。
+
+### Tools
+
+智能体除了阅读代码之外还能运行的东西，对您的系统全部只读：**Plugins**（MCP）、**CLIs**（最多 3 个），以及 **Advanced** 下的 **Structural search (ast-grep rules)**。参见 [Skills、docs 和工具](/zh/how_to_use/code_review/custom_agents_knowledge_and_tools)。
+
+### Comments & model
+
+| 字段 | 选项 |
+| --- | --- |
+| **Tag** | 智能体评论上标签的颜色。 |
+| **Format** | **Inline comments**，或 **One PR comment**：将智能体的所有发现放在一条评论中，最严重的在前。 |
+| **Minimum severity** | **Team minimum** 跟随 What to review 中的 **Minimum severity to post**。**Low (everything)**、**Medium**、**High** 或 **Critical** 为智能体设置自己的下限。 |
+| **Max comments per pull request** | 发布最严重的几条。留空表示不限制。 |
+| **Suggested fix** | **When confident**：智能体对修改有把握时，评论会给出代码。**Never**：只描述问题。 |
+| **How it writes** | 最多 2,000 个字符，说明语气、长度以及每条评论必须包含的内容。留空则使用团队的写作设置。评论始终使用 **General** 中设置的语言。 |
+| **Model** | **Routing default** 跟随 AI 提供商的路由设置。您也可以选择一个 BYOK 模型。没有 BYOK 模型时，智能体使用 Kodus 的模型。 |
+
+## Try it
+
+**Try it** 按屏幕上的当前状态（无论是否已保存）在代码库的一个拉取请求上运行智能体。不会发布任何内容。
+
+<Steps>
+  <Step title="粘贴拉取请求链接">
+    在智能体页面中，粘贴该代码库某个拉取请求的链接，然后点击 **Run agent**。对于大型变更需要几分钟。
+  </Step>
+  <Step title="阅读结果">
+    标题统计发现数量、保留数量以及将要发布的数量。下方包括：
+
+    - **Warnings**：本次运行缺失的内容，例如没有检出代码（智能体只读取了 diff）、某个 CLI 无法安装，或某个 skill 或 doc 无法使用
+    - **Skills opened**，以及智能体读取的参考文件
+    - **Tool calls**，每个都附带输入和输出，包括 CLI 输出
+    - **Findings**：每条都标记为 **kept**、**dropped** 或 **unverified**，附带原因、引用的规则，以及将要发布的 **Comment**
+  </Step>
+  <Step title="修改后再次运行">
+    修改指令、glob 或工具后再次运行。如果在运行后进行了编辑，页面会提示该结果来自较早的版本。
+  </Step>
+</Steps>
+
+Try it 可在代码库和目录级别使用，并且需要编辑代码审查设置的权限。如果没有变更文件与智能体的 glob 匹配，运行会被跳过并说明原因。
+
+## 在拉取请求上运行单个智能体
+
+在拉取请求中评论，第一行写上智能体的命令名：
+
+```
+@kody -v data-contracts
+```
+
+Kody 只运行这个智能体，审查整个拉取请求，即使该智能体处于关闭状态，并发布它的评论。Kody 自己的审查者不会运行，此命令也永远不会批准拉取请求。如果没有智能体对应该名称，Kody 会回复可用的名称。
+
+## 智能体在审查中如何运行
+
+<Steps>
+  <Step title="选择智能体">
+    所有已开启、且其 glob 至少匹配一个变更文件的智能体都会运行。没有匹配文件的智能体会被列为未运行。
+  </Step>
+  <Step title="审查">
+    每个智能体只审查自己的文件，与 Kody 的审查并行，并且只报告其指令要求的内容。它从目标分支读取 skills 和 docs，并使用自己的工具。
+  </Step>
+  <Step title="检查每条发现">
+    约定类发现必须引用它所应用的规则，来源可以是关联的指南或智能体的指令。如果引文不在目标分支上的指南中，该发现会被丢弃。用 "..." 缩短的引文，只要每一部分都按顺序存在即可通过。随后，验证器会丢弃超出智能体关注范围或在代码中缺乏依据的发现。ast-grep 匹配本身即可作为证据。
+  </Step>
+  <Step title="应用智能体的设置">
+    先应用智能体的最低严重程度，再应用其评论上限（保留最严重的）。
+  </Step>
+  <Step title="与主审查合并">
+    当智能体和 Kody 报告同一个问题时，只保留一条评论。对于智能体关注范围内的团队规则，保留智能体的评论；其他情况保留 Kody 的评论。
+  </Step>
+  <Step title="发布">
+    评论带有智能体的标签。约定类评论会引用所应用的规则（指南及其原文，或 "agent's instructions"）。由 CLI 支持的发现会在 **Evidence** 下显示 CLI 输出中提到该文件的行。
+  </Step>
+</Steps>
+
+审查的结束评论包含一个可折叠的 **Custom agents** 部分：一个表格列出每个运行过的智能体、其状态、**Posted** 和 **Dropped by checks**（当有发现因严重程度被拦下时还会有 **Below minimum severity**），并用一行列出未运行的智能体及原因。
+
+## 限制
+
+| 限制 | 值 |
+| --- | --- |
+| Instructions | 8,000 个字符 |
+| How it writes | 2,000 个字符 |
+| 每个智能体的 CLI | 3 |
+| 每个智能体（以及主审查）的 skills | 20 |
+| 每个智能体（以及主审查）的 docs | 10 |
+| 每个智能体（以及主审查）的 doc token | 20,000 |
+| ast-grep 规则 | 64,000 字节 |
+
+## FAQ
+
+<AccordionGroup>
+  <Accordion title="为什么我的智能体没有运行？">
+    按顺序检查：
+
+    - 它处于**关闭**状态。新智能体默认关闭。`@kody -v <name>` 仍然可以运行它。
+    - 没有变更文件与它的 **Files** glob 匹配，或所有匹配都落在 **Except** 中。结束评论会将其列为 "Not run: … (no matching files)"。
+    - 它的文件在代码库的忽略路径中，而它的 glob 没有点名这些文件。结束评论会显示 "its files are in the ignored paths"。请显式点名这些文件（参见 [Files & knowledge](#files--knowledge)）。
+    - 它的文件在拉取请求中被删除了。
+    - 在拥有自己列表的代码库中，之后在全局级别添加的智能体不会影响它。
+    - 在目录中，审查使用的是代码库的设置（例如，拉取请求涉及两个已配置的目录）。
+  </Accordion>
+  <Accordion title="为什么某条发现被丢弃了？">
+    使用 **Try it** 在同一个拉取请求上运行智能体：每条被丢弃的发现都会显示原因。常见原因：
+
+    - 引文不在目标分支上的指南中（被改写了，或者指南只在该拉取请求中修改过）。
+    - 该发现超出了智能体指令要求的范围。
+    - 验证器在代码中找不到依据。
+    - 低于智能体的最低严重程度，或超出了评论上限。
+    - Kody 的审查报告了同一个问题，并保留了它自己的评论。
+  </Accordion>
+  <Accordion title="可以在 kodus-config.yml 中配置智能体吗？">
+    不可以。`kodus-config.yml` 中的 `customAgents` 和 `knowledge` 不会被读取。结束评论会提示："kodus-config.yml: customAgents is not read from this file; configure custom agents in the app."
+  </Accordion>
+  <Accordion title="拉取请求能修改用来评判它的规则吗？">
+    不能。Skills、docs 和 ast-grep 规则文件从拉取请求的目标分支读取。在拉取请求中对它们的修改会在合并后生效。
+  </Accordion>
+  <Accordion title="删除智能体后，过去的评论会怎样？">
+    它的发现会保留在过去的拉取请求上。Skills 和 docs 仍然登记在 Skills & docs 页面中。
+  </Accordion>
+</AccordionGroup>

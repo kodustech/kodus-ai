@@ -1,0 +1,165 @@
+---
+title: "Skills, Docs and Tools"
+description: "Give a custom agent your repository's guides, read-only plugins, your team's CLIs and ast-grep rules."
+tag: 'beta'
+---
+
+<Callout icon="alien" iconType="regular">Custom agents are in beta. Behavior and screens may still change.</Callout>
+
+## Skills & docs
+
+Skills and docs are guides that already live in your repository. Kodus doesn't copy them: it reads them from the **pull request's target branch** on every review, so edits on that branch apply without coming back to the settings, and a pull request can't change the rule that judges it.
+
+| | Skill | Doc |
+| --- | --- | --- |
+| What it is | A folder with a `SKILL.md` (or a single `.md` agent file) | A Markdown guide |
+| How the agent reads it | Opens it on demand, when the change needs it, plus its reference files | Loads it whole, every review |
+| Best for | Many rules, or rules for a part of the code | A short guide that applies to every change the agent reviews |
+
+Scripts inside a skill are shown to the agent as text and never run.
+
+### Where Kodus finds them
+
+**Skills** are detected at:
+
+- `.claude/skills/*/SKILL.md`
+- `.claude/agents/*.md`
+- `.agents/skills/*/SKILL.md`
+- `.github/skills/*/SKILL.md`
+
+A `SKILL.md` starts with YAML frontmatter holding `name` (lowercase letters, digits and hyphens, matching its folder) and `description`. A skill without them is listed as "Not a valid skill" with the reason. The agent reads `SKILL.md` (up to 500 lines, about 5,000 tokens) and the files next to it, one folder deep, such as `references/payments.md`.
+
+```markdown .claude/skills/ledger-rules/SKILL.md
+---
+name: ledger-rules
+description: How the ledger service records, reverses and reconciles entries.
+---
+
+# Ledger rules
+
+- Every write to `entries` goes through `LedgerWriter`; never insert directly.
+- A reversal is a new entry, never an UPDATE of the original.
+
+See references/reconciliation.md for the nightly job.
+```
+
+**Docs** are suggested from `CONTRIBUTING.md`, `ARCHITECTURE.md`, `CONVENTIONS.md`, `STYLEGUIDE.md` and `docs/**/*.md` (up to 30). You can also add any path by hand: a file with an extension is a doc, a folder (or a `SKILL.md` inside one) is a skill.
+
+### Link them
+
+There are two places to link a skill or doc:
+
+- **On the agent's page**, in **Files & knowledge → Skills & docs**: **Add skill or doc** lists what the agent can follow, or use **Add by path**.
+- **On the Skills & docs page** (the link next to **Custom agents** in What to review): every registered skill and doc with a checkbox for **Main review** and for each agent. Linking to **Main review** gives the guide to Kody's own review.
+
+At the global level, the Skills & docs page only accepts paths typed by hand. Each repository is read separately, so open a repository's settings to see whether each path exists there.
+
+<Warning>
+  A file marked **Also a Kody Rules source** already feeds Kody Rules. Linking it to an agent too can make the same rule comment twice.
+</Warning>
+
+### Budgets
+
+Per agent, and for the main review:
+
+| Limit | Value |
+| --- | --- |
+| Skills | 20 |
+| Docs | 10 |
+| Doc tokens | 20,000 |
+
+The Skills & docs page warns when an agent or the main review is over a limit. In a review, docs past the budget are cut or skipped, and the review records a warning.
+
+### How findings use them
+
+A convention finding must **quote** the rule it applies. Kodus checks the quote against the guide as it is on the target branch and drops the finding when the quote isn't there. The posted comment cites the rule:
+
+```markdown
+**Rule** (`docs/ledger.md`):
+> A reversal is a new entry, never an UPDATE of the original.
+```
+
+## Plugins (MCP)
+
+Agents can look things up in the plugins installed in your workspace: a tracker, a wiki, monitoring. Under **Tools → Plugins**, turn a plugin on for the agent and keep **Use every tool**, or **Customize** the list.
+
+Only read tools are offered; write tools never are. A plugin that marks its tools read-only is taken at its word. For one that doesn't, a tool qualifies only when its name carries a read verb (get, list, search, read, find…) and no write verb. A review never creates a ticket or posts a message for your team.
+
+The agent consults a plugin when the change points to something recorded there, such as a ticket in the pull request description, and cites what it found. See [Plugins](/en/how_to_use/code_review/plugins) to install one.
+
+## Team CLIs
+
+An agent can run up to **3** of your team's command-line tools: a duplicate-code detector, a schema checker, an internal linter. CLIs run only in the isolated E2B sandbox, inside the repository checkout. On any other sandbox the CLI is not installed and the agent runs without it.
+
+Under **Tools → CLIs**, click **Add CLI**:
+
+| Field | Notes |
+| --- | --- |
+| **Name** | How the agent and the comments refer to it. |
+| **Binary** | What the agent calls, e.g. `jscpd`. |
+| **Install** | One package-manager command, pinned to an exact version or digest. Runs once in the sandbox before the review. |
+| **Allowed command prefixes** | Every call must start with one of these. A prefix names a subcommand or flag after the binary, e.g. `ledgerctl check`. A token ending in `/` covers any path below it. |
+| **Allowed domains** | Hosts the CLI may reach. Everything else is blocked. |
+| **Usage** | Markdown the agent reads to learn when and how to call it. |
+| **Runs project code** | On for tests, builds or linters that load the repository. Such a CLI never receives secrets. |
+| **Secrets** | Environment variables (e.g. `LEDGER_TOKEN`) set only in this CLI's environment, masked in its output, never in the prompt. Write-only: once saved they show as **Stored · hidden**. |
+
+**Install rules.** Supported installers: `npm`, `pnpm`, `yarn`, `pip`, `pip3`, `pipx`, `uv`, `go`, `cargo`. Every package must be pinned (`tool@1.2.3`, `tool==1.2.3` or `tool@sha256:…`). Tags such as `@latest`, version ranges, URLs, Git sources, local paths and shell syntax are refused.
+
+<CodeGroup>
+```bash npm
+npm i -g jscpd@4.0.5
+```
+
+```bash pip
+pip install sqlfluff==3.2.5
+```
+
+```bash go
+go install github.com/acme/ledgerctl@v1.4.2
+```
+</CodeGroup>
+
+**How calls run.** The agent passes arguments, never a shell command: pipes, redirects, globs and variables are passed literally. A call that doesn't start with an allowed prefix is refused. Each CLI runs as its own user, with a timeout, and its output is capped.
+
+When a finding comes from a CLI, the comment shows the CLI output lines that name the file:
+
+```markdown
+**Evidence** (`jscpd`):
+> - src/billing/invoice.ts [12:1 - 41:2] (29 lines, 212 tokens)
+> src/billing/credit-note.ts [8:1 - 37:2]
+```
+
+<Note>
+  If the install fails, the agent runs without that CLI and the run records the warning. **Try it** shows it under **Warnings**.
+</Note>
+
+## ast-grep rules
+
+Under **Tools → Advanced → Structural search (ast-grep rules)**, give the agent [ast-grep](https://ast-grep.github.io) rules, either:
+
+- **Inline**: the rule YAML itself. Separate several rules with `---`. Each needs an `id` and a `rule`.
+- **A rule file**: a single line with the path of a `.yml` or `.yaml` file in the repository, read from the pull request's target branch.
+
+```yaml
+id: no-float-money
+language: typescript
+message: Parse amounts with Money.parse, never parseFloat
+rule:
+  pattern: parseFloat($A)
+```
+
+The rules run over the pull request's changed files. A rule match is proof: a finding that cites a rule the run matched on that file skips the quote check and the model verification. Rules are limited to 64,000 bytes. The field's hint lists the rules it found, and reports a rule without `id` or `rule`.
+
+The agent also has ad-hoc structural search over the repository, without any rule configured.
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Custom Agents" icon="robot" href="/en/how_to_use/code_review/custom_agents">
+    Levels, the agent page, Try it and how agents run in a review.
+  </Card>
+  <Card title="Duplicate code with jscpd" icon="clone" href="/en/cookbook/custom-agent-duplicate-code">
+    A complete agent with a team CLI.
+  </Card>
+</CardGroup>

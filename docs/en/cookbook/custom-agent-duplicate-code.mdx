@@ -1,0 +1,111 @@
+---
+title: "Duplicate code agent with jscpd"
+description: "A custom agent that runs jscpd in the sandbox and flags code a pull request copies instead of reusing."
+icon: "clone"
+---
+
+## Why a CLI
+
+A model reading a diff can't know that the 30 lines it just read already exist three folders away. [jscpd](https://github.com/kucherenko/jscpd) can: it scans the checkout and reports every clone with both locations. This agent runs it, keeps the clones the pull request introduced, and posts each one with jscpd's own output as evidence.
+
+The example is a TypeScript billing service. Adjust paths and thresholds to your repository.
+
+## Step 1 — Create the agent
+
+In **Code review → What to review → Custom agents**, click **New agent → Templates → Blank**. On its page, fill in **Instructions**:
+
+```text Name
+Duplicate code
+```
+
+```text Instructions
+Find code this pull request adds or changes that duplicates code already in the repository.
+
+Run jscpd on the directories the pull request changes, then read both copies of each clone it reports.
+
+Report a clone only when:
+- one of its copies is in a file this pull request changes, and
+- both copies do the same thing (same logic, not just similar boilerplate), and
+- the duplicated block is at least 10 lines.
+
+Ignore tests, fixtures, migrations, generated code, imports and type declarations.
+
+For each finding, name both locations and say what to extract or reuse: an existing function when one copy already is one, or a new shared helper otherwise.
+```
+
+## Step 2 — Set the files
+
+Under **Files & knowledge**:
+
+| Field | Value |
+| --- | --- |
+| **Files** | `src/**` |
+| **Except** | `**/*.test.ts`, `**/*.spec.ts`, `**/__fixtures__/**`, `**/generated/**`, `src/db/migrations/**` |
+
+## Step 3 — Add the CLI
+
+Under **Tools → CLIs**, click **Add CLI**:
+
+| Field | Value |
+| --- | --- |
+| **Name** | `jscpd` |
+| **Binary** | `jscpd` |
+| **Install** | `npm i -g jscpd@4.0.5` |
+| **Allowed command prefixes** | `jscpd --reporters console` |
+| **Allowed domains** | *(empty: jscpd needs no network)* |
+| **Runs project code** | Off: jscpd reads files, it doesn't execute them |
+| **Secrets** | *(none)* |
+
+**Usage**:
+
+```markdown
+jscpd finds copy-pasted code across the repository.
+
+Call it with the console reporter, the thresholds, and the directories the pull request changes:
+
+--reporters console --min-lines 10 --min-tokens 70 --ignore **/*.test.ts,**/generated/** src/billing src/invoices
+
+There is no shell: do not quote arguments. Each clone prints both copies as `path [startLine:col - endLine:col]`.
+Read both copies before reporting a clone.
+```
+
+## Step 4 — Comments
+
+Under **Comments & model**:
+
+| Field | Value | Why |
+| --- | --- | --- |
+| **Format** | Inline comments | Each clone lands on the copied lines. |
+| **Minimum severity** | Team minimum | |
+| **Max comments per pull request** | `5` | A large copy-paste can produce many clones; the most severe are kept. |
+| **Suggested fix** | Never | The fix is a refactor across files, not a line change. |
+| **How it writes** | `Two sentences: where the other copy is, and what to reuse or extract.` | |
+
+Click **Save**.
+
+## Step 5 — Try it
+
+Paste the link of a pull request that copies a function, and click **Run agent**. Check:
+
+- **Tool calls** shows the `jscpd` call and its output.
+- Each kept finding's **Comment** ends with an **Evidence** block quoting the jscpd lines that name the file:
+
+```markdown
+**Evidence** (`jscpd`):
+> - src/billing/invoice.ts [12:1 - 41:2] (29 lines, 212 tokens)
+> src/billing/credit-note.ts [8:1 - 37:2]
+```
+
+If **Warnings** says the CLI could not be installed, check the install command. CLIs need the E2B sandbox; without it the agent runs without jscpd.
+
+Turn the agent on when the findings are the ones you want.
+
+## Checklist
+
+- [ ] Install pinned to an exact version
+- [ ] Allowed prefix starts with a flag, not just the binary
+- [ ] Tests and generated code in **Except** and in the jscpd `--ignore`
+- [ ] **Max comments per pull request** set
+- [ ] Tried on a pull request with a known copy
+
+For every field, see [Skills, docs and tools](/en/how_to_use/code_review/custom_agents_knowledge_and_tools#team-clis).

@@ -1,0 +1,92 @@
+---
+title: "Boas Práticas"
+description: "Escreva agentes personalizados que acham problemas reais nos seus pull requests e ficam quietos no resto."
+tag: 'beta'
+---
+
+<Callout icon="alien" iconType="regular">Os agentes personalizados estão em beta. O comportamento e as telas ainda podem mudar.</Callout>
+
+## Um agente por assunto
+
+Um agente que confere arquitetura, segurança e cobertura de testes ao mesmo tempo tem instruções vagas e gera apontamentos vagos. Separe: um agente por assunto, cada um com seus arquivos, guias e tag. A tag mostra ao time quem está falando, e a tabela **Custom agents** do comentário final mostra qual deles está fazendo barulho.
+
+## Escreva instruções focadas
+
+Escreva as instruções como um briefing para um revisor que conhece o código. Cubra três coisas:
+
+1. **O que procurar**, de forma concreta: "imports de `src/domain` dentro de `src/http`", e não "problemas de arquitetura".
+2. **O que ignorar**: estilo, nomes, o que outro agente ou a Kody já cobre.
+3. **Que prova um apontamento precisa**: "cite o arquivo que mostra o padrão existente", "mostre o caminho da origem até o uso", "cite a regra de `docs/ledger.md`".
+
+O agente reporta só o que as instruções pedem, e o verificador descarta o que estiver fora desse foco. Um apontamento que as instruções não pedem é um apontamento que você não vai ver.
+
+<Tabs>
+  <Tab title="Vago">
+    ```text
+    Review the code for quality and best practices.
+    ```
+  </Tab>
+  <Tab title="Focado">
+    ```text
+    Flag code in src/http/** that imports from src/infra/** directly.
+    Handlers reach infrastructure only through the ports in src/domain/ports.
+    Ignore tests, generated code and naming.
+    For each finding, name the port the handler should use, or say that
+    none exists yet.
+    ```
+  </Tab>
+</Tabs>
+
+## Diga que prova um apontamento precisa
+
+Os apontamentos são conferidos antes de serem postados. Dê ao agente algo que ele consiga provar:
+
+- **Uma regra num guia**: vincule o doc ou a skill e peça para o agente citar a regra. A citação é conferida no guia na branch de destino.
+- **Um resultado de CLI**: as linhas da saída que citam o arquivo entram no comentário como evidência.
+- **Uma regra do ast-grep**: um match vale como prova sozinho, sem checagem pelo modelo.
+
+Uma regra que só existe na cabeça de alguém não pode ser citada. Escreva-a nas instruções ou num doc.
+
+## Deixe os globs explícitos
+
+- Preencha **Files** com o código que importa para o agente: `src/payments/**`, e não vazio. Um agente sem globs roda em todo pull request.
+- Use **Except** para testes, fixtures e código gerado.
+- Nomeie os arquivos explicitamente quando eles estão nos caminhos ignorados e o agente ainda precisa lê-los: `package.json`, `infra/**/*.tf`. Um glob amplo como `**/*.ts` não chega em arquivos ignorados.
+- Num diretório, os globs continuam começando na raiz do repositório.
+
+## Skill ou doc?
+
+| Use um **doc** quando | Use uma **skill** quando |
+| --- | --- |
+| O guia é curto e vale para toda mudança que o agente revisa. | Há muitas regras, ou regras que só valem para algumas mudanças. |
+| Você quer que ele seja lido inteiro, sempre. | Você quer que o agente abra só quando a mudança pede, com os arquivos de referência. |
+
+Os docs contam num orçamento de 20.000 tokens por agente. Um manual longo funciona melhor como skill com arquivos de referência.
+
+## Teste num pull request real antes de ligar
+
+Todo agente novo começa desligado. Antes de ligar:
+
+1. Escolha um pull request recente que toque os arquivos do agente, de preferência um em que você sabe o que um bom revisor diria.
+2. Rode o **Try it**. Leia as chamadas de ferramenta, as skills que ele abriu e cada apontamento.
+3. Ajuste as instruções, os globs ou a severidade mínima e rode de novo.
+4. Ligue o agente quando os comentários que seriam postados forem os que você quer ver num pull request.
+
+`@kody -v <nome>` faz o mesmo num pull request de verdade, postando os comentários, com o agente ainda desligado.
+
+## Leia os motivos de descarte
+
+Os apontamentos descartados mostram o que ajustar no agente:
+
+| Motivo | O que mudar |
+| --- | --- |
+| Citação não encontrada | O guia na branch de destino não tem aquele texto. Vincule o guia certo, ou coloque a regra nas instruções. |
+| Fora do foco do agente | As instruções não pedem isso. Inclua, ou deixe para a Kody. |
+| Sem respaldo no código | O agente chutou. Peça prova concreta nas instruções. |
+| Abaixo da severidade mínima, ou acima do limite de comentários | Filtro esperado. Baixe o piso se quiser ver mais. |
+
+## Controle o volume
+
+- Defina **Max comments per pull request** em agentes que podem gerar muitos apontamentos, como um agente de código duplicado. Ficam os mais graves.
+- Use **One PR comment** para agentes cujos apontamentos ficam melhores juntos, como um relatório de cobertura.
+- Use **Suggested fix: Never** quando a correção seria um palpite, como mover algo de camada.
