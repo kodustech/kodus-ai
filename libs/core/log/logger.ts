@@ -1261,6 +1261,24 @@ interface SerializeFailureContext {
 
 type SerializeFailureReporter = (ctx: SerializeFailureContext) => void;
 
+function readErrorProperty(
+    source: Record<string, unknown>,
+    key: string,
+): unknown {
+    try {
+        return source[key];
+    } catch {
+        // One unreadable diagnostic must not discard the rest of the log line.
+        return undefined;
+    }
+}
+
+function sanitizeErrorUrl(value: string): string {
+    // Provider endpoints may carry credentials under arbitrary parameter names.
+    // Keep the endpoint, never its query or fragment, on every error-log path.
+    return sanitizeString(value.split(/[?#]/, 1)[0]);
+}
+
 /**
  * Best-effort pull of an org id off the failing value, so the drop warning is
  * attributable. Mirrors the in-repo `target` shape
@@ -1272,17 +1290,18 @@ function organizationIdOf(value: unknown): string | undefined {
         return undefined;
     }
     const record = value as Record<string, unknown>;
-    const nested = record.organizationAndTeamData;
-    if (
-        nested &&
-        typeof nested === 'object' &&
-        typeof (nested as Record<string, unknown>).organizationId === 'string'
-    ) {
-        return (nested as Record<string, unknown>).organizationId as string;
+    const nested = readErrorProperty(record, 'organizationAndTeamData');
+    if (nested && typeof nested === 'object') {
+        const nestedId = readErrorProperty(
+            nested as Record<string, unknown>,
+            'organizationId',
+        );
+        if (typeof nestedId === 'string') {
+            return nestedId;
+        }
     }
-    return typeof record.organizationId === 'string'
-        ? (record.organizationId as string)
-        : undefined;
+    const organizationId = readErrorProperty(record, 'organizationId');
+    return typeof organizationId === 'string' ? organizationId : undefined;
 }
 
 /**
@@ -1412,18 +1431,10 @@ export function capSerialized(
 function innerErrorForHttpContext(
     source: Record<string, unknown>,
 ): Record<string, unknown> | undefined {
-    // The log path degrades instead of throwing: a getter that throws on the
-    // error, or on `lastError`, would otherwise take the whole line down - the
-    // same contract `capSerialized` keeps for throwing getters and toJSON
-    // (#1835 review).
-    try {
-        const inner = source.lastError;
-        return typeof inner === 'object' && inner !== null
-            ? (inner as Record<string, unknown>)
-            : undefined;
-    } catch {
-        return undefined;
-    }
+    const inner = readErrorProperty(source, 'lastError');
+    return typeof inner === 'object' && inner !== null
+        ? (inner as Record<string, unknown>)
+        : undefined;
 }
 
 /**
@@ -1436,30 +1447,27 @@ function httpContextOf(
     maxStringLength: number,
 ): Record<string, unknown> {
     const picked: Record<string, unknown> = {};
-    // Every read is inside the guard, and the catch keeps whatever was read
-    // before the throwing one: a log line loses a field, never itself
-    // (#1835 review).
-    try {
-        const status =
-            source.statusCode === undefined
-                ? source.status
-                : source.statusCode;
-        if (typeof status === 'number') {
-            picked.statusCode = status;
-        }
-        if (typeof source.url === 'string') {
-            const sanitized = sanitizeString(source.url);
-            picked.url =
-                sanitized.length > maxStringLength
-                    ? `${sanitized.substring(0, maxStringLength)}…`
-                    : sanitized;
-        }
-        const length = responseBodyLengthOf(source.responseBody);
-        if (length !== undefined) {
-            picked.responseBodyLength = length;
-        }
-    } catch {
-        // Degrade to the fields read so far.
+    const rawStatusCode = readErrorProperty(source, 'statusCode');
+    const status =
+        rawStatusCode === undefined
+            ? readErrorProperty(source, 'status')
+            : rawStatusCode;
+    if (typeof status === 'number') {
+        picked.statusCode = status;
+    }
+    const rawUrl = readErrorProperty(source, 'url');
+    if (typeof rawUrl === 'string') {
+        const sanitized = sanitizeErrorUrl(rawUrl);
+        picked.url =
+            sanitized.length > maxStringLength
+                ? `${sanitized.substring(0, maxStringLength)}…`
+                : sanitized;
+    }
+    const length = responseBodyLengthOf(
+        readErrorProperty(source, 'responseBody'),
+    );
+    if (length !== undefined) {
+        picked.responseBodyLength = length;
     }
     return picked;
 }
@@ -1482,12 +1490,13 @@ export function extractErrorProps(
     const props: Record<string, unknown> = {};
     const source = error as unknown as Record<string, unknown>;
     for (const key of ERROR_LOG_PROPS) {
-        const value = source[key];
+        const value = readErrorProperty(source, key);
         if (value === undefined) {
             continue;
         }
         if (typeof value === 'string') {
-            const sanitized = sanitizeString(value);
+            const sanitized =
+                key === 'url' ? sanitizeErrorUrl(value) : sanitizeString(value);
             props[key] =
                 sanitized.length > maxStringLength
                     ? `${sanitized.substring(0, maxStringLength)}…`
@@ -1503,11 +1512,11 @@ export function extractErrorProps(
         }
     }
     // Derived signal for the response body we deliberately never log.
-    if (source.responseBody !== undefined) {
-        const length = responseBodyLengthOf(source.responseBody);
-        if (length !== undefined) {
-            props.responseBodyLength = length;
-        }
+    const bodyLength = responseBodyLengthOf(
+        readErrorProperty(source, 'responseBody'),
+    );
+    if (bodyLength !== undefined) {
+        props.responseBodyLength = bodyLength;
     }
     // A retry-exhausted provider error carries the attempt that failed on
     // `lastError`, so without this the line holds only type, message and
@@ -1543,7 +1552,7 @@ function pickHttpContext(
     const source = value as Record<string, unknown>;
     const picked: Record<string, unknown> = {};
     for (const key of keys) {
-        const raw = source[key];
+        const raw = readErrorProperty(source, key);
         if (raw === undefined) {
             continue;
         }
@@ -1552,7 +1561,8 @@ function pickHttpContext(
             // reason) as `boundErrorForLog` below: a pair whose closing
             // delimiter falls beyond the cut never matches a pattern, so its
             // opening prefix — the credential — is emitted in the clear.
-            const sanitized = sanitizeString(raw);
+            const sanitized =
+                key === 'url' ? sanitizeErrorUrl(raw) : sanitizeString(raw);
             picked[key] =
                 sanitized.length > maxStringLength
                     ? `${sanitized.substring(0, maxStringLength)}…`
@@ -1640,7 +1650,8 @@ export function boundErrorForLog(
             // about to be clamped anyway, and `redactEmbeddedSecrets` skips
             // strings with nothing credential-shaped in them; same order as
             // extractErrorProps, so the two paths cannot disagree.
-            const sanitized = sanitizeString(value);
+            const sanitized =
+                key === 'url' ? sanitizeErrorUrl(value) : sanitizeString(value);
             bounded[key] =
                 sanitized.length > maxStringLength
                     ? `${sanitized.substring(0, maxStringLength)}…`
@@ -1652,11 +1663,9 @@ export function boundErrorForLog(
         }
         bounded[key] = capSerialized(value, maxStringLength);
     }
-    if (flat.responseBody !== undefined) {
-        const length = responseBodyLengthOf(flat.responseBody);
-        if (length !== undefined) {
-            bounded.responseBodyLength = length;
-        }
+    const bodyLength = responseBodyLengthOf(flat.responseBody);
+    if (bodyLength !== undefined) {
+        bounded.responseBodyLength = bodyLength;
     }
     // Same unwrapping as extractErrorProps: a retry-exhausted provider error
     // holds the failing attempt on `lastError`, and only its HTTP context is
