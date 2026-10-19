@@ -102,9 +102,6 @@ export interface PromptAgentMeta {
     conventionGuides?: string[];
     /** Skills catalog and linked docs for this agent's target (#2172). */
     knowledgeSection?: string;
-    /** Custom agents: the team opted this agent into the full defect hunt
-     *  ("Also report general bugs"). Unset → it keeps to its lane. */
-    reportGeneralBugs?: boolean;
 }
 
 /** Custom agents carry their guides (possibly none); built-in agents do not. */
@@ -112,10 +109,10 @@ function hasOwnLane(meta: PromptAgentMeta): boolean {
     return meta.conventionGuides !== undefined;
 }
 
-/** A custom agent that reports only within its focus: the generalist covers
+/** A custom agent reports only within its focus: the generalist covers
  *  general bugs. False for every built-in agent. */
 export function isLaneScoped(meta: PromptAgentMeta): boolean {
-    return hasOwnLane(meta) && !meta.reportGeneralBugs;
+    return hasOwnLane(meta);
 }
 
 /** The knowledge section goes inside the agent block, after everything the
@@ -748,8 +745,7 @@ ${memoryRulesSection}
  * team's instructions at the top their prompts diverged in the first line and
  * no provider prefix cache could be shared between them. Now the date,
  * mindset, workflow and scope form a prefix that is byte-identical across
- * them (lane-scoped agents share one, agents that also report general bugs
- * another), ended by CACHE_PREFIX_BOUNDARY so Anthropic caches it on its own
+ * them, ended by CACHE_PREFIX_BOUNDARY so Anthropic caches it on its own
  * breakpoint; OpenAI and Gemini match the prefix implicitly. What names the
  * agent (Role: identity, instructions, language) and what follows it today
  * comes after.

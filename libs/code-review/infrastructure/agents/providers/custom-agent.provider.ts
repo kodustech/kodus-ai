@@ -95,11 +95,8 @@ ${files
     Read any other file for context, but report findings only on these files. A renamed file with no diff still counts: check what the move breaks, such as its relative imports.
   </Scope>`
         : '';
-    // Opted into general bugs: the defect hunt is part of its mission, so
-    // the instructions no longer bound what it reports.
-    const generalBugs = agent.reportGeneralBugs === true;
     return `  <Mission>
-    You are the team's "${agent.name}" reviewer. Find the problems the team's instructions below ask you to look for, in the code this pull request changes. Investigate the codebase before reporting, and back each finding with evidence from the code.${generalBugs ? '\n    Also report the general correctness bugs you find in the changed code, even when the instructions do not ask for them.' : ''}
+    You are the team's "${agent.name}" reviewer. Find the problems the team's instructions below ask you to look for, in the code this pull request changes. Investigate the codebase before reporting, and back each finding with evidence from the code.
   </Mission>
 
   <TeamInstructions>
@@ -107,7 +104,8 @@ ${instructions}
   </TeamInstructions>
 
   <DoNotReport>
-    Do not report:${generalBugs ? '' : "\n    - issues outside what the team's instructions ask for (other reviewers cover them)"}
+    Do not report:
+    - issues outside what the team's instructions ask for (other reviewers cover them)
     - style or cosmetic issues, unless the instructions ask for them
     - speculative concerns without evidence in the code
   </DoNotReport>${scope}${teamSystems}`;
@@ -225,14 +223,7 @@ export class CustomAgentProvider extends BaseCodeReviewAgentProvider {
         return this.agent.instructions || undefined;
     }
 
-    protected reportsGeneralBugs(): boolean {
-        return this.agent.reportGeneralBugs === true;
-    }
-
-    /** Unset when the team opted it into general bugs: then nothing is
-     *  dropped for being outside its instructions. */
     protected getLaneFocus(input: ReviewAgentInput): string | undefined {
-        if (this.reportsGeneralBugs()) return undefined;
         return buildCustomAgentLaneFocus(
             this.agent,
             this.getConventionGuides(input),

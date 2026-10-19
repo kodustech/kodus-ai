@@ -646,11 +646,6 @@ class CustomAgentConfigDto {
     @Type(() => CustomAgentModelsDto)
     models?: CustomAgentModelsDto;
 
-    /** "Also report general bugs"; absent means false. */
-    @IsOptional()
-    @IsBoolean()
-    reportGeneralBugs?: boolean;
-
     @ValidateNested()
     @Type(() => CustomAgentPresentationDto)
     presentation: CustomAgentPresentationDto;

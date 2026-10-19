@@ -181,12 +181,6 @@ export abstract class BaseCodeReviewAgentProvider {
         return undefined;
     }
 
-    /** Unset for every built-in agent; a custom agent the team opted into
-     *  "Also report general bugs" returns true and keeps the defect hunt. */
-    protected reportsGeneralBugs(): boolean | undefined {
-        return undefined;
-    }
-
     /**
      * What this agent is allowed to report, as the verifier reads it: set
      * only for a custom agent kept to its lane, whose findings outside it are
@@ -1031,7 +1025,6 @@ export abstract class BaseCodeReviewAgentProvider {
             supportsMixed: this.supportsMixedLabels(),
             conventionGuides: this.getConventionGuides(input),
             knowledgeSection: renderKnowledgeSection(input.knowledge),
-            reportGeneralBugs: this.reportsGeneralBugs(),
         };
     }
 

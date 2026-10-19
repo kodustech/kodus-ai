@@ -21,10 +21,7 @@ jest.mock(
 
 import { resolveReviewAgentModel } from '@libs/code-review/infrastructure/agents/collaborators/model-factory';
 import { runAgentLoopViaCore } from '@libs/code-review/infrastructure/agents/core/core-agent-loop.adapter';
-import {
-    customAgentConfigSchema,
-    type CustomAgentConfig,
-} from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import type { CustomAgentConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { LLM_TASK } from '@libs/llm/byok-config';
 
 import {
@@ -731,24 +728,6 @@ describe('CustomAgentProvider — lane', () => {
         expect(focus).toContain('tracker (get_issue)');
     });
 
-    it('hunts general bugs and takes no lane check when the team opts in', async () => {
-        await provider(config({ reportGeneralBugs: true })).execute(
-            withSandbox(),
-        );
-
-        const [loopParams] = runLoopMock.mock.calls[0];
-        expect(loopParams.laneFocus).toBeUndefined();
-        expect(loopParams.systemPrompt).toContain(
-            'Assume every change is broken until you prove it is safe.',
-        );
-        expect(loopParams.systemPrompt).toContain(
-            'Also report the general correctness bugs you find',
-        );
-        expect(loopParams.systemPrompt).not.toContain(
-            "issues outside what the team's instructions ask for",
-        );
-    });
-
     it('puts its own tools before the skill tools', async () => {
         class WithTool extends CustomAgentProvider {
             protected async buildAgentTools() {
@@ -801,25 +780,3 @@ describe('CustomAgentProvider — lane', () => {
     });
 });
 
-describe('customAgentConfigSchema — reportGeneralBugs', () => {
-    it('leaves an agent saved without the setting kept to its lane', () => {
-        const { reportGeneralBugs: _omit, ...saved } = config();
-        const parsed = customAgentConfigSchema.parse(saved);
-
-        expect(parsed.reportGeneralBugs).toBeUndefined();
-        expect(provider(parsed)['reportsGeneralBugs']()).toBe(false);
-    });
-
-    it('keeps the setting through a parse (resolve and Try it parse the draft)', () => {
-        expect(
-            customAgentConfigSchema.parse(config({ reportGeneralBugs: true }))
-                .reportGeneralBugs,
-        ).toBe(true);
-        expect(() =>
-            customAgentConfigSchema.parse({
-                ...config(),
-                reportGeneralBugs: 'yes',
-            }),
-        ).toThrow();
-    });
-});

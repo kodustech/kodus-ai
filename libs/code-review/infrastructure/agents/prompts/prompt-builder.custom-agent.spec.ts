@@ -215,20 +215,6 @@ describe('custom agent — lane focus', () => {
             'Reporting threshold (high-recall)',
         );
     });
-
-    it('keeps the full defect hunt when the team asks for general bugs', () => {
-        const general = { ...e2e, reportGeneralBugs: true };
-        const system = buildSystemPrompt(input(), general);
-        const user = buildUserPrompt(input(), general);
-
-        expect(isLaneScoped(general)).toBe(false);
-        expect(system).toContain(
-            'Assume every change is broken until you prove it is safe.',
-        );
-        expect(system).not.toContain('Report only findings within your focus');
-        expect(user).toContain('Reporting threshold (high-recall)');
-        expect(user).not.toContain('the issues your focus covers');
-    });
 });
 
 describe('custom agent — shared system-prompt prefix', () => {
@@ -268,21 +254,5 @@ describe('custom agent — shared system-prompt prefix', () => {
 
         expect(boundaryEnd).toBeGreaterThan(CACHE_PREFIX_BOUNDARY.length);
         expect(commonPrefixLength(a, b)).toBeGreaterThanOrEqual(boundaryEnd);
-    });
-
-    it('agents that also report general bugs share a prefix of their own', () => {
-        const a = buildSystemPrompt(input(), {
-            ...e2e,
-            reportGeneralBugs: true,
-        });
-        const b = buildSystemPrompt(input(), {
-            ...security,
-            reportGeneralBugs: true,
-        });
-        const boundaryEnd =
-            a.indexOf(CACHE_PREFIX_BOUNDARY) + CACHE_PREFIX_BOUNDARY.length;
-
-        expect(commonPrefixLength(a, b)).toBeGreaterThanOrEqual(boundaryEnd);
-        expect(boundaryEnd).toBeGreaterThan(4000);
     });
 });

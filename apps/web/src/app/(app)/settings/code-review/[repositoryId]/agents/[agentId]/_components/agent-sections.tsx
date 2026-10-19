@@ -8,7 +8,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@components/ui/select";
-import { Switch } from "@components/ui/switch";
 import TagInput from "@components/ui/tag-input";
 import { Textarea } from "@components/ui/textarea";
 import {
@@ -105,33 +104,6 @@ export const WhatItDoes = ({
                     }
                 />
             </Field>
-            <div className="flex items-center gap-3">
-                <Switch
-                    id="agent-report-general-bugs"
-                    aria-label="Also report general bugs"
-                    size="sm"
-                    checked={agent.reportGeneralBugs === true}
-                    disabled={!canEdit}
-                    onCheckedChange={(checked) =>
-                        onChange((current) => ({
-                            ...current,
-                            reportGeneralBugs: checked || undefined,
-                        }))
-                    }
-                />
-                <label
-                    htmlFor="agent-report-general-bugs"
-                    className="flex flex-col">
-                    <span className="text-text-primary text-xs font-medium">
-                        Also report general bugs
-                    </span>
-                    <span className="text-text-tertiary text-xs">
-                        Off: the agent reports only what its instructions,
-                        skills and tools ask for; the main review already
-                        covers general bugs.
-                    </span>
-                </label>
-            </div>
             <div className="flex flex-wrap gap-1.5">
                 <Chip>
                     {skills} {skills === 1 ? "skill" : "skills"}

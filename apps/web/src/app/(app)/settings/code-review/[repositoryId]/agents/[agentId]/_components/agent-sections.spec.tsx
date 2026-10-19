@@ -55,46 +55,6 @@ describe("WhatItDoes", () => {
         );
         expect(screen.queryByRole("alert")).toBeNull();
     });
-
-    it("keeps an agent to its instructions until the team asks for general bugs", () => {
-        const onChange = jest.fn();
-        render(
-            <WhatItDoes
-                agent={agent}
-                knowledge={[]}
-                canEdit
-                onChange={onChange}
-            />,
-        );
-        const toggle = screen.getByRole("switch", {
-            name: /also report general bugs/i,
-        });
-        expect(toggle).not.toBeChecked();
-
-        fireEvent.click(toggle);
-
-        const patch = onChange.mock.calls[0][0] as (
-            a: CustomAgent,
-        ) => CustomAgent;
-        expect(patch(agent).reportGeneralBugs).toBe(true);
-        expect(
-            patch({ ...agent, reportGeneralBugs: true }).instructions,
-        ).toBe(agent.instructions);
-    });
-
-    it("shows the setting on for an agent that reports general bugs", () => {
-        render(
-            <WhatItDoes
-                agent={{ ...agent, reportGeneralBugs: true }}
-                knowledge={[]}
-                canEdit
-                onChange={jest.fn()}
-            />,
-        );
-        expect(
-            screen.getByRole("switch", { name: /also report general bugs/i }),
-        ).toBeChecked();
-    });
 });
 
 describe("RunsOn", () => {
