@@ -40,6 +40,34 @@ describe('custom agent config schemas', () => {
         );
     });
 
+    it('refuses a CLI with secrets that could print them', () => {
+        const withSecret = (overrides: Record<string, unknown>) => ({
+            ...agent('ledger'),
+            tools: {
+                cli: [
+                    {
+                        ...cli('ledger-lint'),
+                        secrets: [{ env: 'LEDGER_TOKEN', ciphertext: 'c' }],
+                        ...overrides,
+                    },
+                ],
+            },
+        });
+        for (const overrides of [
+            { allowedPrefixes: ['ledger-lint printenv'] },
+            { allowedPrefixes: ['ledger-lint config get'] },
+            { binary: 'node', allowedPrefixes: ['node -e'] },
+        ]) {
+            expect(
+                customAgentConfigSchema.safeParse(withSecret(overrides))
+                    .success,
+            ).toBe(false);
+        }
+        expect(customAgentConfigSchema.safeParse(withSecret({})).success).toBe(
+            true,
+        );
+    });
+
     it('still accepts a config saved with the retired mode', () => {
         for (const mode of ['shadow', 'post']) {
             const legacy = agent('ledger');

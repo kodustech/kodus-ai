@@ -268,14 +268,9 @@ describe('buildRunCommand', () => {
             secretEnvNames: [],
             timeoutSec: 120,
         });
-        // The call runs in a root shell: the argv survives both quotings.
-        const inner = execFileSync(
-            '/bin/sh',
-            ['-c', `printf %s ${command.split(' -- /bin/sh -c ')[1]}`],
-            { encoding: 'utf8' },
-        );
-        expect(inner).toContain(shellJoin(hostile));
-        expect(inner).toContain(`-u '${identity.user}'`);
+        // The call is one quoting deep in the root shell it runs in.
+        expect(command).toContain(shellJoin(hostile));
+        expect(command).toContain(`-u '${identity.user}'`);
         expect(command).toContain('/usr/bin/timeout -k 5 120');
         expect(command).not.toContain('--preserve-env');
     });

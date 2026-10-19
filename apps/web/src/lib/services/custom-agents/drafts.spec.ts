@@ -303,6 +303,23 @@ describe("custom agent drafts", () => {
 
     it("flags an unpinned install, missing prefixes and secrets on project code", () => {
         expect(cliIssues(cli())).toEqual([]);
+        const secrets = [{ env: "LEDGER_TOKEN", value: "x" }];
+        expect(
+            cliIssues(cli({ allowedPrefixes: ["ledgerctl printenv"], secrets })),
+        ).toContain(
+            "A CLI with secrets cannot allow env listings or token-printing commands",
+        );
+        expect(
+            cliIssues(cli({ allowedPrefixes: ["auth token"], secrets })),
+        ).toContain(
+            "A CLI with secrets cannot allow env listings or token-printing commands",
+        );
+        expect(cliIssues(cli({ binary: "bash", secrets }))).toContain(
+            "A CLI with secrets cannot be a shell or interpreter: name its own binary",
+        );
+        expect(cliIssues(cli({ allowedPrefixes: ["ledgerctl printenv"] }))).toEqual(
+            [],
+        );
         expect(cliIssues(cli({ install: "npm i -g ledgerctl" }))).toContain(
             "Pin the install to a version, e.g. tool@1.2.3",
         );

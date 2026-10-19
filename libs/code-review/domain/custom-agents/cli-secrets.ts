@@ -1,5 +1,7 @@
 import type { CustomAgentConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
+import { type CliSecretSlot, isCliSecretCiphertext } from './cli-secret-cipher';
+
 /**
  * CLI secrets are write-only (#2172). The config stores `{ env, ciphertext }`
  * and a client never sees a ciphertext: every read carries this placeholder
@@ -147,11 +149,15 @@ export class CliSecretMissingError extends Error {
         readonly cliName: string,
         /** The CLI's definition changed since the secret was stored. */
         readonly cliChanged = false,
+        /** The stored value cannot be read (not this encryption's format). */
+        readonly unreadable = false,
     ) {
         super(
-            cliChanged
-                ? `Secret ${env} of CLI "${cliName}" must be typed again: the CLI changed (install, binary, allowed prefixes or domains, project code, or its secret names)`
-                : `Secret ${env} of CLI "${cliName}" has no value at this level: send the value to set it`,
+            unreadable
+                ? `Secret ${env} of CLI "${cliName}" must be typed again: the stored value can no longer be read`
+                : cliChanged
+                  ? `Secret ${env} of CLI "${cliName}" must be typed again: the CLI changed (install, binary, allowed prefixes or domains, project code, or its secret names)`
+                  : `Secret ${env} of CLI "${cliName}" has no value at this level: send the value to set it`,
         );
         this.name = 'CliSecretMissingError';
     }
@@ -174,7 +180,7 @@ export class CliSecretMissingError extends Error {
 export function sealCustomAgentSecrets<T extends AgentLike>(
     incoming: T[] | undefined,
     stored: AgentLike[] | undefined,
-    encrypt: (plaintext: string) => string,
+    encrypt: (plaintext: string, slot: CliSecretSlot) => string,
 ): T[] | undefined {
     if (!Array.isArray(incoming)) return incoming;
     const storedSecrets = indexStoredSecrets(stored);
@@ -189,10 +195,15 @@ export function sealCustomAgentSecrets<T extends AgentLike>(
                 cli: cli.map((tool) => {
                     if (!Array.isArray(tool?.secrets)) return tool;
                     const secrets = tool.secrets.map((secret) => {
+                        const slot = {
+                            agentId: agent.id,
+                            cliName: tool.name,
+                            env: secret?.env,
+                        };
                         if (typeof secret?.value === 'string' && secret.value) {
                             return {
                                 env: secret.env,
-                                ciphertext: encrypt(secret.value),
+                                ciphertext: encrypt(secret.value, slot),
                             };
                         }
                         const stored = storedSecrets.get(
@@ -211,12 +222,25 @@ export function sealCustomAgentSecrets<T extends AgentLike>(
                                     !!stored,
                                 );
                             }
+                            // A value stored in another format would only
+                            // fail at review time: ask for it now.
+                            if (!isCliSecretCiphertext(kept)) {
+                                throw new CliSecretMissingError(
+                                    secret?.env,
+                                    tool.name,
+                                    false,
+                                    true,
+                                );
+                            }
                             return { env: secret.env, ciphertext: kept };
                         }
-                        if (sent === kept) {
+                        if (sent === kept && isCliSecretCiphertext(kept)) {
                             return { env: secret.env, ciphertext: kept };
                         }
-                        return { env: secret.env, ciphertext: encrypt(sent) };
+                        return {
+                            env: secret.env,
+                            ciphertext: encrypt(sent, slot),
+                        };
                     });
                     return { ...tool, secrets };
                 }),

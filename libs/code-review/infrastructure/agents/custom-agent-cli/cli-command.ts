@@ -10,13 +10,19 @@
  *   token (`scan` does not allow `scanner`);
  * - each CLI runs as its own unprivileged user, from the absolute path its
  *   pinned install produced, under a timeout;
- * - secrets travel only in the process env (named here, never valued).
+ * - secrets travel only in the process env (named here, never valued);
+ * - every script here runs as root through the sandbox's root channel
+ *   (`run(..., { asRoot: true })`), with a system-only PATH: the review user
+ *   has no sudo, and no step of a CLI's life passes through that user.
  */
 import { createHash } from 'node:crypto';
 
 import { CliToolConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { checkCliInstallCommand } from '@libs/core/infrastructure/config/types/general/cli-install';
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
+import { ROOT_SAFE_PATH_LINE } from '@libs/sandbox/infrastructure/providers/review-user-privileges';
+
+import { CLI_EGRESS_PROXY_SOURCE } from './cli-egress-proxy.source';
 
 export const CLI_OUTPUT_MAX_CHARS = 20_000;
 export const CLI_DEFAULT_TIMEOUT_SEC = 120;
@@ -195,10 +201,17 @@ export interface CliSandboxIdentity {
     /** Unprivileged Linux user the CLI installs and runs as. */
     user: string;
     home: string;
-    /** iptables chain holding this CLI's egress allowlist. */
+    /** nft chain fencing the CLI user to its egress proxy. */
     chain: string;
     /** Marker on the /etc/hosts lines pinned for this CLI. */
     tag: string;
+    /** Unprivileged user the CLI's egress proxy runs as. */
+    proxyUser: string;
+    proxyHome: string;
+    /** nft chain fencing the proxy user to public HTTPS (and DNS). */
+    proxyChain: string;
+    /** Loopback port the proxy listens on. */
+    proxyPort: number;
 }
 
 /** One user per (agent, CLI): CLIs never share a home, env or egress rules. */
@@ -211,11 +224,16 @@ export function cliSandboxIdentity(
         .digest('hex')
         .slice(0, 12);
     const user = `kcli${key}`;
+    const proxyUser = `kpx${key}`;
     return {
         user,
         home: `/home/${user}`,
         chain: `KCLI_${key}`,
         tag: `kodus-cli:${key}`,
+        proxyUser,
+        proxyHome: `/home/${proxyUser}`,
+        proxyChain: `KPX_${key}`,
+        proxyPort: 20_000 + (parseInt(key.slice(0, 4), 16) % 20_000),
     };
 }
 
@@ -278,17 +296,18 @@ export function buildInstallScript(params: {
     const candidates = cliBinaryCandidates(h).map(shSingleQuote).join(' ');
     return inSubshell([
         'set -eu',
+        ROOT_SAFE_PATH_LINE,
         // The review user's home holds the proxy config and the checkout: the
         // CLI user may traverse to the repo, never list or read the rest.
-        'sudo -n chmod 711 /home/user 2>/dev/null || true',
-        'sudo -n chmod 600 /home/user/config.json 2>/dev/null || true',
-        `id -u ${shSingleQuote(identity.user)} >/dev/null 2>&1 || sudo -n useradd --create-home --home-dir ${shSingleQuote(h)} --shell /usr/sbin/nologin ${shSingleQuote(identity.user)}`,
-        `sudo -n chmod 700 ${shSingleQuote(h)}`,
+        'chmod 711 /home/user 2>/dev/null || true',
+        'chmod 600 /home/user/config.json 2>/dev/null || true',
+        `id -u ${shSingleQuote(identity.user)} >/dev/null 2>&1 || useradd --create-home --home-dir ${shSingleQuote(h)} --shell /usr/sbin/nologin ${shSingleQuote(identity.user)}`,
+        `chmod 700 ${shSingleQuote(h)}`,
         `sudo -n -u ${shSingleQuote(identity.user)} -- /usr/bin/env -C ${shSingleQuote(h)} -i ${shellJoin(env)} /usr/bin/timeout -k 5 ${CLI_INSTALL_TIMEOUT_SEC} ${shellJoin(argv)}`,
         // Nothing the install started (a lifecycle script's background
         // process) may live on as the CLI user into the calls that carry
         // its secrets.
-        `sudo -n pkill -KILL -u ${shSingleQuote(identity.user)} >/dev/null 2>&1 || true`,
+        `pkill -KILL -u ${shSingleQuote(identity.user)} >/dev/null 2>&1 || true`,
         `for d in ${candidates}; do`,
         `  if sudo -n -u ${shSingleQuote(identity.user)} test -x "$d"/${shSingleQuote(binary)}; then echo "${CLI_BINARY_MARKER}$d/"${shSingleQuote(binary)}; exit 0; fi`,
         'done',
@@ -340,12 +359,31 @@ const PUBLIC_IPV4_AWK = [
     '}',
 ].join(' ');
 
+/** Where the egress proxy source is written in the sandbox (root-owned). */
+export const CLI_EGRESS_PROXY_DIR = '/usr/local/lib/kodus-cli';
+export const CLI_EGRESS_PROXY_PATH = `${CLI_EGRESS_PROXY_DIR}/egress-proxy.js`;
+
+/** Node binaries the proxy may run with: root-owned, from the image. */
+const NODE_CANDIDATES = ['/usr/bin/node', '/usr/local/bin/node'];
+
 /**
- * Fence the CLI user's egress to its allowlist. Domains are resolved now and
- * pinned in /etc/hosts; the user's DNS, loopback and every other address are
- * rejected. Matching on the ORIGINAL destination (`ct original ip daddr`) keeps the
- * rule right behind the transparent egress proxy, which rewrites the
- * destination to loopback before the filter table sees the packet.
+ * Fence the CLI user's egress to its allowlist, by host name.
+ *
+ * - The CLI user may open TCP only to its own egress proxy on loopback; its
+ *   port 443 connections, whatever address they dial, are redirected there
+ *   (nat, ahead of the image's transparent proxy). Everything else (other
+ *   ports, UDP, DNS, IPv6, other loopback services) is rejected.
+ * - The proxy (CLI_EGRESS_PROXY_SOURCE) runs as its own user, forwards a
+ *   connection only when the TLS server name is on the allowlist, and
+ *   resolves that name itself, refusing non-public addresses.
+ * - The proxy user may reach only DNS and public addresses on 443.
+ * - Allowed names are also resolved now and pinned in /etc/hosts (public
+ *   addresses only, else the CLI is refused), so the CLI, which has no DNS,
+ *   can look them up.
+ *
+ * Plain HTTP is not forwarded: a credential must not travel in clear text,
+ * and HTTPS is the only protocol whose destination name can be checked
+ * without decrypting it.
  */
 export function buildNetworkScript(params: {
     identity: CliSandboxIdentity;
@@ -353,15 +391,21 @@ export function buildNetworkScript(params: {
 }): string {
     const { identity, domains } = params;
     const user = shSingleQuote(identity.user);
-    // `KCLI_` and hex (cliSandboxIdentity): safe unquoted in nft syntax.
+    const proxyUser = shSingleQuote(identity.proxyUser);
+    const proxyHome = shSingleQuote(identity.proxyHome);
+    const ready = shSingleQuote(`${identity.proxyHome}/ready`);
+    const port = identity.proxyPort;
+    // `KCLI_`/`KPX_` and hex (cliSandboxIdentity): safe unquoted in nft syntax.
     const chain = identity.chain;
+    const proxyChain = identity.proxyChain;
     const tag = identity.tag;
     const table = 'inet kodus_cli';
+    const natTable = 'ip kodus_cli_nat';
     const lines = [
         'set -eu',
-        'NFT="sudo -n nft"',
-        'IPS=""',
-        `sudo -n sed -i '/# ${tag}$/d' /etc/hosts`,
+        ROOT_SAFE_PATH_LINE,
+        'NFT="nft"',
+        `sed -i '/# ${tag}$/d' /etc/hosts`,
     ];
     for (const domain of domains) {
         const d = shSingleQuote(domain);
@@ -371,37 +415,76 @@ export function buildNetworkScript(params: {
             // A domain that resolves inside the sandbox's network (metadata
             // endpoint, loopback services, private hosts) is refused whole.
             `for ip in $R; do echo "$ip" | awk ${shSingleQuote(PUBLIC_IPV4_AWK)} || { echo ${shSingleQuote(`${domain} resolves to a non-public address`)} "$ip" >&2; exit 4; }; done`,
-            `for ip in $R; do echo "$ip ${domain} # ${tag}" | sudo -n tee -a /etc/hosts >/dev/null; IPS="$IPS $ip"; done`,
+            `for ip in $R; do echo "$ip ${domain} # ${tag}" | tee -a /etc/hosts >/dev/null; done`,
         );
     }
     lines.push(
+        // The proxy: its own user, the source written by root, restarted
+        // with this review's allowlist.
+        `id -u ${proxyUser} >/dev/null 2>&1 || useradd --create-home --home-dir ${proxyHome} --shell /usr/sbin/nologin ${proxyUser}`,
+        `chmod 700 ${proxyHome}`,
+        'NODE=""',
+        `for c in ${NODE_CANDIDATES.join(' ')}; do if [ -x "$c" ] && [ "$(stat -L -c %u "$c")" = 0 ]; then NODE="$c"; break; fi; done`,
+        `[ -n "$NODE" ] || { echo 'no root-owned node for the egress proxy' >&2; exit 4; }`,
+        `mkdir -p ${shSingleQuote(CLI_EGRESS_PROXY_DIR)}`,
+        `printf '%s' ${shSingleQuote(CLI_EGRESS_PROXY_SOURCE)} > ${shSingleQuote(CLI_EGRESS_PROXY_PATH)}`,
+        `chmod 644 ${shSingleQuote(CLI_EGRESS_PROXY_PATH)}`,
+        `pkill -KILL -u ${proxyUser} >/dev/null 2>&1 || true`,
+        `rm -f ${ready}`,
+        `setsid sudo -n -u ${proxyUser} -- /usr/bin/env -i HOME=${proxyHome} "$NODE" ${shSingleQuote(CLI_EGRESS_PROXY_PATH)} ${shSingleQuote(JSON.stringify(domains))} ${port} ${ready} </dev/null >>${shSingleQuote(`${identity.proxyHome}/proxy.log`)} 2>&1 &`,
+        'i=0',
+        `while [ ! -e ${ready} ] && [ $i -lt 100 ]; do sleep 0.1; i=$((i+1)); done`,
+        `[ -e ${ready} ] || { echo 'egress proxy did not start' >&2; exit 4; }`,
         // nft, not iptables: the E2B kernel has no iptables owner match, but
         // nftables matches the socket's user natively (`meta skuid`).
         `$NFT add table ${table}`,
         `$NFT add chain ${table} out '{ type filter hook output priority 0 ; policy accept ; }'`,
+        `$NFT add table ${natTable}`,
+        // Ahead of the image's transparent proxy (nat priority -100).
+        `$NFT add chain ${natTable} out '{ type nat hook output priority -150 ; policy accept ; }'`,
+        `UID_=$(id -u ${user})`,
+        `PUID_=$(id -u ${proxyUser})`,
+        `$NFT list chain ${natTable} out | grep -q "meta skuid $UID_ tcp dport 443 redirect to :${port}" || $NFT add rule ${natTable} out meta skuid "$UID_" tcp dport 443 redirect to :${port}`,
+        // The CLI user: its proxy only.
         `$NFT add chain ${table} ${chain}`,
         `$NFT flush chain ${table} ${chain}`,
         `$NFT add rule ${table} ${chain} meta nfproto ipv6 reject`,
-        // Non-public ranges are rejected before any accept, whatever DNS says.
-        `$NFT add rule ${table} ${chain} ct original ip daddr '{ ${NON_PUBLIC_IPV4_CIDRS.join(', ')} }' reject`,
-        `for ip in $IPS; do $NFT add rule ${table} ${chain} ct original ip daddr "$ip" accept; done`,
+        `$NFT add rule ${table} ${chain} ip daddr 127.0.0.1 tcp dport ${port} accept`,
         `$NFT add rule ${table} ${chain} reject`,
-        `UID_=$(id -u ${user})`,
-        `$NFT list chain ${table} out | grep -q "meta skuid $UID_ jump ${identity.chain}" || $NFT add rule ${table} out meta skuid "$UID_" jump ${chain}`,
+        // The proxy user: DNS, and public addresses on 443. Matching on the
+        // ORIGINAL destination (`ct original`) keeps the rule right behind
+        // the image's transparent proxy, which rewrites the destination.
+        `$NFT add chain ${table} ${proxyChain}`,
+        `$NFT flush chain ${table} ${proxyChain}`,
+        `$NFT add rule ${table} ${proxyChain} meta nfproto ipv6 reject`,
+        `$NFT add rule ${table} ${proxyChain} ct state established,related accept`,
+        `$NFT add rule ${table} ${proxyChain} ct original proto-dst 53 accept`,
+        `$NFT add rule ${table} ${proxyChain} ct original ip daddr '{ ${NON_PUBLIC_IPV4_CIDRS.join(', ')} }' reject`,
+        `$NFT add rule ${table} ${proxyChain} ct original proto-dst 443 accept`,
+        `$NFT add rule ${table} ${proxyChain} reject`,
+        `$NFT list chain ${table} out | grep -q "meta skuid $UID_ jump ${chain}" || $NFT add rule ${table} out meta skuid "$UID_" jump ${chain}`,
+        `$NFT list chain ${table} out | grep -q "meta skuid $PUID_ jump ${proxyChain}" || $NFT add rule ${table} out meta skuid "$PUID_" jump ${proxyChain}`,
     );
     return inSubshell(lines);
 }
 
+/** Shared temp directories a CLI might write to despite TMPDIR. */
+const SHARED_TMP_DIRS = ['/tmp', '/var/tmp', '/dev/shm'];
+
 /**
- * The single line that runs one CLI call. Secrets are named in
- * `--preserve-env` and arrive through the sandbox process env, so their
- * values are never part of this string. The shell the sandbox starts holds
- * that env and runs as the review user, whose other commands could read a
- * process's env under /proc: it `exec`s into sudo at once, so the env lives
- * only in root's shell and the CLI user's processes from then on. After the
- * call, timed out or not, every process the CLI user still owns is killed,
- * so nothing it started (a daemon, a forked child) outlives the call; the
- * call's exit code is kept.
+ * The command that runs one CLI call, as root through the sandbox's root
+ * channel. Secrets are named in `--preserve-env` and arrive through that
+ * root process's env, so their values are never part of this string, and no
+ * process of the review user ever holds them (only root can read a root
+ * process's env).
+ *
+ * Files the CLI writes stay its own: each call gets a fresh private temp
+ * directory inside the CLI user's home (0700, as TMPDIR/TMP/TEMP) and runs
+ * under umask 077, so even a file it drops in /tmp is unreadable to the
+ * review user. After the call, timed out or not, every process the CLI user
+ * still owns is killed (nothing it started outlives the call), its temp
+ * directory is removed, and so is anything it left in the shared temp
+ * directories. The call's exit code is kept.
  */
 export function buildRunCommand(params: {
     identity: CliSandboxIdentity;
@@ -415,8 +498,19 @@ export function buildRunCommand(params: {
         ? ` --preserve-env=${secretEnvNames.join(',')}`
         : '';
     const user = shSingleQuote(identity.user);
-    const asRoot = `sudo -n -u ${user} -H${preserve} -- /usr/bin/env -C ${shSingleQuote(CLI_REPO_DIR)} /usr/bin/timeout -k 5 ${timeoutSec} ${shellJoin([binaryPath, ...args])}; rc=$?; pkill -KILL -u ${user} >/dev/null 2>&1; exit $rc`;
-    return `exec sudo -n${preserve} -- /bin/sh -c ${shSingleQuote(asRoot)}`;
+    const tmpTemplate = shSingleQuote(`${identity.home}/.run-XXXXXXXX`);
+    // umask is set inside the CLI user's process: sudo may apply its own.
+    const withUmask = `/bin/sh -c ${shSingleQuote('umask 077; exec "$@"')} sh`;
+    return [
+        ROOT_SAFE_PATH_LINE,
+        `T=$(mktemp -d ${tmpTemplate}) || exit 125`,
+        `chown ${user}: "$T" && chmod 700 "$T" || { rm -rf "$T"; exit 125; }`,
+        `sudo -n -u ${user} -H${preserve} -- /usr/bin/env -C ${shSingleQuote(CLI_REPO_DIR)} TMPDIR="$T" TMP="$T" TEMP="$T" ${withUmask} /usr/bin/timeout -k 5 ${timeoutSec} ${shellJoin([binaryPath, ...args])}; rc=$?`,
+        `pkill -KILL -u ${user} >/dev/null 2>&1`,
+        'rm -rf "$T"',
+        `find ${SHARED_TMP_DIRS.join(' ')} -xdev -mindepth 1 -user ${user} -exec rm -rf {} + >/dev/null 2>&1`,
+        'exit $rc',
+    ].join('\n');
 }
 
 export function resolveCliTimeoutSec(cli: Pick<CliToolConfig, 'timeoutSec'>) {

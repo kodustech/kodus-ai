@@ -12,7 +12,12 @@ import { jsonSchema } from 'ai';
 
 import type { AgentTool } from '@libs/agent-harness/domain/contracts/tool.contract';
 
+import type { CliSecretSlot } from '@libs/code-review/domain/custom-agents/cli-secret-cipher';
 import type { CustomAgentCliRun } from '@libs/code-review/infrastructure/agents/review-agent.contract';
+import {
+    cliEnvExposureProblem,
+    cliSecretReferenceProblem,
+} from '@libs/core/infrastructure/config/types/general/cli-env-guard';
 import { createLogger } from '@libs/core/log/logger';
 import type {
     SandboxInstance,
@@ -37,8 +42,9 @@ export const RUN_CLI_TOOL_NAME = 'runCli';
 export interface RunCliToolDeps {
     sandbox: SandboxInstance | undefined;
     installed: readonly InstalledCustomAgentCli[] | undefined;
-    /** Decrypts a stored secret ciphertext (`decrypt` from common/utils/crypto). */
-    decrypt: (ciphertext: string) => string;
+    /** Decrypts a stored secret of this slot (`decryptCliSecret`); throws
+     *  when it cannot. */
+    decrypt: (ciphertext: string, slot: CliSecretSlot) => string;
     /** Told of each call and the output the agent got. */
     onRun?: (run: Omit<CustomAgentCliRun, 'agentId'>) => void;
     /** The review's ids (organization, team, repository, PR) for the logs. */
@@ -114,7 +120,24 @@ export async function executeRunCli(
         // As argv arrays: shown as one string, models sent it as one argument.
         return `Error: these arguments are not allowed for ${cli.name}. args must start with one of these argument lists: ${cli.allowedPrefixes
             .map((p) => JSON.stringify(prefixTokens(p, cli)))
-            .join(', ')} — each element is one argument; a "dir/" element accepts any path under it.`;
+            .join(
+                ', ',
+            )} — each element is one argument; a "dir/" element accepts any path under it.`;
+    }
+
+    // A CLI with credentials never runs a call that would print them: env
+    // listings, /proc, known token-printing subcommands, or an argument the
+    // CLI could expand into a secret. (argv itself never reaches a shell.)
+    if (!cli.runsProjectCode && cli.secrets?.length) {
+        const exposure =
+            cliEnvExposureProblem(args) ??
+            cliSecretReferenceProblem(
+                args,
+                cli.secrets.map((secret) => secret.env),
+            );
+        if (exposure) {
+            return `Error: refused, ${exposure}; this CLI holds credentials. The CLI was not run.`;
+        }
     }
 
     // Decrypted here, for this one process, and never kept. A CLI that runs
@@ -124,13 +147,17 @@ export async function executeRunCli(
         for (const secret of cli.secrets ?? []) {
             let value = '';
             try {
-                value = decrypt(secret.ciphertext);
+                value = decrypt(secret.ciphertext, {
+                    agentId: entry.agentId,
+                    cliName: cli.name,
+                    env: secret.env,
+                });
             } catch {
                 value = '';
             }
             if (!value) {
                 logger.warn({
-                    message: `runCli: secret ${secret.env} of ${cli.name} could not be decrypted; not run`,
+                    message: `runCli: secret ${secret.env} of ${cli.name} could not be decrypted; it must be typed again; not run`,
                     context: 'runCli',
                     metadata: {
                         ...deps.logContext,
@@ -139,7 +166,7 @@ export async function executeRunCli(
                         secretEnv: secret.env,
                     },
                 });
-                return `Error: credential ${secret.env} for ${cli.name} is not available; the CLI was not run.`;
+                return `Error: credential ${secret.env} for ${cli.name} cannot be read and must be typed again in the agent's settings; the CLI was not run.`;
             }
             envs[secret.env] = value;
         }
@@ -157,8 +184,11 @@ export async function executeRunCli(
 
     let run: SandboxRunResult;
     try {
+        // As root: the review user has no sudo, and the process holding the
+        // secrets must not be one the review user owns.
         run = await sandbox.run(command, {
             timeoutMs: (timeoutSec + 15) * 1000,
+            asRoot: true,
             ...(secretValues.length ? { envs } : {}),
         });
     } catch (error) {

@@ -32,7 +32,7 @@ import {
     ContextReferenceDetectionService,
 } from '@libs/ai-engine/infrastructure/adapters/services/context/context-reference-detection.service';
 import { deepDifference, deepMerge } from '@libs/common/utils/deep';
-import { encrypt } from '@libs/common/utils/crypto';
+import { encryptCliSecret } from '@libs/code-review/domain/custom-agents/cli-secret-cipher';
 import {
     CliSecretMissingError,
     effectiveStoredCustomAgents,
@@ -324,7 +324,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                             directoryId,
                             directoryPaths: resolvedPaths,
                         }),
-                        encrypt,
+                        encryptCliSecret,
                     );
                 } catch (error) {
                     if (error instanceof CliSecretMissingError) {

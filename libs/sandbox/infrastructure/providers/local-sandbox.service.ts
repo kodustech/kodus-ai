@@ -24,6 +24,7 @@ import {
     CreateSandboxParams,
     ISandboxProvider,
     SandboxInstance,
+    SandboxRunOptions,
     SandboxRunResult,
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
@@ -273,8 +274,17 @@ export class LocalSandboxService implements ISandboxProvider {
             // explicitly instead of piggybacking on this entry point.
             const run = async (
                 command: string,
-                opts?: { timeoutMs?: number; envs?: Record<string, string> },
+                opts?: SandboxRunOptions,
             ): Promise<SandboxRunResult> => {
+                // The local sandbox is the worker's own host: there is no
+                // root channel, and none is ever opened from a review.
+                if (opts?.asRoot) {
+                    return {
+                        stdout: '',
+                        stderr: 'Running as root is not available in the local sandbox',
+                        exitCode: 1,
+                    };
+                }
                 if (/`|\$\(/.test(command)) {
                     this.logger.warn({
                         message:

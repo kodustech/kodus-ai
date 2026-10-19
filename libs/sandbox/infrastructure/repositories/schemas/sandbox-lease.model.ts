@@ -66,6 +66,14 @@ export class SandboxLeaseModel extends CoreDocument {
     @Prop({ type: String, required: false })
     baseBranch?: string;
 
+    /**
+     * The review user lost every root path before the repository arrived
+     * (see SandboxInstance.privilegesDropped). Recorded at creation, where it
+     * is known, so a consumer that reconnects later gets the same answer.
+     */
+    @Prop({ type: Boolean, required: false })
+    privilegesDropped?: boolean;
+
     @Prop({ type: String, required: false })
     prNumber?: string;
 

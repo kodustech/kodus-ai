@@ -1,4 +1,10 @@
-import { decrypt } from '@libs/common/utils/crypto';
+import { decryptCliSecret } from '@libs/code-review/domain/custom-agents/cli-secret-cipher';
+
+const ledgerSlot = {
+    agentId: 'ledger-agent',
+    cliName: 'ledgerctl',
+    env: 'LEDGER_TOKEN',
+};
 import { BadRequestException, ConflictException } from '@nestjs/common';
 
 import { CLI_SECRET_MASK } from '@libs/code-review/domain/custom-agents/cli-secrets';
@@ -188,13 +194,17 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — custom agents', () => {
         const [secret] = configs.customAgents[0].tools.cli[0].secrets;
         expect(JSON.stringify(configs)).not.toContain('ledger-s3cret');
         expect(secret.env).toBe('LEDGER_TOKEN');
-        expect(decrypt(secret.ciphertext)).toBe('ledger-s3cret');
+        expect(decryptCliSecret(secret.ciphertext, ledgerSlot)).toBe(
+            'ledger-s3cret',
+        );
     });
 
     it('keeps the stored ciphertext when the screen sends the mask back', async () => {
         const configs = await buildUseCase({
             customAgents: [
-                ledgerAgent([{ env: 'LEDGER_TOKEN', ciphertext: 'iv:stored' }]),
+                ledgerAgent([
+                    { env: 'LEDGER_TOKEN', ciphertext: 'kcs1:iv:stored:t' },
+                ]),
             ],
         }).save({
             customAgents: [
@@ -205,14 +215,16 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — custom agents', () => {
         });
 
         expect(configs.customAgents[0].tools.cli[0].secrets).toEqual([
-            { env: 'LEDGER_TOKEN', ciphertext: 'iv:stored' },
+            { env: 'LEDGER_TOKEN', ciphertext: 'kcs1:iv:stored:t' },
         ]);
     });
 
     it('asks for a stored secret again when any part of the CLI definition changes', async () => {
         const stored = {
             customAgents: [
-                ledgerAgent([{ env: 'LEDGER_TOKEN', ciphertext: 'iv:stored' }]),
+                ledgerAgent([
+                    { env: 'LEDGER_TOKEN', ciphertext: 'kcs1:iv:stored:t' },
+                ]),
             ],
         };
         const changed = (cli: Record<string, unknown>) => {
@@ -242,7 +254,9 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — custom agents', () => {
     it('never restores a secret stored on another repository or level', async () => {
         const storedElsewhere = {
             customAgents: [
-                ledgerAgent([{ env: 'LEDGER_TOKEN', ciphertext: 'iv:other' }]),
+                ledgerAgent([
+                    { env: 'LEDGER_TOKEN', ciphertext: 'kcs1:iv:other:t' },
+                ]),
             ],
         };
         const masked = {
@@ -270,26 +284,35 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — custom agents', () => {
                 otherRepositoryConfigs: {
                     customAgents: [
                         ledgerAgent([
-                            { env: 'LEDGER_TOKEN', ciphertext: 'iv:other' },
+                            {
+                                env: 'LEDGER_TOKEN',
+                                ciphertext: 'kcs1:iv:other:t',
+                            },
                         ]),
                     ],
                 },
             },
         ).save({
             customAgents: [
-                ledgerAgent([{ env: 'LEDGER_TOKEN', ciphertext: 'iv:other' }]),
+                ledgerAgent([
+                    { env: 'LEDGER_TOKEN', ciphertext: 'kcs1:iv:other:t' },
+                ]),
             ],
         });
 
         const [secret] = configs.customAgents[0].tools.cli[0].secrets;
-        expect(secret.ciphertext).not.toBe('iv:other');
-        expect(decrypt(secret.ciphertext)).toBe('iv:other');
+        expect(secret.ciphertext).not.toBe('kcs1:iv:other:t');
+        expect(decryptCliSecret(secret.ciphertext, ledgerSlot)).toBe(
+            'kcs1:iv:other:t',
+        );
     });
 
     it('never writes a ciphertext into the settings audit log', async () => {
         const { save, eventEmitter } = buildUseCase({
             customAgents: [
-                ledgerAgent([{ env: 'LEDGER_TOKEN', ciphertext: 'iv:stored' }]),
+                ledgerAgent([
+                    { env: 'LEDGER_TOKEN', ciphertext: 'kcs1:iv:stored:t' },
+                ]),
             ],
         });
         await save({
@@ -300,7 +323,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — custom agents', () => {
 
         const audit = JSON.stringify(eventEmitter.emit.mock.calls);
         expect(eventEmitter.emit).toHaveBeenCalled();
-        expect(audit).not.toContain('iv:stored');
+        expect(audit).not.toContain('kcs1:iv:stored:t');
         expect(audit).not.toContain('ledger-s3cret');
         expect(audit).not.toMatch(/"ciphertext":"(?!••••)[^"]+"/);
     });

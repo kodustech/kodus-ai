@@ -504,7 +504,7 @@ const CliEditor = ({
             </Field>
             <Field
                 label="Allowed domains"
-                hint="Hosts the CLI may reach. Everything else is blocked.">
+                hint="Hosts the CLI may reach over HTTPS, matched by exact name. Everything else, plain HTTP included, is blocked.">
                 <TagInput
                     tags={cli.allowedDomains}
                     disabled={!canEdit}
@@ -551,6 +551,11 @@ const CliEditor = ({
                 <Field
                     label="Secrets"
                     hint="Only in this CLI's environment, masked in its output, never in the prompt.">
+                    <span className="text-warning -mt-1 text-xs">
+                        Use read-only, least-privilege tokens, and allow only
+                        domains you trust: an allowed domain receives whatever
+                        the CLI sends with the token.
+                    </span>
                     <SecretsEditor
                         secrets={cli.secrets ?? []}
                         disabled={!canEdit}

@@ -993,3 +993,101 @@ describe('E2BSandboxService.createSandbox deployment tag', () => {
         });
     });
 });
+
+// ---------------------------------------------------------------------------
+// Review user lockdown and the root channel
+// ---------------------------------------------------------------------------
+describe('E2B review user lockdown', () => {
+    const { PRIVILEGES_DROPPED_MARKER } = jest.requireActual(
+        './review-user-privileges',
+    );
+    const isLockdown = (cmd: string) => cmd.includes('gpasswd');
+
+    const fakeSandbox = (lockdownStdout: string, lockdownExit = 0) => {
+        const run = jest.fn(async (cmd: string, _opts?: any) => {
+            if (isLockdown(cmd)) {
+                if (lockdownExit !== 0) {
+                    throw new CommandExitError({
+                        stdout: '',
+                        stderr: 'review user can still use sudo',
+                        exitCode: lockdownExit,
+                    });
+                }
+                return { stdout: lockdownStdout, stderr: '', exitCode: 0 };
+            }
+            return { stdout: '', stderr: '', exitCode: 0 };
+        });
+        return {
+            sandboxId: 'sbx-1',
+            commands: { run },
+            kill: jest.fn(),
+            files: { read: jest.fn(), write: jest.fn() },
+        };
+    };
+
+    const createWith = async (sbx: ReturnType<typeof fakeSandbox>) => {
+        (Sandbox as any).create = jest.fn().mockResolvedValue(sbx);
+        const config = {
+            get: (key: string) =>
+                ({
+                    API_E2B_KEY: 'key',
+                    API_E2B_TEMPLATE_ID: 'tpl',
+                    API_NODE_ENV: 'test',
+                })[key],
+        };
+        const service = new E2BSandboxService(config as any);
+        return service.createSandboxWithRepo({
+            cloneUrl: 'https://github.com/org/repo.git',
+            authToken: 'tok',
+            branch: 'feature',
+            prNumber: 1,
+            platform: PlatformType.GITHUB,
+        });
+    };
+
+    it('locks the review user down as root before the repository arrives', async () => {
+        const sbx = fakeSandbox(`${PRIVILEGES_DROPPED_MARKER}\n`);
+        const instance = await createWith(sbx);
+        const calls = sbx.commands.run.mock.calls;
+        const lockdown = calls.findIndex(([cmd]) => isLockdown(cmd));
+        const clone = calls.findIndex(([cmd]) => cmd.includes('git init'));
+        expect(lockdown).toBeGreaterThanOrEqual(0);
+        expect(lockdown).toBeLessThan(clone);
+        expect(calls[lockdown][1]).toEqual(
+            expect.objectContaining({ user: 'root' }),
+        );
+        // Nothing else of the review runs as root.
+        expect(
+            calls.filter(([, opts]) => opts?.user === 'root'),
+        ).toHaveLength(1);
+        expect(instance.privilegesDropped).toBe(true);
+        expect((Sandbox as any).create).toHaveBeenCalledWith(
+            'tpl',
+            expect.objectContaining({ secure: true }),
+        );
+    });
+
+    it('marks the sandbox as not locked down when the check fails, without failing it', async () => {
+        const sbx = fakeSandbox('', 5);
+        const instance = await createWith(sbx);
+        expect(instance.privilegesDropped).toBe(false);
+        expect(sbx.kill).not.toHaveBeenCalled();
+    });
+
+    it('does not trust a lockdown run that exits 0 without the marker', async () => {
+        const instance = await createWith(fakeSandbox('done\n'));
+        expect(instance.privilegesDropped).toBe(false);
+    });
+
+    it('runs an asRoot command as root, and others as the review user', async () => {
+        const sbx = fakeSandbox(`${PRIVILEGES_DROPPED_MARKER}\n`);
+        const instance = await createWith(sbx);
+        sbx.commands.run.mockClear();
+        await instance.run('id', { asRoot: true });
+        await instance.run('id');
+        expect(sbx.commands.run.mock.calls[0][1]).toEqual(
+            expect.objectContaining({ user: 'root' }),
+        );
+        expect(sbx.commands.run.mock.calls[1][1]?.user).toBeUndefined();
+    });
+});

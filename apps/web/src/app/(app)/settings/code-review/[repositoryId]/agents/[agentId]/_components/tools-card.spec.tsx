@@ -154,6 +154,16 @@ describe("ClisField", () => {
         expectAskedAgain(sheet);
     });
 
+    it("tells the user to give the CLI least-privilege tokens", () => {
+        const sheet = openSheet();
+        expect(
+            within(sheet).getByText(/read-only, least-privilege tokens/),
+        ).toBeInTheDocument();
+        expect(
+            within(sheet).getByText(/plain HTTP included, is blocked/),
+        ).toBeInTheDocument();
+    });
+
     it("keeps a stored secret when only the usage notes change", () => {
         const sheet = openSheet();
 

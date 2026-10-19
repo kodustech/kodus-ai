@@ -7,9 +7,10 @@ const MIN_ENCODED_CORE = 8;
 
 /**
  * Every spelling of a secret a CLI could plausibly echo back: the value, its
- * base64 / base64url, and the base64 core it keeps when it is embedded in a
+ * base64 / base64url, the base64 core it keeps when it is embedded in a
  * longer encoded string (`user:secret` in a Basic auth header) at any of the
- * three byte alignments.
+ * three byte alignments, its percent encoding, hex (both cases) and JSON
+ * string escapes.
  */
 export function secretVariants(secret: string): string[] {
     if (!secret) return [];
@@ -41,7 +42,26 @@ export function secretVariants(secret: string): string[] {
             variants.add(url);
         }
     }
-    variants.add(encodeURIComponent(secret));
+    // Text encodings a CLI or its debug output commonly applies: percent
+    // encoding (either hex case), hex in either case (debug traces, and
+    // byte-per-pair dumps within one line) and JSON string escaping.
+    const percent = encodeURIComponent(secret);
+    variants.add(percent);
+    variants.add(percent.replace(/%[0-9A-F]{2}/g, (m) => m.toLowerCase()));
+    const hex = bytes.toString('hex');
+    const hexPairs = hex.match(/../g)?.join(' ') ?? '';
+    for (const value of [hex, hexPairs]) {
+        variants.add(value);
+        variants.add(value.toUpperCase());
+    }
+    variants.add(JSON.stringify(secret).slice(1, -1));
+    // \u-escaped every non-ASCII-safe character, as some JSON encoders do.
+    variants.add(
+        secret.replace(
+            /[^\x20-\x7e]|["\\/<>&']/g,
+            (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`,
+        ),
+    );
     return [...variants].filter(Boolean);
 }
 

@@ -1,6 +1,6 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 
-import { decrypt } from '@libs/common/utils/crypto';
+import { decryptCliSecret } from '@libs/code-review/domain/custom-agents/cli-secret-cipher';
 import { createLogger } from '@libs/core/log/logger';
 import type {
     MCPAdapter,
@@ -316,7 +316,7 @@ export class CustomAgentProvider extends BaseCodeReviewAgentProvider {
         const runCli = buildRunCliAgentTool({
             sandbox,
             installed: tooling?.installedClis?.[this.agent.id],
-            decrypt,
+            decrypt: decryptCliSecret,
             logContext,
             onRun: tooling?.onCliRun
                 ? (run) => tooling.onCliRun!({ ...run, agentId: this.agent.id })

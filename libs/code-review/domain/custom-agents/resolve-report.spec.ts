@@ -65,7 +65,8 @@ describe('custom agent resolve report', () => {
     it('reports rules over the size the tool runs instead of counting them', () => {
         const rule = 'id: r\nlanguage: ts\nrule: { pattern: x }\n---\n';
         const source = rule.repeat(
-            Math.ceil(CUSTOM_AGENT_LIMITS.maxAstGrepRuleBytes / rule.length) + 1,
+            Math.ceil(CUSTOM_AGENT_LIMITS.maxAstGrepRuleBytes / rule.length) +
+                1,
         );
         const report = countAstGrepRules(source);
         expect(report.ruleCount).toBe(0);

@@ -35,6 +35,35 @@ describe('maskSecrets', () => {
         }
     });
 
+    it.each([
+        ['lower hex', Buffer.from(SECRET).toString('hex')],
+        ['upper hex', Buffer.from(SECRET).toString('hex').toUpperCase()],
+        [
+            'byte-pair hex',
+            Buffer.from(SECRET).toString('hex').match(/../g)!.join(' '),
+        ],
+    ])('masks the %s spelling', (_name, encoded) => {
+        const out = maskSecrets(`dump: ${encoded} end`, [SECRET]);
+        expect(out).toBe(`dump: ${SECRET_REDACTION} end`);
+    });
+
+    it('masks JSON-escaped and percent-encoded spellings', () => {
+        const tricky = 'p@ss/"w\\rd"+é';
+        const json = JSON.stringify({ token: tricky });
+        const unicodeEscaped = JSON.stringify(tricky)
+            .slice(1, -1)
+            .replace(/"/g, '\\u0022');
+        const percent = encodeURIComponent(tricky);
+        const out = maskSecrets(
+            [json, percent, percent.toLowerCase(), unicodeEscaped].join('\n'),
+            [tricky],
+        );
+        expect(out).not.toContain(JSON.stringify(tricky).slice(1, -1));
+        expect(out).not.toContain(percent);
+        expect(out).not.toContain(percent.toLowerCase());
+        expect(out.split('\n')[0]).toBe(`{"token":"${SECRET_REDACTION}"}`);
+    });
+
     it('masks every secret, longest first', () => {
         const other = `${SECRET}_extended`;
         const out = maskSecrets(`${other} ${SECRET}`, [SECRET, other]);
