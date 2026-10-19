@@ -189,11 +189,11 @@ export function finderRunEnvironment(
 }
 
 /**
- * A submitResult payload that is a findings result. Partial recovery drops
- * every invalid item, so a list that had items and lost them all comes back
- * as `suggestions: []`: that is what was cut, not a review that found nothing.
+ * A submitResult payload that arrived whole: the findings schema accepts it
+ * and recovery dropped none of its items. On a cut turn a dropped item means
+ * the result was damaged; the valid items still ship, the run is partial.
  */
-function isSubmittedResult(
+function isWholeResult(
     payload: unknown,
     telemetryMetadata?: { organizationId?: string },
 ): boolean {
@@ -207,7 +207,7 @@ function isSubmittedResult(
         'codeSuggestions',
     ]) as { suggestions?: unknown };
     const sent = Array.isArray(raw?.suggestions) ? raw.suggestions.length : 0;
-    return sent === 0 || clean.suggestions.length > 0;
+    return clean.suggestions.length === sent;
 }
 
 export async function runAgentLoopViaCore(
@@ -414,13 +414,15 @@ export async function runAgentLoopViaCore(
     // that answered in prose is not incomplete; prose recovery owns it (#2171).
     // The runner makes an artifact of every requested result call, executed or
     // not, so a turn cut while writing submitResult leaves one holding raw,
-    // unparseable input, or an object that is no findings result (`{}`): only
-    // what the findings schema accepts counts as submitted.
-    const submitted = r.finderState.artifacts.some(
-        (a) =>
-            a.type === FINDER_DONE_TOOL &&
-            isSubmittedResult(a.payload, input.telemetryMetadata),
-    );
+    // unparseable input, an object that is no findings result (`{}`), or items
+    // recovery had to drop: only a result that arrived whole counts.
+    // The submitResult the review publishes: extractFindings reads the last.
+    const published = [...r.finderState.artifacts]
+        .reverse()
+        .find((a) => a.type === FINDER_DONE_TOOL);
+    const submitted =
+        !!published &&
+        isWholeResult(published.payload, input.telemetryMetadata);
     const incompleteReason: AgentLoopOutput['incompleteReason'] =
         r.finderState.status === 'budget-exhausted'
             ? 'budget-exhausted'

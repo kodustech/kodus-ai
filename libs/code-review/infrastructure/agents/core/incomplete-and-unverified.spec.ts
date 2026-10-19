@@ -208,6 +208,73 @@ describe('#2171 — finder run that ends without a submitted result', () => {
         expect(out.incompleteReason).toBe('truncated');
     });
 
+    // PR #2173 review: on a cut turn, recovery that drops any item means the
+    // result was damaged; the valid items still ship, the review is partial.
+    it('reports truncated when recovery dropped one of the items of a cut submitResult', async () => {
+        useModel(async (opts) =>
+            isVerifierCall(opts)
+                ? toolCall(
+                      'submitVerdict',
+                      { keep: true, rationale: 'ok' },
+                      SAFE,
+                  )
+                : toolCall(
+                      'submitResult',
+                      {
+                          reasoning: 'two candidates',
+                          suggestions: [findings.suggestions[0], {}],
+                      },
+                      { unified: 'length', raw: 'max_tokens' },
+                  ),
+        );
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(out.incompleteReason).toBe('truncated');
+        expect(
+            out.findings.suggestions.map((s: any) => s.relevantFile),
+        ).toEqual(['a.ts']);
+    });
+
+    // The stricter reading applies to a cut turn only: a finished turn whose
+    // result lost a malformed item is a format problem, not an unfinished run.
+    it('a finished turn whose submitResult lost a malformed item is not incomplete', async () => {
+        useModel(async (opts) =>
+            isVerifierCall(opts)
+                ? toolCall(
+                      'submitVerdict',
+                      { keep: true, rationale: 'ok' },
+                      SAFE,
+                  )
+                : toolCall(
+                      'submitResult',
+                      {
+                          reasoning: 'two candidates',
+                          suggestions: [findings.suggestions[0], {}],
+                      },
+                      SAFE,
+                  ),
+        );
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(out.incompleteReason).toBeUndefined();
+    });
+
+    it('an explicit empty findings list on a cut turn is a submitted result', async () => {
+        useModel(async () =>
+            toolCall(
+                'submitResult',
+                { reasoning: 'nothing found', suggestions: [] },
+                { unified: 'length', raw: 'max_tokens' },
+            ),
+        );
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(out.incompleteReason).toBeUndefined();
+    });
+
     it('a complete submitResult on a cut turn is a submitted result', async () => {
         useModel(async (opts) =>
             isVerifierCall(opts)
