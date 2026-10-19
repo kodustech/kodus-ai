@@ -33,12 +33,7 @@ export const TASK_META: Record<string, { label: string; description: string }> =
     customAgent: {
         label: TASK_LABELS.customAgent,
         description:
-            "The review agents your team created. Each one reads the PRs its file patterns match and writes findings — the model set for Custom Agents, or the one an agent pins.",
-    },
-    customAgentCheck: {
-        label: TASK_LABELS.customAgentCheck,
-        description:
-            "A second pass that re-reads each custom agent finding against the code and drops the ones it cannot confirm, before anything is posted — the model set for Custom Agents: finding check.",
+            "The review agents your team created. Each one reads the PRs its file patterns match, writes findings and verifies them — the model set for Custom Agents, or the one an agent pins.",
     },
     "": {
         label: "Unrouted",

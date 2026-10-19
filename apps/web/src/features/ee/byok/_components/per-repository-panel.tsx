@@ -233,9 +233,7 @@ export const PerRepositoryPanel = ({
                                                         </span>
                                                     )}
                                                     <span className="text-text-tertiary shrink-0 text-xs">
-                                                        {a.step === "check"
-                                                            ? "custom agent · finding check"
-                                                            : "custom agent"}
+                                                        custom agent
                                                         {a.folderName
                                                             ? ` · ${a.folderName}`
                                                             : ""}

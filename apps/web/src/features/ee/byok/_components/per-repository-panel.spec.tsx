@@ -16,7 +16,7 @@ jest.mock("@services/organizationParameters/fetch", () => ({
                 repositoryName: "acme/api",
                 agentId: "a1",
                 agentName: "API contracts",
-                step: "check",
+                step: "run",
                 model: "model-kimi",
             },
         ],
@@ -34,7 +34,7 @@ describe("PerRepositoryPanel", () => {
 
         expect(await screen.findByText("API contracts")).toBeVisible();
         expect(screen.getByText("acme/api")).toBeVisible();
-        expect(screen.getByText(/finding check/)).toBeVisible();
+        expect(screen.getByText("custom agent")).toBeVisible();
         expect(screen.getByText("Kimi K2.7 Code")).toBeVisible();
         expect(
             screen.getByRole("link", { name: "API contracts" }),

@@ -80,8 +80,6 @@ const TASK_CAPABILITY_REQUIREMENTS: Record<LlmTask, CapabilityRequirement> = {
     conversation: TOOL_CALLING_REQUIREMENT,
     // A custom agent investigates with tools (grep, ast-grep, MCP, CLIs).
     customAgent: TOOL_CALLING_REQUIREMENT,
-    // The check pass returns a verdict per finding, like the review family.
-    customAgentCheck: STRUCTURED_OUTPUT_REQUIREMENT,
 };
 
 

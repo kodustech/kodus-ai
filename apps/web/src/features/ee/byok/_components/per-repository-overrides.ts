@@ -2,13 +2,12 @@ import type { ListModelOverridesResult } from "@services/organizationParameters/
 
 export type FolderOverride = { id: string; name: string; model: string };
 
-/** A custom agent that pins its own model for one step (#2172). */
+/** A custom agent that pins its own model (#2172). */
 export type AgentOverride = {
     id: string;
     agentId: string;
     agentName: string;
-    /** `run` = the agent itself, `check` = its finding check. */
-    step: "run" | "check";
+    step: "run";
     model: string;
     /** Set when the agent is stored on a folder of a monorepo. */
     folderName?: string;

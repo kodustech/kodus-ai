@@ -426,7 +426,7 @@ export function buildTryTrace(params: {
 
     return {
         status: 'completed',
-        models: { run: agent.models?.run, check: agent.models?.check },
+        models: { run: agent.models?.run },
         skillsOpened: [...skillsOpened.values()],
         toolCalls: calls.map((call) => ({
             tool: call.tool,

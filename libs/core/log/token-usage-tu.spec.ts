@@ -1,5 +1,4 @@
 import {
-    CUSTOM_AGENT_CHECK_RUN_SUFFIX,
     CUSTOM_AGENT_RUN_PREFIX,
     deriveArea,
     deriveTu,
@@ -8,7 +7,6 @@ import {
     SYSTEM_RUN_NAMES,
 } from './token-usage-tu';
 import {
-    BACKFILL_CUSTOM_AGENT_CHECK_RUN_SUFFIX,
     BACKFILL_CUSTOM_AGENT_RUN_PREFIX,
     BACKFILL_ROUTING_TASKS,
     BACKFILL_SUGGESTION_RUN_NAMES,
@@ -158,26 +156,15 @@ describe('deriveTu', () => {
                 }
             });
 
-            it('attributes an unstamped custom agent check to `customAgentCheck`', () => {
+            it('counts a custom agent verify in `customAgent`, the model it runs on', () => {
                 for (const rn of [
                     'code-review-custom-api-contracts-verify',
                     'code-review-custom-api-contracts-convention-verify',
                 ]) {
                     expect(
                         deriveTu({ ...usage, 'gen_ai.run.name': rn })!.route,
-                    ).toBe('customAgentCheck');
+                    ).toBe('customAgent');
                 }
-            });
-
-            it('splits the check out even when it ran on the finder slot (stamped customAgent)', () => {
-                expect(
-                    deriveTu({
-                        ...usage,
-                        'gen_ai.run.name':
-                            'code-review-custom-api-contracts-verify',
-                        'route': 'customAgent',
-                    })!.route,
-                ).toBe('customAgentCheck');
             });
 
             it('keeps a stamped custom agent route', () => {
@@ -328,9 +315,6 @@ describe('deriveArea', () => {
         );
         expect(new Set(BACKFILL_ROUTING_TASKS)).toEqual(ROUTING_TASKS);
         expect(BACKFILL_CUSTOM_AGENT_RUN_PREFIX).toBe(CUSTOM_AGENT_RUN_PREFIX);
-        expect(BACKFILL_CUSTOM_AGENT_CHECK_RUN_SUFFIX).toBe(
-            CUSTOM_AGENT_CHECK_RUN_SUFFIX.source,
-        );
     });
 
     it('ROUTING_TASKS matches the real LlmTask enum', () => {

@@ -59,7 +59,7 @@ export type CustomAgent = {
         cli?: CliToolConfig[];
     };
     /** BYOK model ids; absent means the routing table decides. */
-    models?: { run?: string; check?: string };
+    models?: { run?: string };
     presentation: CustomAgentPresentation;
 };
 
@@ -158,7 +158,7 @@ export type CustomAgentTryFinding = {
 export type CustomAgentTryTrace = {
     status: "completed" | "skipped" | "failed";
     reason?: string;
-    models?: { run?: string; check?: string };
+    models?: { run?: string };
     skillsOpened: Array<{ path: string; files?: string[] }>;
     toolCalls: Array<{
         tool: string;

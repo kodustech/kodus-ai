@@ -464,11 +464,10 @@ export const customAgentConfigSchema = z.object({
             })
             .optional(),
     }),
-    /** BYOK model ids overriding the `customAgent` / `customAgentCheck` tasks. */
+    /** BYOK model id overriding the `customAgent` task. */
     models: z
         .object({
             run: z.string().optional(),
-            check: z.string().optional(),
         })
         .optional(),
     presentation: customAgentPresentationSchema,

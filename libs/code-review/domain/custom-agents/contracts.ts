@@ -117,7 +117,7 @@ export type CustomAgentTryTrace = {
     status: 'completed' | 'skipped' | 'failed';
     /** Why the agent was skipped (no file matched) or failed. */
     reason?: string;
-    models?: { run?: string; check?: string };
+    models?: { run?: string };
     skillsOpened: Array<{ path: string; files?: string[] }>;
     toolCalls: Array<{
         tool: string;

@@ -99,26 +99,26 @@ export function collectModelOverrides(
     return out;
 }
 
-/** A custom agent (#2172) that pins its own model for one of its steps. */
+/** A custom agent (#2172) that pins its own model. */
 export interface CustomAgentModelOverride extends ModelOverrideLocation {
     agentId: string;
     agentName: string;
-    /** `run` overrides the customAgent task, `check` the customAgentCheck one. */
-    step: 'run' | 'check';
+    /** The customAgent task it overrides. */
+    step: 'run';
     model: string;
 }
 
 type AgentLike = {
     id?: unknown;
     name?: unknown;
-    models?: { run?: unknown; check?: unknown };
+    models?: { run?: unknown };
 };
 
 const trimmedString = (value: unknown): string | undefined =>
     typeof value === 'string' && value.trim() ? value.trim() : undefined;
 
 /**
- * Enumerate every custom agent model pin (`customAgents[].models.run|check`)
+ * Enumerate every custom agent model pin (`customAgents[].models.run`)
  * at the level the agent is stored on: global, repository or directory.
  * Read-only: these are cleared from the agent's own page, never in bulk.
  */
@@ -152,7 +152,7 @@ export function collectCustomAgentModelOverrides(
             const agentId = trimmedString(agent?.id);
             if (!agentId) continue;
             const agentName = trimmedString(agent?.name) ?? agentId;
-            for (const step of ['run', 'check'] as const) {
+            for (const step of ['run'] as const) {
                 const model = trimmedString(agent?.models?.[step]);
                 if (model) {
                     out.push({ ...location, agentId, agentName, step, model });

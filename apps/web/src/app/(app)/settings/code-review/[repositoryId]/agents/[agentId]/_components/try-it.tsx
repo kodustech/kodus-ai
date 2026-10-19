@@ -223,10 +223,7 @@ export const TryResult = ({ trace }: { trace: CustomAgentTryTrace }) => {
                       : `Failed${trace.reason ? ` · ${trace.reason}` : ""}`}
             </span>
             <span className="text-text-secondary flex flex-wrap gap-x-3 text-xs">
-                {trace.models?.run && <span>Run: {trace.models.run}</span>}
-                {trace.models?.check && (
-                    <span>Check: {trace.models.check}</span>
-                )}
+                {trace.models?.run && <span>Model: {trace.models.run}</span>}
                 {typeof trace.durationMs === "number" && (
                     <span>{Math.round(trace.durationMs / 1000)} s</span>
                 )}

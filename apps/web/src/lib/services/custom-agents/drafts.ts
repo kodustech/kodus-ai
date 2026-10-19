@@ -591,10 +591,8 @@ export const settingsSummary = (
         ),
         ...(agent.tools.cli ?? []).map((cli) => `${cli.name || "Unnamed"} CLI`),
     ];
-    const { run, check } = agent.models ?? {};
-    if (!run && !check) chips.push("Model: routing default");
-    if (run) chips.push(`Model: ${model(run)}`);
-    if (check) chips.push(`Check: ${model(check)}`);
+    const run = agent.models?.run;
+    chips.push(run ? `Model: ${model(run)}` : "Model: routing default");
     return chips;
 };
 
@@ -708,14 +706,7 @@ export const cliIssues = (cli: CliToolConfig): string[] => {
  * secret left blank after "Replace" has neither and is dropped.
  */
 export const prepareAgentsForSave = (agents: CustomAgent[]): CustomAgent[] =>
-    agents.map((loaded) => {
-        // A preview config saved before shadow mode was retired still holds
-        // `presentation.mode`, which the save endpoint no longer takes.
-        const { mode: _retired, ...presentation } =
-            loaded.presentation as CustomAgent["presentation"] & {
-                mode?: unknown;
-            };
-        const agent = { ...loaded, presentation };
+    agents.map((agent) => {
         if (!agent.tools.cli?.length) return agent;
         return {
             ...agent,

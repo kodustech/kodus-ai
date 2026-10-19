@@ -104,15 +104,11 @@ export interface PromptAgentMeta {
     knowledgeSection?: string;
 }
 
-/** Custom agents carry their guides (possibly none); built-in agents do not. */
-function hasOwnLane(meta: PromptAgentMeta): boolean {
+/** Custom agents carry their guides (possibly none); built-in agents do not.
+ *  A custom agent reports only within its focus: the generalist covers
+ *  general bugs. */
+export function hasOwnLane(meta: PromptAgentMeta): boolean {
     return meta.conventionGuides !== undefined;
-}
-
-/** A custom agent reports only within its focus: the generalist covers
- *  general bugs. False for every built-in agent. */
-export function isLaneScoped(meta: PromptAgentMeta): boolean {
-    return hasOwnLane(meta);
 }
 
 /** The knowledge section goes inside the agent block, after everything the
@@ -149,8 +145,7 @@ ${guides.map((g) => `      - ${g}`).join('\n')}
 }
 
 /** The finder's defect hunt: the generalist's and every built-in agent's
- *  mindset and workflow, and a custom agent's when it also reports general
- *  bugs. */
+ *  mindset and workflow. */
 const DEFECT_HUNT_MINDSET = `  <Mindset>
     Assume every change is broken until you prove it is safe.
     Your default is to report — you need evidence to DISMISS, not evidence to report.
@@ -754,7 +749,6 @@ function buildCustomAgentSystemPrompt(
     input: ReviewAgentInput,
     meta: PromptAgentMeta,
 ): string {
-    const lane = isLaneScoped(meta);
     const langLabel = resolveLanguageLabel(input.languageResultPrompt);
     const langSection = langLabel
         ? `\n  <Language>Write ALL review comments, summaries, and reasoning in ${langLabel}. This is mandatory — do not fall back to English.</Language>`
@@ -762,9 +756,9 @@ function buildCustomAgentSystemPrompt(
 
     return `<CodeReviewAgent>
   <Date>${new Date().toLocaleDateString('en-GB')}</Date>
-${lane ? LANE_MINDSET : DEFECT_HUNT_MINDSET}
+${LANE_MINDSET}
 
-${lane ? LANE_WORKFLOW : DEFECT_HUNT_WORKFLOW}
+${LANE_WORKFLOW}
 
 ${FINDER_SCOPE}
 ${CACHE_PREFIX_BOUNDARY}
@@ -780,12 +774,9 @@ ${formatMemoryRules(input.memoryRules)}
 </CodeReviewAgent>`;
 }
 
-/** The compact prompt's behavioral spine, for a custom agent kept to its lane. */
+/** The compact prompt's behavioral spine, for a custom agent. */
 const LANE_COMPACT_SPINE = `  <Mindset>The generalist reviewer already covers general correctness bugs on this PR. Report only findings within your focus (the <Role> below: your mission, the team's instructions, linked guides and skills, your tools). Within it, assume the change breaks what your focus checks until you can show it does not.</Mindset>
   <Workflow>For the changed code your focus applies to: investigate only what your focus needs (its guides, skills and tools, the code a rule depends on), read enough to confirm or dismiss, then submit via the submitResult tool.</Workflow>`;
-
-const DEFECT_HUNT_COMPACT_SPINE = `  <Mindset>Assume each change is broken until you can name the input that proves it safe. Default to reporting when you have code-backed suspicion.</Mindset>
-  <Workflow>For each changed function: grep callers and callees with the tools, read enough to confirm or dismiss, then submit via the submitResult tool.</Workflow>`;
 
 const COMPACT_SCOPE = `  <Scope>Root cause must be in lines added or modified by this PR. Trace impact through callers but anchor the finding to a changed line — for cross-file bugs anchor on the changed trigger line, never a placeholder or non-diff path; if you can't anchor it to a changed line, omit it.</Scope>`;
 
@@ -808,7 +799,7 @@ function buildCompactCustomAgentSystemPrompt(
     });
 
     return `<CodeReviewAgent>
-${isLaneScoped(meta) ? LANE_COMPACT_SPINE : DEFECT_HUNT_COMPACT_SPINE}
+${LANE_COMPACT_SPINE}
 ${COMPACT_SCOPE}
 ${CACHE_PREFIX_BOUNDARY}
   <Role>You are ${meta.identity.name}, ${meta.identity.description}${langLine}
@@ -934,7 +925,7 @@ export function buildUserPrompt(input: ReviewAgentInput, meta: PromptAgentMeta):
 
         // A custom agent kept to its lane gets the same task and rules scoped
         // to its focus; every other agent gets the defect hunt verbatim.
-        const lane = isLaneScoped(meta);
+        const lane = hasOwnLane(meta);
         const toolHints = `${input.callGraph ? '\n    Use the call graph above as a fast map of production callers/callees, but still verify with tools before reporting.' : ''}${
                 input.linkedRepoAccess?.list()?.length
                     ? '\n    When linked repositories are listed in <CrossRepoBoundary>, use grep/readFile with repo="<fullName>" to verify producer/consumer shapes across the boundary. Only report cross-repo defects with confirmed counterpart evidence.'
@@ -1066,7 +1057,7 @@ export function buildCompactUserPrompt(input: ReviewAgentInput, meta: PromptAgen
             ? `\n    Label each finding as one of: ${allowedSuggestionLabels.join(', ')}.`
             : '';
 
-        const lane = isLaneScoped(meta);
+        const lane = hasOwnLane(meta);
         const compactTask = lane
             ? `  <Task>Review this PR for the issues your focus covers (your <Role>); the generalist reviewer covers general correctness bugs, do not report them. For the changed code your focus applies to: investigate what your focus needs, read enough to confirm. Anchor each finding to a changed line and let the verifier filter unsupported claims.</Task>
 `

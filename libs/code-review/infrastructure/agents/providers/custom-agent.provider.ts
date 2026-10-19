@@ -27,7 +27,7 @@ import type {
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
-import { LLM_TASK, type NormalizedModel } from '@libs/llm/byok-config';
+import { LLM_TASK } from '@libs/llm/byok-config';
 import { ByokErrorCounter } from '@libs/notifications/application/byok-error-counter.service';
 import { DocumentationSearchExaService } from '@libs/code-review/infrastructure/adapters/services/documentation-search-exa.service';
 import {
@@ -364,38 +364,22 @@ export class CustomAgentProvider extends BaseCodeReviewAgentProvider {
     }
 
     /**
-     * Runs on the `customAgent` routing task and checks on `customAgentCheck`,
-     * each overridable per agent by a BYOK model id. With no agent override
-     * the repository's model override still applies to the run.
+     * Runs on the `customAgent` routing task, overridable per agent by a BYOK
+     * model id; with no agent override the repository's model override still
+     * applies. Its findings are verified on that same model, as the built-in
+     * agents' are: the check is the review's verify, not a model of its own.
      */
     protected async resolveModels(
         input: ReviewAgentInput,
-    ): Promise<ResolvedAgentModel & { checkByokConfig?: NormalizedModel }> {
+    ): Promise<ResolvedAgentModel> {
         const runOverride = this.agent.models?.run?.trim();
-        const checkOverride = this.agent.models?.check?.trim();
-        const [run, check] = await Promise.all([
-            resolveReviewAgentModel(
-                runOverride
-                    ? {
-                          ...input,
-                          byokModelId: runOverride,
-                          byokModel: undefined,
-                      }
-                    : input,
-                this.permissionValidationService,
-                LLM_TASK.customAgent,
-            ),
-            resolveReviewAgentModel(
-                {
-                    ...input,
-                    byokModelId: checkOverride || undefined,
-                    byokModel: undefined,
-                },
-                this.permissionValidationService,
-                LLM_TASK.customAgentCheck,
-            ),
-        ]);
-        return { ...run, checkByokConfig: check.byokConfig };
+        return resolveReviewAgentModel(
+            runOverride
+                ? { ...input, byokModelId: runOverride, byokModel: undefined }
+                : input,
+            this.permissionValidationService,
+            LLM_TASK.customAgent,
+        );
     }
 
     async execute(input: ReviewAgentInput): Promise<ReviewAgentOutput> {

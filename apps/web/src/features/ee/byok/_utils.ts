@@ -29,7 +29,6 @@ export const TASK_LABELS: Record<LlmTask, string> = {
     prSummary: "PR Summary",
     conversation: "Chat",
     customAgent: "Custom Agents",
-    customAgentCheck: "Custom Agents: finding check",
 };
 
 /**
@@ -49,9 +48,7 @@ export const TASK_DESCRIPTIONS: Record<LlmTask, string> = {
     prSummary: "Writes the summary at the top of each pull request.",
     conversation: "Powers the Kody chat assistant in the dashboard and IDE.",
     customAgent:
-        "Runs the review agents your team created. Each one reads the PRs its file patterns match and writes findings.",
-    customAgentCheck:
-        "A second pass that re-reads each custom agent finding against the code and drops the ones it cannot confirm before posting.",
+        "Runs the review agents your team created. Each one reads the PRs its file patterns match, writes findings and verifies them.",
 };
 
 /** Resolve a model id to its human label within a pool, falling back to the raw

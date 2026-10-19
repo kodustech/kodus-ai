@@ -196,7 +196,7 @@ describe('collectCustomAgentModelOverrides (#2172)', () => {
         ],
     };
 
-    it('lists every agent that pins a model, with where it lives and which step', () => {
+    it('lists every agent that pins a model, with where it lives; a retired check pin is ignored', () => {
         expect(collectCustomAgentModelOverrides(cfg)).toEqual([
             {
                 scope: 'global',
@@ -213,26 +213,6 @@ describe('collectCustomAgentModelOverrides (#2172)', () => {
                 agentName: 'Agent a1',
                 step: 'run',
                 model: 'model-a',
-            },
-            {
-                scope: 'repository',
-                repositoryId: 'repo-1',
-                repositoryName: 'acme/api',
-                agentId: 'a1',
-                agentName: 'Agent a1',
-                step: 'check',
-                model: 'model-b',
-            },
-            {
-                scope: 'directory',
-                repositoryId: 'repo-1',
-                repositoryName: 'acme/api',
-                directoryId: 'dir-1',
-                directoryName: 'payments',
-                agentId: 'd1',
-                agentName: 'Agent d1',
-                step: 'check',
-                model: 'model-c',
             },
         ]);
     });

@@ -51,14 +51,11 @@ export const BACKFILL_ROUTING_TASKS = [
     'prSummary',
     'conversation',
     'customAgent',
-    'customAgentCheck',
 ];
 
-// Mirror of CUSTOM_AGENT_RUN_PREFIX / CUSTOM_AGENT_CHECK_RUN_SUFFIX in
-// token-usage-tu.ts (asserted equal by token-usage-tu.spec.ts).
+// Mirror of CUSTOM_AGENT_RUN_PREFIX in token-usage-tu.ts (asserted equal by
+// token-usage-tu.spec.ts).
 export const BACKFILL_CUSTOM_AGENT_RUN_PREFIX = 'code-review-custom-';
-export const BACKFILL_CUSTOM_AGENT_CHECK_RUN_SUFFIX =
-    '-(?:convention-)?verify$';
 
 const gf = (f: string) => ({ $getField: { field: f, input: '$attributes' } });
 
@@ -179,18 +176,7 @@ const SET_TU = {
                             regex: `^${BACKFILL_CUSTOM_AGENT_RUN_PREFIX}`,
                         },
                     },
-                    {
-                        $cond: [
-                            {
-                                $regexMatch: {
-                                    input: rn,
-                                    regex: BACKFILL_CUSTOM_AGENT_CHECK_RUN_SUFFIX,
-                                },
-                            },
-                            'customAgentCheck',
-                            'customAgent',
-                        ],
-                    },
+                    'customAgent',
                     {
                         $cond: [
                             { $in: [gf('route'), BACKFILL_ROUTING_TASKS] },

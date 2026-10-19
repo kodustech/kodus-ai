@@ -161,8 +161,7 @@ export type CustomAgentModelOverrideEntry = {
     directoryName?: string;
     agentId: string;
     agentName: string;
-    /** `run` = the agent itself, `check` = its finding check. */
-    step: 'run' | 'check';
+    step: 'run';
     model: string;
 };
 

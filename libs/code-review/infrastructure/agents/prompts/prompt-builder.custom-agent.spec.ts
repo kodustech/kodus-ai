@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 import {
     buildSystemPrompt,
     buildUserPrompt,
-    isLaneScoped,
+    hasOwnLane,
     type PromptAgentMeta,
 } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
 import { verifierPromptFor } from '@libs/code-review/infrastructure/agents/core/verifier.agent';
@@ -156,7 +156,7 @@ describe('generalist prompts are byte-identical', () => {
         expect(buildSystemPrompt(input(), generalist)).not.toContain(
             CACHE_PREFIX_BOUNDARY,
         );
-        expect(isLaneScoped(generalist)).toBe(false);
+        expect(hasOwnLane(generalist)).toBe(false);
     });
 });
 
@@ -164,7 +164,7 @@ describe('custom agent — lane focus', () => {
     it('replaces the defect hunt with a hunt scoped to its focus', () => {
         const system = buildSystemPrompt(input(), e2e);
 
-        expect(isLaneScoped(e2e)).toBe(true);
+        expect(hasOwnLane(e2e)).toBe(true);
         expect(system).toContain(
             'The generalist reviewer already covers general correctness bugs on it.',
         );

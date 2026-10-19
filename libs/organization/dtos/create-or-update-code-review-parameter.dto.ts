@@ -580,10 +580,6 @@ class CustomAgentModelsDto {
     @IsOptional()
     @IsString()
     run?: string;
-
-    @IsOptional()
-    @IsString()
-    check?: string;
 }
 
 class CustomAgentTagDto {

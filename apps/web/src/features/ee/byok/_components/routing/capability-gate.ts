@@ -47,7 +47,6 @@ const TASK_REQUIREMENT: Record<LlmTask, Requirement> = {
     conversation: "toolCalling",
     prSummary: null,
     customAgent: "toolCalling",
-    customAgentCheck: "structuredOutput",
 };
 
 export const capabilityGate = (

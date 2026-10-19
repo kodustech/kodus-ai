@@ -323,18 +323,6 @@ describe("custom agent drafts", () => {
         ).toContain("Secret names are env variables, e.g. LEDGER_TOKEN");
     });
 
-    it("drops the retired shadow mode before saving", () => {
-        const agent = createAgentFromTemplate("blank", []);
-        const [prepared] = prepareAgentsForSave([
-            {
-                ...agent,
-                presentation: { ...agent.presentation, mode: "shadow" },
-            } as CustomAgent,
-        ]);
-        expect(prepared.presentation).not.toHaveProperty("mode");
-        expect(prepared.presentation).toEqual(agent.presentation);
-    });
-
     it("sends typed or kept secrets and drops a blank one before saving", () => {
         const agent = createAgentFromTemplate("blank", []);
         const [prepared] = prepareAgentsForSave([
@@ -677,13 +665,13 @@ describe("custom agent drafts", () => {
             ).toEqual(["Linear", "semver CLI", "Model: routing default"]);
             expect(
                 settingsSummary(
-                    { ...base(), models: { run: "m1", check: "m2" } },
+                    { ...base(), models: { run: "m1" } },
                     {
                         modelName: (id) =>
                             id === "m1" ? "Model One" : undefined,
                     },
                 ),
-            ).toEqual(["Model: Model One", "Check: m2"]);
+            ).toEqual(["Model: Model One"]);
         });
 
         it("names a plugin from its id when its connection is not listed", () => {

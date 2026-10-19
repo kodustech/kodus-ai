@@ -28,7 +28,6 @@ import {
     ListChecksIcon,
     MessageSquareIcon,
     ShieldCheckIcon,
-    ShieldQuestionIcon,
     type LucideIcon,
 } from "lucide-react";
 import { cn } from "src/core/utils/components";
@@ -375,11 +374,6 @@ const AGENT_CARDS: AgentCard[] = [
         task: "customAgent",
         Icon: BotIcon,
         title: "Custom Agents",
-    },
-    {
-        task: "customAgentCheck",
-        Icon: ShieldQuestionIcon,
-        title: "Custom Agents: finding check",
     },
 ];
 

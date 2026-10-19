@@ -72,7 +72,6 @@ export const READ_ROUTING_TASKS = [
     'prSummary',
     'conversation',
     'customAgent',
-    'customAgentCheck',
 ];
 
 const taskExpr = (areaField: unknown) => ({

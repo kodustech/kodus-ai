@@ -6,7 +6,7 @@ import {
 
 describe('TokenUsageRepository per-task read', () => {
     // The read path trusts `tu.route` only when it is a known task. A task
-    // missing here (customAgent / customAgentCheck, #2172) is folded back
+    // missing here (customAgent, #2172) is folded back
     // into `codeReview` on the Token Usage screen.
     it('trusts every routing task the write path stamps', () => {
         expect(new Set(READ_ROUTING_TASKS)).toEqual(ROUTING_TASKS);

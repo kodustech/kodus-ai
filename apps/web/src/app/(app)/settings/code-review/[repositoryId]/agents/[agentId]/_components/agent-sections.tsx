@@ -392,37 +392,28 @@ export const ModelsFields = ({
 }) => {
     const byok = useByokModels();
     const { models, routing, nameOf: labelOf } = byok;
-    const routed = (task: "customAgent" | "customAgentCheck") =>
-        labelOf(routing?.taskOverrides?.[task] ?? routing?.defaultModelId);
+    const routed = labelOf(
+        routing?.taskOverrides?.customAgent ?? routing?.defaultModelId,
+    );
 
-    const pick = (key: "run" | "check") => (value: string) =>
-        onChange((current) => {
-            const next = { ...(current.models ?? {}) };
-            if (value === ROUTING_DEFAULT) delete next[key];
-            else next[key] = value;
-            return {
-                ...current,
-                models: Object.keys(next).length ? next : undefined,
-            };
-        });
+    const pick = (value: string) =>
+        onChange((current) => ({
+            ...current,
+            models: value === ROUTING_DEFAULT ? undefined : { run: value },
+        }));
 
     const selector = (
-        key: "run" | "check",
-        task: "customAgent" | "customAgentCheck",
-    ) => (
         <Select
-            value={agent.models?.[key] ?? ROUTING_DEFAULT}
+            value={agent.models?.run ?? ROUTING_DEFAULT}
             disabled={!canEdit || !models.length}
-            onValueChange={pick(key)}>
-            <SelectTrigger
-                size="md"
-                aria-label={key === "run" ? "Run model" : "Check model"}>
+            onValueChange={pick}>
+            <SelectTrigger size="md" aria-label="Model">
                 <SelectValue />
             </SelectTrigger>
             <SelectContent>
                 <SelectItem value={ROUTING_DEFAULT}>
                     Routing default
-                    {routed(task) ? ` (${routed(task)})` : ""}
+                    {routed ? ` (${routed})` : ""}
                 </SelectItem>
                 {models.map((model) => (
                     <SelectItem key={model.id} value={model.id}>
@@ -441,18 +432,11 @@ export const ModelsFields = ({
                     models.
                 </p>
             )}
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <Field
-                    label="Run"
-                    hint="Reads the change, calls tools and writes findings.">
-                    {selector("run", "customAgent")}
-                </Field>
-                <Field
-                    label="Check"
-                    hint="Judges each finding before it is kept.">
-                    {selector("check", "customAgentCheck")}
-                </Field>
-            </div>
+            <Field
+                label="Model"
+                hint="Reviews the change and verifies its findings, as the main review does.">
+                {selector}
+            </Field>
         </>
     );
 };
@@ -464,7 +448,7 @@ export const Models = (props: {
 }) => (
     <Section
         title="Models"
-        description="By default the routing table decides, under Custom Agents and Custom Agents: finding check. Pin a model here to override it for this agent only.">
+        description="By default the routing table decides, under Custom Agents. Pin a model here to override it for this agent only.">
         <ModelsFields {...props} />
     </Section>
 );
