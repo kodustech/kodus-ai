@@ -27,6 +27,7 @@ import {
     PrReviewInProgressError,
 } from '@libs/code-review/domain/errors/pr-review-in-progress.error';
 import { describePipelineError } from '@libs/code-review/utils/describe-pipeline-error';
+import { EnqueueImplementationCheckUseCase } from '@libs/code-review/application/use-cases/enqueue-implementation-check.use-case';
 
 /**
  * Messages the pipeline sets before it knows the outcome. Reporting one of
@@ -74,6 +75,7 @@ export class AutomationCodeReviewService implements Omit<
         private readonly organizationService: IOrganizationService,
         private readonly codeReviewHandlerService: CodeReviewHandlerService,
         private readonly distributedLockService: DistributedLockService,
+        private readonly enqueueImplementationCheckUseCase: EnqueueImplementationCheckUseCase,
     ) {}
 
     async setup(payload?: any): Promise<any> {
@@ -524,7 +526,7 @@ export class AutomationCodeReviewService implements Omit<
         message: string,
         data: any,
         stageName?: string,
-    ) {
+    ): Promise<boolean> {
         try {
             const errorMessage = [
                 AutomationStatus.ERROR,
@@ -543,6 +545,7 @@ export class AutomationCodeReviewService implements Omit<
                 message,
                 stageName,
             );
+            return true;
         } catch (error) {
             this.logger.error({
                 message: 'Error updating automation execution',
@@ -550,6 +553,7 @@ export class AutomationCodeReviewService implements Omit<
                 error: error instanceof Error ? error : undefined,
                 metadata: { executionUuid: entity.uuid, status },
             });
+            return false;
         }
     }
 
@@ -577,13 +581,17 @@ export class AutomationCodeReviewService implements Omit<
             lastExecutionData,
         );
 
-        await this.updateAutomationExecution(
+        const persisted = await this.updateAutomationExecution(
             execution,
             finalStatus,
             finalMessage,
             newData,
             'Kody Review Finished',
         );
+
+        if (persisted) {
+            await this.enqueueImplementationCheck(payload, finalStatus, result);
+        }
 
         this.logger.log({
             message: `Successfully handled pull request for PR#${payload.pullRequest?.number}`,
@@ -593,6 +601,58 @@ export class AutomationCodeReviewService implements Omit<
                 ...result,
             },
         });
+    }
+
+    /**
+     * The push webhook checks suggestions only once they are stored, so a
+     * commit pushed while this review was running was checked against an
+     * empty set (#2182). Checking again once the review is persisted covers
+     * it; without a new commit the check finds no diff and stops before the
+     * LLM call.
+     */
+    private async enqueueImplementationCheck(
+        payload: any,
+        finalStatus: AutomationStatus,
+        result: any,
+    ): Promise<void> {
+        const commitSha = result?.lastAnalyzedCommit?.sha;
+
+        if (
+            !commitSha ||
+            (finalStatus !== AutomationStatus.SUCCESS &&
+                finalStatus !== AutomationStatus.PARTIAL_ERROR)
+        ) {
+            return;
+        }
+
+        const {
+            organizationAndTeamData,
+            repository,
+            pullRequest,
+            platformType,
+        } = payload;
+
+        try {
+            await this.enqueueImplementationCheckUseCase.execute({
+                organizationAndTeamData,
+                repository: { id: repository?.id, name: repository?.name },
+                pullRequestNumber: pullRequest?.number,
+                commitSha,
+                trigger: 'review_completed',
+                platformType,
+            });
+        } catch (error) {
+            this.logger.error({
+                message: `Failed to enqueue implementation check after review of PR#${pullRequest?.number}`,
+                context: AutomationCodeReviewService.name,
+                error: error instanceof Error ? error : undefined,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryId: repository?.id,
+                    pullRequestNumber: pullRequest?.number,
+                },
+            });
+        }
     }
 
     /**
