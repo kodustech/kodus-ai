@@ -55,6 +55,11 @@ services:
             # Next 16 answers 403 on /_next/* for dev requests coming from an
             # origin it was not told about — the tunnel hostname is one.
             - ALLOWED_DEV_ORIGINS=${RUNO_PUBLIC_HOST}
+        # A deploy brings new code to a .next volume that outlives it, and
+        # Turbopack's dev cache in it kept serving a route tree from before a
+        # page was deleted: every page next to it answered 404. A preview
+        # starts from an empty .next instead; the first visit compiles again.
+        command: sh -c "find .next -mindepth 1 -delete && exec pnpm start:dev"
         deploy:
             resources:
                 limits:
