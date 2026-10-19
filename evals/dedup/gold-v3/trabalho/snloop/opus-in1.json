@@ -1,0 +1,2449 @@
+{
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "9fde0e906897cc0f4f71793f647dd629faba3317",
+  "base": "bc89fe00ea84d20bedcec782f0701b9711dc8201",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+    "lines": [
+     96,
+     99
+    ],
+    "texto": "WHAT: `prisma.credential.update` is called in `getClient`, but `prisma` is never imported in this file. WHY: this fails type-checking and throws a ReferenceError whenever a Salesforce client is constructed, so the Salesforce integration breaks. HOW: add `import prisma from \"@calcom/prisma\";`."
+   },
+   {
+    "id": "S2",
+    "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+    "lines": [
+     75,
+     99
+    ],
+    "texto": "WHAT: `getClient` now always POSTs to Salesforce's token endpoint and writes the credential to the DB on every service construction. This is done without an expiry check and without going through `refreshOAuthTokens`, so credential sync is bypassed for Salesforce. WHY: every booking or availability call triggers an extra network round trip and DB write, and the sync endpoint is never used for this app. It also throws on any non-'OK' statusText. HOW: only refresh when the token is expired, and call it through `refreshOAuthTokens`."
+   },
+   {
+    "id": "S3",
+    "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+    "lines": [
+     5,
+     11
+    ],
+    "texto": "WHAT: the computed keys `[z.string().toString()]` evaluate to a fixed string like \"[object Object]\", not a wildcard. The schema therefore requires a numeric property with that literal name. WHY: every parse in sync mode fails and throws 'Invalid refreshed tokens were returned', so credential sync cannot work. HOW: use `z.object({ access_token: z.string() }).passthrough()` and check expiry fields explicitly."
+   },
+   {
+    "id": "S4",
+    "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+    "lines": [
+     25,
+     27
+    ],
+    "texto": "WHAT: when the response lacks `refresh_token`, a literal placeholder \"refresh_token\" is injected into the parsed data. WHY: callers such as Zoom (`key.refresh_token = newTokens.refresh_token`) and Salesforce persist this data, overwriting the real refresh token with a fake one, which breaks later refreshes. HOW: do not inject a placeholder; leave the field undefined or preserve the existing token in the caller."
+   },
+   {
+    "id": "S5",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     97,
+     101
+    ],
+    "texto": "WHAT: `parseRefreshTokenResponse` returns the zod safeParse result (`{success, data}`), and that whole object is saved as the credential `key`. WHY: the stored Google credential becomes `{success:true,data:{...}}` and loses its token fields, so the next `googleCredentialSchema.parse(credential.key)` throws. HOW: store `parseRefreshTokenResponse(...).data`."
+   },
+   {
+    "id": "S6",
+    "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+    "lines": [
+     8,
+     15
+    ],
+    "texto": "WHAT: in sync mode the function returns the raw fetch `Response`, while callers expect the refresh function's shape. Those shapes are axios `{data}` (Zoho, Bigin), the googleapis `res.data`, and the Hubspot token object. WHY: callers read `tokenInfo.data.error`, `res.data`, or `hubspotRefreshToken.expiresIn` on a Response, which yields undefined or a TypeError, so the sync path fails for these apps. HOW: parse the sync response (`await response.json()`) and adapt it to the shape each caller expects, e.g. wrap it as `{ data }`."
+   },
+   {
+    "id": "S7",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     85,
+     96
+    ],
+    "texto": "WHAT: `refreshOAuthTokens` returns a fetch Response in sync mode, but the code reads `tokenInfo.data.error` as an axios response. WHY: `tokenInfo.data` is undefined on a Response, so this throws a TypeError whenever credential sync is enabled. HOW: normalize the sync response to `{ data: json }` inside `refreshOAuthTokens`, or here before use."
+   },
+   {
+    "id": "S8",
+    "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+    "lines": [
+     263,
+     264
+    ],
+    "texto": "WHAT: `parseRefreshTokenResponse` throws on invalid data, and the previous error logging branch was removed. The line below still relies on `tokenResponse.success`, which is now always true if reached. WHY: a malformed Microsoft token response previously just logged and kept the old credentials, but now aborts the whole refresh with a generic error and no logging of the MS response. HOW: keep the safeParse and error logging in the non-sync path, or catch and log the zod error."
+   },
+   {
+    "id": "S9",
+    "file": "apps/web/pages/api/webhook/app-credential.ts",
+    "lines": [
+     24,
+     29
+    ],
+    "texto": "WHAT: the webhook secret is compared with `!==`, which is not constant-time. WHY: this is the only authentication on an endpoint that overwrites any user's third-party credentials, and the comparison leaks timing information about the secret. HOW: compare with `crypto.timingSafeEqual` over equal-length buffers."
+   },
+   {
+    "id": "S10",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     85,
+     94
+    ],
+    "texto": "refreshOAuthTokens' third parameter is `userId` and is sent as `calcomUserId` to the sync endpoint, but this call passes `credentialId`. A credential id gets treated as a Cal.com user id, so the wrong user's credentials can be requested or synced. The refreshAccessToken method has no user id available, so pass the credential's userId (add it as a parameter) instead."
+   },
+   {
+    "id": "S11",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     97,
+     100
+    ],
+    "texto": "parseRefreshTokenResponse returns a zod SafeParse result ({success, data}), but the old googleCredentialSchema.parse returned the parsed key. The result is now stored as the credential `key`, so the credential becomes {success:true,data:{...}} and loses the top-level access_token, refresh_token and expiry_date. Later Google auth reads of the credential then fail. Store `.data` of the parsed result instead."
+   },
+   {
+    "id": "S12",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     85,
+     94
+    ],
+    "texto": "`refreshOAuthTokens` expects a Cal.com userId, but this call passes `credentialId`. With credential sync enabled, the sync endpoint receives the credential row id as `calcomUserId`. It can return a different user's OAuth access token, and that token is then stored on this credential and returned to the caller. Pass the owning user's id instead."
+   },
+   {
+    "id": "S13",
+    "file": "apps/web/pages/api/webhook/app-credential.ts",
+    "lines": [
+     24,
+     29
+    ],
+    "texto": "The webhook secret is compared with `!==`, which leaks timing information. This secret is the only authentication on an endpoint that overwrites any user's app credentials. Compare the hashed or equal-length buffers with crypto.timingSafeEqual instead."
+   },
+   {
+    "id": "S14",
+    "file": "apps/web/pages/api/webhook/app-credential.ts",
+    "lines": [
+     57,
+     59
+    ],
+    "texto": "The decryption key falls back to an empty string when CALCOM_APP_CREDENTIAL_ENCRYPTION_KEY is unset. A critical key should not have a weak default. Fail fast with an explicit error if the key is missing."
+   },
+   {
+    "id": "S15",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     97,
+     100
+    ],
+    "texto": "parseRefreshTokenResponse returns a zod safeParse result ({success, data}), not the parsed value. The result is saved as the credential `key`, so the DB gets {success:true,data:{...}} instead of the Google credentials. Later reads of access_token and refresh_token then fail. Store `.data` from the parse result."
+   },
+   {
+    "id": "S16",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     85,
+     94
+    ],
+    "texto": "refreshOAuthTokens takes a userId as its third argument, but the Zoho Bigin code passes `credentialId`. With credential sharing enabled, the sync endpoint is asked for the wrong calcomUserId, so another user's tokens may be fetched or none found. Pass the credential's userId."
+   },
+   {
+    "id": "S17",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     97,
+     101
+    ],
+    "texto": "parseRefreshTokenResponse returns a zod safeParse result ({success, data}), not the parsed credential. Here the whole wrapper is stored as `key`, so the Google credential in the DB becomes {success:true,data:{...}} and later reads of access_token/refresh_token fail. Use the `.data` of the parsed result as the key."
+   },
+   {
+    "id": "S18",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     85,
+     94
+    ],
+    "texto": "refreshOAuthTokens declares its third parameter as the Cal.com userId (sent as calcomUserId to the sync endpoint), but this caller passes credentialId. With credential sync enabled the endpoint receives a credential id as the user id, so it syncs the wrong user's tokens or none. Pass the credential's userId instead."
+   },
+   {
+    "id": "S19",
+    "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+    "lines": [
+     8,
+     15
+    ],
+    "texto": "In sync mode refreshOAuthTokens returns a raw fetch Response, but callers such as Google, Zoho CRM and Zoho Bigin read `.data` as with axios or gaxios. `.data` is undefined on a fetch Response, so token.access_token or tokenInfo.data.error throws a TypeError whenever credential sync is enabled. Return a shape matching the non-sync callers, for example {data: await response.json()}, or normalize it per caller."
+   },
+   {
+    "id": "S20",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     94,
+     101
+    ],
+    "texto": "parseRefreshTokenResponse returns a zod SafeParse result ({success, data}), but it is assigned to `key` and written to credential.key. The stored Google credential becomes {success:true,data:{...}}, so the next googleCredentialSchema.parse(credential.key) throws and the credential is permanently broken. Use `.data` from the parsed result."
+   },
+   {
+    "id": "S21",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     85,
+     94
+    ],
+    "texto": "refreshOAuthTokens is given `credentialId` as its userId argument. When credential sync is enabled, the sync endpoint is asked for the credential id as `calcomUserId`, which can return another user's tokens or none. The sync path also returns a fetch Response, so `tokenInfo.data` is undefined and the next line throws a TypeError. Pass the credential's userId instead."
+   },
+   {
+    "id": "S22",
+    "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+    "lines": [
+     5,
+     11
+    ],
+    "texto": "The minimum token schema uses computed keys such as `[z.string().toString()]`, which evaluate to a fixed literal string like \"ZodString\". The schema therefore requires a property with that literal name to be a number, and no real token response has it. With credential sync enabled, every parse fails and throws \"Invalid refreshed tokens were returned\". Use `.passthrough()` and `z.object({access_token: z.string()})` instead."
+   },
+   {
+    "id": "S23",
+    "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+    "lines": [
+     25,
+     27
+    ],
+    "texto": "When the parsed response has no refresh_token, the code writes the literal placeholder \"refresh_token\" into it. Callers that merge this data into the stored credential, such as the Office365 calendar and Salesforce services, then overwrite the real refresh token. Later refreshes fail. Only set the placeholder in sync mode, and never overwrite an existing stored token."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01",
+    "descricao": "The new app-credential webhook checks its shared secret with a plain !== string comparison instead of a constant-time comparison, leaking timing information about the secret.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       23,
+       29
+      ],
+      "texto": "Direct !== comparison of webhook secret leaks via timing attack. Use constant-time comparison (e.g., crypto.timingSafeEqual on hashed/buffered values with length check) instead of `req.headers[...] !== process.env.CALCOM_WEBHOOK_SECRET`."
+     },
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       24,
+       27
+      ],
+      "texto": "The webhook authenticates a secret using direct string inequality, which is not constant-time and can leak information about the secret through comparison timing. Compare fixed-length representations using a constant-time primitive (such as crypto.timingSafeEqual), handling absent or malformed headers safely, instead of comparing the secret strings directly."
+     },
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       24,
+       29
+      ],
+      "texto": "The webhook secret is compared with the `!==` operator, which short-circuits on the first differing byte and leaks the secret via response timing (timing attack). An attacker can iteratively recover CALCOM_WEBHOOK_SECRET and then forge requests that create/update arbitrary user credential keys (decrypted with the AES key) via this endpoint. Use a constant-time comparison, e.g. crypto.timingSafeEqual on equal-length buffers, guarding for length mismatch first."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#02",
+    "descricao": "The webhook parses the body with zod .parse and decrypts/JSON-parses the keys without error handling, so invalid payloads produce 500 errors instead of 400 responses.",
+    "textoGolden": "The `appCredentialWebhookRequestBodySchema.parse` function can throw on invalid payloads, resulting in 500 Internal Server Errors instead of the expected 400 Bad Request responses. This can lead to confusion for clients and hinder proper error handling.",
+    "comentarios": [
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       31,
+       31
+      ],
+      "texto": "WHAT: zod parse, symmetricDecrypt and JSON.parse throw unhandled (no try/catch) with no method guard. WHY: Invalid body/keys or GET request crashes handler with 500 and leaks stack, instead of 400/405. HOW: Wrap parse/decrypt in try/catch returning 400 and restrict to POST."
+     },
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       31,
+       59
+      ],
+      "texto": "schema .parse plus symmetricDecrypt/JSON.parse throw unhandled (ZodError, decrypt error, SyntaxError) on invalid body or tampered keys, crashing webhook with 500. Use safeParse and try/catch with 400 responses."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#03",
+    "descricao": "The webhook's non-atomic findFirst-then-create lets concurrent deliveries for the same user and app insert duplicate credential rows.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       62,
+       70
+      ],
+      "texto": "The webhook performs a non-atomic findFirst followed by create when no credential exists. Concurrent deliveries for the same user and app can both observe no row and insert duplicates because Credential has no unique userId/appId constraint; subsequent findFirst updates only one duplicate, leaving competing credentials stale. Serialize the lookup/create operation for each user/app pair or introduce an appropriate uniqueness constraint and atomic upsert."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#07",
+    "descricao": "parseRefreshTokenResponse writes the hardcoded string 'refresh_token' when the refresh response omits a refresh token, so the stored credential gets an invalid refresh token and later refreshes fail.",
+    "textoGolden": "The parseRefreshTokenResponse function incorrectly sets refresh_token to the hardcoded string 'refresh_token' when it's missing from the OAuth refresh token response. This invalidates the token, breaking subsequent token refreshes and causing authentication failures.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       25,
+       26
+      ],
+      "texto": "The parser fabricates the literal refresh token \"refresh_token\" whenever a successful response omits refresh_token, including when synchronization is disabled. Office365's response schema explicitly permits that omission, and its caller merges parsed data over existing credentials, replacing the valid saved refresh token with this invalid value and breaking the next refresh. Leave the property absent so the existing token survives the merge."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       25,
+       26
+      ],
+      "texto": "When a refresh response omits refresh_token, this helper manufactures the hardcoded credential \"refresh_token\". Callers such as Office365 merge this into stored credentials, overwriting the valid existing refresh token and causing subsequent provider refreshes to use a predictable invalid token. Leave the field absent and preserve the existing credential when omission is allowed by the provider, or reject the response when a refresh token is required; do not substitute a literal authentication token."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       25,
+       27
+      ],
+      "texto": "WHAT: Missing refresh_token is replaced with literal string \"refresh_token\". WHY: Stores bogus refresh token in DB, breaking all future refreshes and masking provider errors. HOW: Preserve existing credential refresh_token or throw instead of injecting placeholder."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+    "descricao": "minimumTokenResponseSchema uses computed keys from z.string().toString(), which produce a literal key rather than a wildcard, so the sync-mode schema does not validate or keep expiry and other token fields as intended.",
+    "textoGolden": "The Zod schema in parseRefreshTokenResponse uses computed property keys [z.string().toString()] and [z.string().optional().toString()] in minimumTokenResponseSchema, which is invalid Zod syntax and will throw a runtime error.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       5,
+       11
+      ],
+      "texto": "`[z.string().toString()]` evaluates to a fixed string key such as \"ZodString\", so minimumTokenResponseSchema requires a literal numeric property with that name. Every synced token response fails validation and throws \"Invalid refreshed tokens were returned\". Use `z.object({access_token: z.string()}).passthrough()` instead."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       5,
+       11
+      ],
+      "texto": "The computed keys `[z.string().toString()]` evaluate to the literal string \"[object Object]\", not a wildcard. The schema therefore requires a numeric property named \"[object Object]\", so safeParse always fails in credential-sync mode and the function throws \"Invalid refreshed tokens were returned\". Use `.passthrough()` on an object with access_token and optional numeric expiry fields instead."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       5,
+       11
+      ],
+      "texto": "The computed keys `[z.string().toString()]` evaluate to a literal string like \"ZodString\" and not to a wildcard. The schema therefore requires a numeric property with that nonsense name and never matches real token responses. In sync mode every refresh throws \"Invalid refreshed tokens were returned\". Use `.passthrough()` and a real expiry check instead."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+    "descricao": "In sync mode refreshOAuthTokens returns a raw fetch Response, but callers expect their provider-specific shapes (res.data, axios .data, HubspotToken), so token refresh breaks for Google, Zoho and HubSpot when credential sharing is on.",
+    "textoGolden": "When APP_CREDENTIAL_SHARING_ENABLED and CALCOM_CREDENTIAL_SYNC_ENDPOINT are set, the refreshFunction helper returns the fetch Response, but several callers (for example GoogleCalendarService.refreshAccessToken expecting res.data, and HubspotCalendarService.refreshAccessToken expecting a HubspotToken) assume it returns the integration-specific token object. That mismatch will cause runtime errors in the sync-enabled path unless the return type or those call sites are adjusted.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+      "lines": [
+       8,
+       15
+      ],
+      "texto": "WHAT: In the credential-sharing branch `refreshOAuthTokens` returns the raw `fetch` `Response` object instead of a parsed token payload, yet several callers treat the result as an already-parsed token object.\nWHY: Callers such as hubspot (`hubspotRefreshToken.expiresIn`), zoho-bigin (`tokenInfo.data.error`), zohocrm (`zohoCrmTokenInfo.data.error`) and googlecalendar (`res?.data`) read `.data`/token fields off the return value; a `Response` has neither, so the sync path yields `undefined`/`NaN` or throws a TypeError \u2014 the feature's primary code path is broken for those apps.\nHOW: Parse the response (e.g. `const data = await response.json(); return data;`) before returning, or make every caller await the appropriate response handler."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+      "lines": [
+       8,
+       15
+      ],
+      "texto": "In sharing mode refreshOAuthTokens returns the raw fetch Response (no `.data`), but the google caller reads `res?.data` and then `token.access_token`, throwing a TypeError swallowed by the catch, so the token is never refreshed."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       94,
+       95
+      ],
+      "texto": "`res?.data` assumes the value returned by refreshOAuthTokens has a `.data` field (true for the `fetchTokens.res` branch), but when APP_CREDENTIAL_SHARING_ENABLED the helper returns a raw `fetch()` Response, which has no `.data`. Then `token.access_token` throws. Either parse the shared-mode Response here or have refreshOAuthTokens return a normalized `{ data }` shape."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+    "descricao": "Google Calendar persists the safeParse result object instead of its data as the credential key, corrupting the stored credential so later reads fail.",
+    "textoGolden": "parseRefreshTokenResponse returns a Zod safeParse result ({ success, data, error }), not the credential key object. Persisting that as key stores the wrapper instead of the token payload; we should store the parsed data or use schema parse.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       83,
+       100
+      ],
+      "texto": "parseRefreshTokenResponse returns a SafeParse result {success,data}, not the parsed key. Storing it directly as `key` writes the wrapper to the credential. Unwrap like other callers: check .success and use .data."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       83,
+       100
+      ],
+      "texto": "parseRefreshTokenResponse returns SafeParse result {success,data}, but call site stores that wrapper as credential `key` (previously googleCredentialSchema.parse() returned the plain object). Store `key.data` / handle wrapper, otherwise persisted credential becomes {success,data} shape and subsequent credential reads fail."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       83,
+       100
+      ],
+      "texto": "parseRefreshTokenResponse returns SafeParse wrapper {success,data} but code stores the whole wrapper as credential.key. Office365calendar in same PR unwraps via .data. Persisted credential will be {success,data} instead of tokens, so next load fails validation. Unwrap to .data after success check."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#11",
+    "descricao": "After switching to parseRefreshTokenResponse, the tokenResponse.success check in Office365 refreshAccessToken is dead code and the previous error logging was dropped.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+      "lines": [
+       263,
+       264
+      ],
+      "texto": "parseRefreshTokenResponse now throws when parsing fails, so the `tokenResponse.success` check on the next line is dead code and the previous error logging was removed. A failed refresh now throws out of refreshAccessToken instead of keeping the old credentials. Catch the error or restore the previous handling."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#13",
+    "descricao": "Salesforce getClient now refreshes the OAuth token and writes the credential on every service construction, adding a network round trip and DB write even when the access token is valid.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+      "lines": [
+       75,
+       84
+      ],
+      "texto": "getClient now unconditionally exchanges the Salesforce refresh token on every service construction, even when the saved access token is valid. Each constructor invocation adds a blocking OAuth network round trip and credential database write before any Salesforce operation, replacing jsforce's existing on-demand refresh behavior. Keep refresh on demand or guard the exchange with a token-expiration check."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#14",
+    "descricao": "The new Salesforce token refresh uses prisma without importing it, so the code fails type checking and throws a ReferenceError at runtime.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+      "lines": [
+       96,
+       99
+      ],
+      "texto": "The new credential update references prisma without importing or declaring it; searching this file finds only the new usage. This fails TypeScript checking and raises ReferenceError after a successful token exchange at runtime. Import prisma from @calcom/prisma before using it."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+    "descricao": "Zoho Bigin passes the credential id instead of the user id to refreshOAuthTokens, so the sync endpoint receives the wrong calcomUserId.",
+    "textoGolden": "The `refreshOAuthTokens` function is passed `credentialId` instead of `userId`, which breaks the credential sync functionality by causing incorrect user lookups. This issue can lead to failures in syncing user credentials, impacting user experience.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+      "lines": [
+       85,
+       94
+      ],
+      "texto": "WHAT: The 3rd argument to `refreshOAuthTokens` is `credentialId` (= `credential.id`, line 53), but the function's parameter is `userId` (`refreshOAuthTokens(refreshFunction, appSlug, userId)`).\nWHY: When APP_CREDENTIAL_SHARING_ENABLED, the sync endpoint is sent `calcomUserId: <credential id>` instead of the user id, so Bigin credentials are synced against the wrong/non-existent user (all other apps correctly pass `credential.userId`).\nHOW: Pass `credential.userId` instead of `credentialId` as the third argument."
+     },
+     {
+      "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+      "lines": [
+       85,
+       94
+      ],
+      "texto": "refreshOAuthTokens' third parameter is the Cal.com userId (used as `calcomUserId` in the sync request and to decide whether sharing runs), but this call passes `credentialId`. Every other caller passes `credential.userId`, so the credential-sync endpoint receives a credential row id as the user id and shared credentials are fetched/updated for the wrong identity. Pass `credential.userId` here."
+     },
+     {
+      "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+      "lines": [
+       85,
+       94
+      ],
+      "texto": "refreshOAuthTokens' third parameter is `userId` (declared in refreshOAuthTokens.ts line 3 and used as `calcomUserId: userId.toString()`), but this call passes `credentialId` (the Credential row id, line 53) instead of the user id. When credential sharing is enabled the customer's sync endpoint receives a credential id labelled as calcomUserId and cannot resolve the correct Cal.com user. Pass `credential.userId` (the BiginToken/credential payload carries it) or plumb the user id through refreshAccessToken."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#16",
+    "descricao": "Salesforce checks response.statusText !== 'OK' instead of response.ok when refreshing the token, which can misclassify successful responses, and then ignores the refreshed token.",
+    "textoGolden": "The Salesforce integration checks `response.statusText` instead of `response.ok` when handling OAuth token refresh responses. This can lead to unreliable behavior, as a successful response may not be correctly identified, resulting in the use of stale credentials and potential authentication failures.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+      "lines": [
+       86,
+       107
+      ],
+      "texto": "WHAT: Checks response.statusText !== \"OK\" instead of response.ok and builds jsforce.Connection from stale credentialKey.access_token/instance_url ignoring accessTokenParsed.data. WHY: Refresh never takes effect (old token reused) and valid refreshes can throw on runtimes where statusText is empty. HOW: Check !response.ok and use parsed access_token/instance_url for connection and DB update."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#17",
+    "descricao": "After refreshing the Salesforce token, jsforce.Connection is created with the stale access_token and instance_url instead of the newly refreshed values.",
+    "textoGolden": "The `jsforce.Connection` is created using stale `credentialKey.access_token` and `credentialKey.instance_url` after a token refresh, which can lead to authentication failures and incorrect data access. Ensure that the connection is established using the refreshed token values instead.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+      "lines": [
+       96,
+       106
+      ],
+      "texto": "WHAT: The new block fetches and persists a fresh access token (`accessTokenParsed.data`) but then creates the `jsforce.Connection` with the stale `credentialKey.access_token` (line 106) instead of the just-refreshed token.\nWHY: The refreshed token is written to the DB but never used for the connection; if the old token was expired, jsforce must refresh again (extra round trip) or fail, and the DB/connection state diverge.\nHOW: Pass the new access token (`accessTokenParsed.data.access_token`) to the `jsforce.Connection`."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#opa-01",
+    "descricao": "The app-credential webhook looks up appStoreMetadata by app.slug, but the map is keyed by dirName, so apps whose slug differs from their directory (e.g. google-calendar) always get a 404 and their credentials cannot be synced.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "implement-access-token-context-encoding-framework-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "daffb05b5ad091d3ec09933c3c99c2b54f448696",
+  "base": "c22f76867f595f0f7c327376a66a08dca01949e8",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     482,
+     483
+    ],
+    "texto": "WHAT: `isAccessTokenId` extracts the wrong characters, `substring(3, 5)` instead of `substring(4, 6)`, and returns false when they are equal, so the condition is inverted. WHY: the matcher never verifies the grant shortcut (the 2-char prefix is `sessionType`+`tokenType`+`grant`, so the grant sits at index 4-6). Tests pass even when the token carries the wrong grant, and a correct token would fail if the offsets ever aligned. HOW: compare `items[0].substring(4, 6)` with `expectedGrantShortcut` and return false when they are NOT equal. Also check that `items[0].length() == 6`."
+   },
+   {
+    "id": "S2",
+    "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+    "lines": [
+     73,
+     73
+    ],
+    "texto": "WHAT: the 'Null rawTokenId not allowed' check is performed on `grantType` a second time, so `rawTokenId` is never null-checked. WHY: a null raw token ID is accepted and `encodeTokenId` would then emit an ID ending in the literal string \"null\". HOW: call `Objects.requireNonNull(rawTokenId, ...)` on the last check."
+   },
+   {
+    "id": "S3",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     480,
+     484
+    ],
+    "texto": "isAccessTokenId reads the wrong characters and inverts the comparison. The encoded id is 'sstt' + 'gg' + ':', so the grant shortcut is at chars 4-6, not 3-5. The code also returns false when the shortcut equals the expected one, so a correct token id is rejected and a wrong one is accepted."
+   },
+   {
+    "id": "S4",
+    "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+    "lines": [
+     72,
+     73
+    ],
+    "texto": "The 'Null rawTokenId not allowed' check is applied to grantType (a copy-paste error), so rawTokenId is never null-checked. A null rawTokenId is accepted and would be encoded as the string 'null'."
+   },
+   {
+    "id": "S5",
+    "file": "AssertEvents.java",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "The test matcher AssertEvents.isAccessTokenId contains an inverted and wrongly indexed assertion. This is a test-quality bug (the reviewer noted it is outside their own review class), so the matcher may not validate access token IDs correctly. The assertion condition and the index used should be corrected."
+   },
+   {
+    "id": "S6",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     480,
+     484
+    ],
+    "texto": "isAccessTokenId disagrees with the encoder's token ID format. The encoder writes the grant shortcut at chars 4-6 of the prefix, but the matcher reads substring(3,5), and it returns false when the shortcut equals the expected one. As a result, correct token IDs fail the expectations in expectCodeToToken, expectRefresh and the other users of this matcher. Use substring(4,6) and negate the comparison."
+   },
+   {
+    "id": "S7",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     482,
+     483
+    ],
+    "texto": "The comment and code disagree with the actual token id layout 'ssttgg:uuid'. The grant shortcut is chars 5-6 (substring(4,6)), not the 4th char (substring(3,5)). The check is also inverted: it returns false when the shortcut equals the expected one, contradicting the matcher description. Fix the comment, offsets and condition."
+   },
+   {
+    "id": "S8",
+    "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+    "lines": [
+     73,
+     73
+    ],
+    "texto": "The null check on line 73 tests grantType, but its message says 'Null rawTokenId not allowed'. A null rawTokenId is never checked, and a duplicate grantType null check would report the wrong field. Check rawTokenId here."
+   },
+   {
+    "id": "S9",
+    "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java",
+    "lines": [
+     29,
+     33
+    ],
+    "texto": "The javadoc says the shortcut is 'usually like 3-letters', but every implementation uses 2 characters and the token-id decoder requires exactly 2 characters (6-char context). The doc should state the required 2-character length."
+   },
+   {
+    "id": "S10",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     483,
+     483
+    ],
+    "texto": "The grant shortcut is extracted with substring(3, 5), but the token id layout is sessionType(0-1), tokenType(2-3), grantType(4-5). The matcher therefore compares the last char of the token type plus the first char of the grant shortcut instead of the grant shortcut. Use substring(4, 6)."
+   },
+   {
+    "id": "S11",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     483,
+     483
+    ],
+    "texto": "The grant shortcut comparison is inverted: the matcher returns false when the shortcut equals the expected one. A correct token id is rejected and a wrong grant type is accepted, so the matcher does not verify the grant type. Negate the condition."
+   },
+   {
+    "id": "S12",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     480,
+     484
+    ],
+    "texto": "isAccessTokenId never validates the grant shortcut. It slices substring(3, 5) instead of the grant-type chars at 4..6, and it returns false when the shortcut equals the expected one (the condition is inverted). The matcher therefore accepts tokens with any grant type, so the event assertions that use it would not catch a wrong grant shortcut. Compare substring(4, 6) with the expected shortcut and return false when they are not equal."
+   },
+   {
+    "id": "S13",
+    "file": "services/src/test/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderTest.java",
+    "lines": [
+     77,
+     85
+    ],
+    "texto": "testIncorrectGrantType catches any RuntimeException, and the test factory has a null sessionFactory. The unknown-shortcut lookup therefore fails with a NullPointerException instead of the intended IllegalArgumentException, and the test still passes. Catch IllegalArgumentException specifically and assert its message, and give the factory a mocked sessionFactory."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#01",
+    "descricao": "The AccessTokenContext constructor checks grantType twice instead of rawTokenId, so a null rawTokenId passes validation and is encoded as ':null'.",
+    "textoGolden": "In AccessTokenContext constructor, the fourth Objects.requireNonNull validates grantType twice instead of validating rawTokenId, allowing null rawTokenId values to pass validation.",
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+      "lines": [
+       73,
+       73
+      ],
+      "texto": "WHAT: the constructor validates `grantType` a second time instead of `rawTokenId` (`Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\")`). WHY: a null `rawTokenId` is silently accepted, so `encodeTokenId` produces a token id ending in `:null` and any later consumer of the raw id gets an invalid value instead of an early failure. HOW: change the argument to `Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")`."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+      "lines": [
+       69,
+       78
+      ],
+      "texto": "Line 73 calls Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\") \u2014 it validates grantType a second time (line 72 already does) with a message naming a different field. rawTokenId is never validated, so a null rawTokenId is accepted at construction and the advertised check/message is wrong. It should be Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+      "lines": [
+       73,
+       73
+      ],
+      "texto": "The null-check message names the wrong parameter: `Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\")` validates `grantType` but reports `rawTokenId`, and it duplicates the check on line 72 while `rawTokenId` is never validated at all. The message that reaches the reader contradicts the code it guards; it should be `Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")`."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#02",
+    "descricao": "isAccessTokenId reads the grant shortcut at the wrong offset (3,5 instead of 4,6) and inverts the comparison, so the event assertions never verify the token's grant type.",
+    "textoGolden": "In isAccessTokenId, the substring for the grant shortcut and the equality check look inverted: the grant shortcut occupies indices 4\u20135 (substring(4,6)), and a match should return true (combined with UUID check), not false.",
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+      "lines": [
+       483,
+       483
+      ],
+      "texto": "WHAT: `isAccessTokenId` reads the grant shortcut from the wrong offset and inverts the comparison \u2014 `if (items[0].substring(3, 5).equals(expectedGrantShortcut)) return false;`. WHY: for the encoded id `ssttgg:raw` the grant shortcut occupies 0-based indices 4-5, so `substring(3,5)` inspects the token-type/grant boundary and can never equal the expected shortcut; combined with the inverted `return false`, the equality branch is unreachable and the matcher validates only the UUID part. As a result the new assertions in `expectCodeToToken`/`expectRefresh`/`expectDeviceCodeToToken`/`expectAuthReqIdToToken` do not actually assert the grant type and would pass even if the grant shortcut were wrong. HOW: use `items[0].substring(4, 6)` and negate the condition (`if (!items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;`)."
+     },
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+      "lines": [
+       476,
+       492
+      ],
+      "texto": "The matcher logic is inverted: line 483 returns false when the extracted grant shortcut EQUALS expectedGrantShortcut, so a token that actually carries the expected grant fails the matcher, while a token with any other grant shortcut falls through and passes. The condition should be negated: `if (!items[0].substring(3,5).equals(expectedGrantShortcut)) return false;`. Also note the encode site writes the grant shortcut at chars 4-6 (substring(4,6)); substring(3,5) reads one character early into the token-type field, so the offset is off by one relative to TokenManager.encodeTokenId."
+     },
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+      "lines": [
+       482,
+       483
+      ],
+      "texto": "The comment 'Grant type shortcut starts at character 4th char' disagrees with the encoding that this PR defines (sessionType chars 1-2, tokenType 3-4, grantType 5-6, e.g. 'trltcc'), and the code reads substring(3,5) \u2014 the 4th-5th chars, i.e. the token-type second char plus the grant first char, never the grant shortcut. The comment (and the index) should point at the 5th char / substring(4,6)."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#03",
+    "descricao": "getShortcut() Javadoc says shortcuts are usually 3 letters, but the encoding requires exactly 2-character shortcuts.",
+    "textoGolden": "Javadoc mentions \"usually like 3-letters shortcut\" but some implementations use 2-letter shortcuts (\"ac\", \"cc\", \"rt\", \"te\", \"pc\", \"ci\", \"ro\"). Consider updating documentation to reflect actual usage pattern.",
+    "comentarios": [
+     {
+      "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java",
+      "lines": [
+       30,
+       31
+      ],
+      "texto": "The Javadoc says getShortcut() returns 'usually like 3-letters shortcut', but every implementation introduced in this PR returns a 2-character shortcut ('ac','cc','pg','pc','rt','ro','te','ci','dg') and the encoder relies on exactly 2 chars (encoded context length 6 = 2+2+2). The doc states a length the code does not produce; it should say 2-character shortcut."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java",
+      "lines": [
+       73,
+       76
+      ],
+      "texto": "Grant shortcuts are registered without enforcing the two-character length required by the decoder. A custom grant returning a three-character shortcut, which the new OAuth2GrantTypeFactory documentation explicitly suggests, produces a seven-character prefix that getTokenContextFromTokenId rejects, breaking encode/decode round trips for that grant. Validate shortcut length during registration and dynamic refresh, and document the required two-character format."
+     },
+     {
+      "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java",
+      "lines": [
+       30,
+       31
+      ],
+      "texto": "The new contract describes getShortcut() as usually returning a three-letter shortcut, but DefaultTokenContextEncoderProvider requires exactly two characters for the grant field (six total prefix characters, decoded with substring(4, 6)). An extension author following this documentation can produce token IDs that the default decoder rejects. Document the required two-character length rather than advertising three letters."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#04",
+    "descricao": "testIncorrectGrantType catches any RuntimeException, so it passes on a NullPointerException from the unset sessionFactory rather than verifying the unknown-grant IllegalArgumentException.",
+    "textoGolden": " Catching generic RuntimeException is too broad. The implementation throws IllegalArgumentException specifically - catch that instead for more precise testing.",
+    "comentarios": [
+     {
+      "file": "services/src/test/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderTest.java",
+      "lines": [
+       77,
+       83
+      ],
+      "texto": "Catching RuntimeException allows this negative test to pass for an unrelated fixture failure. The fixture constructs the factory without postInit, leaving sessionFactory null; resolving the unregistered `ac` shortcut calls sessionFactory.getProviderFactoriesStream and throws NullPointerException before the decoder's intended unknown-grant IllegalArgumentException. Catch/assert IllegalArgumentException specifically and provide a factory fixture whose lookup returns no matching grant, so removing the decoder's validation would fail the test."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#05",
+    "descricao": "Client-credentials (and UMA permission) token issuance never sets the GRANT_TYPE attribute, so their access token ids are encoded with the unknown grant 'na' instead of their shortcut.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java",
+      "lines": [
+       57,
+       60
+      ],
+      "texto": "The new grant metadata falls back to 'na' for client-credentials and UMA tokens because their issuance paths never set Constants.GRANT_TYPE on their fresh ClientSessionContext. ClientCredentialsGrantType calls responseBuilder.generateAccessToken directly, and PermissionGrantType delegates to AuthorizationTokenService, so neither executes the new assignment in createTokenResponse; tokens from these known grants therefore carry unknown grant context. Set the grant attribute in both issuance paths before generating the access token."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#06",
+    "descricao": "Lazy registration of newly deployed grants does not check shortcut uniqueness, so a grant reusing an existing shortcut silently overwrites the reverse mapping and older tokens decode to the wrong grant.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java",
+      "lines": [
+       112,
+       114
+      ],
+      "texto": "Enforce shortcut uniqueness during lazy registration rather than overwriting grantsByShortcuts. If a newly deployed grant B uses existing grant A's shortcut, this path replaces shortcut\u2192A with shortcut\u2192B while retaining both forward entries. Previously issued A tokens then decode as B. Concurrent registrations of two new grants with the same shortcut likewise both succeed, with the last inverse-map write winning. Use collision-aware atomic registration and reject the conflicting grant before publishing its forward mapping."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#opa-01",
+    "descricao": "getShortcut() is added as an abstract method to OAuth2GrantTypeFactory without a default, breaking existing custom grant type factories (compile error or AbstractMethodError when DefaultTokenContextEncoderProviderFactory.postInit calls it).",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "9966ec5a13e331659c3ea00981f9b11b0faf821f",
+  "base": "fd358e8a388939959369f08f616e29552cdaf96e",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/remote_subscriptions/consumers/result_consumer.py",
+    "lines": [
+     254,
+     259
+    ],
+    "texto": "WHAT: Every strategy created by `create_with_partitions` shares the factory-level `queue_pool`, but `SimpleQueueProcessingStrategy.close()`/`join()` shut that pool down. WHY: After a rebalance, Arroyo closes the old strategy and creates a new one on the dead pool. `queue.put` then raises ShutDown, and `submit()` catches it and marks the offset complete, so messages are silently dropped and committed. HOW: Create the FixedQueuePool per strategy instance (inside `create_thread_queue_parallel_worker`), or have the strategy not shut down a pool it does not own and shut it down only in `factory.shutdown()`."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     185,
+     185
+    ],
+    "texto": "WHAT: Work queues are created unbounded (`queue.Queue()`), and `submit()`/`poll()` never apply backpressure. WHY: If workers are slower than Kafka ingestion, the in-memory backlog and the offset tracker sets grow without limit, causing memory exhaustion. The class docstring claims natural backpressure. HOW: Use `queue.Queue(maxsize=N)` and have `submit` raise arroyo `MessageRejected` when full, or check queue depth in `submit`."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     86,
+     96
+    ],
+    "texto": "WHAT: The committable-offset scan only advances over strictly consecutive integers (`offset in all_offsets`). WHY: Any permanent hole in the Kafka offsets (compaction or transaction markers) stops commits forever for that partition while `all_offsets` keeps growing. HOW: Walk the sorted tracked offsets and stop only at an offset that is still outstanding, instead of requiring numeric contiguity."
+   },
+   {
+    "id": "S4",
+    "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+    "lines": [
+     1921,
+     1922
+    ],
+    "texto": "WHAT: The error-handling test asserts that no offset is committed after a processing failure. WHY: The worker's `finally` marks failed items complete, so they become committable. The assertion passes only because the 1s commit loop has not yet fired when the test checks (about 0.3s after the work finishes), so the test is timing-dependent and contradicts its own docstring. HOW: Assert that the failed offset is committed after waiting for a commit, which is the real behaviour, or change the implementation to hold back failed offsets."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     246,
+     255
+    ],
+    "texto": "The SimpleQueueProcessingStrategy docstring promises 'Natural backpressure when queues fill up', but every queue is an unbounded queue.Queue() and submit() never blocks. Slow workers just let queues grow without limit. Remove the claim, or bound the queues (maxsize) so the claim is true."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     148,
+     149
+    ],
+    "texto": "The docstring says offsets are committed only after successful processing, but the worker marks the offset complete in a finally block, so offsets of items whose processor raised are also committed. The docstring should describe this, or the code should stop completing failed items."
+   },
+   {
+    "id": "S7",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     335,
+     345
+    ],
+    "texto": "The strategy's close/terminate/join shut down the FixedQueuePool, but that pool is created once in the factory __init__ and shared by every strategy that create_with_partitions returns. After the first rebalance the next strategy reuses a dead pool. Its submits fail, and the error handler marks those offsets complete, so messages are dropped and committed. Leave pool shutdown to ResultsStrategyFactory.shutdown(), or create the pool per strategy."
+   },
+   {
+    "id": "S8",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     86,
+     93
+    ],
+    "texto": "get_committable_offsets assumes offsets are consecutive integers and stops at the first number missing from all_offsets. A legitimate gap in Kafka offsets (compaction, transaction markers) or a rebalance that re-delivers offsets below last_committed makes the loop break immediately, so commits for that partition stall permanently. Walk the sorted tracked offsets instead and stop only at the first one still in `outstanding`."
+   },
+   {
+    "id": "S9",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     335,
+     342
+    ],
+    "texto": "The strategy's close()/terminate() shut down the FixedQueuePool, but the factory creates that pool once in __init__ and shares it with every strategy it builds. After a rebalance, create_with_partitions hands the next strategy a dead pool. Its submits raise ShutDown, the except-branch marks the offsets complete, and unprocessed messages get committed. Fix by having the factory create a fresh pool per strategy, or by having the strategy not shut down a pool it does not own."
+   },
+   {
+    "id": "S10",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     335,
+     342
+    ],
+    "texto": "The strategy's close() and terminate() shut down the FixedQueuePool, but the factory shares that one pool across every strategy it creates. After the first rebalance, the next strategy submits into shut-down queues, and `queue.put` raises ShutDown. `submit()` swallows that error and marks the offset complete, so those offsets get committed without being processed (data loss). Fix this by leaving pool shutdown to ResultsStrategyFactory.shutdown() and not shutting it down in the strategy."
+   },
+   {
+    "id": "S11",
+    "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+    "lines": [
+     1921,
+     1922
+    ],
+    "texto": "The test says errors must not block offset commits, but it asserts that no offsets were committed. The worker's `finally` completes the offset even on failure, so offsets 100 and 101 are committable and the commit loop should commit 102. The assertion passes only because it checks before the commit loop's first 1s wait ends. Wait for the commit and assert `committed_offsets[test_partition] == 102`."
+   },
+   {
+    "id": "S12",
+    "file": "tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py",
+    "lines": [
+     302,
+     312
+    ],
+    "texto": "The test is named and documented as verifying in-order processing within a group, but it only asserts `len(self.processed_results) == 5`. It would pass if messages were processed out of order. Record the results and assert that they match the submission order."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#01",
+    "descricao": "Claims OffsetTracker.get_committable_offsets requires every integer offset to exist, so Kafka offset gaps permanently block commits for the partition and per-partition state is never cleared on rebalance.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       100,
+       105
+      ],
+      "texto": "Offsets are only tracked for messages that were submitted, and there is no partition revoke handling. Contiguity is checked with `range(start, max_offset+1)`, so any offset gap (compacted topics, transactional markers, or offsets filtered out upstream) permanently blocks commits for that partition. The `last_committed`, `all_offsets` and `outstanding` state is never cleared on rebalance, so stale state survives partition reassignment. Treat gaps as committable once all lower tracked offsets are complete, and clear per-partition state when partitions are revoked."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       86,
+       93
+      ],
+      "texto": "The commit scan assumes consecutive Kafka offsets and breaks at the first offset that is not in all_offsets. A permanent offset gap (compacted or transactional records) then blocks commits for that partition forever. Track the submitted offsets in sorted order and commit up to the highest offset below the lowest outstanding one, rather than requiring every integer in between to be present."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       86,
+       93
+      ],
+      "texto": "Determine the commit boundary from received offsets rather than requiring every integer in this range to exist. Kafka offsets need not be consecutive: if 100, 102 and 103 are delivered and completed, this scan stops at the nonexistent 101 even though there is no unfinished record. Conversely, after committing 100 and removing it, the next scan starts at 102 and commits past the gap, contradicting the added gap tests. Iterate received offsets in sorted order and stop at the first outstanding record; add a test covering legitimate skipped Kafka offsets across multiple commit cycles."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03",
+    "descricao": "OrderedQueueWorker marks a work item's offset complete in a finally block even when processing raised, so failed messages are committed and dropped, contradicting the documented guarantee of committing only after successful processing.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       144,
+       149
+      ],
+      "texto": "The worker marks the offset complete in the `finally` block even when `result_processor(...)` raises, so a message whose handling failed is reported as committable and its offset is committed (it will never be retried). This contradicts the strategy's own guarantee 'Only commits offsets after successful processing' and the new test `test_thread_queue_parallel_error_handling`, which asserts the partition is not committed after a failure. Only call `complete_offset` on the success path (or track failed offsets separately) so failures are not silently skipped."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       142,
+       149
+      ],
+      "texto": "The worker marks the offset complete in `finally` even when `result_processor` raised an exception, so a failed item's offset is reported as committable and gets committed by the commit loop. This contradicts the strategy's documented guarantee 'Only commits offsets after successful processing' and the contract asserted in test_results_consumer.py (test_thread_queue_parallel_error_handling, which expects the failed partition NOT to be committed): the failed message is committed past and never retried. Track success separately and only call `complete_offset` when processing succeeded (or make the failure explicit so the offset is withheld/retried)."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       144,
+       149
+      ],
+      "texto": "The failed item's offset is completed unconditionally in the `finally` block, so `complete_offset` runs even when `result_processor` raised. This breaks the class's documented guarantee ('Only commits offsets after successful processing', line 254): the commit loop then advances past a message that was never successfully processed, silently dropping it (and, per the PR's own test_thread_queue_parallel_error_handling, a commit is produced where none is expected). Only call `offset_tracker.complete_offset(...)` on the success path (i.e. after `result_processor` returns normally), or explicitly decide and document the at-most-once semantics; do not complete on the exception path."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#04",
+    "descricao": "test_thread_queue_parallel_error_handling's docstring says errors must not block commits for other messages, but the test asserts that nothing was committed, so it does not verify the behaviour it describes.",
+    "textoGolden": "The test test_thread_queue_parallel_error_handling has a docstring that doesn't match the test implementation.",
+    "comentarios": [
+     {
+      "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+      "lines": [
+       1911,
+       1922
+      ],
+      "texto": "The commit assertion contradicts the test's own docstring and cannot fail for the reason it claims. The docstring says \"errors in processing don't block offset commits for other messages\", but the body asserts `len(committed_offsets) == 0 or test_partition not in committed_offsets` \u2014 i.e. it passes only when nothing is committed. In queue_consumer.py ordered worker's `finally` calls `complete_offset` even after result_processor raises (lines 148-149), so offset 100 should be committable and offset 101 should advance the commit; if the whole commit path were removed (commits blocked entirely) the test would still pass. Assert the positive behaviour instead: e.g. that the failing message's offset was still completed so commits progressed (expect `committed_offsets[test_partition] == 102`, matching the follow-on offset of the successfully processed message)."
+     },
+     {
+      "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+      "lines": [
+       1874,
+       1924
+      ],
+      "texto": "test_thread_queue_parallel_error_handling claims errors don't block commits but asserts len(committed)==0 / not in, and waits only for total==0+sleep(0.2) while commit loop is 1.0s. It passes if commits are correctly made (checked before loop fires) and if commits are never made. Wait for commit condition and assert contiguous commit includes both offsets despite the exception."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#05",
+    "descricao": "The error-handling test asserts no commit happened after only a 0.2s sleep while the commit loop runs every second, so it passes without ever observing whether a failed offset gets committed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+      "lines": [
+       1915,
+       1922
+      ],
+      "texto": "The error-handling test can pass even when failed messages are committed. It waits for two processor calls, sleeps only 0.2 seconds, and asserts that no commit has happened, whereas _commit_loop waits 1 second. OrderedQueueWorker currently completes the failed offset in finally, so the unsafe commit can occur after this assertion. Synchronize with an actual commit-loop iteration before asserting that it cannot advance past the failed offset."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+    "descricao": "FixedQueuePool uses unbounded queues and the strategy never applies backpressure, so when workers fall behind the consumer keeps polling and queued work items grow memory without limit, contrary to the documented backpressure guarantee.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       184,
+       185
+      ],
+      "texto": "Each worker queue is created unbounded (queue.Queue() with no maxsize) although the class docstring promises 'Natural backpressure when queues fill up' and the strategy claims to guarantee backpressure. With no bound and no MessageRejected raised from submit(), a slow group continues to accumulate items in its queue while the consumer keeps polling, so memory grows without limit under a sustained backlog \u2014 the opposite of the intended protection. Fix: give the queues a maxsize and raise/return MessageRejected (or otherwise propagate backpressure to the caller) when a queue is full."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       246,
+       255
+      ],
+      "texto": "The `SimpleQueueProcessingStrategy` docstring promises \"Natural backpressure when queues fill up\", but the queues this strategy drives are unbounded: `FixedQueuePool` creates each one as `queue.Queue()` with no maxsize (line 185), and `submit()` puts items unconditionally. Nothing ever blocks, so no backpressure exists. Either bound the queues (pass a `maxsize` and handle `queue.Full` / block in `submit`) or correct the docstring so it does not advertise a guarantee the code does not provide."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       184,
+       185
+      ],
+      "texto": "The pool creates unbounded queues, while strategy submit always accepts messages and poll never applies backpressure. When a queue's worker is slow or ingestion exceeds processing capacity, queued WorkItems retain both decoded results and original Kafka messages without any limit, causing growing memory consumption and eventual consumer OOM. Bound queued/in-flight work and raise Arroyo MessageRejected when capacity is reached, ensuring that rejection is not swallowed by the generic submit exception handler."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10",
+    "descricao": "Graceful shutdown sets each worker's shutdown flag before draining, so workers stop with items still queued, and close() stops the commit thread first, so finished work is not committed and gets replayed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       231,
+       243
+      ],
+      "texto": "WHAT: FixedQueuePool.shutdown sets worker.shutdown=True while OrderedQueueWorker.run loops on while not self.shutdown, so workers exit without draining queued WorkItems even though queues are shut down with immediate=False. WHY: Graceful shutdown silently drops queued items and leaves their offsets in outstanding forever, causing reprocessing/duplicates and failing the claimed graceful-shutdown guarantee. HOW: Remove the shutdown-flag short-circuit and let workers drain until queue.ShutDown, e.g. loop unconditionally and break only on ShutDown."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       335,
+       345
+      ],
+      "texto": "close() stops the commit thread and shuts down workers before draining accepted work, and join() only repeats close() instead of waiting for processing and making a final commit. Pool shutdown sets worker.shutdown before workers can drain their queues, so assignment revocation abandons queued results and completed in-flight work is not finally committed, causing replay and allowing unfinished old work to overlap a new owner. Make close() stop acceptance without blocking, then have join() drain accepted work within its timeout and commit completed offsets before releasing workers."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       233,
+       238
+      ],
+      "texto": "Do not set worker.shutdown before draining the queues during graceful shutdown. If a worker is processing A while B is queued, shutdown sets the flag; after A finishes, the worker exits at `while not self.shutdown` without ever retrieving B. Calling queue.shutdown(immediate=False) does not override that loop condition. Drain accepted work before stopping workers, and keep committing available until that drain completes; currently close stops the commit thread before the workers as well, so even work finished during shutdown is not finally committed."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+    "descricao": "The strategy's close() shuts down the factory-owned shared queue pool, so after a partition rebalance the next strategy reuses a dead pool; submissions fail and the error handler marks their offsets complete, committing messages that were never processed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       335,
+       338
+      ],
+      "texto": "SimpleQueueProcessingStrategy.close() shuts down the FixedQueuePool, but that pool is a singleton owned by the factory (created once in ResultsStrategyFactory.__init__ and never recreated). Arroyo calls strategy.close() then join() on every assignment revocation/rebalance, and the factory's create_with_partitions is called again for the next assignment; the new strategy then reuses the already-shut-down queue_pool. Because q.shutdown(immediate=False) makes subsequent put() raise queue.ShutDown, submit()'s except branch (lines 317-325) swallows it and marks the offset complete, so after any rebalance every message is committed as processed without ever being handled \u2014 silent data loss. Fix: either let the factory own the pool lifecycle (don't shut it down from the strategy's close) and create a fresh pool per create_with_partitions, or reset/recreate factory.queue_pool when the strategy is closed."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       335,
+       342
+      ],
+      "texto": "WHAT: SimpleQueueProcessingStrategy.close/terminate shuts down the factory-owned shared FixedQueuePool. WHY: ResultsStrategyFactory creates one queue_pool and hands it to every strategy from create_with_partitions, so Arroyo rebalance (close old strategy, create new one reusing factory.queue_pool) reuses a dead pool with joined workers and shut-down queues, stalling all further processing. HOW: Make pool lifecycle owned only by the factory: strategy close should only stop its commit thread, not call queue_pool.shutdown()."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       335,
+       345
+      ],
+      "texto": "SimpleQueueProcessingStrategy.close(), terminate() and join() shut down the FixedQueuePool, but that pool is created once by ResultsStrategyFactory and shared by every strategy it creates. After a rebalance, Arroyo closes the old strategy and then calls create_with_partitions again, which reuses the dead pool. Messages then fail to enqueue, and the submit() exception handler marks them complete, so their offsets get committed without the messages being processed. The strategy should only stop its own commit thread. The pool should be shut down only by factory.shutdown(), or the pool should be created per strategy."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#12",
+    "descricao": "The strategy invokes Arroyo's commit callback from a background thread rather than from submit/poll on the consumer thread, so commits can race with polling and partition revocation on a non-thread-safe consumer.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       273,
+       291
+      ],
+      "texto": "`commit_function` is called from the background commit thread, but arroyo's commit callback is expected to be called from the main consumer thread, and the Kafka consumer is not thread-safe. Committing from another thread risks races with polling and with rebalances."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#15",
+    "descricao": "The WorkItem docstring says the original message is kept for offset tracking, but offset tracking only uses partition and offset and the message field is never used.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       24,
+       31
+      ],
+      "texto": "The `WorkItem` docstring says it \"includes the original message for offset tracking\", but the `message` field is never used for offset tracking \u2014 `OffsetTracker` and the commit loop only ever read `partition`/`offset`, and `submit()` even re-derives the offset from `message.value` rather than from the stored `message`. Update the docstring to describe what the field is actually for (or remove the unused field) so it does not misdescribe the dataclass contract."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       24,
+       31
+      ],
+      "texto": "`WorkItem.message` is declared with the comment 'includes the original message for offset tracking' and is populated in `SimpleQueueProcessingStrategy.submit`, but nothing ever reads it \u2014 offset tracking uses the separate `partition`/`offset` fields. The declared purpose does not match any actual use, so the field (and the extra reference to each Kafka message it keeps alive) is dead; either use it for offset tracking or remove it."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#16",
+    "descricao": "The tests named for concurrent processing across groups only check that all items were processed and all groups seen, so a fully serial implementation would pass and concurrency is never verified.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py",
+      "lines": [
+       137,
+       173
+      ],
+      "texto": "Test named/docstringed \"Test that different groups are processed concurrently\" never verifies concurrency. The body only asserts all 6 items ran and that three distinct group numbers were seen \u2014 a single worker draining one queue, or a fully serial FixedQueuePool, would satisfy both assertions. Either measure actual overlap (e.g. have result_processor block on a barrier/event until all three groups have entered, and fail on timeout) or drop the concurrency claim from the name/docstring."
+     },
+     {
+      "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+      "lines": [
+       1780,
+       1822
+      ],
+      "texto": "test_thread_queue_parallel_concurrent_subscriptions claims to verify that different subscriptions are processed concurrently, but the only assertion is `mock_processor_call.call_count == 2`, which a strictly serial implementation also satisfies. Add a real concurrency signal (e.g. a barrier in the mocked processor that requires both calls to be in flight simultaneously before either returns), otherwise this test cannot detect loss of parallelism."
+     },
+     {
+      "file": "tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py",
+      "lines": [
+       137,
+       173
+      ],
+      "texto": "test_concurrent_processing_across_groups claims concurrent processing but only asserts 6 items processed and 3 groups seen. A serial/single-queue implementation would still pass. Verify overlap (blocking processor + timing/thread IDs) or remove concurrency claim."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#17",
+    "descricao": "The strategy ordering test submits identical messages and only checks the count processed, so it cannot detect out-of-order processing within a group.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py",
+      "lines": [
+       302,
+       312
+      ],
+      "texto": "The strategy ordering test submits five identical decoded results for sub1 and only asserts their count. Processing them in reverse order would still pass. Give each message a distinguishable sequence value and assert the exact processed sequence, so this tests ordering through SimpleQueueProcessingStrategy rather than only delivery."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#18",
+    "descricao": "The graceful-shutdown test only asserts that the factory cleared its queue_pool reference, which shutdown always does, so it does not verify that pending work is drained or workers stop.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+      "lines": [
+       2004,
+       2005
+      ],
+      "texto": "This does not verify graceful shutdown: factory.shutdown unconditionally clears queue_pool after calling pool.shutdown, so the assertion passes even if pending messages are abandoned or worker threads remain alive. Retain the pool reference and assert that all submitted work completed and its workers stopped; the current worker shutdown flag can stop workers without draining their queues."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#20",
+    "descricao": "The polling bound max_wait = 50 is repeated as a magic number across the thread-queue-parallel tests instead of a named constant.",
+    "textoGolden": "The magic number 50 for max_wait is used repeatedly throughout the tests. Consider extracting this as a named constant to improve maintainability.",
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-01",
+    "descricao": "OffsetTracker.get_committable_offsets starts scanning at max(last_committed + 1, min_offset); after mark_committed prunes offsets, a gap is skipped on the next cycle, so offsets are committed past a missing offset, contrary to the 'highest contiguous offset' guarantee.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-02",
+    "descricao": "The test's wait loop stops at the first recorded commit but asserts the committed offset is exactly 105, so a commit fired mid-processing can record a lower offset and make the test flaky.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#oph-01",
+    "descricao": "The per-worker queue_depth gauge is tagged only with identifier, so all queues report into one series and the metric shows whichever queue reported last.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "advanced-sql-analytics-framework-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "f3317b329b4eb8fd96f99dd86525bc4a22d20248",
+  "base": "cbe1e7d63f098e306058c0fbcab2f5c30602fa7d",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     194,
+     200
+    ],
+    "texto": "WHAT: enableSqlExpressions returns false on every path, and `enabled` is the inverted flag value, so FlagSqlExpressions is never honoured. WHY: the logic is misleading and dead. Turning the feature flag on cannot enable SQL expressions later, and a reader will assume the flag is respected. HOW: if the disable is meant to be unconditional, drop the flag lookup and state that explicitly, for example by returning an error directly in the QueryTypeSQL case. Otherwise return `h.features.IsEnabledGlobally(featuremgmt.FlagSqlExpressions)`."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     194,
+     200
+    ],
+    "texto": "enableSqlExpressions computes `enabled` from the feature flag but returns false on every path, so the computed value is dead. SQL expressions are therefore always rejected with 'sqlExpressions is not implemented', even when FlagSqlExpressions is enabled. The `enabled` variable is also negated, which makes its name misleading. Return the flag's value directly."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     194,
+     200
+    ],
+    "texto": "The flag value is negated and both branches return false, so the function ignores the SqlExpressions feature flag and never returns true. SQL expressions are therefore rejected even when the flag is enabled. Return the flag value directly."
+   },
+   {
+    "id": "S4",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     194,
+     200
+    ],
+    "texto": "`enableSqlExpressions` is named as a predicate for 'SQL expressions enabled', but it always returns false. The local `enabled` holds the negation of the flag, and both branches return false. The name and variable therefore state the opposite of what the code does, and the flag is never honoured. Return the flag value directly, or rename the function to say it is a hard-disable."
+   },
+   {
+    "id": "S5",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     129,
+     132
+    ],
+    "texto": "The error \"sqlExpressions is not implemented\" is returned for every SQL query. This includes cases where the feature flag is on, and it misleads users about the cause. Make the message say the feature is disabled or unavailable, for example \"sqlExpressions feature is not enabled\"."
+   },
+   {
+    "id": "S6",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     194,
+     200
+    ],
+    "texto": "`enableSqlExpressions` returns false on every path: the inverted `enabled` variable leads to `return false`, and the fall-through is also `return false`. The SqlExpressions feature flag is therefore ignored, and every SQL expression query fails with \"sqlExpressions is not implemented\" even when the flag is on. Return the flag's value directly."
+   },
+   {
+    "id": "S7",
+    "file": "pkg/expr/sql/parser.go",
+    "lines": [
+     22,
+     30
+    ],
+    "texto": "TablesList now depends on the stub DB.RunCommands, which always returns \"not implemented\". So NewSQLCommand always fails for any SQL, including through UnmarshalSQLCommand, which has no feature gate. The failure surfaces as a misleading BadRequest \"error reading SQL command\". Make the stub's failure explicit and consistent, for example return a distinct not-implemented error from NewSQLCommand, or gate all SQL entry points the same way."
+   },
+   {
+    "id": "S8",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     194,
+     200
+    ],
+    "texto": "enableSqlExpressions negates the flag and then returns false on both branches. As a result ReadQuery rejects every SQL expression even when FlagSqlExpressions is enabled, which breaks callers that relied on the flag. Return the flag value directly."
+   },
+   {
+    "id": "S9",
+    "file": "pkg/expr/sql/db.go",
+    "lines": [
+     12,
+     22
+    ],
+    "texto": "The real duck DB is replaced by a stub whose TablesList, RunCommands and QueryFramesInto all return errors. sql.TablesList (used by NewSQLCommand) and SQLCommand.Execute still expect a working engine. Every SQL expression therefore fails at parse time or returns an error result, even for callers that get past the reader gate. Either keep the real implementation behind the flag, or make the consumers handle the unavailable engine explicitly."
+   },
+   {
+    "id": "S10",
+    "file": "sql_command_test.go",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "The PR changes no test files, but the existing SQL tests in sql_command_test.go that call NewSQLCommand would now fail against the stubbed DB, because TablesList returns \"not implemented\". The tests were not updated to match the stubbed behaviour. They fail rather than pass falsely, so they need updating or the stub needs a real implementation."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "advanced-sql-analytics-framework-grafana-codex#06",
+    "descricao": "The variable in TablesList is still named duckDB although it no longer holds a DuckDB instance.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/expr/sql/parser.go",
+      "lines": [
+       22,
+       26
+      ],
+      "texto": "After replacing `duck.NewInMemoryDB()` with local `NewInMemoryDB()` and removing the duck import, the local `duckDB` still carries the old implementation name though it is no longer a duck DB. Rename to `db`/`sqlDB` (as done in sql_command.go) so identifier matches code."
+     }
+    ]
+   },
+   {
+    "issueId": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+    "descricao": "enableSqlExpressions returns false on both branches, so ReadQuery rejects every SQL expression query as not implemented even when the sqlExpressions feature flag is enabled.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "advanced-sql-analytics-framework-grafana-codex#oph-02",
+    "descricao": "The variable `enabled` in enableSqlExpressions holds the negated flag value, so it is true when SQL expressions are disabled and the name states the opposite of its value.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "sms-workflow-reminder-retry-count-tracking-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "c790227e0cda780e6fea9bb03af27948d9e286b9",
+  "base": "917c7b0764f4c6bfdca95db2c5f73dbfdbe11757",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     38,
+     42
+    ],
+    "texto": "WHAT: The `retryCount: { gt: 1 }` branch of the deleteMany OR has no `method: WorkflowMethods.SMS` constraint. WHY: The SMS cron can delete WorkflowReminder rows of any method (email, WhatsApp) that have retryCount > 1, so its delete scope is broader than the SMS-only scope before this PR. HOW: Add `method: WorkflowMethods.SMS` to the retryCount branch."
+   },
+   {
+    "id": "S2",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     189,
+     199
+    ],
+    "texto": "WHAT: The retryCount update inside the catch block is not guarded, so a failure there throws out of the for-loop. WHY: A DB error or a concurrently deleted row (Prisma P2025) aborts the cron run, and the remaining reminders are not scheduled and no response is sent. HOW: Wrap the update in its own try/catch and log the error so the loop continues."
+   },
+   {
+    "id": "S3",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     28,
+     43
+    ],
+    "texto": "The comment says this deleteMany only removes SMS reminders whose scheduled date has passed. The new OR branch also deletes every WorkflowReminder with retryCount > 1, whatever its method or scheduled date. Update the comment to describe the retry-count deletion, or add `method: WorkflowMethods.SMS` to that branch so the code matches the comment."
+   },
+   {
+    "id": "S4",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     31,
+     43
+    ],
+    "texto": "The SMS cleanup delete was scoped to method SMS, but the new `retryCount > 1` OR branch has no method filter. Any non-SMS WorkflowReminder (email, WhatsApp) whose retryCount exceeds 1 would now be deleted by the SMS cron. Add `method: WorkflowMethods.SMS` to the retryCount branch."
+   },
+   {
+    "id": "S5",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     38,
+     42
+    ],
+    "texto": "The `retryCount > 1` delete branch has no `method: WorkflowMethods.SMS` condition, while the rest of this SMS cron and its comment are SMS-only. It therefore deletes reminders of any method (email, WhatsApp) whose retryCount exceeds 1. Add `method: WorkflowMethods.SMS` to this branch."
+   },
+   {
+    "id": "S6",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     189,
+     198
+    ],
+    "texto": "The retryCount update inside the catch block can itself throw (DB error, or the row was already deleted by a concurrent run). That throw escapes the for-loop, so the remaining reminders are never processed and the handler returns 500. Wrap the update in its own try/catch so one failing reminder cannot abort the batch."
+   },
+   {
+    "id": "S7",
+    "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "lines": [
+     31,
+     43
+    ],
+    "texto": "The `retryCount > 1` branch of the OR is not restricted to `method: SMS`. This SMS cron can therefore delete reminders of any method (email, WhatsApp) that have retryCount > 1. Scope the retryCount condition to SMS reminders."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#01",
+    "descricao": "retryCount is set to reminder.retryCount + 1 from a value read at the start of the run instead of an atomic increment, so overlapping runs can lose increments.",
+    "textoGolden": "Using retryCount: reminder.retryCount + 1 reads a possibly stale value and can lose increments under concurrency; consider an atomic increment via Prisma (increment: 1) to avoid race conditions (also applies to the similar update in the catch block).",
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       179,
+       197
+      ],
+      "texto": "WHAT: retryCount is incremented with a read-value computed at the start of the run (`retryCount: reminder.retryCount + 1`) instead of an atomic increment. WHY: if two cron invocations overlap (or the same reminder is processed twice before the write commits), both read the same retryCount and both write N+1, so failures are undercounted and the reminder can loop forever without ever reaching the `retryCount > 1` deletion threshold. HOW: use `data: { retryCount: { increment: 1 } }` so the increment is atomic (the initial read value is then irrelevant)."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       190,
+       197
+      ],
+      "texto": "`retryCount: reminder.retryCount + 1` is a read-modify-write of the value fetched at the top of the handler, not an atomic increment. Two overlapping cron runs both read the same retryCount and both write the same +1, losing an update, so failed reminders can be retried indefinitely and never reach the `gt: 1` deletion threshold. Use Prisma's atomic `retryCount: { increment: 1 }` instead of computing from the stale in-memory value (same issue in the else branch at lines 179-186)."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       183,
+       185
+      ],
+      "texto": "Retry counts are assigned from the stale findMany snapshot instead of incremented atomically, both here and in the catch branch. Two overlapping cron requests can each fail scheduling the same reminder with retryCount zero and both write one, so two failed attempts do not reach the deletion threshold and additional attempts are scheduled. Use Prisma's atomic retryCount increment operation in both failure branches."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+    "descricao": "The deleteMany OR clause applies retryCount > 1 without the SMS method filter, so the SMS cron deletes any workflow reminder (email, WhatsApp) with retryCount above 1.",
+    "textoGolden": "The deletion logic in scheduleSMSReminders.ts incorrectly deletes non-SMS workflow reminders (e.g., Email, WhatsApp) that have retryCount > 1. This occurs because the retryCount condition within the OR clause for deletion lacks a method: WorkflowMethods.SMS filter, causing it to apply to all reminder types instead of only SMS reminders, which is the intended scope of this function.",
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       28,
+       43
+      ],
+      "texto": "The comment \"//delete all scheduled sms reminders where scheduled date is past current date\" no longer describes the deleteMany below it. After this change the query also deletes reminders with retryCount > 1, and that OR branch has no `method: WorkflowMethods.SMS` filter, so non-SMS (email) reminders with retryCount > 1 are now deleted too. Update the comment (or add the missing SMS filter to the retryCount branch) so the prose matches what the code actually deletes."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       53,
+       63
+      ],
+      "texto": "The deleteMany OR clause deletes any reminder with retryCount > 1 regardless of method."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       38,
+       43
+      ],
+      "texto": "The second OR branch `{ retryCount: { gt: 1 } }` has no `method` filter, unlike the first branch (`method: WorkflowMethods.SMS`). Because `retryCount` is a generic column on WorkflowReminder used by all reminder methods, this deleteMany now permanently deletes every reminder of ANY method (including EMAIL) whose retryCount exceeds 1, even though this cron is only supposed to clean up SMS reminders. Add `method: WorkflowMethods.SMS` to this branch (or scope the whole where to SMS) so non-SMS reminders are never destroyed."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#03",
+    "descricao": "The cleanup comment describes only past-date SMS deletion and omits the new retryCount > 1 deletion branch.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       38,
+       42
+      ],
+      "texto": "Update the cleanup comment to describe the new retry-exhaustion deletion branch. It currently says this deletes scheduled SMS reminders whose date has passed, but this OR branch also deletes any reminder with retryCount > 1, including future-dated reminders and without an SMS restriction. The comment now misrepresents the scope of this destructive operation."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       28,
+       44
+      ],
+      "texto": "Stale comment: line 28 says 'delete all scheduled sms reminders where scheduled date is past current date' but the new OR clause also deletes any reminder with retryCount > 1 regardless of method or date. Update the comment to describe both branches."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
+    "descricao": "The retry-count update inside the catch block is not guarded, so if it throws (for example the reminder was deleted concurrently) the error escapes the loop and the cron run fails, skipping the remaining reminders.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       189,
+       198
+      ],
+      "texto": "WHAT: the catch block performs an unguarded `prisma.workflowReminder.update` while handling the scheduling error. WHY: if this write itself rejects (e.g. the row was concurrently removed, or a transient DB error), the rejection is not caught and escapes the for-loop, aborting the whole cron run so all remaining reminders go unprocessed. HOW: wrap the retryCount update in its own try/catch (log and continue) so a failure to record the retry does not abort processing of the remaining reminders."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       190,
+       197
+      ],
+      "texto": "This new `prisma.workflowReminder.update` sits inside the catch block, which is NOT protected by any try/catch. If this update throws (e.g. the reminder was already removed by the `deleteMany` at the top of the file during a concurrent run -> Prisma P2025, or a transient DB error), the exception escapes the `for` loop and rejects the handler, so all remaining unscheduled reminders are skipped and the cron request fails. Previously the catch only did `console.log`, so a single bad reminder never aborted the batch and the endpoint always returned 200. Wrap this update in its own try/catch (or `updateMany`/catch-and-log) so a failed retry-count write cannot take down the whole scheduling run."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       190,
+       197
+      ],
+      "texto": "The new database update inside catch can itself throw when a reminder has been deleted during scheduling. Booking cancellation deletes reminders through handleCancelBooking and deleteScheduledSMSReminder, so a concurrent cancellation followed by a scheduling error now rejects the entire cron handler and prevents the remaining reminders from being processed. Use an updateMany filtered by the reminder ID to tolerate an already-deleted row, and guard errors from retry bookkeeping so they do not escape the per-reminder error handler."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#06",
+    "descricao": "Claims transient errors increment retryCount, so two runs during an outage delete the whole pending SMS reminder queue.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       190,
+       197
+      ],
+      "texto": "WHAT: The catch block unconditionally increments retryCount for any exception (profile/bookerUrl/templating/rate-limit/Twilio outage). WHY: Two consecutive cron runs with a transient global failure increment every pending SMS reminder to 2 and the startup deleteMany then wipes the entire future SMS queue, not just permanently-invalid numbers. HOW: Only increment on permanent scheduleSMS failure, or distinguish transient errors from terminal ones before counting toward deletion."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#07",
+    "descricao": "The new OR arm on retryCount has no supporting index, so the cleanup delete can no longer be fully served by the existing index and may scan the table.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "lines": [
+       31,
+       43
+      ],
+      "texto": "WHAT: the deleteMany WHERE now uses `OR` between `(method = SMS AND scheduledDate <= now)` and `retryCount > 1`, but WorkflowReminder has no index on the newly added retryCount column. WHY: Postgres cannot satisfy a two-way OR using the existing (method, scheduled, scheduledDate) index and will fall back to a sequential scan of the entire WorkflowReminder table on every cron invocation, turning a previously indexed delete into a full table scan as the table grows. HOW: add an index on retryCount (or restructure so each branch is index-usable), then re-check the query plan."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#09",
+    "descricao": "The retryCount increment update is duplicated in the else branch and the catch block.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "scheduleSMSReminders.ts",
+      "lines": [
+       178,
+       197
+      ],
+      "texto": "The retryCount increment is duplicated in the else-branch and catch."
+     }
+    ]
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#e2b-01",
+    "descricao": "SMS-sending locks are counted as failed scheduling attempts: scheduleSMS returns undefined for locked users/teams, retryCount is incremented, and after two cron runs the retryCount > 1 cleanup deletes future reminders even if sending is later unlocked.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#sncc-01",
+    "descricao": "retryCount is not incremented when a reminder has no message or no sendTo number, so such reminders are reprocessed on every cron run until their scheduled date.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "6048e2a86b50e81e1e3b1b467dfea5a895add3dc",
+  "base": "d1440bb5d2f2190ad7ae1d26c165f970055b5370",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+    "lines": [
+     53,
+     77
+    ],
+    "texto": "WHAT: The cancel loop runs all SendGrid requests inside one try/catch, and the prisma deletes are lazy and only run at `Promise.all` after the loop. WHY: If one `client.request` throws (for example for a stale batch_id), the loop exits, the remaining cancelled reminders are not cancelled, and their emails can still be sent. Rows for already-cancelled reminders also stay in the DB. HOW: Use a try/catch per reminder, and delete each row right after its successful cancel."
+   },
+   {
+    "id": "S2",
+    "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+    "lines": [
+     484,
+     497
+    ],
+    "texto": "WHAT: `deleteScheduledEmailReminder` and `deleteScheduledSMSReminder` now perform the Prisma update/delete and the Twilio cancel, but handleCancelBooking calls them without awaiting. The old code awaited the DB deletes in `Promise.all`. WHY: The handler returns right after the other deletes, so on serverless runtimes the pending writes can be dropped. Reminders then stay uncancelled and the emails or SMS are still sent for cancelled bookings, which is the bug this PR fixes. HOW: Collect the returned promises and await them in the existing Promise.all."
+   },
+   {
+    "id": "S3",
+    "file": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+    "lines": [
+     197,
+     232
+    ],
+    "texto": "`deleteScheduledEmailReminder` and its `immediateDelete` flag no longer match the behaviour. With `immediateDelete` it only cancels the SendGrid batch and never deletes the reminder row. Without it, it only sets `cancelled: true`. The SMS sibling of the same name does delete the row, so callers reading the name will wrongly assume deletion. Rename them to something like `cancelScheduledEmailReminder` and `immediateCancel`."
+   },
+   {
+    "id": "S4",
+    "file": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+    "lines": [
+     213,
+     223
+    ],
+    "texto": "When `immediateDelete` is true, the SendGrid batch is cancelled and the function returns without deleting the WorkflowReminder row. The row is also not marked `cancelled`, so the cron cleanup never picks it up. Reminders cancelled this way (reschedule, deleted workflow, deleted step) stay in the DB as scheduled=true, unlike the SMS path and the non-immediate email path. Delete the DB row after the immediate cancel."
+   },
+   {
+    "id": "S5",
+    "file": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+    "lines": [
+     213,
+     223
+    ],
+    "texto": "With immediateDelete=true the function cancels the SendGrid batch and returns without deleting the WorkflowReminder row. Before this PR every caller removed the row after cancelling, so rescheduled, deleted-workflow and deleted-step reminders are now orphaned in the DB. The callers were not changed to delete the row themselves, so the function should delete it after the cancel request succeeds."
+   },
+   {
+    "id": "S6",
+    "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+    "lines": [
+     53,
+     77
+    ],
+    "texto": "A single failing Sendgrid cancel request throws out of the shared try/catch and aborts the loop, so all later cancelled reminders are skipped. The failing row still matches `cancelled: true`, so it blocks the queue on every cron run, and those reminders may still be sent. Wrap each reminder's cancel and delete in its own try/catch so one failure does not stop the others."
+   },
+   {
+    "id": "S7",
+    "file": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+    "lines": [
+     213,
+     223
+    ],
+    "texto": "The `immediateDelete` branch cancels the Sendgrid batch and returns without deleting or marking the WorkflowReminder row. The reschedule path in handleNewBooking uses this branch, so the old booking keeps a stale row with `scheduled=true`. Nothing removes or marks that row afterwards. Delete the row after a successful cancel."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+    "descricao": "Reminder cancel helpers are called without await inside forEach when bookings are cancelled/rescheduled or workflows edited, so the handler can return before reminders are cancelled or deleted and failures are unobserved.",
+    "textoGolden": "Asynchronous functions deleteScheduledEmailReminder and deleteScheduledSMSReminder are called without await inside forEach loops. This occurs during booking rescheduling/cancellation, and workflow/workflow step deletion/updates. Consequently, scheduled workflow reminders may not be reliably cancelled, potentially leaving them active.",
+    "comentarios": [
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       484,
+       493
+      ],
+      "texto": "WHAT: async deleteScheduledEmailReminder/deleteScheduledSMSReminder called inside forEach without collecting/awaiting promises. WHY: handler returns before cancels complete and rejections are unobserved, so cancellations are lost and reminder emails/SMS are still sent (same fire-and-forget pattern repeated in handleNewBooking:966, bookings.tsx:488, workflows.tsx:212/376/519/574)."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       485,
+       495
+      ],
+      "texto": "Cancellation now delegates the database update/deletion to asynchronous reminder helpers without awaiting them, while removing reminder deletes from the awaited promise list. The handler can finish before cancelled flags or unscheduled-reminder deletions are persisted, allowing a subsequent scheduler run to schedule a cancelled booking's reminder and leaving cancellation work unfinished when a serverless invocation terminates. Collect and await the helper promises; apply the same correction to the modified rescheduling and workflow-update callers that discard these promises."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       485,
+       495
+      ],
+      "texto": "Await the reminder cancellation promises before completing the cancellation request. These helpers now own persistence of cancellation: email awaits a workflowReminder update and SMS awaits Twilio before deleting the row. The forEach discards their promises, and removing remindersToDelete from the awaited promise list removes the previous guarantee that reminder state is cleared before the handler returns. In a serverless request the outstanding operations can be interrupted after the response, leaving reminders active for a cancelled booking. Collect these helper promises and include them in the awaited Promise.all."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+    "descricao": "The cron cancels SendGrid sends for cancelled reminders in one try around the whole loop, so one failing cancel aborts all remaining cancellations and the row deletions, and the failing row blocks later runs.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "lines": [
+       43,
+       77
+      ],
+      "texto": "WHAT: remindersToCancel loop awaits SendGrid cancel per-reminder inside one try and only runs Prisma deletes after the loop, with no method filter. WHY: a single throw (e.g. null SMS referenceId sent as batch_id, or one SendGrid error) aborts the loop and skips Promise.all deletes, leaving all other cancelled emails still scheduled so they are still sent."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "lines": [
+       66,
+       74
+      ],
+      "texto": "Successful cancellation records are only deleted after every SendGrid request in the loop succeeds. If a later request fails, the catch skips all queued Prisma deletions; the next run retries an already-cancelled batch, which SendGrid rejects with 400, and aborts before processing the remaining reminders. Await each reminder's database deletion immediately after its successful cancellation and isolate errors per reminder so one failed batch does not block the others."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "lines": [
+       53,
+       76
+      ],
+      "texto": "Handle cancellation failures per reminder rather than around the entire batch. If one SendGrid request rejects (for example, for an expired or invalid batch ID), the loop exits before cancelling the remaining reminders, and Promise.all is never reached, so even earlier successfully cancelled reminders remain in the database. The failed record stays eligible for the next run and can repeatedly block other cancellations until their emails are sent. Execute each successful deletion and isolate failures so the worker continues processing the remaining reminders."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#05",
+    "descricao": "Email reminders for cancelled bookings are only flagged cancelled and cancelled in SendGrid by the cron later, so reminders close to their send time can still be delivered.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "lines": [
+       46,
+       48
+      ],
+      "texto": "Deferred cancellation includes reminders less than ten minutes from their scheduled send time, when SendGrid no longer permits cancellation. A booking cancelled in that interval is only marked cancelled locally by deleteScheduledEmailReminder, and the cron's POST is rejected, so its email is still delivered. Process cancellation before SendGrid's ten-minute cutoff and explicitly handle cancellations that arrive after that deadline rather than relying on this cron query to stop delivery."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#06",
+    "descricao": "The cron cancels SendGrid scheduled sends one at a time with sequential awaits, which is slower than batching.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "lines": [
+       53,
+       74
+      ],
+      "texto": "The new cancel loop performs a sequentially awaited SendGrid HTTP request (`await client.request(...)`) for each reminder returned by an unbounded `findMany` (no `take`), then deletes them. WHY: this is O(N) serial network round-trips per cron run; if many reminders are cancelled at once (e.g. a bulk event-type disable or booking cancellation wave) the cron handler can block for a long time on serial SendGrid latency. HOW: fan the independent SendGrid cancel requests out with `Promise.all`, and/or bound the query with `take` plus pagination, then batch the DB deletes."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "lines": [
+       56,
+       64
+      ],
+      "texto": "WHAT: SendGrid cancel issued with sequential await inside for loop over remindersToCancel. WHY: cron blocks O(N) sequential network round-trips instead of parallel batch, materially slowing the hourly schedule job as cancelled backlog grows."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#11",
+    "descricao": "deleteScheduledEmailReminder and its immediateDelete flag do not delete anything; the names no longer describe the behaviour.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+      "lines": [
+       197,
+       232
+      ],
+      "texto": "`deleteScheduledEmailReminder` and its `immediateDelete` flag no longer match what the code does. The default path only marks the reminder `cancelled: true`, and the `immediateDelete` path only sends a cancel request to the email provider. Neither path deletes the scheduled send or the row, unlike the SMS counterpart, which still deletes. Rename them (for example `cancelScheduledEmailReminder` and `immediateCancel`) or document the behaviour."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#13",
+    "descricao": "deleteScheduledSMSReminder deletes the DB row only after a successful Twilio cancel, so a cancel failure leaves the reminder row behind now that callers no longer delete it.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/lib/reminders/smsReminderManager.ts",
+      "lines": [
+       177,
+       186
+      ],
+      "texto": "twilio.cancelSMS and prisma.workflowReminder.delete share one try block. If the Twilio cancel throws, the DB row is never deleted. The reminder row then stays behind for a booking that was cancelled, rescheduled or deleted, because the callers no longer delete rows themselves. Delete the row in a finally block, or handle the cancel failure separately so the delete still runs."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#14",
+    "descricao": "Prisma is imported in workflows.tsx but no longer used.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/workflows.tsx",
+      "lines": [
+       1,
+       10
+      ],
+      "texto": "`Prisma` is imported as a value (line 9) but is no longer used anywhere in this file. This PR removed the only usages (`Prisma.BatchPayload` in the now-deleted `remindersToDelete` / `deleteReminderPromise` declarations), while the import was kept. WHY: the repo's ESLint `no-unused-vars` rule will fail CI/build for an unused import. HOW: remove `Prisma` from the import list (and keep `import type { PrismaPromise }` as a type-only import)."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#prod-01",
+    "descricao": "The cron route sets the API key only on @sendgrid/mail, so the new @sendgrid/client cancellation requests are unauthenticated and reminders for cancelled bookings stay scheduled.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "anonymous-add-configurable-device-limit-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "bbd8c507cdf56f6b884373809e0b24abd4a2353d",
+  "base": "50f4e78a39914711d0d231a501ba215becf17ebc",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/services/anonymous/anonimpl/anonstore/database_test.go",
+    "lines": [
+     51,
+     70
+    ],
+    "texto": "TestIntegrationBeyondDeviceLimit only asserts that a new device is rejected at the limit. It would still pass if updateDevice always returned ErrDeviceLimitReached, so the 'existing devices keep updating' behaviour is untested. Add a step that calls CreateOrUpdateDevice again for the first device and asserts NoError, and that its updated_at or user agent changed."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+    "lines": [
+     52,
+     54
+    ],
+    "texto": "ProvideAnonDBStore now requires a `deviceLimit int64` argument, but pkg/server/wire.go:374-375 still lists it as a wire provider and binds AnonStore to *AnonDBStore. Wire cannot satisfy a bare int64 parameter, so wire generation or the build breaks. impl.go no longer consumes an injected AnonStore, so remove the provider and the bind from wire.go and regenerate wire_gen.go."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/services/anonymous/anonimpl/impl.go",
+    "lines": [
+     144,
+     148
+    ],
+    "texto": "The local cache key is set in tagDeviceUI before CreateOrUpdateDevice runs. When the store returns ErrDeviceLimitReached, the device stays in the cache, and the next request within the cache TTL returns nil early and is authenticated as anonymous. The device limit is therefore enforced only for the first request of each rejected device. Set the cache entry only after CreateOrUpdateDevice succeeds, or delete it when the call returns an error."
+   },
+   {
+    "id": "S4",
+    "file": "pkg/services/anonymous/anonimpl/impl.go",
+    "lines": [
+     144,
+     148
+    ],
+    "texto": "tagDeviceUI caches the device key in localCache before CreateOrUpdateDevice runs, so after ErrDeviceLimitReached is returned once, later requests from the same device hit the cache, TagDevice returns nil, and client.go's Authenticate lets them in. The limit is only enforced on the first request per cache window. Set the cache entry only after CreateOrUpdateDevice succeeds (or delete it on error)."
+   },
+   {
+    "id": "S5",
+    "file": "pkg/services/anonymous/anonimpl/impl.go",
+    "lines": [
+     83,
+     95
+    ],
+    "texto": "The local cache key is set before CreateOrUpdateDevice runs and is never removed when it fails. After ErrDeviceLimitReached (or a transient DB error), the next 29 minutes of requests for that device hit the cache and return nil, so the rejected device is let through as anonymous and the limit is bypassed. Set the cache only after the store call succeeds, or delete the key on error."
+   },
+   {
+    "id": "S6",
+    "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+    "lines": [
+     108,
+     147
+    ],
+    "texto": "The device limit is checked with a separate COUNT and then an unconditional upsert, with no transaction or lock. Concurrent requests from distinct new devices can all read count < limit and all insert, so the stored device count exceeds device_limit. Make the check and insert atomic, for example with a conditional INSERT ... SELECT ... WHERE (SELECT COUNT(*) ...) < limit, or run both inside a serialized transaction."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#01",
+    "descricao": "The device limit check counts devices and then inserts in separate non-atomic steps, so concurrent requests from new devices can all pass the check and exceed the configured limit.",
+    "textoGolden": "Race condition: Multiple concurrent requests could pass the device count check simultaneously and create devices beyond the limit. Consider using a database transaction or lock.",
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       108,
+       118
+      ],
+      "texto": "The limit check counts devices and then inserts in separate steps with no lock or transaction. Concurrent requests from new devices can all see count < limit and all insert, so the limit is exceeded. Make the count-and-insert atomic, for example with a conditional INSERT ... SELECT ... WHERE (SELECT COUNT(*)) < limit."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       108,
+       118
+      ],
+      "texto": "The device limit check is a non-atomic count followed by an insert. Concurrent requests from different new devices can all see count < limit and all insert, so the number of devices exceeds deviceLimit. Make the check and insert atomic, for example with a conditional INSERT ... SELECT WHERE (SELECT COUNT(*)) < limit, or serialize the check and insert under a lock."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       108,
+       118
+      ],
+      "texto": "WHAT: CreateOrUpdateDevice does check-then-act (CountDevices then INSERT/UPSERT) with no lock, transaction, or unique-guard when deviceLimit>0. WHY: Two concurrent new-device requests can both observe count < limit and both insert, exceeding the configured limit and breaking the enforcement contract. HOW: Enforce atomically (e.g., conditional insert guarded by count in one statement/transaction with serializable lock, or re-check count on conflict)."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#02",
+    "descricao": "Device slots are keyed by the client-controlled X-Grafana-Device-Id header with no validation or rate limiting, so an anonymous caller can fill the limit with fake IDs and deny anonymous access to every new legitimate device.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       109,
+       117
+      ],
+      "texto": "WHAT: Device slots counted toward deviceLimit are keyed by the unauthenticated X-Grafana-Device-Id header (read in impl.go TagDevice) with no validation or rate-limit. WHY: Any anonymous caller can mint arbitrary device IDs to fill the table up to the limit, after which all legitimate new anonymous devices get ErrDeviceLimitReached and authentication is denied \u2014 a trivial anonymous-access DoS introduced by the limit. HOW: Do not let a single client consume many slots (e.g., bind slot consumption to IP/fingerprint, rate-limit new-device creation, or require proof of distinct device)."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#05",
+    "descricao": "TestIntegrationBeyondDeviceLimit only checks that a new device is rejected at the limit and never verifies that an existing device can still be updated at the limit.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database_test.go",
+      "lines": [
+       51,
+       70
+      ],
+      "texto": "The at-limit call reuses a brand-new device ID (\"keep\") that was never inserted, so it only reaches updateDevice's `rowsAffected == 0` -> ErrDeviceLimitReached branch. The success branch of the newly added updateDevice (an existing device still being updated while the store is at the limit) is never exercised by any test \u2014 every other call uses deviceLimit 0, so updateDevice is never invoked. A regression that made updateDevice always affect 0 rows, use a wrong WHERE/SET, or unconditionally return ErrDeviceLimitReached whenever limit>0 would leave this and all other tests green. Add a case that, after the store is at the limit, calls CreateOrUpdateDevice again with the SAME DeviceID and asserts require.NoError (and ideally that client_ip/user_agent/updated_at were changed), so the update path is actually verified."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database_test.go",
+      "lines": [
+       51,
+       70
+      ],
+      "texto": "TestIntegrationBeyondDeviceLimit only checks that a new device is rejected at the limit. It would still pass if updateDevice always returned ErrDeviceLimitReached, because it never re-submits the existing device (DeviceID \"32mdo31deeqwes\") at the limit. Add a call that updates the existing device with a new UserAgent or UpdatedAt, require NoError, and check the stored row changed."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#07",
+    "descricao": "tagDeviceUI caches the device key before CreateOrUpdateDevice; when the store returns ErrDeviceLimitReached the entry stays, so the next request from the same device skips the limit check and authenticates for up to 29 minutes.",
+    "textoGolden": "The `tagDeviceUI` function populates the local cache with the device ID before the `CreateOrUpdateDevice` call. If `ErrDeviceLimitReached` is returned, the cache entry remains set, allowing subsequent requests to bypass the device limit until the cache expires after 29 minutes.",
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/client.go",
+      "lines": [
+       44,
+       47
+      ],
+      "texto": "WHAT: TagDevice failures that triggered the new ErrDeviceLimitReached early-return are not permanent, because tagDeviceUI (impl.go:87) writes the device key into localCache BEFORE CreateOrUpdateDevice (impl.go:93) and never evicts it on error; tagDeviceUI returns early on any cache hit (impl.go:83-84). WHY: the first request from a new over-limit device is denied, but the poisoned cache makes every subsequent request from that same device skip the limit check entirely and authenticate successfully, so the configurable device limit is bypassed by simply retrying. HOW: only set the cache key after CreateOrUpdateDevice returns nil (e.g. move a.localCache.SetDefault after the successful DB write, or delete the key when it returns ErrDeviceLimitReached)."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/impl.go",
+      "lines": [
+       144,
+       148
+      ],
+      "texto": "TagDevice now propagates ErrDeviceLimitReached to deny an over-limit anonymous device, but tagDeviceUI (impl.go:83-95) records the device in localCache at line 87 *before* calling a.anonStore.CreateOrUpdateDevice. When the store rejects the device with ErrDeviceLimitReached, the key is already cached, so the next request for that same device returns early at line 83 with a nil error and the device is admitted. The limit therefore only blocks the first request and is silently bypassed on retry. Fix by only setting the cache entry after CreateOrUpdateDevice succeeds (move SetDefault after the store call), or by removing/not caching the key on failure."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/client.go",
+      "lines": [
+       44,
+       46
+      ],
+      "texto": "The new authentication gate accepts retries from devices that were rejected by the limit because tagDeviceUI inserts the cache entry before CreateOrUpdateDevice succeeds. At capacity, the first request with a new X-Grafana-Device-Id fails, but subsequent requests with that same ID hit the 29-minute cache and receive an anonymous identity without admission to the device store. Cache only successful admissions, and ensure concurrent requests cannot treat an in-progress admission as successful."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#09",
+    "descricao": "Device tagging now runs synchronously in Authenticate, adding DB round-trips on cache-miss anonymous requests where it used to be fire-and-forget.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/client.go",
+      "lines": [
+       44,
+       50
+      ],
+      "texto": "WHAT: Anonymous.Authenticate changed from fire-and-forget goroutine TagDevice to synchronous TagDevice(ctx) that runs CountDevices + INSERT/UPDATE inline. WHY: Every cache-miss anonymous authentication now blocks on two DB round-trips in the login hot path, adding latency and DB load per request where previously auth returned immediately. HOW: Restore async tagging for the non-limit path or at least decouple denial from the hot path (e.g., async count with cached count, or only synchronously enforce when near limit)."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#11",
+    "descricao": "The new auth.anonymous device_limit setting has no entry in conf/defaults.ini, so the GF_AUTH_ANONYMOUS_DEVICE_LIMIT environment override is ignored and the limit stays 0.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/setting/setting.go",
+      "lines": [
+       1654,
+       1654
+      ],
+      "texto": "The new device_limit setting is read without adding a corresponding key to conf/defaults.ini. applyEnvVariableOverrides only visits keys already present in the loaded INI and runs before readAuthSettings, so setting GF_AUTH_ANONYMOUS_DEVICE_LIMIT alone is ignored and leaves the limit at zero, disabling enforcement. Add an uncommented device_limit = 0 entry under auth.anonymous in defaults.ini so the standard environment override mechanism can apply it."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#opa-02",
+    "descricao": "The anonymous device limit is enforced only through TagDevice, which returns nil when the client-controlled device ID header is missing, so requests without the header authenticate anonymously regardless of the configured limit.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#opa-04",
+    "descricao": "The doc comment on updateDevice says it updates a device \"updated between the given times\", but the function takes no times, computes the 30-day window itself and returns ErrDeviceLimitReached when no row matches.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#prod-02",
+    "descricao": "updateDevice prepends the query to the captured args inside the retried DB callback, so a SQLite lock retry runs Exec with the query duplicated in the arguments and the update fails.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "267d8be1f556ed59639ced396c885bb44586da19",
+  "base": "7a5fbae060bd0d3e29f3a4b5c6f2bfd8b2914dc7",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/serializers/user_serializer.rb",
+    "lines": [
+     105,
+     155
+    ],
+    "texto": "`website_name` is derived from the website but is not listed in `untrusted_attributes`, and `include_website_name` only checks `website.present?`. Untrusted or new users' websites are hidden from `website` but their host and path still leak through `website_name`. Add `:website_name` to `untrusted_attributes` so it follows the same trust gating as `website`."
+   },
+   {
+    "id": "S2",
+    "file": "app/serializers/user_serializer.rb",
+    "lines": [
+     137,
+     151
+    ],
+    "texto": "The website host is compared with the Discourse hostname without case normalisation. URI#host keeps the original case, so `Example.com` is not treated as the same domain as `example.com`, and the same-domain, sibling-subdomain and parent-domain checks give inconsistent results. Downcase `website_host` and `discourse_host` before comparing."
+   },
+   {
+    "id": "S3",
+    "file": "app/serializers/user_serializer.rb",
+    "lines": [
+     153,
+     155
+    ],
+    "texto": "`website_name` is serialized for every user with a website, but `website` is an untrusted attribute that is hidden for low-trust users. The template now shows the website block whenever `model.website_name` is present. For TL0 users it therefore renders the host text with no href, and it leaks the website they are not meant to show. Add `:website_name` to `untrusted_attributes`, or make `include_website_name` also respect the `include_website?` gate."
+   },
+   {
+    "id": "S4",
+    "file": "app/serializers/user_serializer.rb",
+    "lines": [
+     153,
+     155
+    ],
+    "texto": "`website_name` is derived from `website`, but it was not added to `untrusted_attributes`, where `website` is stripped for untrusted users. The template used to show nothing when `website` was hidden. It now shows the globe icon and hostname for basic users, leaking the hidden website. Add `:website_name` to `untrusted_attributes`, or make `include_website_name` also respect the untrusted check."
+   },
+   {
+    "id": "S5",
+    "file": "app/serializers/user_serializer.rb",
+    "lines": [
+     105,
+     111
+    ],
+    "texto": "`website_name` is derived from `website`, but only `website` is listed in `untrusted_attributes`. For untrusted users the website is hidden, yet `website_name` is still serialized. The profile then shows a globe icon and host text with an empty link. Add `:website_name` to `untrusted_attributes` so the two stay in agreement."
+   },
+   {
+    "id": "S6",
+    "file": "app/serializers/user_serializer.rb",
+    "lines": [
+     144,
+     146
+    ],
+    "texto": "The sibling-subdomain check strips the first label from both hosts and compares the remainder, which assumes the remainder is a registrable domain. For hosts under a public suffix, such as foo.co.uk vs forum.co.uk or a.github.io vs b.github.io, the remainder is only the suffix, so unrelated sites are treated as the same site and the full path is shown. Compare against the registrable domain (for example with the PublicSuffix gem) or require at least two remaining labels."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#01",
+    "descricao": "website_name compares hostnames case-sensitively, so an uppercase website host matching the instance domain shows only the host instead of the full path.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       137,
+       151
+      ],
+      "texto": "The new `website_name` compares two domain names case-sensitively. `URI(website.to_s).host` preserves the letter case written by the user, whereas `Discourse.current_hostname` is the canonical lower-cased host, and no side is down-cased before the comparison at lines 141, 144-146 and 149 (including the `ends_with?` suffix check). Because DNS host names are case-insensitive identity values, `http://EXAMPLE.com/user` and `http://example.com/user` denote the same host but take different branches, so the same-site check is decided by letter case: the wrong arm is chosen and the full-path form is dropped. Normalise both sides before comparing, e.g. `website_host = URI(website.to_s).host&.downcase` (or use `URI(...).hostname`, which down-cases) and compare against `Discourse.current_hostname.to_s.downcase`."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       138,
+       141
+      ],
+      "texto": "Hostname comparisons are case-sensitive even though DNS hostnames are case-insensitive. With an instance hostname of example.com and a valid website of http://EXAMPLE.COM/user, neither the exact-host nor suffix comparison matches, so the profile displays only EXAMPLE.COM instead of the requested path. Normalize both hostnames to lowercase for comparison while preserving the desired display spelling."
+     }
+    ]
+   },
+   {
+    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#04",
+    "descricao": "website_name strips only the first label to decide same-domain, so unrelated hosts under multi-label public suffixes (co.uk, github.io) are treated as the instance domain and shown with full path.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       144,
+       146
+      ],
+      "texto": "WHAT: the `elsif` branch treats the last two dot-segments as the registrable domain, so multi-part public suffixes are mis-compared. WHY: for e.g. website_host='example.co.uk' and discourse_host='forum.co.uk' both have 3 segments, the branch compares `'co.uk' == 'co.uk'`, concludes the domains match, and returns `website_host + path`, even though example.co.uk and forum.co.uk are unrelated sites \u2014 the display then shows a path that does not belong to the instance domain, defeating the feature's purpose. HOW: compare against a public-suffix-aware registrable domain (e.g. use the PublicSuffix list) or require at least the full suffix before treating hosts as the same domain, instead of blindly taking `split('.')[1..-1]`."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       144,
+       146
+      ],
+      "texto": "Comparing all labels except the first incorrectly treats unrelated domains under multi-label public suffixes as the same domain. For example, with instance host `forum.co.uk` and website `https://unrelated.co.uk/user`, this returns `unrelated.co.uk/user` rather than the unrelated-site host-only label. Both hosts have three labels and their suffixes are `co.uk`, so this branch mistakes the public suffix for a shared site domain. Use registrable-domain-aware comparison (or a narrower explicit host relationship) before including the path."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       144,
+       146
+      ],
+      "texto": "The same-label-count branch treats two hosts as the same domain when everything after the first label matches. Unrelated hosts on shared suffixes, such as `a.github.io` and `b.github.io`, are treated as the same domain, so the full path is shown for an unrelated website. Compare against the registrable domain, for example with the PublicSuffix gem, or drop this heuristic branch."
+     }
+    ]
+   },
+   {
+    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#05",
+    "descricao": "Claims website_name should also show the full path when the website is a subdomain of the instance host.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       147,
+       150
+      ],
+      "texto": "WHAT: Else branch only tests `discourse_host.ends_with?('.'+website_host)` (discourse child of website) and misses the reverse (website subdomain of instance). WHY: With instance `example.com` and website `http://sub.example.com/page`, it returns `sub.example.com` instead of `sub.example.com/page`, contradicting the PR intent to show the full path for same-base-domain URLs. HOW: Also return host+path when `website_host` ends with `.`+discourse_host or shares the same registrable domain."
+     }
+    ]
+   },
+   {
+    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+    "descricao": "website_name is not marked untrusted, so the host/path of a TL0 user's website, which is hidden from anonymous viewers, is still exposed through the new field.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       153,
+       155
+      ],
+      "texto": "WHAT: website_name re-exposes the user's website for profiles where it is intentionally hidden \u2014 the attribute is added to the public `attributes` list (line 43) but not to `untrusted_attributes`, and `include_website_name` only checks `website.present?` instead of `scope.restrict_user_fields?(object)`. WHY: `website` is an untrusted attribute gated by `restrict_user_fields?` (lib/guardian/user_guardian.rb:58-60), which is true for a TL0 user viewed by an anonymous visitor; `website_name` derives `website_host + path` from the same `object.user_profile.website`, so the URL that `include_website?` suppresses is still disclosed through the new key (the existing spec at spec/serializers/user_serializer_spec.rb:11-14 only asserts the listed untrusted keys are absent, so this leak is not covered). HOW: add `:website_name` to the `untrusted_attributes` list (or have `include_website_name` return false when `scope.restrict_user_fields?(object)`), mirroring the `website` handling."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       137,
+       155
+      ],
+      "texto": "`website_name` is derived from the same `object.user_profile.website` value that `:website` protects via `untrusted_attributes` (lines 105-111), but it is only gated by `include_website_name` -> `website.present?`. Since the untrusted filter removes `website` for some viewers while `website_name` is still emitted, and in the same-domain / subdomain branches it returns host *plus* `URI(website).path` (lines 143/146/149), the user's full website URL still leaves in the response for viewers the filter was supposed to strip it from. Either add `:website_name` to `untrusted_attributes` or gate `include_website_name` with the same trust condition as `website`."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       153,
+       155
+      ],
+      "texto": "The new `website_name` field is gated only on `website.present?`, ignoring the visibility constraint this file declares for its source attribute: lines 105-111 put `:website` in `untrusted_attributes`, so `website` is omitted for viewers not allowed to see profile fields, but `website_name` is still serialized because `include_website_name` never consults that condition. Those viewers now receive the user's URL host, and when the host equals (lines 141-143) or is a parent of (144-149) the instance host they receive host + path, i.e. the complete URL that `website` was supposed to hide. Fix by adding `:website_name` to the `untrusted_attributes` list (105-111) \u2014 or make the guard reuse `website`'s own inclusion condition instead of a bare presence check."
+     }
+    ]
+   },
+   {
+    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07",
+    "descricao": "include_website_name lacks the '?' suffix that ActiveModelSerializers requires, so the conditional-inclusion guard is never called.",
+    "textoGolden": "The include_website_name method is missing the required ? suffix. Rails serializers expect include_ methods to end with ? for conditional attribute inclusion, a convention followed by other methods in this serializer. Without it, the website_name attribute may not be conditionally included as intended. Additionally, the '.' << website_host string concatenation should be replaced with '.' + website_host or '.#{website_host}' to avoid mutating string literals, which can lead to issues.",
+    "comentarios": [
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       153,
+       153
+      ],
+      "texto": "WHAT: `include_website_name` is missing the trailing `?` required by ActiveModelSerializers. WHY: every other conditional-inclusion guard in this file uses the `?` form (`define_method \"include_#{attr}?\"` at lines 9/18/27, `include_email?` at line 117), and AMS 0.8.3 resolves the guard as `include_<attr>?`; because this method lacks the `?` it is never invoked, so the intended `website.present?` condition is silently ignored and `website_name` is always serialized. HOW: rename to `def include_website_name?`."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       153,
+       155
+      ],
+      "texto": "The guard method is named `include_website_name`, but ActiveModelSerializers (and this file's own convention, e.g. `include_email?` at line 117) resolves per-attribute guards via `include_<attribute>?`. Because the name lacks the trailing `?`, the framework never invokes it: the `website.present?` guard is dead code and `website_name` is serialized unconditionally, emitting `website_name: null` for users without a website. Rename to `include_website_name?`."
+     },
+     {
+      "file": "app/serializers/user_serializer.rb",
+      "lines": [
+       153,
+       155
+      ],
+      "texto": "The conditional-inclusion guard is named `include_website_name`, but ActiveModelSerializers resolves these guards as `include_<attribute>?` (the sibling in this very file is `include_email?` at line 117). As written the method is never called, so the guard is dead and the `:website_name` attribute declared at line 43 is serialized unconditionally. That defeats the intent of the guard (`website.present?`): the payload now always carries `website_name`, including for the scopes where `website` itself is withheld by the `untrusted_attributes` list (line 109), leaking the user's site host/path to viewers who were never meant to receive the website. Rename the method to `include_website_name?` so the serializer base class honors it."
+     }
+    ]
+   }
+  ]
+ },
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "ce2dcc537b4b1f98a335e88cfe8e0b804483252a",
+  "base": "85737f52b59aa2e3403c9b8e48acf71ccc5bfae3",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "services/src/main/java/org/keycloak/forms/login/freemarker/model/RecoveryAuthnCodeInputLoginBean.java",
+    "lines": [
+     17,
+     19
+    ],
+    "texto": "WHAT: `credentialModelOpt.get()` is called without checking whether the Optional returned by `RecoveryAuthnCodesUtils.getCredential` is present, and the model built from it may have no next code. WHY: a user whose recovery-code credential is not found, or is not usable (for example a federated model with no usable code data), triggers an unhandled NoSuchElementException while rendering the login form, so the user sees a server error instead of a login challenge. HOW: check `isPresent()` and handle the empty case (for example fail the challenge or fall back) before building the model."
+   },
+   {
+    "id": "S2",
+    "file": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+    "lines": [
+     117,
+     125
+    ],
+    "texto": "WHAT: `createRecoveryCodesCredential` serializes the raw, unhashed recovery codes to JSON and passes them to `updateCredential`, so the user-storage provider receives them in plaintext. WHY: the local-DB path stores the codes through `RecoveryAuthnCodesCredentialModel.createFromValues` instead of persisting the raw JSON, so the user-storage path is the only one that exposes raw codes. A provider that persists them as-is keeps working recovery codes in readable form. HOW: document that user storages must hash the codes, or pass the hashed values and let validation hash the input before comparing."
+   },
+   {
+    "id": "S3",
+    "file": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+    "lines": [
+     117,
+     125
+    ],
+    "texto": "The raw recovery codes are serialized to plaintext JSON and handed to the user-storage provider via updateCredential. The local-storage path hashes each code before persisting, so the federated path stores the codes unhashed in an external system. Anyone with read access to that store, or any log or dump of it, can use the codes to bypass authentication. Pass hashed codes (the same form as credentialModel's secret data) to the federated provider, or document that the provider must hash them."
+   },
+   {
+    "id": "S4",
+    "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java",
+    "lines": [
+     80,
+     80
+    ],
+    "texto": "RecoveryAuthnCodesUtils.getCredential can now return a federated (user-storage) credential, but the code after this lookup still treats it as a local DB credential. It parses it with createFromCredentialModel and then updates or removes it through the local credential store after a code is used. For a federated credential these calls have no matching DB row and the model is not in the DB credential shape, so marking the code as used can break or be skipped. Only run the local update/removal when the credential came from local storage."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#01",
+    "descricao": "The test user-storage provider validates recovery codes without consuming the used code, so the same code can be replayed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       326,
+       340
+      ],
+      "texto": "WHAT: The new recovery-codes branch of isValid only checks whether the submitted code appears in the stored list and never removes the consumed entry. WHY: Unlike the local RecoveryAuthnCodesCredentialProvider.isValid (which calls removeRecoveryAuthnCode()+updateStoredCredential), the federated path never consumes a code and allCodesUsed() can never become true, so a used recovery code remains valid and can be replayed indefinitely. HOW: On a successful match, remove that entry from the stored codes (rewrite recoveryCodes.credentialData), mirroring the local provider's consume-on-success semantics."
+     },
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       340,
+       340
+      ],
+      "texto": "The new recovery-code validator accepts any code in the original list without consuming the accepted code. Repeating a successful login with the same code succeeds indefinitely, while getCredentials reconstructs all original codes so the login form never advances or detects exhaustion. Validate the next unused code and persist its consumption before returning success."
+     },
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       340,
+       340
+      ],
+      "texto": "The new federated recovery-code validator accepts any code in the original list but never removes a successfully used code from myUser.recoveryCodes. Consequently the same recovery code remains valid on subsequent logins, and getCredentials reconstructs the full original set every time. Consume and persist the successfully validated code (and test a second login/replay), so federated recovery codes retain their one-time semantics."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#02",
+    "descricao": "getCredentials rebuilds the recovery-codes credential without copying the stored credential id, so the returned federated credential has a null id and cannot be targeted by id-based removal.",
+    "textoGolden": "After creating the RecoveryAuthnCodesCredentialModel, consider setting its id from the stored credential (e.g., myUser.recoveryCodes.getId()); otherwise getId() will be null and downstream removal by id (e.g., removeStoredCredentialById in the authenticator flow) may not work.",
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       237,
+       242
+      ],
+      "texto": "WHAT: getCredentials builds the RecoveryAuthnCodesCredentialModel via createFromValues but never sets its id from the stored myUser.recoveryCodes.getId() (createFromValues does not populate id). WHY: The returned federated model has a null id, so callers that identify/delete the credential by id \u2014 e.g. RecoveryAuthnCodesFormAuthenticator.removeStoredCredentialById(recoveryCodeCredentialModel.getId()) when all codes are used, or federated-credential deletion via getFederatedCredentialsStream \u2014 cannot target the actual credential. HOW: call model.setId(myUser.recoveryCodes.getId()) after createFromValues."
+     },
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       237,
+       242
+      ],
+      "texto": "getCredentials rebuilds the recovery-code model without copying the ID assigned during updateCredential. createFromValues does not assign an ID, so the exposed federated credential has a null ID and CredentialDeleteHelper cannot resolve it by the stored credential ID for account deletion. Copy myUser.recoveryCodes.getId() to the reconstructed model before returning it."
+     },
+     {
+      "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+      "lines": [
+       237,
+       242
+      ],
+      "texto": "The CredentialModel returned from getCredentials for recovery codes is built with createFromValues and never gets the stored credential's id (myUser.recoveryCodes.getId()). RecoveryAuthnCodesFormAuthenticator later calls removeStoredCredentialById(model.getId()) once all codes are used, and this would pass a null id. Fix: call model.setId(myUser.recoveryCodes.getId()) after creating the model."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#05",
+    "descricao": "Creating recovery codes in external storage does not remove a previously stored local recovery-codes credential, and validation falls back to local storage, so the replaced codes still authenticate.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+      "lines": [
+       125,
+       129
+      ],
+      "texto": "Successful recovery-code creation in external storage leaves any existing locally stored recovery-code credential active. For a federated user who previously stored codes locally and now has an external provider supporting this type, regeneration no longer calls RecoveryAuthnCodesCredentialProvider.createCredential's replacement cleanup; UserCredentialManager.isValid falls back to the local validator when external validation rejects an old code, so the supposedly replaced codes still authenticate. Remove the previous local recovery-code credential after successful external creation."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#06",
+    "descricao": "Exhausted recovery codes are removed with removeStoredCredentialById, which only covers local storage, so a federated recovery-codes credential is never removed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java",
+      "lines": [
+       80,
+       88
+      ],
+      "texto": "RecoveryAuthnCodesUtils.getCredential() can now return a credential from user storage (federated), but this code still calls removeStoredCredentialById() on it once all codes are used. That removal only targets local stored credentials, so a federated credential may not be removed. The user could then be left with an exhausted credential in user storage. Remove federated credentials through the federated path, or confirm the removal reaches user storage."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java",
+      "lines": [
+       80,
+       88
+      ],
+      "texto": "RecoveryAuthnCodesUtils.getCredential can now return a credential from user storage, but exhausted codes are cleaned up with removeStoredCredentialById, which only targets the local DB. For a federated credential (possibly with a null id), the exhausted credential is never removed or the call misbehaves, so the user keeps a dead credential. Remove federated credentials through a path that covers user storage, for example by checking where the credential came from."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java",
+      "lines": [
+       80,
+       89
+      ],
+      "texto": "RecoveryAuthnCodesUtils.getCredential can now return a federated credential. The authenticator still removes an exhausted one with removeStoredCredentialById(getId()), which only deletes from the local store, and the federated model's id may be null. Remove the credential through the path that matches where it was found, for example by checking whether it came from the federated stream and using the federated removal."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-01",
+    "descricao": "Looking up recovery codes now always queries the federated provider first, which for LDAP users adds an LDAP round-trip and can throw IllegalStateException, failing recovery-code login with a 500.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-03",
+    "descricao": "An error log in the test user storage hard-codes the credential type as 'recovery-codes' instead of using RecoveryAuthnCodesCredentialModel.TYPE ('recovery-authn-codes').",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "5b229316ee4c661836ed1161139692a3e8527444",
+  "base": "98fa098e6fade3097a11fe7f99a98a4e6ffb4728",
+  "sugestoes": [],
+  "issues": [
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#01",
+    "descricao": "The flex-item styles target the inner .extra-info-wrapper instead of the component's root div, so in the flexbox header a long topic title keeps its full width and pushes the navigation panel out instead of being truncated.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/base/topic.scss",
+      "lines": [
+       29,
+       30
+      ],
+      "texto": "The flex-item styling targets the inner .extra-info-wrapper rather than the outer div generated by header-extra-info's Ember.Component. With .contents now using flexbox, that outer div retains its automatic minimum width, so a long nowrap topic title cannot shrink to the available space and pushes the navigation panel outside the header instead of being ellipsized by the existing desktop truncation rules. Move the extra-info-wrapper class onto the component's root element and set min-width: 0 on that flex item so ordering and truncation apply to the actual header child."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#02",
+    "descricao": "The align-items mixin emits no -moz-box-align, so on old Firefox versions using the display:-moz-box fallback the advertised vertical centering is not applied.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/foundation/mixins.scss",
+      "lines": [
+       117,
+       122
+      ],
+      "texto": "The alignment mixin does not match the Mozilla fallback emitted by flexbox(): when display: -moz-box is selected, neither align-items nor the WebKit/MS declarations control its cross-axis alignment. Consequently @include align-items(center) in the header and small-action leaves those children at the legacy default instead of vertically centering them. Emit -moz-box-align: $alignment alongside -webkit-box-align so the advertised fallback produces the same alignment."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#03",
+    "descricao": "The align-items mixin emits -ms-align-items, which never existed in IE/Edge; the legacy property is -ms-flex-align, so the declaration is dead.",
+    "textoGolden": "-ms-align-items never existed in any version of IE/Edge; the correct legacy property is -ms-flex-align.",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/foundation/mixins.scss",
+      "lines": [
+       117,
+       123
+      ],
+      "texto": "WHAT: align-items() mixin emits -ms-align-items: $alignment which is not a valid IE10/11 property (only -ms-flex-align exists). WHY: dead declaration shows wrong contract and leaves IE alignment dependent solely on -ms-flex-align, which also breaks for flex-start/flex-end values. HOW: remove the -ms-align-items line and map flex-start/flex-end to start/end for -ms-flex-align/-webkit-box-align."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#05",
+    "descricao": "Removing the float-based right alignment of .d-header .panel leaves the server-rendered (no-JS) header's login panel, which sits inside .row and is not a flex item, no longer right-aligned next to the title.",
+    "textoGolden": "Mixing float: left with flexbox causes layout issues. Further this PR removes the float-based right alignment for .d-header .panel, which may cause the login panel in the non-Ember/noscript header (where .panel is nested inside .row and not a flex item) to stack under the title instead of remaining right-aligned.",
+    "comentarios": []
+   }
+  ]
+ }
+}

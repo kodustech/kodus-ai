@@ -1,0 +1,11 @@
+{
+ "caseId": "unified-storage-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "id": "S3",
+   "match": "unified-storage-performance-optimizations-grafana-codex#05",
+   "newGroup": null,
+   "reason": "It asserts the same constructor-contract change: NewResourceServer eagerly calls Init, blocks on initialization, and fails construction on initialization errors. The discussion of callers invoking Init again adds detail to that same claim."
+  }
+ ]
+}

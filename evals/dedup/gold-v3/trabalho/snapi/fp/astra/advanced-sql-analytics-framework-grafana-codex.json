@@ -1,0 +1,11 @@
+{
+ "caseId": "advanced-sql-analytics-framework-grafana-codex",
+ "items": [
+  {
+   "id": "S5",
+   "match": "advanced-sql-analytics-framework-grafana-codex#02",
+   "newGroup": null,
+   "reason": "It asserts the same stub replacement causes SQL execution and table parsing to fail with 'not implemented'. The additional consumer-update explanation describes the same cause and defect."
+  }
+ ]
+}

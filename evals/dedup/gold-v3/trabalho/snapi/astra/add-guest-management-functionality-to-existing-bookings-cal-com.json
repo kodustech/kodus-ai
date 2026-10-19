@@ -1,0 +1,83 @@
+{
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "newGroup": null,
+   "reason": "Reports passing raw guests instead of uniqueGuests to the email sender, causing existing attendees to receive new-booking confirmations."
+  },
+  {
+   "id": "S2",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "newGroup": null,
+   "reason": "Reports the && permission check that wrongly excludes team admins who are not owners."
+  },
+  {
+   "id": "S3",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "newGroup": null,
+   "reason": "Includes the same blacklist bypass caused by comparing unnormalized guest input against lowercased blacklist entries. It also describes case-sensitive attendee deduplication."
+  },
+  {
+   "id": "S4",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "newGroup": null,
+   "reason": "Reports the same case-variation bypass of BLACKLISTED_GUEST_EMAILS."
+  },
+  {
+   "id": "S5",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#05",
+   "newGroup": null,
+   "reason": "Reports the existing-attendee deduplication problem covered by this issue: case variants are incorrectly added again."
+  },
+  {
+   "id": "S6",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#13",
+   "newGroup": null,
+   "reason": "Reports that the always-truthy template string makes the translated error fallback unreachable."
+  },
+  {
+   "id": "S7",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#09",
+   "newGroup": null,
+   "reason": "Repeats the claim that an unguarded calendar update can fail after guests are persisted, skipping emails and leaving a partially applied mutation."
+  },
+  {
+   "id": "S8",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#04",
+   "newGroup": null,
+   "reason": "Reports the same check-then-insert race allowing concurrent requests to create duplicate attendees. The additional case-sensitivity observation does not change that match."
+  },
+  {
+   "id": "S9",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "newGroup": null,
+   "reason": "Reports using && instead of || for team admin-or-owner authorization."
+  },
+  {
+   "id": "S10",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "newGroup": null,
+   "reason": "Reports passing raw guests to sendAddGuestsEmails, misclassifying resubmitted existing attendees as new guests."
+  },
+  {
+   "id": "S11",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "newGroup": null,
+   "reason": "Reports that differently cased guest emails bypass the lowercased blacklist."
+  },
+  {
+   "id": "S12",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#12",
+   "newGroup": null,
+   "reason": "Reports the same hard-coded English Remove email tooltip bypassing translation."
+  },
+  {
+   "id": "S13",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#13",
+   "newGroup": null,
+   "reason": "Reports the always-nonempty template string preventing the unable_to_add_guests fallback and exposing a raw error-code prefix."
+  }
+ ]
+}

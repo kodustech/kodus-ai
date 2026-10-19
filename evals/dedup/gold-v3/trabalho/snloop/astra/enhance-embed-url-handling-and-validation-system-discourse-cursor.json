@@ -1,0 +1,83 @@
+{
+ "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Describes the same raw_html cooking bypass that stores and renders imported HTML without sanitization, allowing stored XSS."
+  },
+  {
+   "id": "S2",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Describes the same unguarded i.content.scrub call that crashes on description-only feed items and aborts the remaining import."
+  },
+  {
+   "id": "S3",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#30",
+   "newGroup": null,
+   "reason": "Describes the same full synchronous feed poll repeated for every uncached article because throttling is per URL. The additional timeout concern does not change the shared problem."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Flags the template's malformed conditional terminator, end if. No golden issue describes this template control-flow problem."
+  },
+  {
+   "id": "S5",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+   "newGroup": null,
+   "reason": "Describes the same incorrect rewriting of protocol-relative links and images onto the article's host."
+  },
+  {
+   "id": "S6",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+   "newGroup": null,
+   "reason": "Describes the same protocol-relative URL corruption caused by stripping leading slashes and prefixing the article host."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Identifies the stale spec expecting a direct TopicRetriever call while the controller enqueues retrieve_topic. This is separate from the golden issue about the missing-embed_url test."
+  },
+  {
+   "id": "S8",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "Describes the same unescaped URL interpolation into the imported footer anchor, allowing markup injection into raw HTML."
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Flags incorrect escaping of request.referer inside a JavaScript string in the embed layout. This is distinct from the golden postMessage origin-validation issue."
+  },
+  {
+   "id": "S10",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#33",
+   "newGroup": null,
+   "reason": "Describes the same URL and username prerequisite tests that pass without exercising their guards because feed polling remains disabled."
+  },
+  {
+   "id": "S11",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#32",
+   "newGroup": null,
+   "reason": "Describes the same missing-embed_url test rejected by the host guard before reaching the required-parameter check."
+  },
+  {
+   "id": "S12",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Describes the same nil content crash at i.content.scrub that aborts feed polling."
+  },
+  {
+   "id": "S13",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#17",
+   "newGroup": null,
+   "reason": "Describes the same non-atomic embed lookup and creation that raises an unhandled uniqueness exception during concurrent imports. The side-effect discussion adds detail to that race."
+  }
+ ]
+}

@@ -1,0 +1,106 @@
+{
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#snloop-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "packages/core/EventManager.ts:591-594 still builds `message` in the updateAllCalendarEvents catch block, but the PR removed the `console.error(message)` that consumed it, so the variable is now never read.",
+    "category": "style",
+    "comment": "In updateAllCalendarEvents the catch block builds an error `message` that is no longer logged or used after the PR removed console.error, leaving dead code.",
+    "severity": "low"
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com#snloop-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "AddGuestsDialog.tsx:43-44 does toast `${err.data?.code}: ${t(err.message)}`, but the tRPC handler (createNextApiHandler.ts has no errorFormatter) already returns the same message in the response to the same authenticated user; the handler's own errors are translation keys (addGuests.handler.ts:44,55,81). Displaying it adds no exposure.",
+    "category": null,
+    "comment": "The AddGuests dialog error toast shows the raw server error message and code, which could display internal backend details such as Prisma errors to the user.",
+    "severity": "medium"
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com#snloop-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "app-credential.ts:19 returns 403 unless APP_CREDENTIAL_SHARING_ENABLED, which (packages/lib/constants.ts:103-104) requires CALCOM_APP_CREDENTIAL_ENCRYPTION_KEY to be set, so the `|| \"\"` fallback at line 58 is unreachable; an empty key would also fail in createDecipheriv rather than decrypt.",
+    "category": null,
+    "comment": "The app-credential webhook decrypts keys with CALCOM_APP_CREDENTIAL_ENCRYPTION_KEY falling back to an empty string when the env var is unset, instead of failing fast.",
+    "severity": "high"
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor#snloop-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "groups_controller.rb remove_member calls `group.users.delete(user_id)`, which in Rails 4 does find(ids) and raises RecordNotFound when the user is not a member; Discourse maps that to a 404. Answering 404 when the member to remove is already gone is an acceptable outcome for a stale request, not a defect.",
+    "category": null,
+    "comment": "Admin remove_member calls group.users.delete with a raw integer id, which raises RecordNotFound (404/500) when the user is not or no longer a member, e.g. on concurrent removal.",
+    "severity": "medium"
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#snloop-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "The PR only changes getSubGroupsCount (GroupAdapter.java:273-275); the getSubGroupsStream overloads at lines 254-268 that call modelSupplier.get() unguarded are untouched by this PR, so their NPE risk is pre-existing.",
+    "category": null,
+    "comment": "GroupAdapter's NPE guard is applied only to getSubGroupsCount; the getSubGroupsStream overloads still dereference modelSupplier.get(), which is null when the group is deleted concurrently.",
+    "severity": "medium"
+  },
+  "replays-self-serve-bulk-delete-system-sentry#snloop-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "browser_reporting_collector.py BrowserReportSerializer: validate_timestamp/validate_age docstrings say 'age is absent, but timestamp is present' / 'age is present, but not timestamp', yet the code only rejects both being present; both fields are required=False so a report with neither passes.",
+    "category": "doc_defect",
+    "comment": "BrowserReportSerializer's validate_timestamp/validate_age docstrings claim one of age/timestamp must be present, but the code only enforces mutual exclusion, so reports with neither are accepted.",
+    "severity": "low"
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#snloop-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "The 'within the threshold of commits' comment at incidents.py:50-51 is moved verbatim from the base mark_failed.py:139-140; the PR only relocates it, so the wording is pre-existing.",
+    "category": null,
+    "comment": "A comment in incidents.py says 'within the threshold of commits' although the code inspects check-ins, not commits.",
+    "severity": "low"
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#snloop-02": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "The new files incidents.py:11 and incident_occurrence.py:25 define `logger = logging.getLogger(__name__)` and never use it (only one occurrence of `logger` each).",
+    "category": "style",
+    "comment": "The newly added incidents.py and incident_occurrence.py define module loggers that are never used.",
+    "severity": "low"
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com#snloop-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "user.ts:899-900 adds googleChannelId to findUnlockedUserForSession's selectedCalendars select, but the `me` handler (viewer/me/get.handler.ts:109-148) returns an explicit field list without selectedCalendars, so the identifier is not exposed; it only stays on the server-side session user.",
+    "category": null,
+    "comment": "The session user query now selects the internal googleChannelId of selected calendars, which could be exposed to the client if the result is returned (e.g. by the me handler).",
+    "severity": "medium"
+  },
+  "advanced-sql-analytics-framework-grafana-codex#snloop-01": {
+    "class": "FP",
+    "subclass": "hallucination",
+    "reason": "The only test calling NewSQLCommand, TestNewCommand in pkg/expr/sql_command_test.go, starts with t.Skip(), so it cannot fail against the stubbed DB; the claim that existing SQL tests would now fail is false.",
+    "category": null,
+    "comment": "Existing SQL tests in sql_command_test.go calling NewSQLCommand would now fail because the stubbed DB's TablesList returns 'not implemented', and they were not updated.",
+    "severity": "medium"
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#snloop-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "GroupPermissionsV2.java:144-147 uses getResourceTypeResource without a null check, but hasPermission already requires the admin realm resource server, and AdminPermissionsSchema.java:270-275 creates a type resource for every schema type (including the new Groups) when the admin permissions client is set up, so null is not reachable in normal flows; UserPermissionsV2.java:109-111 uses the same pattern.",
+    "category": null,
+    "comment": "GroupPermissionsV2.hasPermission passes getResourceTypeResource's result to policyStore.findByResource without a null check, causing an NPE and 500 on group listing and user search when the Groups type resource is missing.",
+    "severity": "high"
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#snloop-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "test_organization_events_stats.py:3626-3627 comments say 'bucket has 1 event' next to count == 10; each bucket does store one event (client_sample_rate 0.1 upsampled to 10), so the comment is accurate, at most terse.",
+    "category": null,
+    "comment": "Inline test comments say each bucket has 1 event while the assertions expect count == 10, contradicting the upsampled value.",
+    "severity": "low"
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#snloop-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "buffer.py module docstring still says the payload is added 'to the set' and calls span-buf:s:* 'set keys', while the PR switches to zadd scored by end_timestamp_precise (buffer.py:197-199) and add-buffer.lua now uses zunionstore and zpopmin to cap at 1000 spans.",
+    "category": "doc_defect",
+    "comment": "The spans buffer module docstring still describes span-buf:s:* keys as plain sets, though they are now sorted sets scored by end_timestamp_precise and trimmed to 1000 spans by add-buffer.lua.",
+    "severity": "low"
+  }
+}

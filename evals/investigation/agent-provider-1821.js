@@ -524,6 +524,11 @@ async function createModel(config, caseId) {
             return withCallCounter(withReasoningEffort(withCallTimeout(comCache), id), modelId);
         }
 
+        if (spec && spec.openrouterProviderOrder?.length) {
+            const { modeloOpenRouterFixo } = require('./eval-model');
+            return withCallCounter(withReasoningEffort(withCallTimeout(modeloOpenRouterFixo(modelId)), modelId), modelId);
+        }
+
         const { buildEvalModel } = require('../shared/build-model');
         applyModelEnv(modelId);
         return withCallCounter(

@@ -1,0 +1,17 @@
+{
+ "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+ "items": [
+  {
+   "id": "S4",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#12",
+   "newGroup": null,
+   "reason": "It asserts the same defect in deleteScheduledEmailReminder: immediateDelete cancels the SendGrid batch but neither deletes nor marks the database row. The reschedule caller and cron details elaborate the same orphaned-row claim."
+  },
+  {
+   "id": "S5",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#12",
+   "newGroup": null,
+   "reason": "It asserts the same immediateDelete branch defect: cancellation leaves the WorkflowReminder row scheduled and unflagged. The explanation of why cron cleanup misses it describes the same claimed consequence."
+  }
+ ]
+}

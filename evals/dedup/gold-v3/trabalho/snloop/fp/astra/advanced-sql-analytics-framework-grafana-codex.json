@@ -1,0 +1,29 @@
+{
+ "caseId": "advanced-sql-analytics-framework-grafana-codex",
+ "items": [
+  {
+   "id": "S5",
+   "match": "advanced-sql-analytics-framework-grafana-codex#03",
+   "newGroup": null,
+   "reason": "The central complaint is that the reader guard returns a misleading 'not implemented' message instead of describing feature availability, matching the rejected message claim."
+  },
+  {
+   "id": "S7",
+   "match": "advanced-sql-analytics-framework-grafana-codex#02",
+   "newGroup": null,
+   "reason": "It attributes SQL parsing failure to the stub's always-erroring RunCommands. The additional entry-point and error-handling details describe consequences of the same rejected defect."
+  },
+  {
+   "id": "S9",
+   "match": "advanced-sql-analytics-framework-grafana-codex#02",
+   "newGroup": null,
+   "reason": "It repeats the claim that replacing DuckDB with an always-erroring stub breaks SQL parsing and execution."
+  },
+  {
+   "id": "S10",
+   "match": "advanced-sql-analytics-framework-grafana-codex#02",
+   "newGroup": null,
+   "reason": "The alleged test failures follow from the same rejected claim that the stub makes NewSQLCommand parsing fail. Naming affected tests and requesting updates does not introduce a different underlying defect."
+  }
+ ]
+}

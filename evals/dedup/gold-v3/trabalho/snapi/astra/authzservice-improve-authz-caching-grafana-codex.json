@@ -1,0 +1,35 @@
+{
+ "caseId": "authzservice-improve-authz-caching-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This describes stale denials persisting after access is granted until the denial-cache TTL expires. None of the golden issues describes this problem; #05 concerns repeated DB reloads for distinct denied resources."
+  },
+  {
+   "id": "S2",
+   "match": "authzservice-improve-authz-caching-grafana-codex#01",
+   "newGroup": null,
+   "reason": "The unescaped underscore separators allow different name/parent pairs to share a denial-cache key, incorrectly denying another resource."
+  },
+  {
+   "id": "S3",
+   "match": "authzservice-improve-authz-caching-grafana-codex#04",
+   "newGroup": null,
+   "reason": "The test seeds the permission cache with false, so it passes even without the denial-cache short-circuit."
+  },
+  {
+   "id": "S4",
+   "match": "authzservice-improve-authz-caching-grafana-codex#01",
+   "newGroup": null,
+   "reason": "The comment identifies the same denial-cache key collision between different name/parent pairs caused by underscore concatenation."
+  },
+  {
+   "id": "S5",
+   "match": "authzservice-improve-authz-caching-grafana-codex#04",
+   "newGroup": null,
+   "reason": "The comment identifies the same false permission-cache seed that prevents the test from verifying the denial-cache short-circuit."
+  }
+ ]
+}

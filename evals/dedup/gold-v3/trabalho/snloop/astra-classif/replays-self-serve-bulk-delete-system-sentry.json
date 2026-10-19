@@ -1,0 +1,12 @@
+{
+ "caseId": "replays-self-serve-bulk-delete-system-sentry",
+ "items": [
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#snloop-01",
+   "class": "TP",
+   "subclass": "nit",
+   "reason": "In src/sentry/issues/endpoints/browser_reporting_collector.py:47-60, both fields are optional and the newly added validators only check the other field; neither requires at least one field to be supplied. The docstrings therefore overstate the presence validation, but this is a documentation nit without an established behavioral defect.",
+   "severity": "low"
+  }
+ ]
+}

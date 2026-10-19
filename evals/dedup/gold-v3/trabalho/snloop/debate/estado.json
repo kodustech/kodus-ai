@@ -1,0 +1,209 @@
+{
+ "add-guest-management-functionality-to-existing-bookings-cal-com#snloop-01": {
+  "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+  "issue": {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#snloop-01",
+   "comentarios": [
+    {
+     "gid": "sonnet-snloop:S11",
+     "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+     "lines": [
+      42,
+      45
+     ],
+     "texto": "The error toast renders the raw server `err.message` (and error code) directly. Unexpected backend failures such as Prisma errors from the handler can carry internal details that end up displayed to the user. Only show the message when it is a known translation key, otherwise fall back to the generic `unable_to_add_guests` text."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "AddGuestsDialog.tsx:43-44 does toast `${err.data?.code}: ${t(err.message)}`, but the tRPC handler (createNextApiHandler.ts has no errorFormatter) already returns the same message in the response to the same authenticated user; the handler's own errors are translation keys (addGuests.handler.ts:44,55,81). Displaying it adds no exposure."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "apps/web/components/dialog/AddGuestsDialog.tsx:43-44 passes arbitrary server messages through translation and constructs an always-nonempty string, so unknown messages appear in the toast and the generic fallback never runs. packages/trpc/server/middlewares/captureErrorsMiddleware.ts:15 applies redactError, but packages/lib/redactError.ts:23-27 sanitizes only selected Prisma errors in production and returns other errors unchanged. Thus production Prisma errors are protected, but the broader raw-error display problem remains."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "The comment's decisive claim is that Prisma errors leak internal details into the toast. Your own evidence refutes it: packages/lib/redactError.ts:23-25 `if (shouldRedact(error) && IS_PRODUCTION) { ... return new Error(\"An error occured while querying the database.\") }` covers all four Prisma error classes (lines 11-14), and it runs in captureErrorsMiddleware. Every non-Prisma error the handler throws is a translation key: addGuests.handler.ts:44 `message: \"booking_not_found\"`, :55 `\"you_do_not_have_permission\"`, :81 `\"emails_must_be_unique_valid\"`. And the toast at AddGuestsDialog.tsx:43 `${err.data?.code}: ${t(err.message)}` only shows the same user the message already in their tRPC response, so there is no exposure. That `message || t(\"unable_to_add_guests\")` never falls back is dead code at most (a nit), not the security defect the comment reports.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "I change my classification to FP. The addGuests procedure uses captureErrorsMiddleware, and redactError replaces the four listed Prisma error classes with a generic message in production. The handler\u2019s explicit errors use translation keys, and displaying a response message to its existing recipient does not establish additional information exposure. The unreachable fallback is real, but it does not substantiate the reported security defect."
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "fix-proper-handling-of-group-memberships-discourse-cursor#snloop-01": {
+  "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+  "issue": {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#snloop-01",
+   "comentarios": [
+    {
+     "gid": "sonnet-snloop:S7",
+     "file": "app/controllers/admin/groups_controller.rb",
+     "lines": [
+      90,
+      90
+     ],
+     "texto": "`group.users.delete(user_id)` with a raw integer id looks the record up through the association and raises ActiveRecord::RecordNotFound if the user is not (or is no longer) a member. This happens when two admins remove the same member, or on a stale member list, and it returns a 500/404 instead of succeeding silently. Look the user up first and delete it only if it is present in the group."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "groups_controller.rb remove_member calls `group.users.delete(user_id)`, which in Rails 4 does find(ids) and raises RecordNotFound when the user is not a member; Discourse maps that to a 404. Answering 404 when the member to remove is already gone is an acceptable outcome for a stale request, not a defect."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "The new action converts user_id to an integer and passes it directly to group.users.delete at app/controllers/admin/groups_controller.rb:86\u201390; users is a scoped association (app/models/group.rb:8). [Rails 4.1.8 collection_association.rb:240](https://github.com/rails/rails/blob/v4.1.8/activerecord/lib/active_record/associations/collection_association.rb#L240) resolves integer arguments through association find, so an already-removed member raises RecordNotFound before the success response. The previous removal used a membership query that safely did nothing when absent (app/models/group.rb:276\u2013277), making this a regression for stale lists or concurrent removals."
+   },
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "Concede. groups_controller.rb:90 `group.users.delete(user_id)` passes an integer, which in activerecord 4.1.8 (Gemfile.lock:30) goes through association find and raises RecordNotFound when the user is not a member. application_controller.rb:62-73 re-raises it, so the response is a 404 error. The removed code path called group.remove(user), which was a silent no-op, so a stale list or two admins removing the same member is a regression the PR introduces. It is a real but edge-case failure: medium.",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#snloop-01": {
+  "caseId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry",
+  "issue": {
+   "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#snloop-01",
+   "comentarios": [
+    {
+     "gid": "sonnet-snloop:S3",
+     "file": "src/sentry/monitors/logic/incidents.py",
+     "lines": [
+      50,
+      51
+     ],
+     "texto": "The comment says \"within the threshold of commits\", but the code inspects check-ins, not commits. It is misleading prose in this newly added file. Replace \"commits\" with \"check-ins\"."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "low",
+    "text": "The 'within the threshold of commits' comment at incidents.py:50-51 is moved verbatim from the base mark_failed.py:139-140; the PR only relocates it, so the wording is pre-existing."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "low",
+    "text": "src/sentry/monitors/logic/incidents.py:51 says \u201ccommits,\u201d but lines 40\u201352 query and inspect MonitorCheckIn records. The PR relocates this inaccurate comment into the new module; it is a wording defect with no behavioral effect."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "low",
+    "text": "Under the agreed ruling, code the PR only moves without changing it counts as pre-existing. The comment is moved word for word: the base has mark_failed.py:139-140 `# If we have any successful check-ins within the threshold of` / `# commits we have NOT reached an incident state`, and the head has the identical lines at incidents.py:50-51. The PR did not write or change this wording, so it is FP (no subclass). Even if it counted, it would be a nit.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "low",
+    "text": "Changed to FP: the diff confirms that the comment and surrounding check-in logic were moved verbatim from mark_failed.py to incidents.py. The inaccurate word \u201ccommits\u201d is pre-existing, so the explicit ruling for relocated code applies."
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#snloop-01": {
+  "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+  "issue": {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#snloop-01",
+   "comentarios": [
+    {
+     "gid": "sonnet-snloop:S3",
+     "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+     "lines": [
+      143,
+      150
+     ],
+     "texto": "WHAT: hasPermission() passes the result of getResourceTypeResource(...) to policyStore.findByResource() without a null check. WHY: the method returns null when the 'Groups' type resource doesn't exist, which causes an NPE instead of a denied permission and a 500 on group listing and user search. HOW: return false if the type resource is null."
+    },
+    {
+     "gid": "sonnet-snloop:S11",
+     "file": "GroupPermissionsV2.java",
+     "lines": [
+      null,
+      null
+     ],
+     "texto": "hasPermission() uses the result of getResourceTypeResource() without a null check. The reviewer did not confirm that the type resource is always created, so this finding is less certain."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "high",
+    "text": "GroupPermissionsV2.java:144-147 uses getResourceTypeResource without a null check, but hasPermission already requires the admin realm resource server, and AdminPermissionsSchema.java:270-275 creates a type resource for every schema type (including the new Groups) when the admin permissions client is set up, so null is not reachable in normal flows; UserPermissionsV2.java:109-111 uses the same pattern."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "high",
+    "text": "Existing FGAP V2 realms can lack the newly added Groups resource: the base schema contains only Users and Clients, and server-spi-private/src/main/java/org/keycloak/authorization/AdminPermissionsSchema.java:250 returns without updating an existing permissions client. The lookup at AdminPermissionsSchema.java:150 can therefore return null. The new services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java:147 passes that null to findByResource, which dereferences it at model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/authorization/StoreFactoryCacheSession.java:938, causing an exception instead of permission denial."
+   },
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "high",
+    "text": "Concede. AdminPermissionsSchema.java:250-251 `if (client != null) { return; }`, so init() never adds the new Groups 'all-resource' to an admin permissions client that existed before this PR, whose schema had only Users and Clients. In such a realm getResourceTypeResource returns null (:150 findByName), and GroupPermissionsV2.java:147 `policyStore.findByResource(server, resource)` dereferences it at StoreFactoryCacheSession.java:938 `resource.getId()`. That throws an NPE instead of denying the permission. The feature is EXPERIMENTAL (Profile.java:58), but the path is reachable in realms already set up for FGAP v2.",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ }
+}

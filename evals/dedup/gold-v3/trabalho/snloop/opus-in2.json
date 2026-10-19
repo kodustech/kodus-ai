@@ -1,0 +1,2510 @@
+{
+ "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "d38c4d5f7443223c81529c22470293771baf9f38",
+  "base": "7554b5e3c458dc79b591d5e874e79ab10cf30c2f",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/assets/stylesheets/desktop/topic-post.scss",
+    "lines": [
+     291,
+     291
+    ],
+    "texto": "WHAT: The light-theme value for `.topic-meta-data h5 a` changed from `scale-color($primary, $lightness: 30%)` to 70%, so it no longer matches the original. WHY: This makes the link text much lighter in the default light theme, a visual regression introduced by the PR. HOW: Keep the original light value (30%) and pair it with the mirrored dark value (70%)."
+   },
+   {
+    "id": "S2",
+    "file": "app/assets/stylesheets/desktop/user.scss",
+    "lines": [
+     522,
+     522
+    ],
+    "texto": "WHAT: The light value for `.group-member-info .name` changed from `scale-color($primary, $lightness: 30%)` to 50%. WHY: The name text becomes lighter in the light theme, so the PR changes existing styling instead of only adding a dark variant. HOW: Use 30% for the light value and 70% for `$secondary`."
+   },
+   {
+    "id": "S3",
+    "file": "app/assets/stylesheets/mobile/user.scss",
+    "lines": [
+     497,
+     497
+    ],
+    "texto": "WHAT: The light value for the mobile `.group-member-info .name` changed from `scale-color($primary, $lightness: 30%)` to 50%. WHY: The name text becomes lighter in the light theme, which regresses the existing mobile styling. HOW: Use 30% for the light value and 70% for `$secondary`."
+   },
+   {
+    "id": "S4",
+    "file": "app/assets/stylesheets/mobile/topic-post.scss",
+    "lines": [
+     182,
+     182
+    ],
+    "texto": "WHAT: The light value for the mobile `h3` color changed from `scale-color($primary, $lightness: 20%)` to 50%. WHY: The heading becomes much lighter in the light theme than before. HOW: Use 20% for the light value and 80% for `$secondary`."
+   },
+   {
+    "id": "S5",
+    "file": "app/assets/stylesheets/mobile/modal.scss",
+    "lines": [
+     102,
+     102
+    ],
+    "texto": "WHAT: The light value for `.custom-message-length` changed from `scale-color($primary, $lightness: 70%)` to 30%. WHY: The hint text becomes much darker in the light theme, and the desktop modal.scss uses 70%/30% for the same selector. HOW: Use 70% for the light value and 30% for `$secondary`."
+   },
+   {
+    "id": "S6",
+    "file": "desktop/topic-post.scss",
+    "lines": [
+     291,
+     291
+    ],
+    "texto": "This hunk changed the lightness values instead of only wrapping them in the dark-light-choose helper. This is a styling value error, outside the naming/comment/localisation scope, and another reviewer should check it."
+   },
+   {
+    "id": "S7",
+    "file": "mobile/modal.scss",
+    "lines": [
+     102,
+     102
+    ],
+    "texto": "This hunk changed the lightness values instead of only wrapping them in the dark-light-choose helper. This is a styling value error, outside the naming/comment/localisation scope, and another reviewer should check it."
+   },
+   {
+    "id": "S8",
+    "file": "app/assets/stylesheets/desktop/topic-post.scss",
+    "lines": [
+     288,
+     292
+    ],
+    "texto": "The light-theme value was changed from primary 30% to primary 70%, so the original color no longer applies. This lightens the text in the default theme. The dark-light-choose call should keep primary 30% and pair it with secondary 70%."
+   },
+   {
+    "id": "S9",
+    "file": "app/assets/stylesheets/mobile/modal.scss",
+    "lines": [
+     99,
+     103
+    ],
+    "texto": "The light-theme value was changed from primary 70% to primary 30%, which makes the text much darker in the default theme. The dark-light-choose call should keep primary 70% and pair it with secondary 30%."
+   },
+   {
+    "id": "S10",
+    "file": "app/assets/stylesheets/mobile/topic-post.scss",
+    "lines": [
+     179,
+     183
+    ],
+    "texto": "The h3 light-theme value was changed from primary 20% to primary 50%, so the heading color is wrongly dimmed in the default theme. The dark-light-choose call should keep primary 20% and pair it with secondary 80%."
+   },
+   {
+    "id": "S11",
+    "file": "app/assets/stylesheets/desktop/topic-post.scss",
+    "lines": [
+     291,
+     291
+    ],
+    "texto": "The light-theme argument was changed from primary 30% to primary 70% while adding the dark variant. The topic-meta-data username link becomes much lighter in the light theme. Keep the original light value and mirror it: primary 30% and secondary 70%."
+   },
+   {
+    "id": "S12",
+    "file": "app/assets/stylesheets/mobile/topic-post.scss",
+    "lines": [
+     182,
+     182
+    ],
+    "texto": "The h3 color was 20% lightness. It is now 50%/50%, which changes the light theme and does not match the desktop counterpart (20%/80%). Use primary 20% and secondary 80%."
+   },
+   {
+    "id": "S13",
+    "file": "app/assets/stylesheets/mobile/modal.scss",
+    "lines": [
+     102,
+     102
+    ],
+    "texto": "The original light color was primary 70%. The new call uses primary 30% for the light theme, which makes the text much darker. Use primary 70% and secondary 30%, as in desktop/modal.scss."
+   },
+   {
+    "id": "S14",
+    "file": "app/assets/stylesheets/desktop/user.scss",
+    "lines": [
+     522,
+     522
+    ],
+    "texto": "The .name color was primary 30% and is now 50%/50%, so the light theme changes. Use primary 30% and secondary 70%."
+   },
+   {
+    "id": "S15",
+    "file": "app/assets/stylesheets/mobile/modal.scss",
+    "lines": [
+     102,
+     102
+    ],
+    "texto": "The light-theme value was changed from primary 70% to primary 30%, so the hint text becomes much darker in the default theme. The dark value (secondary 70%) is also the inverse of the mapping used elsewhere. It should keep primary 70% and pair it with secondary 30%."
+   },
+   {
+    "id": "S16",
+    "file": "app/assets/stylesheets/desktop/topic-post.scss",
+    "lines": [
+     291,
+     291
+    ],
+    "texto": "The light-theme value was changed from primary 30% to primary 70%, which makes the link text much lighter in the default theme. The original was 30%, and its dark pair should be secondary 70%."
+   },
+   {
+    "id": "S17",
+    "file": "app/assets/stylesheets/mobile/topic-post.scss",
+    "lines": [
+     182,
+     182
+    ],
+    "texto": "The light-theme value for the h3 was changed from primary 20% to primary 50%, which is a regression in the default theme. It should keep primary 20% and pair it with secondary 80%."
+   },
+   {
+    "id": "S18",
+    "file": "app/assets/stylesheets/desktop/user.scss",
+    "lines": [
+     522,
+     522
+    ],
+    "texto": "The light-theme value for `.name` was changed from primary 30% to primary 50%, which makes the name lighter in the default theme. It should keep primary 30% and pair it with secondary 70%."
+   },
+   {
+    "id": "S19",
+    "file": "app/assets/stylesheets/mobile/modal.scss",
+    "lines": [
+     102,
+     102
+    ],
+    "texto": "The light-theme argument was changed from primary 70% to primary 30%, and the dark argument is secondary 70%. The values are swapped, so the light theme's faint hint text becomes much darker. Keep primary 70% and pair it with secondary 30%."
+   },
+   {
+    "id": "S20",
+    "file": "app/assets/stylesheets/desktop/topic-post.scss",
+    "lines": [
+     291,
+     291
+    ],
+    "texto": "The original light color was primary 30%, but the new light argument is primary 70%, with the dark value secondary 30%. This lightens the reply username links in the light theme, which is an unintended regression. Use primary 30% with secondary 70%."
+   },
+   {
+    "id": "S21",
+    "file": "app/assets/stylesheets/mobile/topic-post.scss",
+    "lines": [
+     182,
+     182
+    ],
+    "texto": "The original h3 color was primary 20%, but the new light argument is primary 50%, with the dark value secondary 50%. This washes out the heading in the light theme. Use primary 20% with secondary 80%, as the sibling rules do."
+   },
+   {
+    "id": "S22",
+    "file": "app/assets/stylesheets/desktop/user.scss",
+    "lines": [
+     522,
+     522
+    ],
+    "texto": "The original `.name` color was primary 30%, but the new light argument is primary 50%, with the dark value secondary 50%. This lightens the name in the light theme, which is an unintended change. Use primary 30% with secondary 70%."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+    "descricao": "In .topic-meta-data h5 a, the light-theme color changed from scale-color($primary, 30%) to 70% because the dark-light-choose arguments were inverted, making the link much paler in light themes.",
+    "textoGolden": "In .topic-meta-data h5 a, the original code had color: scale-color($primary, $lightness: 30%) but was changed to dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%)). The lightness for the light theme changed from 30% to 70%, which is a dramatic inversion",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/desktop/topic-post.scss",
+      "lines": [
+       291,
+       291
+      ],
+      "texto": "The light-theme argument was changed from the original lightness. WHAT: the original was `scale-color($primary, $lightness: 30%)`, but the new value uses `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))` \u2014 the first (light-theme) argument is now 70%, not 30%. WHY: this silently darkens the light-theme color for `.topic-meta-data h5 a` (post-author link) from a 30% to a 70% tint, a light-theme regression outside the PR's dark-theme-only intent; the values also are inverted relative to the (X, 100\u2212X) convention used everywhere else (should be 30/70). HOW: use `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/desktop/topic-post.scss",
+      "lines": [
+       291,
+       291
+      ],
+      "texto": "The original value was scale-color($primary, $lightness: 30%). After conversion the light-mode argument became $primary:70% and dark-mode $secondary:30% \u2014 both inverted away from the original 30%. Should be dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%)). As written the light-mode color is dramatically lighter than intended."
+     },
+     {
+      "file": "app/assets/stylesheets/desktop/topic-post.scss",
+      "lines": [
+       291,
+       291
+      ],
+      "texto": "This bold link inside `.reply`/`nav.post-controls` was originally `scale-color($primary, $lightness: 30%)`. The rewrite uses 70% as the light-theme argument, inverting the intended value (the complementary pair should be 30/70, not 70/30). The light theme now shows this link far lighter than before; the first argument must remain the original 30%."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+    "descricao": "In mobile .custom-message-length the light-theme lightness changed from 70% to 30% (inverted pair), making the hint text much darker than before and than desktop.",
+    "textoGolden": "In topic-post.css the original code used $lightness: 70% but the replacement uses $lightness: 30% for the light theme. This makes the text significantly darker than intended.",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/mobile/modal.scss",
+      "lines": [
+       102,
+       102
+      ],
+      "texto": "The light-theme argument was changed from the original lightness. WHAT: the original was `scale-color($primary, $lightness: 70%)`, but the new value is `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))` \u2014 the first argument is now 30%, not 70%. WHY: this changes the light-theme color of `.custom-message-length` from a 70% to a 30% tint (a light-theme regression), and the pair is inverted vs. the (X, 100\u2212X) convention; the desktop counterpart at desktop/modal.scss:94 correctly kept 70/30. HOW: use `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/mobile/modal.scss",
+      "lines": [
+       102,
+       102
+      ],
+      "texto": "The original `.custom-message-length` color was `scale-color($primary, $lightness: 70%)`. The refactor changed the light-theme argument to 30%, so the light theme now renders this hint much darker than before (a 40-point lightness jump). It also no longer matches its desktop counterpart (desktop/modal.scss keeps `70%, 30%`). The first argument must stay at the original 70%: `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/mobile/modal.scss",
+      "lines": [
+       100,
+       102
+      ],
+      "texto": "`.custom-message-length` now contradicts the desktop rule for the same class. desktop/modal.scss (line 94) converted the original `scale-color($primary, $lightness: 70%)` to `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))` (keeping 70%), while this hunk produced `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`, flipping the primary lightness 70\u219230. Both files started from 70%, so mobile should be 70/30 to agree with desktop and preserve the original value."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+    "descricao": "In desktop/user.scss .name the light-theme lightness was changed from 30% to 50%, lightening the name in light themes instead of only adding a dark-theme value.",
+    "textoGolden": "This change for desktop/user.css changes $primary from 30% to 50% for the light theme; most other changes preserve the original $primary value and move the complement to $secondary for dark. Consider reviewing this (also applies to a similar .name change in the mobile variant).",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/desktop/user.scss",
+      "lines": [
+       522,
+       522
+      ],
+      "texto": "The `.name` color was `scale-color($primary, $lightness: 30%)` and is now `50%` in the light branch. This changes the light-theme color. Use `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/desktop/user.scss",
+      "lines": [
+       522,
+       522
+      ],
+      "texto": "The .name color was scale-color($primary, $lightness: 30%) but the light argument was changed to 50%, so the light theme loses its contrast. Use dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))."
+     },
+     {
+      "file": "app/assets/stylesheets/desktop/user.scss",
+      "lines": [
+       522,
+       522
+      ],
+      "texto": "The .name light value was changed from primary 30% to 50%, which lightens the text in light mode. Use dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+    "descricao": "In mobile/user.scss .name the light-theme lightness was changed from 30% to 50% instead of preserving 30% with a 70% secondary for dark themes.",
+    "textoGolden": "In mobile/user.scss line 497, the lightness value for dark themes should be inverted to 70% instead of being changed to 50%. This change may lead to unintended visual regressions in light themes.",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/desktop/user.scss",
+      "lines": [
+       522,
+       522
+      ],
+      "texto": "The light-theme value no longer matches the original. WHAT: `.group-member-info .name` was `scale-color($primary, $lightness: 30%)` and now is `dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%))` (30% \u2192 50%). WHY: this lightens the name link in the light theme, an unintended light-theme change; the equivalent rule in common/base/user.scss:124 correctly preserved 30% (30/70). HOW: use `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/mobile/user.scss",
+      "lines": [
+       497,
+       497
+      ],
+      "texto": "The light-theme value no longer matches the original. WHAT: `.group-member-info .name` was `scale-color($primary, $lightness: 30%)` and now is `dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%))` (30% \u2192 50%). WHY: this lightens the name link in the light theme, an unintended light-theme change inconsistent with the mobile/desktop counterpart that preserved 30%; desktop/user.scss:522 has the same defect. HOW: use `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/desktop/user.scss",
+      "lines": [
+       522,
+       522
+      ],
+      "texto": ".group-member-info .name originally used scale-color($primary, $lightness: 30%). The conversion changed the light-mode argument to 50% (making it 50/50), altering the intended color. Should preserve the original: dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+    "descricao": "In mobile topic-post a.star h3 the light-theme lightness changed from 20% to 50%, fading the heading and diverging from the desktop 20%/80% conversion.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/mobile/topic-post.scss",
+      "lines": [
+       182,
+       182
+      ],
+      "texto": "The light-theme value no longer matches the original. WHAT: `.topic-map h3` was `scale-color($primary, $lightness: 20%)` and now is `dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%))` (20% \u2192 50%). WHY: this visibly lightens the topic-map heading in the light theme; the desktop counterpart at desktop/topic-post.scss:321 correctly kept 20% (20/80), so mobile diverged. HOW: use `dark-light-choose(scale-color($primary, $lightness: 20%), scale-color($secondary, $lightness: 80%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/mobile/topic-post.scss",
+      "lines": [
+       182,
+       182
+      ],
+      "texto": "Original was scale-color($primary, $lightness: 20%). The conversion changed it to 50%/50%, but the desktop mirror of this rule (desktop/topic-post.scss h3) uses 20%/80%. The two files must agree; should be dark-light-choose(scale-color($primary, $lightness: 20%), scale-color($secondary, $lightness: 80%))."
+     },
+     {
+      "file": "app/assets/stylesheets/mobile/topic-post.scss",
+      "lines": [
+       182,
+       182
+      ],
+      "texto": "This `h3` was originally `scale-color($primary, $lightness: 20%)`. The rewrite changed the light-theme argument to 50%, so the light theme renders the heading lighter than before; the correct pair is 20/80, not 50/50. The first argument must keep the original 20%."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#07",
+    "descricao": "The comment describing the topic-list cell default color still names a plain scale-color($primary, 50%) rule that the PR replaced with dark-light-choose.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/base/discourse.scss",
+      "lines": [
+       72,
+       76
+      ],
+      "texto": "The comment at lines 72-74 states \"the default for table cells in topic list is scale-color($primary, $lightness: 50%)\", but the rule it documents was converted by this PR to `dark-light-choose(scale-color($primary, $lightness: X%), scale-color($secondary, $lightness: 100-X%))` (here for coldmap-high/med/low and in common/base/_topic-list.scss th/td). The prose still names a single `$primary` expression, so it no longer describes the code: a reader comparing the two will look for a plain `$primary` 50% rule that no longer exists. Update the comment to describe the dark-light-choose baseline (e.g. \"is dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%))\")."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#08",
+    "descricao": "In dark themes the notification badge background becomes a lightened $secondary while its text stays $secondary, giving dark text on a dark background with poor contrast.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/components/badges.css.scss",
+      "lines": [
+       239,
+       239
+      ],
+      "texto": "The dark-theme notification badge background now uses a lightened $secondary while its text still uses the unmodified $secondary. This puts dark text on a dark background for plain badges such as category unread counts in site-map.hbs:73; with $secondary black, the foreground is #000 and the background is approximately #4d4d4d (about 2.5:1 contrast), making the small count text difficult to read. Set the default badge foreground, including its &[href] rule, to a contrasting dark-theme color such as $primary when selecting this dark background."
+     }
+    ]
+   }
+  ]
+ },
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "4f8aed295a29954023b2849c060ef4fb299d1b5d",
+  "base": "62db063e1e1abe691313ab42682a68f796d63769",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/models/post.rb",
+    "lines": [
+     133,
+     133
+    ],
+    "texto": "WHAT: Post#cook returns `raw` verbatim for raw_html posts, and the raw comes from remote RSS or scraped HTML that was never sanitized. WHY: script or event-handler HTML in a feed item or page is stored and rendered unescaped (`raw post.cooked` in embed/best.html.erb and in normal topic views), so it executes in the forum's origin. HOW: sanitize the HTML before storing or returning it, for example with the Sanitize gem and a tag/attribute whitelist, in TopicEmbed.import or in this branch of cook."
+   },
+   {
+    "id": "S2",
+    "file": "app/jobs/scheduled/poll_feed.rb",
+    "lines": [
+     35,
+     36
+    ],
+    "texto": "WHAT: `i.content.scrub` is called without a nil check, and one failing item aborts the loop. WHY: RSS items that only provide a description leave `content` nil, so NoMethodError stops the whole poll and no later items are imported. HOW: fall back to the description and skip items with no content, for example `raw = i.content || i.description; next if raw.blank?`."
+   },
+   {
+    "id": "S3",
+    "file": "lib/topic_retriever.rb",
+    "lines": [
+     40,
+     43
+    ],
+    "texto": "WHAT: perform_retrieve runs a full synchronous feed fetch and import (`Jobs::PollFeed.new.execute({})`) for every uncached embed URL. WHY: the throttle is per URL, so many distinct embed URLs trigger repeated full feed downloads and imports of every item. The `open(feed_url)` call has no timeout, so a slow feed ties up Sidekiq workers. HOW: throttle feed polling globally with a redis key, and add a timeout to the feed fetch."
+   },
+   {
+    "id": "S4",
+    "file": "app/views/embed/best.html.erb",
+    "lines": [
+     6,
+     6
+    ],
+    "texto": "WHAT: The template closes the conditional with `<%- end if %>`, which is a trailing `if` modifier on `end`. WHY: it is a syntax hazard, because the following template output becomes the modifier's condition. The header branches may then render incorrectly or the template may raise a SyntaxError. HOW: use `<%- end %>`."
+   },
+   {
+    "id": "S5",
+    "file": "app/models/topic_embed.rb",
+    "lines": [
+     62,
+     73
+    ],
+    "texto": "Protocol-relative URLs (`//host/path`) start with '/', so they are treated as site-relative. The leading-slash strip then rewrites `//cdn.other.com/a.png` to `http://eviltrout.com/cdn.other.com/a.png`, which points at the wrong host. Skip values that start with `//`, or resolve them against the scheme, for both `a[href]` and `img[src]`."
+   },
+   {
+    "id": "S6",
+    "file": "app/models/topic_embed.rb",
+    "lines": [
+     62,
+     73
+    ],
+    "texto": "absolutize_urls treats any href/src starting with '/' as host-relative. Protocol-relative URLs such as '//cdn.example.com/x.png' are rewritten to 'http://host/cdn.example.com/x.png', because the leading slashes are stripped and the path is appended to the host prefix. Skip values that start with '//' (or resolve them against the scheme) instead of prefixing the host."
+   },
+   {
+    "id": "S7",
+    "file": "app/controllers/embed_controller.rb",
+    "lines": [
+     14,
+     17
+    ],
+    "texto": "The controller enqueues Jobs :retrieve_topic when no embed exists, but spec/controllers/embed_controller_spec.rb expects TopicRetriever.new(...).retrieve to be called from the controller. The spec and the implementation disagree, so the 'tells the topic retriever to work' example fails. Either call the retriever or change the spec to expect the job to be enqueued."
+   },
+   {
+    "id": "S8",
+    "file": "app/models/topic_embed.rb",
+    "lines": [
+     13,
+     13
+    ],
+    "texto": "The URL is interpolated unescaped into an HTML anchor that is appended to content stored as raw_html and later rendered with `raw` in the embed view. A URL containing a quote or markup breaks out of the attribute and reaches users verbatim. Escape it with ERB::Util.html_escape before building the link."
+   },
+   {
+    "id": "S9",
+    "file": "app/views/layouts/embed.html.erb",
+    "lines": [
+     11,
+     11
+    ],
+    "texto": "request.referer is written into a JavaScript string literal with HTML escaping (`<%= %>`), which is not JS escaping. Characters such as `&` turn into HTML entities, and backslashes or newlines are not JS-escaped. Emit the value with `.to_json` or `escape_javascript` instead."
+   },
+   {
+    "id": "S10",
+    "file": "spec/jobs/poll_feed_spec.rb",
+    "lines": [
+     18,
+     28
+    ],
+    "texto": "The 'requires feed_polling_url' and 'requires embed_by_username' tests stub only one setting. `feed_polling_enabled?` defaults to false, so `poll_feed` is never called whatever the other guards do. Removing the url or username check from `PollFeed#execute` would not fail these tests. Stub `feed_polling_enabled?` to true (and the other setting to a valid value) in each test so the guard under test is the only reason `poll_feed` is skipped."
+   },
+   {
+    "id": "S11",
+    "file": "spec/controllers/embed_controller_spec.rb",
+    "lines": [
+     8,
+     11
+    ],
+    "texto": "The 'is 404 without an embed_url' test never sets `embeddable_host`, so `ensure_embeddable` raises InvalidAccess before `params.require(:embed_url)` is reached. The test would pass even if the embed_url requirement were removed. Stub a valid host and a matching referer so the missing embed_url is the only failure cause."
+   },
+   {
+    "id": "S12",
+    "file": "app/jobs/scheduled/poll_feed.rb",
+    "lines": [
+     31,
+     37
+    ],
+    "texto": "`i.content` is nil for feed items that carry only a description, so `i.content.scrub` raises NoMethodError and aborts the whole feed poll. This also breaks TopicRetriever, which calls PollFeed inline. Fall back to `i.description` and skip items with no content."
+   },
+   {
+    "id": "S13",
+    "file": "app/models/topic_embed.rb",
+    "lines": [
+     15,
+     30
+    ],
+    "texto": "The check for an existing embed and the later create are not atomic. Concurrent PollFeed and RetrieveTopic imports of the same URL both create a topic and post, and the loser's `TopicEmbed.create!` raises RecordNotUnique on the unique embed_url index. The rollback leaves PostCreator's non-transactional side effects (Redis keys, enqueued jobs) behind. Serialize the import per URL, for example with a Redis lock or by rescuing RecordNotUnique and re-reading the embed."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#01",
+    "descricao": "The postMessage handler in embed.js checks the sender with discourseUrl.indexOf(e.origin), a substring test instead of exact origin equality, so a page on an origin that is a substring of the Discourse URL can send forged discourse-resize messages to the embedding page.",
+    "textoGolden": "The current origin validation using indexOf is insufficient and can be bypassed. An attacker could use a malicious domain like evil-discourseUrl.com to pass this check.",
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/embed.js",
+      "lines": [
+       15,
+       17
+      ],
+      "texto": "The message-origin check uses substring matching: `discourseUrl.indexOf(e.origin) === -1`. Any origin that is a substring of discourseUrl is accepted (e.g. discourseUrl `https://discourse.example.com` accepts origin `https://discourse`), so a malicious page can post `discourse-resize` messages into the embed. Compare against the iframe's actual origin exactly (`e.origin !== expectedOrigin`) instead of a substring test."
+     },
+     {
+      "file": "embed.js",
+      "lines": [
+       17,
+       17
+      ],
+      "texto": "Uses indexOf containment instead of origin equality, but it cannot be bypassed."
+     },
+     {
+      "file": "app/assets/javascripts/embed.js",
+      "lines": [
+       15,
+       17
+      ],
+      "texto": "WHAT: postMessage origin check is reversed (`discourseUrl.indexOf(e.origin)===-1`) instead of strict origin equality. WHY: any e.origin that is a substring of discourseUrl passes, letting a foreign iframe drive `iframe.height` handling and future message branches."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#04",
+    "descricao": "The referer and embed_url host checks compare against SiteSetting.embeddable_host case-sensitively, so a host differing only in case is rejected even though hostnames are case-insensitive.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/embed_controller.rb",
+      "lines": [
+       26,
+       26
+      ],
+      "texto": "Host identity is compared case-sensitively: `URI(request.referer).host != SiteSetting.embeddable_host`. Hostnames are case-insensitive, so a referer such as `http://EVILTROUT.COM/...` never matches the configured `eviltrout.com` (and the same flaw exists in lib/topic_retriever.rb:15 for `URI(@embed_url).host`). Normalize both sides with downcase before comparing so case variations of the same host are treated identically."
+     },
+     {
+      "file": "embed_controller.rb",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The referer/host comparison does not lowercase either side, so a mixed-case host is wrongly rejected. The reviewer notes this fails closed and is not a bypass. Normalize case on both sides of the host comparison (e.g. downcase both) to avoid false rejections. The same issue applies to topic_retriever.rb."
+     },
+     {
+      "file": "topic_retriever.rb",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The host comparison does not lowercase either side, so a mixed-case host is wrongly rejected. This fails closed and is not a bypass. Normalize case on both sides of the comparison (e.g. downcase both) to avoid false rejections."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+    "descricao": "PollFeed reads i.content.scrub for every feed item, so items without a content element (common in RSS feeds that only have description) raise NoMethodError and abort the import of the remaining items.",
+    "textoGolden": "Calling `i.content.scrub` assumes that `i.content` is always populated. However, many RSS feeds do not provide a `content` field, leading to a potential nil pointer exception when `i.content` is nil. A fallback to `description` should be implemented to prevent crashes.",
+    "comentarios": [
+     {
+      "file": "app/jobs/scheduled/poll_feed.rb",
+      "lines": [
+       35,
+       35
+      ],
+      "texto": "WHAT: `CGI.unescapeHTML(i.content.scrub)` assumes every feed item has a `content` element. WHY: many RSS 2.0 items expose only `<description>` (simple-rss returns nil for `content`), so `nil.scrub` raises NoMethodError and, because the job is `sidekiq_options retry: false`, the entire hourly feed import for all items is aborted. HOW: fall back to the available field, e.g. `(i.content || i.description || i.summary).to_s.scrub`, and skip items whose body is blank."
+     },
+     {
+      "file": "app/jobs/scheduled/poll_feed.rb",
+      "lines": [
+       31,
+       36
+      ],
+      "texto": "The feed item is consumed unconditionally: url = i.link, then i.title, and content = CGI.unescapeHTML(i.content.scrub). SimpleRSS item accessors raise NoMethodError when the element is absent (RSS 2.0 feeds frequently carry only <description>, no <content>, and some items have no <link>/<title>), so a single malformed or content-less item aborts the whole hourly job with an unhandled exception instead of skipping it. The code already anticipates a blank link (line 33 fallback) but reads i.content/i.title without a nil guard; use i.content.to_s (or fall back to i.description/summary) and skip items whose content is blank."
+     },
+     {
+      "file": "app/jobs/scheduled/poll_feed.rb",
+      "lines": [
+       31,
+       37
+      ],
+      "texto": "`i.content.scrub` raises NoMethodError when a feed item has no content (only a description). The exception aborts the whole poll, so every item after it is never imported. Fall back to `i.content || i.description`, skip items with blank content, and rescue per item."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#08",
+    "descricao": "Posts imported from RSS or remote pages use cook_method raw_html, which makes Post#cook return the raw HTML without sanitization, and the embed view outputs it with raw post.cooked, allowing stored XSS from imported content.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/post.rb",
+      "lines": [
+       130,
+       136
+      ],
+      "texto": "WHAT: the new `return raw if cook_method == Post.cook_methods[:raw_html]` makes `Post#cook` return completely unsanitized HTML, and Jobs::PollFeed stores untrusted feed content this way (poll_feed.rb:35-36 \u2192 TopicEmbed.import, unlike import_remote which sanitizes via Readability's tag/attribute whitelist). WHY: the stored `cooked` value is then emitted with `<%= raw post.cooked %>` in app/views/embed/best.html.erb:19, and that page is served from the forum's own origin \u2014 so a malicious/compromised RSS feed item containing `<script>` or `onerror=` runs attacker JavaScript in the forum origin and can read cookies/session and perform authenticated actions (stored XSS). HOW: sanitize the raw HTML before persisting it (e.g. run the feed content through the same HTML sanitizer used for regular posts, or restrict the raw_html cook path to trusted, pre-sanitized sources only)."
+     },
+     {
+      "file": "app/models/post.rb",
+      "lines": [
+       130,
+       133
+      ],
+      "texto": "WHAT: Post#cook returns raw verbatim for cook_method raw_html, skipping the cooking/sanitization pipeline and plugin filters. WHY: any RSS/readability HTML imported via TopicEmbed is rendered unsanitized in embed/best.html.erb, executing attacker script in the Discourse origin."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       22,
+       22
+      ],
+      "texto": "Feed-provided HTML is persisted with raw_html cooking after only Nokogiri parsing and URL rewriting, which do not sanitize scripts or event-handler attributes. A malicious feed entry containing executable HTML is stored as post.cooked and executed under the forum origin when rendered, including through the new raw cooked embed view. Sanitize imported HTML with an explicit safe tag, attribute and URL-scheme allowlist before storing it or returning it from the raw_html cooking path."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
+    "descricao": "TopicEmbed.import appends a footer that interpolates the URL unescaped into an <a href='...'> tag in raw HTML that is later rendered unsanitized, so a crafted URL can inject markup; it also appends to contents with << without handling nil.",
+    "textoGolden": "The TopicEmbed.import method is susceptible to a NoMethodError if the contents parameter is nil when attempting to append a string, and an XSS vulnerability due to unescaped url interpolation in the generated HTML.",
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       10,
+       13
+      ],
+      "texto": "WHAT: TopicEmbed.import interpolates feed-controlled url unescaped into raw HTML (`<a href='#{url}'>#{url}</a>`) and stores feed HTML as raw_html. WHY: url passing /^https?\\:\\/\\// can still contain `'`, `>` or script, and RSS content is never sanitized, giving stored XSS when rendered via `raw post.cooked`. HOW: HTML-escape url and sanitize content instead of raw_html passthrough."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       10,
+       14
+      ],
+      "texto": "TopicEmbed.import interpolates feed-controlled url unescaped into HTML link stored with cook_method raw_html (Post#cook returns raw, bypassing pipeline) and rendered with raw post.cooked: XSS via quote/script break-out. Escape url for text and attribute contexts before storing."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       13,
+       13
+      ],
+      "texto": "The url is interpolated unescaped into `<a href='#{url}'>#{url}</a>`. The post is stored with cook_method raw_html and rendered with `raw post.cooked`, so a url containing a quote or markup is output as live HTML. Escape it with ERB::Util.html_escape (or CGI.escapeHTML) for both the href and the link text."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#16",
+    "descricao": "TopicEmbed.import appends the footer with contents <<, mutating the caller's string in place instead of building a new string.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       13,
+       13
+      ],
+      "texto": "`contents <<` mutates the caller's string in place. This raises FrozenError for frozen strings and appends the footer twice if the same string is imported again. Use `contents = contents + ...` instead."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#17",
+    "descricao": "TopicEmbed.import checks for an existing embed and then creates the post and TopicEmbed without handling the unique-index conflict, so two concurrent imports of the same URL make one job fail with RecordNotUnique.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       15,
+       30
+      ],
+      "texto": "TopicEmbed.import does a check-then-insert on embed_url (where(...).first, then TopicEmbed.create!) with no rescue for the unique index declared on topic_embeds.embed_url. The only guard against concurrent intake is the Redis throttle in TopicRetriever, which is bypassed for staff (retrieve_topic.rb:17 passes no_throttle: user.try(:staff?)) and can expire while a slow retrieval (which may synchronously run a full PollFeed, topic_retriever.rb:41) is still running. Two interleaved retrievals for the same URL both see embed.blank? and both attempt creation; the loser raises ActiveRecord::RecordNotUnique, which is unhandled anywhere in the job path, breaking execution. Guard the create against the race (rescue/retry on RecordNotUnique, or use find_or_create_by on embed_url inside the transaction) so concurrent retrievals cannot raise."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       20,
+       28
+      ],
+      "texto": "Make creation idempotent under concurrent imports. Two workers can both read no embed at line 15 and create posts before attempting the same unique embed_url insert. The unique index correctly rolls back the losing transaction, but its unhandled uniqueness exception aborts that job (and potentially the rest of a feed polling run). This is reachable when scheduled polling overlaps retrieval-triggered polling; the per-URL retrieval throttle does not serialize those paths. Handle the conflict outside the transaction and return the winning embed/post, or serialize imports for the URL."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       20,
+       30
+      ],
+      "texto": "Race on check-then-create: two concurrent imports both see TopicEmbed.where(embed_url:url).first blank, both create Post + TopicEmbed.create!. Unique index on embed_url then raises RecordNotUnique (unhandled) or creates duplicates. Need atomic find-or-create / rescue unique violation."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#18",
+    "descricao": "When the embedded post has been deleted, TopicEmbed.import's update path passes a nil embed.post to PostRevisor and crashes on every later import of that URL.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       31,
+       39
+      ],
+      "texto": "On the update path `embed.post` can be nil if the post was deleted. `PostRevisor.new(nil)` then raises NoMethodError, and every later import of that URL fails the same way. Guard against a nil post, for example by skipping the revision or recreating the topic."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       32,
+       37
+      ],
+      "texto": "WHAT: update path uses `embed.post` without nil guard then `PostRevisor.new(post)`. WHY: if the first post was deleted, post is nil and revise! dereferences nil, crashing feed-poll updates instead of recreating/skipping."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       31,
+       37
+      ],
+      "texto": "Orphan-post crash on update path: post = embed.post can be nil if the post/topic was deleted, then PostRevisor.new(nil).revise! raises NoMethodError. Must handle missing post (recreate or skip) instead of assuming present."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#19",
+    "descricao": "Claims import_remote crashes on unparseable pages (nil content) and dead URLs because it does no nil check or network error handling around open(url).read.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       44,
+       52
+      ],
+      "texto": "WHAT: import_remote passes `doc.content` (and title) directly to import where `contents <<` assumes a String, with no nil check or network-error handling around `open(url).read`. WHY: unparseable pages (nil content) raise NoMethodError and dead URLs raise OpenURI errors, crashing RetrieveTopic/Disqus imports with no topic created."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+    "descricao": "absolutize_urls only handles root-relative paths: protocol-relative URLs like //cdn.example.com/x.png are rewritten to http://host/cdn.example.com/x.png and path-relative links are left unresolved, breaking links and images in imported posts.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       64,
+       71
+      ],
+      "texto": "The URL rewrite treats protocol-relative URLs such as `//cdn.example.com/image.jpg` as paths on the article host, producing `http://article-host/cdn.example.com/image.jpg`. Imported images and links using protocol-relative external URLs therefore point to the wrong server. Resolve both href and src using URI joining against the article URL, which also handles ordinary relative paths correctly."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       62,
+       72
+      ],
+      "texto": "Resolve relative href/src references with URI joining rather than handling only leading slashes. For an article at http://example.com/blog/article, href='next' and src='images/photo.jpg' remain relative and resolve against the forum instead of the imported article. Moreover, '//cdn.example.com/photo.jpg' is rewritten to 'http://example.com/cdn.example.com/photo.jpg'. Both yield incorrect links/images in imported posts; apply proper URI resolution to both anchors and images."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       62,
+       73
+      ],
+      "texto": "absolutize_urls treats any href or src starting with '/' as site-relative and strips all leading slashes. Protocol-relative URLs like '//cdn.example.com/a.png' are rewritten to 'http://site/cdn.example.com/a.png', which is broken. Skip values starting with '//' (or prefix them with the scheme) and only rewrite single-slash paths."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#24",
+    "descricao": "The embed view formats post dates with a hard-coded strftime pattern, so users in non-English locales see English month names and a fixed order while the rest of the view is translated.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/views/embed/best.html.erb",
+      "lines": [
+       14,
+       14
+      ],
+      "texto": "The post date uses a hard-coded strftime format `\"%e %b %Y\"`. `%b` emits English month abbreviations (Jan, Feb, ...) no matter what locale the viewer is in, so the date is frozen to en-US while the surrounding strings in this same view are localized via I18n.t. This is a locale-pinned user-facing format; it should be localized (e.g. via the app's localized date helper / l( ) rather than a literal strftime pattern)."
+     },
+     {
+      "file": "app/views/embed/best.html.erb",
+      "lines": [
+       14,
+       14
+      ],
+      "texto": "Use a localized date formatter rather than strftime(\"%e %b %Y\"). %b produces English month abbreviations and the fixed day-month-year order ignores the selected locale, although the neighbouring header and footer labels are translated. Embedded comments therefore show English-formatted dates for users of other locales."
+     },
+     {
+      "file": "app/views/embed/best.html.erb",
+      "lines": [
+       14,
+       14
+      ],
+      "texto": "Date uses strftime(\"%e %b %Y\") hard-coding one locale's month names/order while neighbouring strings go through I18n.t. Use I18n.l with a locale date format so non-English users see localized dates."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#29",
+    "descricao": "The Disqus importer now creates topics through TopicEmbed.import_remote, dropping the thread's created_at and the category option and requiring a live HTTP fetch per thread, so imported topics get wrong dates/categories and a dead link aborts the import.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "lib/tasks/disqus.thor",
+      "lines": [
+       143,
+       149
+      ],
+      "texto": "WHAT: Disqus import replaced PostCreator (title/raw/created_at/category) with `TopicEmbed.import_remote` per thread, dropping category_id, created_at, and strip handling. WHY: imported topics lose categories/timestamps and now require a live HTTP fetch per thread, failing when links are dead."
+     },
+     {
+      "file": "lib/tasks/disqus.thor",
+      "lines": [
+       148,
+       148
+      ],
+      "texto": "Preserve the Disqus thread creation timestamp when switching to TopicEmbed.import_remote. The previous PostCreator call passed `created_at: Date.parse(t[:created_at])`, but this replacement passes only the title, and TopicEmbed.import_remote/import never forward a timestamp to PostCreator. Imported historical topics now get the migration time as their initial post creation date while their replies retain historical dates, losing the importer's chronological fidelity. Extend the import options to forward created_at and pass the thread timestamp here."
+     },
+     {
+      "file": "lib/tasks/disqus.thor",
+      "lines": [
+       148,
+       148
+      ],
+      "texto": "The Disqus import now calls TopicEmbed.import_remote instead of PostCreator. This silently drops the `--category` option and the `created_at` from the Disqus thread, and the `--category` method_option was removed from the CLI. It also now makes a live HTTP fetch of every thread link, and `open(url)` raises on a failure that previously could not happen, aborting the whole import. Keep the category and date handling, and rescue fetch errors per thread."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#30",
+    "descricao": "Every retrieval of an article not yet embedded synchronously polls and imports the entire RSS feed, and since throttling is per URL, many different article requests repeat the full feed download and processing.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "lib/topic_retriever.rb",
+      "lines": [
+       40,
+       42
+      ],
+      "texto": "Every uncached article retrieval synchronously downloads and processes the complete configured feed before fetching the article. Because the retrieval throttle is keyed by individual embed URL, simultaneous requests for different articles each repeat the feed download and all per-item database lookups/imports, multiplying worker load by the number of requests times feed size. Coalesce feed polling with a feed-wide throttle or lock and reuse its recent results instead of executing a full poll per article."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#32",
+    "descricao": "The 'is 404 without an embed_url' spec never sets an embeddable host, so the request is rejected by ensure_embeddable before the embed_url check runs, and the test would pass even without that check.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "spec/controllers/embed_controller_spec.rb",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "The test is named 'is 404 without an embed_url' but passes for the wrong reason: it never sets embeddable_host, which defaults to '' so the before_filter `ensure_embeddable` raises at the blank-host check before `params.require(:embed_url)` is reached. The request is rejected regardless of whether the embed_url requirement exists, so the test would still pass if that requirement were removed. Stub a valid embeddable_host here so the failure is actually attributable to the missing embed_url."
+     },
+     {
+      "file": "spec/controllers/embed_controller_spec.rb",
+      "lines": [
+       8,
+       10
+      ],
+      "texto": "The missing-embed_url test does not establish a valid embeddable host and referer, so ensure_embeddable rejects this request before best reaches params.require(:embed_url). It also only checks non-success despite claiming a 404. Removing the required-parameter check would therefore leave this test green. Configure an allowed host/referer for this case and assert the intended missing-parameter response."
+     },
+     {
+      "file": "spec/controllers/embed_controller_spec.rb",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "The 'is 404 without an embed_url' test never sets embeddable_host, so ensure_embeddable rejects the request before params.require(:embed_url) runs. It passes without the embed_url check. Stub embeddable_host and the referer so the missing param is the only failure cause."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#33",
+    "descricao": "The 'requires feed_polling_url' and 'requires embed_by_username' specs leave feed_polling_enabled at its false default, so they never reach the condition they name and would pass with those checks deleted.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "spec/jobs/poll_feed_spec.rb",
+      "lines": [
+       12,
+       28
+      ],
+      "texto": "The three 'requires ...' tests do not isolate the guard they name: each stubs only one setting to falsy while the other two remain falsy by default, so poll_feed is never called even if the named check were deleted. Stub the other two settings to truthy values in each test so removing the named guard would cause poll_feed to run and fail the test."
+     },
+     {
+      "file": "spec/jobs/poll_feed_spec.rb",
+      "lines": [
+       18,
+       28
+      ],
+      "texto": "These two tests do not verify the conditions they name. `execute` is guarded by `feed_polling_enabled? && feed_polling_url.present? && embed_by_username.present?`, and feed_polling_enabled defaults to false. Neither test stubs feed_polling_enabled? to true, so the guard short-circuits at the first clause and poll_feed is never called no matter what feed_polling_url/embed_by_username are. Both would still pass if the URL/username checks were deleted entirely. Stub `SiteSetting.stubs(:feed_polling_enabled?).returns(true)` in each so the specific condition under test is actually reached."
+     },
+     {
+      "file": "spec/jobs/poll_feed_spec.rb",
+      "lines": [
+       18,
+       27
+      ],
+      "texto": "The URL and username prerequisite tests never enable feed polling (whose configured default is false) or supply the other required setting. execute consequently short-circuits at feed_polling_enabled? and never evaluates the prerequisite each test claims to cover. Both tests still pass if their corresponding presence checks are removed. Set all other prerequisites to valid values before making only the setting under test absent, so the poll_feed.never expectation actually detects removal of that guard."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-02",
+    "descricao": "PollFeed.feed_key computes a per-feed cache key that is never used, so the feed is re-fetched and re-processed every hour without a modified-since check.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-03",
+    "descricao": "The embed layout references the 'embed' stylesheet and embed.js, but neither is in config.assets.precompile, so with precompiled assets in production the embed page fails to load them.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-01",
+    "descricao": "The retrieve throttle is keyed by the full embed URL, so an anonymous client can vary the query string on the embeddable host to bypass it and make the server create an unbounded number of topics.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-04",
+    "descricao": "The \"requires feed_polling_enabled?\" spec leaves feed_polling_url and embed_by_username at their blank defaults, so poll_feed is skipped regardless and the test would pass even without the enabled check.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "github-oauth-security-enhancement-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "bb75657fc8f13923c1d7983f422290908a1e7310",
+  "base": "344aa102e7818606e29426ebe69d5a680d8727c6",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     481,
+     482
+    ],
+    "texto": "WHAT: When no Integration row exists for the requested installation_id, `GitHubInstallation.dispatch` calls `pipeline.next_step()` without comparing the authenticated GitHub user to the installer. WHY: `installation_id` comes from the request's GET params, which override the bound state. An attacker authenticated as themselves can claim an installation whose Integration row doesn't exist yet, for example because the installation webhook hasn't arrived. The user-validation fix is skipped in that case. HOW: Don't advance on DoesNotExist. Fail closed, or verify the installer through the GitHub API (for example the user's accessible installations) before continuing. Also, prefer the state-bound installation_id over the request parameter after the OAuth step."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     501,
+     505
+    ],
+    "texto": "WHAT: `integration.metadata[\"sender\"][\"login\"]` is read unguarded. WHY: `build_integration` only stores `sender` when `state.get(\"sender\")` is set, and pre-existing integrations may lack it. Those installs would hit a KeyError and a 500 instead of the error page. HOW: Use safe access, e.g. `(integration.metadata.get(\"sender\") or {}).get(\"login\")`, and treat a missing value as a verification failure."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     500,
+     505
+    ],
+    "texto": "The check indexes integration.metadata[\"sender\"][\"login\"] directly, but `sender` is only stored conditionally (build_integration uses `if state.get(\"sender\")`). An existing Integration without sender metadata raises KeyError and returns a 500 instead of the invalid-request error. Read it defensively with .get() and treat a missing sender as a failed verification."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     500,
+     505
+    ],
+    "texto": "The new check reads `integration.metadata[\"sender\"][\"login\"]` unconditionally. `sender` is optional metadata, because `build_integration` only sets it when `state.get(\"sender\")` is truthy. Any existing Integration without it (for example a legacy install, or one whose webhook sender was never recorded) now raises KeyError and returns a 500, where this branch used to continue to `next_step()`. Read the value defensively with `.get()` and route a missing sender to the `error()` page."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     500,
+     505
+    ],
+    "texto": "`integration.metadata[\"sender\"][\"login\"]` raises KeyError when the Integration has no `sender` in its metadata. `build_integration` only stores `sender` when it is present in the state, and an Integration can exist before the webhook sets it. The result is an unhandled 500 instead of the error page. Read it defensively, for example with `.get(\"sender\", {}).get(\"login\")`, and return `error(...)` on a mismatch or when the value is missing."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     422,
+     429
+    ],
+    "texto": "`safe_urlopen` for the OAuth token exchange is called outside the try block. A network error or timeout from GitHub raises an unhandled exception and returns a 500 instead of the error page. Move the call inside the try so any failure falls through to `error(...)`."
+   },
+   {
+    "id": "S7",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     129,
+     146
+    ],
+    "texto": "error() calls _(error_short) on a variable, so the short messages (\"Invalid installation request.\", \"GitHub installation pending deletion.\", \"Github installed on another Sentry organization.\") are no longer literal arguments to gettext. They are therefore not extracted into the translation catalog, although the old inline code translated them. Wrap the literals in _() where they are defined (the default argument and the call sites) and drop the _() call on the variable."
+   },
+   {
+    "id": "S8",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     500,
+     505
+    ],
+    "texto": "The sender check indexes `integration.metadata[\"sender\"][\"login\"]` unconditionally, but `build_integration` only stores `sender` when it is present in state. An integration without that metadata raises KeyError (a 500) instead of the intended 'Invalid installation request' error. Read it defensively with `.get(\"sender\", {}).get(\"login\")` and fail the check cleanly when it is missing."
+   },
+   {
+    "id": "S9",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     401,
+     413
+    ],
+    "texto": "The OAuth `state` is `pipeline.signature`, which looks deterministic (derived from the pipeline's view classes) and not a per-session random secret. If so, an attacker can predict it and forge a callback with their own `code`. That defeats the CSRF and identity-binding check this PR adds. Generate a random nonce with `secrets.token_urlsafe`, store it in pipeline state, and validate against it."
+   },
+   {
+    "id": "S10",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     412,
+     413
+    ],
+    "texto": "The OAuth `state` is compared to `pipeline.signature` with `!=`, which is not constant-time. Use `django.utils.crypto.constant_time_compare` for this security token check."
+   },
+   {
+    "id": "S11",
+    "file": "tests/sentry/integrations/github/test_integration.py",
+    "lines": [
+     385,
+     396
+    ],
+    "texto": "This test used to cover the 404 \"The GitHub installation could not be found.\" path. It now sends a state that doesn't match the pipeline signature, so it fails at OAuthLoginView's state check and returns the generic \"Invalid installation request.\" The 404 handling in build_integration is never reached, and the test passes even if that handling is broken. Use the correct state value so the flow reaches build_integration, and keep asserting the \"could not be found\" message."
+   },
+   {
+    "id": "S12",
+    "file": "tests/sentry/integrations/github/test_integration.py",
+    "lines": [
+     448,
+     454
+    ],
+    "texto": "test_github_user_mismatch asserts only the generic \"Invalid installation request.\" message and a failure payload. The state-mismatch, token-exchange, missing-login and integration-not-found paths return the same output, so the test passes even if the sender-versus-authenticated-user comparison is removed. Assert something specific to the mismatch branch. For example, prove the state and OAuth steps succeeded, or give the error a distinct message for this case."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#01",
+    "descricao": "error() calls _(error_short) on a variable and callers pass plain literals, so the short error strings are no longer extractable for translation.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       129,
+       146
+      ],
+      "texto": "The helper calls `_(error_short)` on a variable, and callers pass plain string literals. The translation extractor cannot see these strings, so the short error messages sent to the user are no longer translatable; the old code wrapped the literals directly in `_()`. Mark the literals with gettext_lazy at the call sites and the default, and pass them through without wrapping again."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       129,
+       146
+      ],
+      "texto": "error_short strings bypass translation extraction: _(error_short) uses a variable so makemessages cannot collect them. Wrap literals at definition/call sites, e.g. error_short=_(\"Invalid installation request.\") and pass _(\"...\") literals, then use data error value directly without re-wrapping."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       132,
+       141
+      ],
+      "texto": "Translate the short-message literals at their definition/call sites instead of calling `_(error_short)` on a variable. Django's message extraction cannot extract the default `\"Invalid installation request.\"` or the plain-string arguments at the two call sites from this dynamic gettext invocation. The existing pending-deletion and already-installed messages previously appeared directly inside `_()`; this refactor removes their extraction sites, and the new default message cannot enter translation catalogs. Use a translated default and translated arguments, then place `error_short` directly into the payload so these user-facing errors remain localizable."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#02",
+    "descricao": "The org parameter of error()/get_document_origin is actually the active-organization context, not an Organization, so the name is misleading.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       149,
+       152
+      ],
+      "texto": "The parameter is named `org` but the code treats it as the pipeline's active-organization context: it dereferences `org.organization` and every caller (error() and the GitHubInstallation sites) passes `self.active_organization`, not an Organization. The name misstates the argument's type/contract \u2014 a caller following the name and passing a real Organization would hit AttributeError on `.organization`. Rename the parameter (e.g. `active_organization`) and correct the corresponding name in `error()` at line 131 so the two signatures match what is actually passed."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#03",
+    "descricao": "The GitHub OAuth state is pipeline.signature, a static md5 of the pipeline view names, instead of a per-attempt random nonce, so it gives no CSRF protection.",
+    "textoGolden": "OAuth state uses pipeline.signature (static) instead of a per-request random value",
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       401,
+       412
+      ],
+      "texto": "The OAuth state is pipeline.signature, which Pipeline.__init__ computes solely from pipeline view class names and therefore shares across all users and installation attempts. An attacker can obtain an OAuth code for their own GitHub account and send a callback using this known state to a victim with an active installation pipeline, binding the attacker's GitHub identity to the victim's flow instead of rejecting the forged callback. Generate a random per-attempt nonce, store it in pipeline state, and validate that nonce on the OAuth callback."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       401,
+       413
+      ],
+      "texto": "Do not use pipeline.signature as OAuth state. It is a deterministic MD5 of the pipeline identifiers, not an unpredictable nonce tied to this user's authorization attempt (the tests reuse it across users). An attacker can know the expected state and submit a callback containing a code authorized under the attacker's GitHub account, defeating the OAuth login-CSRF protection and the intended binding to the installing user. Generate a cryptographically random per-attempt state, store it in the session/pipeline, and validate and consume it on callback."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#05",
+    "descricao": "The new OAuth step's token exchange and user lookup are not wrapped in error handling, so GitHub/network failures surface as 500s instead of the installation-failed page.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       423,
+       425
+      ],
+      "texto": "The token request is executed outside the try block. If GitHub's token endpoint is unavailable or the request fails with a connection/timeout error, safe_urlopen raises before the guarded response parsing is reached, and this new installation step returns an unhandled server error instead of the installation-failed response. Include the request itself in the error handling and handle the relevant transport exceptions."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       423,
+       436
+      ],
+      "texto": "WHAT: safe_urlopen token exchange and get_user_info() (which calls resp.raise_for_status()) are called with no exception handling. WHY: Any network error, timeout, or non-2xx from GitHub bubbles up as an unhandled exception and 500s the install instead of rendering the invalid-request page. HOW: Wrap the exchange plus get_user_info in try/except and return error() on failure."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       422,
+       436
+      ],
+      "texto": "safe_urlopen() and get_user_info() are called outside any try/except, so network errors, non-2xx responses, or API failures raise unhandled exceptions instead of returning error(). Wrap the token exchange + user-info fetch in try/except and return error() on failure, matching the handled missing-access_token path."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#06",
+    "descricao": "When no Integration exists yet for the installation_id the pipeline advances without comparing the OAuth user to the installer, bypassing the new ownership check.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       481,
+       482
+      ],
+      "texto": "The missing Integration branch advances the pipeline without verifying that github_authenticated_user installed the supplied installation_id. When the installation webhook has not created a record, or the local record was deleted, finish_pipeline calls build_integration using app credentials and attaches the installation without checking the OAuth user's access, allowing a user with another account's installation ID to bypass the new ownership check. Fail closed until trusted installer information is available and apply the ownership check before every successful next_step."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       481,
+       482
+      ],
+      "texto": "The record-absent path advances the pipeline before checking whether the authenticated GitHub user installed this app. Installation IDs arrive from the request, and a missing Integration record (for example before the installation webhook is processed) does not establish ownership. As a result, this path can attach an installation belonging to a different GitHub user despite the new authenticity check. Verify the authenticated user's authorization for the installation before advancing in this branch too, rather than relying on the webhook-created record existing."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       481,
+       482
+      ],
+      "texto": "When no Integration row exists for the installation_id, the code calls next_step() without comparing the OAuth-authenticated GitHub user to the installer. An attacker can supply an installation_id they do not own before the installation webhook has created the row, and bypass the new verification. Do not skip the check in this branch. Either fail closed, or verify ownership another way, for example by confirming the user can access the installation through the GitHub API."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#09",
+    "descricao": "The installer check indexes integration.metadata['sender']['login'] without checking that sender exists, raising KeyError for integrations created without sender metadata.",
+    "textoGolden": "The code attempts to access integration.metadata[sender][login] without checking for the existence of the sender key. This causes a KeyError for integrations where the sender metadata was not set during creation",
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       500,
+       505
+      ],
+      "texto": "integration.metadata[\"sender\"][\"login\"] is indexed without checking that \"sender\" exists, so an ACTIVE integration whose metadata has no sender raises KeyError (500) here. metadata[\"sender\"] is only populated when state.get(\"sender\") is set (integration.py:376-377), and the only writer of that state is the installation webhook (webhook.py:202-208); integrations created through the pipeline itself carry no sender (confirmed by installation.py:44 which explicitly guards `if \"sender\" not in integration.metadata`, and by the pipeline-created integration in test_integration.py:730-743). Previously this branch only bound state and called pipeline.next_step(), so this crash is newly introduced. Fix: guard the lookup, e.g. `if pipeline.fetch_state(\"github_authenticated_user\") != (integration.metadata.get(\"sender\") or {}).get(\"login\"):` and decide the desired fallback when sender is absent."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       500,
+       505
+      ],
+      "texto": "`integration.metadata[\"sender\"][\"login\"]` can raise KeyError. build_integration (line 376-377) only sets metadata[\"sender\"] when state.get(\"sender\") is truthy, so an existing Integration without a sender entry makes this subscripting throw an unhandled KeyError (500) instead of routing to the intended error page. Use `integration.metadata.get(\"sender\", {}).get(\"login\")` (and treat a missing sender as a failed verification) so the mismatch/absence case returns error() rather than crashing."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       501,
+       503
+      ],
+      "texto": "The new ownership check indexes integration.metadata['sender']['login'] even though GitHubIntegrationProvider.build_integration omits sender for normal pipeline-created integrations. Reconnecting an existing active integration without an OrganizationIntegration and without webhook-populated sender now raises KeyError and returns a server error rather than an installation failure. Handle missing sender explicitly and return the invalid-installation response when trusted installer metadata is unavailable."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#10",
+    "descricao": "test_installation_not_found uses a wrong OAuth state, so it fails at the state check and never reaches the installation-not-found path it is meant to test.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/integrations/github/test_integration.py",
+      "lines": [
+       385,
+       396
+      ],
+      "texto": "First response (installation_id) is overwritten by second response (bad state) with no assertion, so the Integration.DoesNotExist / not-ACTIVE branch in GitHubInstallation is never verified. Keep/assert the first flow through a valid OAuth step to reach the installation check instead of only asserting the OAuth state-mismatch error."
+     },
+     {
+      "file": "tests/sentry/integrations/github/test_integration.py",
+      "lines": [
+       388,
+       396
+      ],
+      "texto": "This test no longer verifies the \"installation not found\" path it exists for. The second GET supplies state=ddd023d87a913d5226e2a882c4c4cc05, which is not the github pipeline signature (that is the 9cae5e88803f35ed7970fc131e6e65d3 asserted in test_github_setup and reused elsewhere). OAuthLoginView.dispatch (integration.py:412-413) therefore returns error() before GitHubInstallation runs, producing the same generic \"Invalid installation request.\" message and the same failed template via the state-mismatch branch. The Integration.DoesNotExist handling at integration.py:493-498 is never reached, so the test would still pass if that handling were removed or broken. Use the real pipeline state so the request advances into GitHubInstallation, or assert on something that distinguishes the state-mismatch branch from the missing-installation branch."
+     },
+     {
+      "file": "tests/sentry/integrations/github/test_integration.py",
+      "lines": [
+       388,
+       396
+      ],
+      "texto": "The replacement assertion no longer verifies that a nonexistent installation is rejected: 'Invalid installation request.' is also returned for a state mismatch, missing access token, or missing authenticated login before GitHubInstallation is reached. This test can therefore pass with installation-not-found handling broken if the callback fails OAuth validation instead. Establish a successful OAuth exchange with the actual pipeline state and verify that the nonexistent installation lookup is reached and rejected, rather than accepting this shared authentication-error message alone."
+     }
+    ]
+   }
+  ]
+ },
+ "feat-2fa-backup-codes-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "54486a059cd2032042189bb565646ba4e0f6bd61",
+  "base": "efa6d464a38e60ceeeb88f40668c1c4ac4bfaf54",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+    "lines": [
+     166,
+     170
+    ],
+    "texto": "WHAT: 2FA is already enabled when the backup-codes step is shown, but only the 'Close' button calls onEnable()/resetState(). Dismissing the dialog with Escape or an outside click only toggles the parent's open flag via onOpenChange. WHY: the parent never invalidates viewer.me, so the switch and badge show 2FA as disabled until a refresh. The modal also stays on the DisplayBackupCodes step, and reopening it shows the old codes screen. HOW: when the dialog is dismissed while step === DisplayBackupCodes, run the same logic as the Close button (resetState and onEnable) instead of only onOpenChange."
+   },
+   {
+    "id": "S2",
+    "file": "packages/features/auth/lib/next-auth-options.ts",
+    "lines": [
+     131,
+     137
+    ],
+    "texto": "WHAT: The password check is skipped whenever `credentials.totpCode` is truthy, and the new backup-code branch never validates totpCode. WHY: an attacker with a valid backup code can send a junk totpCode plus the backupCode and log in without the password. This turns a second-factor credential into a sole credential. HOW: skip the password check only for the legitimate TOTP-only flow, for example when `credentials.totpCode && !credentials.backupCode`. Better, always verify the password for CAL-provider users unless that flow is explicitly authorised."
+   },
+   {
+    "id": "S3",
+    "file": "apps/web/playwright/login.2fa.e2e.ts",
+    "lines": [
+     50,
+     53
+    ],
+    "texto": "`expect(locator.isChecked()).toBeTruthy()` asserts on an un-awaited Promise, so it always passes. The enable flow now ends on the backup-codes dialog, which this test never closes, so the test cannot detect a failure to enable 2FA. Close the dialog via `backup-codes-close` and assert `[data-testid=two-factor-switch][data-state=\"checked\"]` is visible, as the second test does."
+   },
+   {
+    "id": "S4",
+    "file": "apps/web/playwright/login.2fa.e2e.ts",
+    "lines": [
+     112,
+     122
+    ],
+    "texto": "The backup-code download and copy checks only assert the filename and a toast, so they would pass if the file or clipboard held wrong or empty content. Read the downloaded file (`download.path()`) and compare it with the backup codes stored for the user, and check the clipboard text."
+   },
+   {
+    "id": "S5",
+    "file": "packages/features/auth/lib/next-auth-options.ts",
+    "lines": [
+     139,
+     156
+    ],
+    "texto": "The backup code is verified against a blob read earlier and then written back as a whole re-encrypted blob, with no lock or compare-and-set. Two concurrent logins with the same code both pass verification, so a single-use code is accepted twice. Concurrent logins with different codes overwrite each other's update and restore a consumed code. Make the consume step atomic, for example a transaction or conditional update (updateMany where backupCodes equals the value originally read, and fail the login if count is 0)."
+   },
+   {
+    "id": "S6",
+    "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+    "lines": [
+     71,
+     75
+    ],
+    "texto": "resetState() does not clear the plaintext backupCodes state or revoke the blob URL in backupCodesUrl. After the dialog is closed or cancelled, the sensitive backup codes stay in memory and the blob URL still serves them. Clear both and call URL.revokeObjectURL when the dialog is closed."
+   },
+   {
+    "id": "S7",
+    "file": "apps/web/pages/api/auth/two-factor/totp/disable.ts",
+    "lines": [
+     50,
+     50
+    ],
+    "texto": "The log message says \"cannot proceed with backup code login\", but this handler disables 2FA and has no login step. It was copied from the login flow and will mislead anyone reading server logs. Change it to describe disabling 2FA with a backup code."
+   },
+   {
+    "id": "S8",
+    "file": "apps/web/components/auth/BackupCode.tsx",
+    "lines": [
+     7,
+     7
+    ],
+    "texto": "The component in BackupCode.tsx is named `TwoFactor`, which is the same name as the TOTP component in TwoFactor.tsx. The name suggests the wrong component and makes stack traces and React devtools ambiguous. Rename it to `BackupCode`."
+   },
+   {
+    "id": "S9",
+    "file": "packages/features/auth/lib/next-auth-options.ts",
+    "lines": [
+     131,
+     145
+    ],
+    "texto": "The password check at line 121 is skipped whenever `credentials.totpCode` is non-empty, but the new backup-code branch never validates `totpCode`. A request with a junk `totpCode` plus a valid `backupCode` therefore authenticates without the password being verified. Skip the password check only when no backup code is supplied (e.g. `!credentials.totpCode && !credentials.backupCode`), or verify the password inside the backup-code branch."
+   },
+   {
+    "id": "S10",
+    "file": "packages/features/auth/lib/next-auth-options.ts",
+    "lines": [
+     143,
+     145
+    ],
+    "texto": "The user-supplied backup code is compared to the stored codes using `Array.indexOf`, which is a short-circuiting, non-constant-time string comparison and leaks timing information. Compare each code with `crypto.timingSafeEqual` over equal-length buffers, without early exit."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#01",
+    "descricao": "The credentials authorize() skips the password check when any totpCode is present, and the new backup-code branch never validates that totpCode, so a backup code plus a dummy totpCode logs in without the account password.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/auth/lib/next-auth-options.ts",
+      "lines": [
+       131,
+       156
+      ],
+      "texto": "The new backup-code branch authenticates without guaranteeing the password check ran: password verification at line 121 is gated on `!credentials.totpCode`, and the branch at line 131 triggers on any truthy `credentials.backupCode` regardless of that gate. A POST to the credentials callback supplying a valid backup code together with any non-empty totpCode therefore takes the backup branch (skipping TOTP validation) while line 121 skips password verification \u2014 granting a session using only a second-factor backup code, with no account password. Require the password check before the backup branch, or include backupCode in the guard at line 121 (e.g. `if (user.password && !credentials.totpCode && !credentials.backupCode)`)."
+     },
+     {
+      "file": "packages/features/auth/lib/next-auth-options.ts",
+      "lines": [
+       131,
+       145
+      ],
+      "texto": "The backup-code branch accepts a valid backup code even when an arbitrary nonempty totpCode has skipped password verification. The preceding guards at lines 113\u2013125 trust the presence of totpCode, but this new branch does not validate it, allowing a holder of a backup code to log in to a password account without knowing its password by submitting both fields. Require password verification for backup-code authentication rather than allowing an unverified totpCode to bypass it."
+     },
+     {
+      "file": "packages/features/auth/lib/next-auth-options.ts",
+      "lines": [
+       131,
+       145
+      ],
+      "texto": "WHAT: The new backup-code login branch authenticates without verifying the password when credentials also contain any totpCode value (password check at line 121 is skipped when totpCode is truthy, and the backup branch never checks it). WHY: An attacker holding only a backup code can add a dummy totpCode to the credentials callback and log in without the password, reducing two factors to one. HOW: Verify the password whenever backupCode is used (or decouple the password check from totpCode presence)."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#02",
+    "descricao": "After enabling 2FA, onEnable is only called from the backup-codes Close button; dismissing the dialog by Escape/overlay never notifies the parent, so the settings page keeps showing 2FA disabled.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+      "lines": [
+       134,
+       136
+      ],
+      "texto": "On a successful enable (response.status === 200) the modal no longer calls onEnable(); it only advances to SetupStep.DisplayBackupCodes, and onEnable() is now invoked solely from the 'close' button (line 269). If the user dismisses the Dialog via ESC or an overlay click, DialogContent's onOpenChange fires (wired to a plain setEnableModalOpen toggle at apps/web/pages/settings/security/two-factor-auth.tsx:64 and the conditional render at apps/web/components/security/TwoFactorAuthSection.tsx:36), so onEnable never runs. The parent callbacks (setEnableModalOpen(false) + utils.viewer.me.invalidate() / setEnabled(true)) are skipped, leaving the 2FA Switch unchecked and the UI showing 2FA as disabled even though the server has enabled it. Call onEnable() from the dismiss path (onOpenChange) or when transitioning into DisplayBackupCodes, not only from the Close button."
+     },
+     {
+      "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+      "lines": [
+       134,
+       136
+      ],
+      "texto": "Successful enablement no longer invokes onEnable until the backup-code screen's explicit Close button is clicked. Dismissing that screen through the dialog's onOpenChange instead only closes it in the parent and does not invalidate viewer.me, leaving the settings switch showing disabled even though the server has enabled 2FA. Ensure dismissal after successful enablement also invokes the completion callback and resets the setup state."
+     },
+     {
+      "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+      "lines": [
+       132,
+       136
+      ],
+      "texto": "After a successful enable, `onEnable()` is no longer called and is only called from the backup-codes Close button. If the user dismisses the dialog by Escape or overlay click (`onOpenChange`) while the codes are displayed, the parent is never notified that 2FA is enabled. The modal also keeps its step state and the plaintext backup codes. Call `onEnable` when 2FA is enabled, or make the dialog's `onOpenChange(false)` on the DisplayBackupCodes step run the same handler as Close, which resets state and clears `backupCodes`."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#04",
+    "descricao": "The default export in BackupCode.tsx is named TwoFactor, a copy-paste leftover from the TOTP component.",
+    "textoGolden": "The exported function TwoFactor handles backup codes and is in BackupCode.tsx. Inconsistent naming.",
+    "comentarios": [
+     {
+      "file": "apps/web/components/auth/BackupCode.tsx",
+      "lines": [
+       7,
+       7
+      ],
+      "texto": "The default export is named `TwoFactor` but this file (BackupCode.tsx) renders the backup-code field and is imported as `BackupCode` by callers. The copied identifier misstates what the component is; rename the function to `BackupCode` so the name matches the file, the imports and the rendered content."
+     },
+     {
+      "file": "apps/web/components/auth/BackupCode.tsx",
+      "lines": [
+       7,
+       7
+      ],
+      "texto": "The default export in BackupCode.tsx is named `TwoFactor`, which is the name of the separate TOTP component. It is a copy-paste leftover and misleads readers and stack traces. Rename it to `BackupCode`."
+     },
+     {
+      "file": "apps/web/components/auth/BackupCode.tsx",
+      "lines": [
+       7,
+       7
+      ],
+      "texto": "Component in BackupCode.tsx is named `TwoFactor` (`export default function TwoFactor`) while the file is BackupCode.tsx and it is imported as `BackupCode`. The name disagrees with the code's contract and duplicates the real TwoFactor component, misleading callers/readers. Rename to `BackupCode`."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#05",
+    "descricao": "The backup-code copy e2e test only waits for the success toast, which is shown unconditionally, so it never verifies the clipboard content.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/playwright/login.2fa.e2e.ts",
+      "lines": [
+       119,
+       122
+      ],
+      "texto": "This 'copy' test does not verify the copy behaviour it names: it clicks backup-codes-copy and then only waits for the toast-success element. The handler (EnableTwoFactorModal) runs navigator.clipboard.writeText(...) without awaiting it and then calls showToast(...) unconditionally, so the toast appears even when the clipboard write is removed or fails. The assertion therefore passes with the backup-code copy feature broken; assert the actual effect (clipboard content, or that the formatted codes reached writeText) instead of the toast."
+     },
+     {
+      "file": "apps/web/playwright/login.2fa.e2e.ts",
+      "lines": [
+       119,
+       122
+      ],
+      "texto": "The copy test only waits for a success toast, but the implementation emits that toast unconditionally without awaiting navigator.clipboard.writeText. Removing the clipboard write entirely, copying an empty string, or rejecting the write would still pass this test. Read the clipboard after the click and compare its contents with the displayed backup codes so the test verifies the actual copy effect."
+     },
+     {
+      "file": "apps/web/playwright/login.2fa.e2e.ts",
+      "lines": [
+       119,
+       122
+      ],
+      "texto": "Copy test only waits for toast-success, explicitly TODOing clipboard check. Broken writeText (wrong format/empty) still passes; assert clipboard content equals formatted backup codes."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#07",
+    "descricao": "Backup-code consumption is a non-atomic read-modify-write, so concurrent logins can accept the same backup code more than once or overwrite each other's removal.",
+    "textoGolden": "Because backupCodes are decrypted and mutated in memory before being written back, two concurrent login requests using the same backupCode could both pass this check and update, so a single backup code may effectively be accepted more than once if used concurrently, weakening the intended one-time-use semantics.",
+    "comentarios": [
+     {
+      "file": "packages/features/auth/lib/next-auth-options.ts",
+      "lines": [
+       144,
+       156
+      ],
+      "texto": "Backup-code consumption is a non-atomic read-modify-write: the code is validated with indexOf (line 144) and only then persisted via prisma.user.update (line 149), with no unique constraint or lock. Two concurrent login requests sending the same valid backup code both read the unchanged row, both pass the indexOf check, and both obtain a session, violating the 'each backup code can be used exactly once' invariant. Consume the code atomically (e.g. a conditional update on the raw encrypted value / a dedicated used-backup-codes table with a unique index) so only one request can succeed."
+     },
+     {
+      "file": "packages/features/auth/lib/next-auth-options.ts",
+      "lines": [
+       144,
+       156
+      ],
+      "texto": "Backup-code consumption is a non-atomic read-modify-write, breaking the stated invariant that each backup code is single-use. Two concurrent login requests with the same backup code both read the same user.backupCodes array and both pass `index !== -1` before either `prisma.user.update` commits; both then persist a stale array (each nulling only its own index), so the code authenticates twice. Make consumption atomic (e.g. compare-and-swap on the encrypted value/updatedAt, a transaction with a conditional update, or an optimistic-locking retry) so exactly one request can claim a given code."
+     },
+     {
+      "file": "packages/features/auth/lib/next-auth-options.ts",
+      "lines": [
+       148,
+       156
+      ],
+      "texto": "Backup-code consumption overwrites the encrypted list by user ID without checking that the stored list still matches the value read before verification. Concurrent requests can both authenticate with the same single-use code, and requests using different codes can overwrite each other's removals and restore a consumed code. Use a conditional atomic update matching the original backupCodes ciphertext and reject or retry authentication if no row was updated."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#12",
+    "descricao": "The copy button shows a success toast without awaiting clipboard.writeText, so a failed copy still tells the user their backup codes were saved.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+      "lines": [
+       276,
+       279
+      ],
+      "texto": "The handler shows \u201cBackup codes copied!\u201d immediately after calling `navigator.clipboard.writeText`, without awaiting its promise. If clipboard access is denied or the write otherwise rejects, the user still receives a success message and may close the dialog believing their recovery codes were saved. Await the clipboard write and show the success toast only after it resolves; handle rejection with an appropriate translated failure message."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#13",
+    "descricao": "The download e2e test checks only the filename, not that the file contains the displayed backup codes.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/playwright/login.2fa.e2e.ts",
+      "lines": [
+       113,
+       117
+      ],
+      "texto": "The download assertion checks only the static filename from the anchor's download attribute. It still passes if the blob contains empty or incorrect backup codes, leaving the essential recovery-code export behavior unverified. Read the downloaded file and compare its contents to the displayed codes, including their formatting."
+     },
+     {
+      "file": "apps/web/playwright/login.2fa.e2e.ts",
+      "lines": [
+       112,
+       117
+      ],
+      "texto": "Download test only asserts suggestedFilename, explicitly TODOing file-content check. Empty/wrong backupCodes blob with correct filename still passes; assert downloaded file lines equal displayed/formatted backup codes."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#14",
+    "descricao": "The disable endpoint's error log says 'backup code login' although it is disabling 2FA.",
+    "textoGolden": "Error message mentions 'backup code login' but this is a disable endpoint, not login",
+    "comentarios": [
+     {
+      "file": "apps/web/pages/api/auth/two-factor/totp/disable.ts",
+      "lines": [
+       50,
+       50
+      ],
+      "texto": "The error log says \"cannot proceed with backup code login\", but this endpoint disables two-factor authentication and does not log in. Change the message to describe disabling 2FA with a backup code."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#15",
+    "descricao": "resetState does not clear backup codes/secret or revoke the backup-codes object URL, leaving a small blob URL leaked per setup cycle.",
+    "textoGolden": "Object URL for backup codes is not revoked on component unmount, leading to a potential memory leak. This can cause increased memory usage over time, especially if the component is mounted and unmounted frequently.",
+    "comentarios": [
+     {
+      "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+      "lines": [
+       71,
+       75
+      ],
+      "texto": "WHAT: resetState() clears only password/error/step and never clears backupCodes, secret, dataUri, nor revokes backupCodesUrl. WHY: Closing the modal after setup leaves TOTP secret and backup codes in memory and leaks the Blob object URL on every setup/close cycle. HOW: Clear those states and call URL.revokeObjectURL in resetState and on unmount."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#16",
+    "descricao": "The disable endpoint calls replaceAll on req.body.backupCode without checking it is a string, so non-string input throws a 500.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/pages/api/auth/two-factor/totp/disable.ts",
+      "lines": [
+       60,
+       64
+      ],
+      "texto": "WHAT: req.body.backupCode.replaceAll assumes a string with no type guard. WHY: A non-string JSON value (number/array) throws TypeError and returns 500 instead of the 400 IncorrectBackupCode contract, breaking error handling and enabling error-probing. HOW: Validate typeof backupCode === 'string' (or String(...)) before replaceAll."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#17",
+    "descricao": "Backup codes are matched case-sensitively against lowercase hex, so a user typing the code in uppercase is rejected.",
+    "textoGolden": "Backup code validation is case-sensitive due to the use of indexOf(). This causes validation to fail if a user enters uppercase hex characters, as backup codes should be case-insensitive for a better user experience.",
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#sncc-01",
+    "descricao": "The backup code is compared with the stored codes through Array.indexOf, which is not constant-time and leaks timing information about the secret backup codes.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "replays-self-serve-bulk-delete-system-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "ea188e2d736fd6ed27c1dba8aae63b7268e2a7a9",
+  "base": "49a275847631e231672d01b5dcd66558c069d25b",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+    "lines": [
+     107,
+     120
+    ],
+    "texto": "WHAT: `zip(error_ids, events.values())` assumes `get_multi` returns one value per requested id in request order. WHY: `get_multi` de-duplicates ids, returns only found ids, and merges cached items after fetched ones, so dict order and length can differ from `error_ids`. Error events are then attributed to the wrong event id, and an error is dropped or duplicated whenever a node is missing or cached. HOW: map node ids back to event ids and iterate the returned dict by key."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+    "lines": [
+     153,
+     155
+    ],
+    "texto": "WHAT: Error event timestamps from nodestore are compared directly against replay segment event timestamps in `gen_request_data`. WHY: nodestore event data uses epoch seconds, while rrweb replay events normally carry milliseconds (I did not confirm the units). If so, every error sorts before all replay events, and the prompt sent to Seer has the wrong chronology. HOW: normalise both to the same unit, for example multiply the error timestamp by 1000 before comparing."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+    "lines": [
+     50,
+     60
+    ],
+    "texto": "WHAT: `validate_timestamp` and `validate_age` test `initial_data.get(...)` for truthiness. WHY: `age: 0` is valid under the Editor's Draft but falsy, so a report with both `age: 0` and `timestamp` passes validation despite violating the mutual-exclusion rule. HOW: test with `\"age\" in self.initial_data` and `\"timestamp\" in self.initial_data` instead."
+   },
+   {
+    "id": "S4",
+    "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+    "lines": [
+     164,
+     174
+    ],
+    "texto": "WHAT: When `use-table-widget-visualization` is enabled, `TableWidgetVisualization` is rendered with `columns={[]}` and an empty `tableData`, ignoring `result.data`, `result.meta` and `fields`. WHY: every dashboard table widget shows an empty table for organizations with the flag on, and the loading state is also lost. HOW: pass the widget's actual `result` as `tableData`, build columns from `fields`/`fieldAliases`, and handle `loading`."
+   },
+   {
+    "id": "S5",
+    "file": "tests/sentry/replays/tasks/test_delete_replays_bulk.py",
+    "lines": [
+     94,
+     99
+    ],
+    "texto": "The row with `max_segment_id: None` is passed only to a mocked `delete_matched_rows`, so the null-segment guard in `_make_recording_filenames` is never exercised. Removing that guard would not fail this test. Add a direct test of `_make_recording_filenames` with `max_segment_id=None` that asserts it returns an empty list."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+    "lines": [
+     107,
+     120
+    ],
+    "texto": "error_ids are paired with events.values() via zip, which assumes the dict from nodestore.get_multi has one entry per requested id in the same order. If a node is missing or ordering differs, event ids get paired with the wrong data. Look up each event by its node id instead."
+   },
+   {
+    "id": "S7",
+    "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+    "lines": [
+     50,
+     60
+    ],
+    "texto": "The docstrings say validate_timestamp checks that 'age is absent, but timestamp is present' and validate_age checks that 'age is present, but not timestamp'. The code only rejects the case where both fields are supplied. Both fields are required=False, so a report with neither passes. Reword the docstrings to say they only enforce mutual exclusion, or add a check that one of the two is present."
+   },
+   {
+    "id": "S8",
+    "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+    "lines": [
+     107,
+     120
+    ],
+    "texto": "`zip(error_ids, events.values())` assumes the `get_multi` dict is ordered like `error_ids` and has an entry for every id. Missing nodes or a different ordering misalign ids with event data, so errors are reported with the wrong id and content. Iterate over `zip(error_ids, node_ids)` and look up `events.get(node_id)` instead."
+   },
+   {
+    "id": "S9",
+    "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+    "lines": [
+     50,
+     60
+    ],
+    "texto": "The age/timestamp mutual-exclusion checks use truthiness on `initial_data.get(...)`, so a value of 0 counts as absent. A report with `age: 0` plus a `timestamp` passes validation even though both specs' fields are present. Use `\"age\" in self.initial_data` and `\"timestamp\" in self.initial_data`."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#01",
+    "descricao": "The age/timestamp mutual-exclusion validators check truthiness via initial_data.get(), so a zero value is treated as absent and a report carrying both fields passes validation.",
+    "textoGolden": "Validation logic incorrectly uses .get('timestamp'), which treats a timestamp of 0 as absent. It should directly check 'timestamp' in self.initial_data to ensure proper field presence detection, preventing both 'age=0' and 'timestamp' from passing mutual-exclusion validation.",
+    "comentarios": [
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       47,
+       59
+      ],
+      "texto": "The timestamp/age validators test truthiness and make both fields optional instead of enforcing exactly one field. Reports with both age=0 and timestamp=0, or with neither field, pass validation despite violating the stated mutually exclusive report formats. Enforce field presence and exclusivity in object-level validate using key membership rather than truthiness."
+     },
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       50,
+       59
+      ],
+      "texto": "Check key presence rather than truthiness when enforcing age/timestamp mutual exclusion. Both fields permit 0, so a report with age=0 and timestamp=0 passes both validators even though both fields are present; a zero-valued counterpart also bypasses the corresponding check. Use `\"age\" in self.initial_data` and `\"timestamp\" in self.initial_data` (or object-level validation) and add zero-value tests."
+     },
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       50,
+       59
+      ],
+      "texto": "Check field presence rather than truthiness when enforcing timestamp/age exclusivity. A report containing both `timestamp: 0` and `age: 0` passes both validators, despite the declared constraint that they must not coexist; with only one zero value, validation is also asymmetric. Use membership checks on initial_data (or object-level validation) and add zero-value mixed-field tests."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#02",
+    "descricao": "The validation-failure warning logs the entire raw, attacker-controlled browser report instead of a redacted subset.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       111,
+       114
+      ],
+      "texto": "The new validation-failure warning logs `raw_report`, the full unvalidated report object supplied by the caller. This endpoint is public and unauthenticated (permission_classes = (), @csrf_exempt), so the payload is attacker-controlled, and browser report bodies routinely carry sensitive values (CSP blocked-uri/document-uri/script-sample, sourceFile, plus the full user_agent). Logging the raw payload on every validation failure writes potentially sensitive data into application logs; log only the report `type` (or a sanitized/redacted subset) instead of the entire raw object."
+     },
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       111,
+       114
+      ],
+      "texto": "Do not attach the complete raw report to the validation warning. Browser reports contain page URLs (potentially including tokens or personal data in query strings) and arbitrary body contents. Any invalid field now causes that entire payload to be emitted at warning level, exposing it in operational logs even where the existing info-level request logging is filtered out. Log the failed field names/report type or a redacted diagnostic instead."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#06",
+    "descricao": "fetch_error_details pairs error_ids positionally with nodestore get_multi values, but get_multi does not preserve input order (cached items are appended last) and drops missing nodes, so error details get attached to the wrong error IDs.",
+    "textoGolden": "Using zip(error_ids, events.values()) assumes the get_multi result preserves the input order; dict value order is not guaranteed to match error_ids, so event data can be paired with the wrong ID (missing nodes also shift alignment).",
+    "comentarios": [
+     {
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       110,
+       120
+      ],
+      "texto": "WHAT: fetch_error_details zips error_ids with events.values() instead of mapping by node_id, misaligning ids to payloads and dropping/mismatching on missing keys. WHY: assigns wrong title/message/timestamp to wrong error id and yields incorrect Seer logs. HOW: look up each node_id in the get_multi dict (e.g. dict keyed by node_id) and preserve error_ids order."
+     },
+     {
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       104,
+       120
+      ],
+      "texto": "`zip(error_ids, events.values())` assumes `nodestore.backend.get_multi(node_ids)` values preserve input order and that all keys exist. Dict values give no such guarantee; missing keys shorten/misalign the zip, attaching the wrong event payload to the wrong error_id. Lookup per-id: iterate node_ids/error_ids and do `events.get(node_id)` instead of zipping with `.values()`."
+     },
+     {
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       104,
+       121
+      ],
+      "texto": "fetch_error_details pairs IDs to payloads with zip(error_ids, events.values()) where events is dict from nodestore get_multi. Values order need not match IDs and missing keys misalign, attaching wrong title/message to wrong error. Look up per node_id instead."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#07",
+    "descricao": "The Snuba replay lookup for error IDs runs even when enable_error_context=false, adding a needless query (and failure point) to opt-out requests.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       67,
+       77
+      ],
+      "texto": "The new Snuba replay lookup executes even when enable_error_context=false. Every opt-out summary request incurs an unnecessary database round trip and can now fail on Snuba availability even though it only needs recording storage. Evaluate the flag first and perform the replay lookup only when error context is enabled."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#12",
+    "descricao": "With the use-table-widget-visualization flag on, the widget renders TableWidgetVisualization with hardcoded empty columns and data instead of the query results, so every table widget shows an empty table.",
+    "textoGolden": "Hardcoded empty data passed to TableWidgetVisualization causes it to always render an empty table instead of displaying actual results when the feature flag is enabled.",
+    "comentarios": [
+     {
+      "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+      "lines": [
+       164,
+       174
+      ],
+      "texto": "WHAT: the `use-table-widget-visualization` branch renders `<TableWidgetVisualization columns={[]} tableData={{data: [], meta: {fields: {}, units: {}}}} />`, hardcoding empty rows and no columns instead of the actual query result. WHY: when the feature flag is enabled for an org, every table widget renders an empty table and silently drops `result.data`/`result.meta`/`columns`, a functional regression for all dashboard table widgets. HOW: build `columns`/`tableData` from the existing `result` (and `widget.queries[i].fields`/`fieldAliases`) rather than the empty placeholder objects."
+     },
+     {
+      "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+      "lines": [
+       164,
+       174
+      ],
+      "texto": "In the new feature-flagged branch, TableWidgetVisualization is rendered with hardcoded empty props: columns={[]} (an empty array, which is truthy for the `columns ?? fallback` logic, so no columns are derived) and tableData={data: [], meta: {fields: {}, units: {}}}. All the real result data computed above (result.data, result.meta, fields, fieldAliases, eventView) is discarded, so any organization with 'use-table-widget-visualization' enabled gets an empty table instead of the query results. Pass the actual result data/columns into the visualization (or keep the old StyledSimpleTableChart) until the widget is properly wired."
+     },
+     {
+      "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+      "lines": [
+       164,
+       174
+      ],
+      "texto": "With the 'use-table-widget-visualization' feature enabled, TableWidgetVisualization is rendered with columns=[] and empty data/meta instead of result.data and result.meta. Every table widget therefore renders empty for orgs with the flag. Fix: pass tableData={{data: result.data, meta: result.meta}} and build columns from the fields."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#13",
+    "descricao": "The custom cell renderers fall back to default rendering on any falsy return (0, '', null), not only undefined, so a renderer cannot render zero or an empty cell.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "static/app/views/dashboards/widgets/tableWidget/defaultTableCellRenderers.tsx",
+      "lines": [
+       70,
+       73
+      ],
+      "texto": "The documented custom-renderer contract says fallback runs when the callback returns undefined, but `if (cell)` also falls back for valid ReactNode results such as `0`, an empty string, or `null`. A caller trying to render zero or deliberately suppress a cell instead gets the default field rendering. Check `cell !== undefined` here and in the head-cell renderer so the implementation honors the advertised contract."
+     },
+     {
+      "file": "static/app/views/dashboards/widgets/tableWidget/defaultTableCellRenderers.tsx",
+      "lines": [
+       70,
+       72
+      ],
+      "texto": "Use `cell !== undefined` instead of `if (cell)` to select the custom renderer result, and apply the same correction to the header renderer. The API documents undefined as the fallback sentinel, but valid ReactNode results such as numeric 0, an empty string, or null are falsy. A custom renderer returning 0 or intentionally hiding a cell with null therefore unexpectedly renders the default value instead."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#19",
+    "descricao": "The attribute-keys query key no longer includes the organization slug, so two organizations with the same filters share a cache entry and switching orgs can show the previous org's attribute names.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+      "lines": [
+       39,
+       41
+      ],
+      "texto": "The new attribute query key omits the organization even though its query function fetches an organization-specific endpoint. Switching organizations with identical project selections such as all projects and the same date range reuses the singleton query client's prior organization's attribute metadata, including while the new request refetches. Include organization.slug or organization.id in the query key."
+     },
+     {
+      "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+      "lines": [
+       39,
+       42
+      ],
+      "texto": "Include the organization slug in this query key. The new useGetTraceItemAttributeKeys implementation fetches `/organizations/${organization.slug}/trace-items/attributes/`, but makeTraceItemAttributeKeysQueryOptions contains no organization identity. Two organizations with identical filters (particularly the default all-project selection) therefore share this cache entry. Switching organizations can display the previous organization's attribute names, and concurrently mounted consumers can reuse a request for the wrong organization. Preserve the organization-specific cache identity that the previous endpoint-based key provided."
+     },
+     {
+      "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+      "lines": [
+       39,
+       42
+      ],
+      "texto": "Include the organization slug or ID in this query key. The query function fetches `/organizations/${organization.slug}/trace-items/attributes/`, but the key contains only query options. Two organizations with the same project selection (especially the all-projects selection), date range and dataset therefore share a cache entry. Switching organizations can display the previous organization's attributes, and overlapping requests can populate the shared entry with the wrong organization's result."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#20",
+    "descricao": "The UseTraceItemAttributeBaseProps doc says only LOGS is supported, although the hooks are also used with SPANS.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "static/app/views/explore/types.tsx",
+      "lines": [
+       9,
+       12
+      ],
+      "texto": "The new shared prop documentation claims the endpoint currently supports only LOGS, but this PR also uses these hooks with TraceItemDataset.SPANS (for example in TransactionNameSearchBar). Update this comment to describe both supported datasets; as written it incorrectly tells callers that a supported and actively used input is unsupported."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#sncc-01",
+    "descricao": "Error event timestamps (seconds) are compared with replay recording event timestamps (milliseconds), so errors are not interleaved chronologically with breadcrumbs.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#sncc-03",
+    "descricao": "dedupedYAxes is now just [yAxis], so its name misdescribes the code.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-01",
+    "descricao": "Every paginated breadcrumb-summary request queries the replay and fetches all of its error events from nodestore with no cap, adding latency and memory proportional to the replay's error count on each page.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-02",
+    "descricao": "HIDDEN_ATTRIBUTES is applied only when a search query is present; the no-search early return shows all attributes, so the hidden attributes still appear in the default span attributes view.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-03",
+    "descricao": "The bulk delete test sets max_segment_id to None to cover the new guard in _make_recording_filenames, but it mocks delete_matched_rows, so the guard is never executed and removing it would not fail the test.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "authzservice-improve-authz-caching-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "7562f37880367411a62304bcdcdc178bced23906",
+  "base": "5634ca44f799a82161f0401dadc286452f3bdbf8",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/services/authz/rbac/service.go",
+    "lines": [
+     116,
+     121
+    ],
+    "texto": "WHAT: A denial is cached per (user, action, name, folder) for the short TTL and is checked before any permission lookup, and nothing invalidates it. WHY: if the resource is created, or the permission is granted, within the TTL after a denial, Check keeps returning Allowed=false and skips the requery. This defeats the PR goal of letting users see newly created dashboards and folders. HOW: keep the denial TTL very short, or invalidate the user's denial entries when permissions are refreshed or written."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/services/authz/rbac/service_test.go",
+    "lines": [
+     981,
+     982
+    ],
+    "texto": "The comment says \"Allow access to the dashboard to prove this is not checked\", but the permCache entry is set to `false`, which denies access. The test therefore cannot show that the denial cache short-circuits the permission lookup. Set the value to `true` so the code matches the comment and the test proves what it claims."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/services/authz/rbac/cache.go",
+    "lines": [
+     30,
+     32
+    ],
+    "texto": "The denial cache key joins name and parent with '_', which can appear in resource UIDs and folder UIDs. Name 'a_b' in folder 'c' and name 'a' in folder 'b_c' therefore produce the same key, so a cached denial for one wrongly denies the other until the TTL expires. Use a delimiter that cannot appear in UIDs, or length-prefix the segments."
+   },
+   {
+    "id": "S4",
+    "file": "pkg/services/authz/rbac/cache.go",
+    "lines": [
+     30,
+     32
+    ],
+    "texto": "The denial cache key concatenates name and parent folder with '_' and no unambiguous encoding, so distinct (name, folder) pairs containing underscores map to the same key (e.g. name 'a_b'/folder 'c' vs name 'a'/folder 'b_c'). A cached denial for one resource then wrongly denies the other. Use a distinct prefix and a separator that cannot appear in UIDs, or length-prefix the fields."
+   },
+   {
+    "id": "S5",
+    "file": "pkg/services/authz/rbac/service_test.go",
+    "lines": [
+     973,
+     995
+    ],
+    "texto": "The test claims the explicit denial entry overrides an allow, but the permCache fixture sets dash1 to false, so there is no allow for the denial to override. With the denial short-circuit removed, Check still returns Allowed=false, so the assertion passes. Set the cached permission to true so that only the denial entry can produce a deny."
+   },
+   {
+    "id": "S6",
+    "file": "pkg/services/authz/rbac/cache.go",
+    "lines": [
+     30,
+     32
+    ],
+    "texto": "The denial cache key joins name and parent with '_', which can also appear in UIDs, so different (name, parent) pairs can produce the same key (e.g. name 'a_b'/folder 'c' vs name 'a'/folder 'b_c'). A cached denial for one resource then wrongly denies another that the user may be allowed to access. Use a delimiter that cannot appear in UIDs, or length-prefix or escape the name and parent segments."
+   },
+   {
+    "id": "S7",
+    "file": "service.go",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "The denial cache key is built by joining UID fields with '_'. Different combinations of field values can produce the same key, so denial entries can collide. One identity's cached denial could then be applied to another request. Use an unambiguous key construction, such as a delimiter that cannot appear in UIDs, length-prefixing, or a structured key type, so distinct field tuples never map to the same key."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#01",
+    "descricao": "The denial cache key joins name and parent folder with underscores, so different name/parent pairs can collide and a cached denial for one resource denies another until TTL expiry.",
+    "textoGolden": "The cache key construction in `userPermDenialCacheKey` uses simple string concatenation with underscores, which can lead to ambiguous keys and collision risks when any component contains underscores or is empty. This could result in incorrect denial cache hits, affecting user permissions.",
+    "comentarios": [
+     {
+      "file": "pkg/services/authz/rbac/cache.go",
+      "lines": [
+       30,
+       31
+      ],
+      "texto": "The denial cache key does not distinguish underscores inside resource and parent UIDs from its field separators. For the same namespace, user and action, (name=\"a_b\", parent=\"c\") and (name=\"a\", parent=\"b_c\") generate the same key, so denying the first request makes Check return false for the second even if its permissions explicitly allow it. Encode the components unambiguously, for example as a JSON tuple or length-prefixed fields."
+     },
+     {
+      "file": "pkg/services/authz/rbac/cache.go",
+      "lines": [
+       30,
+       31
+      ],
+      "texto": "The denial cache key is not injective: for the same namespace, user and action, `(name=\"a_b\", parent=\"c\")` and `(name=\"a\", parent=\"b_c\")` produce the same key. After the first request stores a denial, Check's new early cache return denies the second request without checking its permissions, even if it is allowed. Encode the components unambiguously (for example a JSON tuple or length-prefixed components) and add a test verifying that these two requests do not share a denial entry."
+     },
+     {
+      "file": "pkg/services/authz/rbac/cache.go",
+      "lines": [
+       30,
+       31
+      ],
+      "texto": "Make the denial-cache key encode component boundaries unambiguously (for example, length-prefix or serialize the components). For the same namespace, user and action, name `a_b` with parent `c` and name `a` with parent `b_c` both produce the suffix `_a_b_c`. Underscores can occur in resource UIDs, so denying the first request caches a key that causes Check to immediately deny the second request without evaluating its permissions, even if that resource is allowed."
+     }
+    ]
+   },
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#04",
+    "descricao": "The explicit denial-cache test seeds the cached permission as false instead of true, so it would pass without the denial-cache short-circuit and does not verify it.",
+    "textoGolden": "The test comment says the cached permissions 'allow access', but the map stores false for dashboards:uid:dash1, so checkPermission will still treat this scope as not allowed.",
+    "comentarios": [
+     {
+      "file": "pkg/services/authz/rbac/service_test.go",
+      "lines": [
+       973,
+       995
+      ],
+      "texto": "This test claims to prove the permDenialCache short-circuit (service.go:116-121) denies access, but it seeds the cached permission as map[string]bool{\"dashboards:uid:dash1\": false} (a deny), contradicting its comment \"Allow access to the dashboard to prove this is not checked\". Because the cached set is already a deny, checkPermission returns allowed=false, the code falls through to the DB path, and the fake store also returns no permissions, so Allowed stays false. The assertion passes even if the entire permDenialCache early-return were deleted. Seed the cached permission as true (map[string]bool{\"dashboards:uid:dash1\": true}) so that only the denial-cache entry can force Allowed=false; otherwise the test does not verify the feature."
+     },
+     {
+      "file": "pkg/services/authz/rbac/service_test.go",
+      "lines": [
+       981,
+       982
+      ],
+      "texto": "The comment says \"Allow access to the dashboard to prove this is not checked\", but the code sets the permCache entry to `false`, which is a deny. The test therefore does not show that the permission cache is skipped. Set the value to `true`, or change the comment to match."
+     },
+     {
+      "file": "pkg/services/authz/rbac/service_test.go",
+      "lines": [
+       973,
+       995
+      ],
+      "texto": "The 'Should deny on explicit cache deny entry' test would still pass if the permDenialCache check were removed. permCache is seeded with dash1:false, not true as the comment claims, so the normal path also denies. Seed permCache with {\"dashboards:uid:dash1\": true} and a store that grants the permission, so Allowed=false can only come from the denial entry."
+     }
+    ]
+   },
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#05",
+    "descricao": "A cached permission set that denies a resource always triggers a full DB permission reload, so checks over many inaccessible dashboards issue one query per resource instead of being served from cache.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/authz/rbac/service.go",
+      "lines": [
+       123,
+       139
+      ],
+      "texto": "Every distinct resource denied by the cached permission map triggers a reload of the entire user's action permission set, because the denial cache is resource-specific and a cached false result always falls through to getIdentityPermissions. Sequential checks of N inaccessible dashboards therefore execute N full permission queries and cache rewrites even with a current action-wide cache; getUserPermissions' singleflight only merges overlapping requests. Bound refreshes per user/action with a short refresh cooldown or generation marker so different resource misses can share a recent refresh."
+     }
+    ]
+   },
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#08",
+    "descricao": "The Service struct comment listing its caches was not updated for the new permDenialCache field.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/authz/rbac/service.go",
+      "lines": [
+       55,
+       58
+      ],
+      "texto": "The struct doc comment still reads \"// Cache for user permissions, user team memberships and user basic roles\", but this PR added the new `permDenialCache` field (line 58). The comment no longer enumerates what the struct actually holds and misleads a reader about the new denial-cache field; update it to mention the permission-denial cache so the prose matches the fields."
+     }
+    ]
+   }
+  ]
+ },
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "9501091c52ae94e8d916f79b35d21975b3f9cadb",
+  "base": "bb5a6837cb5b3d8d3b174e17d42ec14486ef8738",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/integrations/services/assignment_source.py",
+    "lines": [
+     18,
+     18
+    ],
+    "texto": "WHAT: `queued` defaults to `timezone.now()`, which is evaluated once at class-definition (import) time. WHY: every AssignmentSource that omits `queued` gets the same stale process-start timestamp, so the field never records when the assignment was queued. HOW: use `field(default_factory=timezone.now)`."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/integrations/services/assignment_source.py",
+    "lines": [
+     18,
+     18
+    ],
+    "texto": "The `queued` field is named as the time the assignment was queued, but `timezone.now()` as a dataclass default is evaluated once at import time. Every AssignmentSource therefore reports the same stale timestamp, and `to_dict()` sends that timestamp to the task. Use `field(default_factory=timezone.now)` so the value is set when each instance is created."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/integrations/services/assignment_source.py",
+    "lines": [
+     18,
+     18
+    ],
+    "texto": "The default `queued = timezone.now()` is evaluated once at import time, so every AssignmentSource gets the same stale process-start timestamp instead of its creation time. Use `field(default_factory=timezone.now)` so each instance gets a fresh timestamp."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/integrations/services/assignment_source.py",
+    "lines": [
+     18,
+     18
+    ],
+    "texto": "The default `queued: datetime = timezone.now()` is evaluated once at import time. Every AssignmentSource built without an explicit `queued` therefore carries the process-start timestamp instead of the time it was queued. Use `field(default_factory=timezone.now)` so each instance gets its own timestamp."
+   },
+   {
+    "id": "S5",
+    "file": "assignment_source tests",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "test_from_dict_empty_array passes an empty dict, so its name disagrees with its body. Rename the test to match what it exercises, or change the input to an actual empty array if that is the intended case."
+   },
+   {
+    "id": "S6",
+    "file": "assignment_source tests",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "test_to_dict asserts `queued is not None`, which is always true because `queued` has a default value. The assertion is weak and cannot fail. Assert a concrete expected value for `queued` instead."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+    "descricao": "AssignmentSource.queued defaults to timezone.now() evaluated at class definition, so all instances share the import-time timestamp instead of the time they were queued.",
+    "textoGolden": "The AssignmentSource dataclass uses queued: datetime = timezone.now() as a default field value, which evaluates timezone.now() once at class definition time and shares that single datetime instance across all objects.",
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/services/assignment_source.py",
+      "lines": [
+       14,
+       18
+      ],
+      "texto": "WHAT: `queued: datetime = timezone.now()` evaluates once at class-definition time so every AssignmentSource without explicit queued shares the same timestamp. WHY: queued time is wrong/stale for all later instances and defeats its purpose as a queue-time marker. HOW: use `field(default_factory=timezone.now)` (with `field` import)."
+     },
+     {
+      "file": "src/sentry/integrations/services/assignment_source.py",
+      "lines": [
+       14,
+       18
+      ],
+      "texto": "Field `queued: datetime = timezone.now()` is evaluated once at import so all AssignmentSources share the same timestamp. Use `field(default_factory=timezone.now)` so each instance measures its actual creation/queue time."
+     },
+     {
+      "file": "src/sentry/integrations/services/assignment_source.py",
+      "lines": [
+       18,
+       18
+      ],
+      "texto": "The dataclass field default `queued: datetime = timezone.now()` is evaluated a single time when the module is imported, so every AssignmentSource created without an explicit `queued` value (which is exactly what `from_integration` does, and what `from_dict` falls back to when the key is absent) shares the same frozen import-time timestamp instead of the moment the assignment was actually queued. This makes the `queued` timestamp semantically wrong/meaningless (it reflects process start, not assignment time) and would silently misreport the queue time anywhere this value is later inspected. Fix by defaulting in a factory/`__post_init__` or making the caller pass the timestamp, e.g. set `queued` inside `from_integration` (`queued=timezone.now()`), or use `field(default_factory=timezone.now)`."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#02",
+    "descricao": "The test method name test_from_dict_inalid_data has a typo; it should be test_from_dict_invalid_data.",
+    "textoGolden": "The method name has a typo: test_from_dict_inalid_data should be test_from_dict_invalid_data.",
+    "comentarios": [
+     {
+      "file": "tests/sentry/integrations/services/test_assignment_source.py",
+      "lines": [
+       13,
+       19
+      ],
+      "texto": "Typo in test name test_from_dict_inalid_data hides it from name-filtered runs (e.g. -k invalid_data): fix spelling to test_from_dict_invalid_data so the invalid-payload guard is actually selected and verified."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#03",
+    "descricao": "test_from_dict_empty_array actually passes an empty dict, so the name does not match what the test exercises.",
+    "textoGolden": "Method name says 'empty_array' but tests empty dict - consider renaming to 'test_from_dict_empty_dict' for clarity.",
+    "comentarios": [
+     {
+      "file": "tests/sentry/integrations/services/test_assignment_source.py",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "The test is named test_from_dict_empty_array but it passes an empty dict ({}), not an empty array; a caller reading the name will believe the empty-list/array input path is covered when it is not. Rename it to test_from_dict_empty_dict (or pass [] to actually cover the empty-array case) so the identifier agrees with the input it exercises."
+     },
+     {
+      "file": "tests/sentry/integrations/services/test_assignment_source.py",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "test_from_dict_empty_array names an empty array but constructs an empty dict (`data: dict[str, Any] = {}`), so it only re-exercises the empty/None path and never covers empty-array input; a regression specific to that input would pass unnoticed. Pass a real empty array or rename the test to match its body."
+     },
+     {
+      "file": "tests/sentry/integrations/services/test_assignment_source.py",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "test_from_dict_empty_array passes {} rather than an empty array. It therefore only tests missing required dictionary keys and would still pass if rejection of an array input were broken. Pass [] to exercise the named case (or rename this test to empty_dict if that is the intended contract)."
+     }
+    ]
+   }
+  ]
+ },
+ "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "dcdcadb771128e79259cc9eff9c70c38fc597976",
+  "base": "0cfc28e76ddc986d2d89dd9b9f63ee916a18a5f9",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/monitors/logic/incident_occurrence.py",
+    "lines": [
+     159,
+     171
+    ],
+    "texto": "`get_monitor_environment_context` builds a `config` copy with `schedule_type` converted to its display string, but the returned dict uses `monitor.config` instead. The transformed copy is dead, so the issue event's monitor context shows the raw schedule_type value. Return `config` in the dict."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/monitors/logic/incident_occurrence.py",
+    "lines": [
+     130,
+     137
+    ],
+    "texto": "The get_failure_reason docstring examples do not match the strings the function returns. It shows \"2 missed check-ins, 1 timeout check-in and 1 error check-in were detected\" and \"A failed check-in was detected\", but the code returns \"%(problem_checkins)s check-ins detected\" and \"An error/A missed/A timeout check-in was detected\". Update the examples to the real outputs, and fix the \"humam readible\" typo while editing."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/monitors/logic/incidents.py",
+    "lines": [
+     50,
+     51
+    ],
+    "texto": "The comment says \"within the threshold of commits\", but the code inspects check-ins, not commits. It is misleading prose in this newly added file. Replace \"commits\" with \"check-ins\"."
+   },
+   {
+    "id": "S4",
+    "file": "unspecified (file containing get_monitor_environment_context)",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "`get_monitor_environment_context` copies the monitor config and swaps in the display schedule_type, but then returns the original `monitor.config`, so the modified copy is discarded. This bug already existed before the PR. It exposes no secrets, because monitor config holds only schedule and threshold settings. Return the copied config instead."
+   },
+   {
+    "id": "S5",
+    "file": "unspecified (changed files that define `logger`)",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "The `logger` objects are defined but never used. Remove them, or use them where logging is intended."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#01",
+    "descricao": "get_failure_reason's docstring examples do not match the strings the function returns.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/monitors/logic/incident_occurrence.py",
+      "lines": [
+       130,
+       137
+      ],
+      "texto": "The `get_failure_reason` docstring describes output this function does not produce. The singular branch (line 146) returns a `SINGULAR_HUMAN_FAILURE_MAP` value such as \"A missed check-in was detected\", yet the docstring advertises \"A failed check-in was detected\"; the multi-check-in branch joins `\"%(count)d %(status)s\"` fragments with `get_text_list(..., last_word=_(\"and\"))` and appends \" check-ins detected\", yielding \"2 missed and 1 error check-ins detected\", not the docstring's \"2 missed check-ins, 1 timeout check-in and 1 error check-in were detected\". Update the examples (or the format string) so the documented contract matches the code."
+     },
+     {
+      "file": "src/sentry/monitors/logic/incident_occurrence.py",
+      "lines": [
+       131,
+       137
+      ],
+      "texto": "The get_failure_reason docstring examples don't match the output. It shows 'A failed check-in was detected' and '...were detected', but the code returns the per-status singular strings ('A missed check-in was detected') or '<list> check-ins detected'. Update the examples to the real output and fix the 'humam readible' typo."
+     }
+    ]
+   },
+   {
+    "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02",
+    "descricao": "get_monitor_environment_context builds a config copy with the human-readable schedule_type but returns the original monitor.config, so the conversion is lost and the context shows the raw value.",
+    "textoGolden": "The function modifies the config variable to include display values but then returns the original monitor.config instead of the modified version.",
+    "comentarios": [
+     {
+      "file": "src/sentry/monitors/logic/incident_occurrence.py",
+      "lines": [
+       159,
+       171
+      ],
+      "texto": "WHAT: get_monitor_environment_context copies monitor.config to `config` and converts schedule_type display, but returns the original monitor_environment.monitor.config instead of `config`. WHY: the display conversion never takes effect so the occurrence context carries the raw schedule_type value, producing wrong output vs the function's evident intent. HOW: return `\"config\": config` instead of `\"config\": monitor_environment.monitor.config`."
+     },
+     {
+      "file": "src/sentry/monitors/logic/incident_occurrence.py",
+      "lines": [
+       159,
+       171
+      ],
+      "texto": "Dead computation: `config` is copied and `config['schedule_type']` transformed to display value, but return uses `monitor_environment.monitor.config` (original) instead of `config`. Change to `\"config\": config` so transformation is used."
+     },
+     {
+      "file": "src/sentry/monitors/logic/incident_occurrence.py",
+      "lines": [
+       160,
+       168
+      ],
+      "texto": "WHAT: In get_monitor_environment_context the code copies config and replaces config['schedule_type'] with the human-readable get_schedule_type_display(), but the returned context dict uses the original `monitor_environment.monitor.config` instead of the modified local `config`, so the mutation is dead. WHY: The occurrence's monitor context always reports the raw schedule_type value rather than the display string the code intended to substitute, producing incorrect evidence data in the emitted occurrence. HOW: return the local variable, i.e. use \"config\": config in the returned dict."
+     }
+    ]
+   }
+  ]
+ },
+ "feature-localization-fallbacks-server-side-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "ecfa17b5a79dfdc91e7a4d50b42ae78a35d0a293",
+  "base": "728845d008f06828630a632e5c7d67e11bf15deb",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "lib/freedom_patches/translate_accelerator.rb",
+    "lines": [
+     62,
+     68
+    ],
+    "texto": "WHAT: Fallback locales (site default and :en) are loaded only by the controller-level `I18n.fallbacks.ensure_loaded!`, while `translate` still loads only `config.locale`. WHY: Code outside controller requests (jobs, mailers, `I18n.with_locale`) can fall back to a locale whose translations were never loaded, producing 'translation missing' instead of the fallback string. HOW: In `translate`, call `I18n.fallbacks.ensure_loaded!` (or load each locale in `fallbacks[config.locale]`) when `config.locale` is not yet loaded."
+   },
+   {
+    "id": "S2",
+    "file": "lib/freedom_patches/translate_accelerator.rb",
+    "lines": [
+     62,
+     68
+    ],
+    "texto": "Fallback locales are loaded only when `ApplicationController#set_locale` calls `I18n.fallbacks.ensure_loaded!`, while `translate` still loads just `config.locale`. Jobs, mailers and `I18n.with_locale` blocks that run outside a controller never load the fallback locales (site default and :en). Their fallback lookups find nothing and return 'translation missing'. Make `translate` ensure the fallback locales are loaded, for example by calling `I18n.fallbacks.ensure_loaded!` there, instead of relying on the controller."
+   },
+   {
+    "id": "S3",
+    "file": "config/initializers/i18n.rb",
+    "lines": [
+     12,
+     24
+    ],
+    "texto": "Fallback locales are loaded only in ApplicationController#set_locale, but the patched I18n.translate caches results under key+locale. If a non-controller caller (job, mailer, console) translates a key that exists only in a fallback locale before that locale is loaded, the \"translation missing\" string is cached under the real key and served to every later reader. Make the patched translate call fallbacks.ensure_loaded! before translating, or skip caching results that are missing translations."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#01",
+    "descricao": "Fallback locale catalogs are only loaded in the controller's set_locale filter, while translate loads just the current locale, so translations outside requests (jobs, mailers) cannot fall back to the site default or English.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/application_controller.rb",
+      "lines": [
+       159,
+       159
+      ],
+      "texto": "Fallback catalogs are ensured loaded only in the controller filter, leaving non-controller translation paths without the catalogs required by the newly enabled fallback backend. Jobs::Base sets I18n.locale directly and PostAlerter uses I18n.with_locale, while the accelerator loads only the current locale and backend fallback lookups bypass that loader; missing keys therefore still produce missing translations or skip the configured site fallback until another request happens to load those catalogs. Ensure the full fallback chain is loaded at the translation boundary, rather than relying solely on the controller filter."
+     },
+     {
+      "file": "lib/freedom_patches/translate_accelerator.rb",
+      "lines": [
+       62,
+       69
+      ],
+      "texto": "The new fallbacks contract requires the fallback locales (site default and :en, from FallbackLocaleList#[]) to be loaded before Backend::Simple#translate is asked for them \u2014 Backend::Simple only returns already-loaded translations. This PR added I18n.ensure_loaded!/I18n.fallbacks.ensure_loaded! but wired it only into ApplicationController#set_locale, and the loader that actually gates every translation, I18n.translate (line 68), still loads only `config.locale`. As a result, any I18n.t performed outside the request cycle (console, background jobs, mailers) or before set_locale runs will not load the fallback locales and will silently return 'translation missing' instead of the fallback the new I18n.fallbacks advertises. Fix: have translate ensure the fallback chain is loaded (e.g. call I18n.fallbacks.ensure_loaded! / load the fallback locales here), not rely on the controller hook."
+     },
+     {
+      "file": "lib/freedom_patches/translate_accelerator.rb",
+      "lines": [
+       67,
+       68
+      ],
+      "texto": "translate loads only config.locale, but the new fallback chain (default_locale, :en) is loaded only by the controller's I18n.fallbacks.ensure_loaded!. Outside controllers (jobs, mailers, rake), a key missing in the current locale falls back to a locale that is not loaded, so it returns 'translation missing', and the LRU cache then stores that result. Fix: in translate, call I18n.fallbacks.ensure_loaded! (or load each locale in fallbacks[config.locale]) before the lookup."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#06",
+    "descricao": "The translation cache key does not include the site or its default locale, but fallback results now depend on SiteSetting.default_locale, so multisite processes or a changed default locale serve stale fallback translations.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "config/initializers/i18n.rb",
+      "lines": [
+       17,
+       17
+      ],
+      "texto": "The new fallback order depends on SiteSetting.default_locale, but the accelerator's translation cache does not include that setting or the current site in its key. In a multisite process, two sites with the same user locale and different default locales reuse the first site's cached fallback translation; changing the default locale also leaves cached fallback results stale. Include the effective fallback chain or site/default-locale context in the translation cache key."
+     }
+    ]
+   }
+  ]
+ },
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "da09bc0808e7c6df1bc10e00d5acf764d94c7cc7",
+  "base": "c9a47dd0cebd121ff73f24e1f8c1829579daf8e3",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/lib/server/service/insightsBooking.ts",
+    "lines": [
+     72,
+     80
+    ],
+    "texto": "getAuthorizationConditions() always returns a non-null Prisma.Sql, so the `else if (filterConditions)` and final `else` (NOTHING_CONDITION) branches in getBaseConditions can never run. The code suggests a filter-only or nothing fallback that cannot happen. Simplify it to: if filterConditions, combine with auth; otherwise return auth."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#01",
+    "descricao": "In getBaseConditions, the branches for a missing authorization condition are unreachable because getAuthorizationConditions always returns a Prisma.Sql.",
+    "textoGolden": "In getBaseConditions(), the else if (filterConditions) and final else branches are unreachable. This is because getAuthorizationConditions() always returns a non-null Prisma.Sql object, making authConditions always truthy, which means only the first two if/else if conditions are ever evaluated.",
+    "comentarios": [
+     {
+      "file": "packages/lib/server/service/insightsBooking.ts",
+      "lines": [
+       72,
+       80
+      ],
+      "texto": "getAuthorizationConditions() always returns a non-null Prisma.Sql, so the `else if (filterConditions)` and final `else` branches (returning NOTHING_CONDITION) in getBaseConditions can never execute. Simplify to: if filterConditions, combine it with authConditions; otherwise return authConditions."
+     },
+     {
+      "file": "packages/lib/server/service/insightsBooking.ts",
+      "lines": [
+       68,
+       81
+      ],
+      "texto": "Unreachable branches in getBaseConditions: authConditions is always a truthy Prisma.Sql object (never null, NOTHING is `1=0`), so `else if (filterConditions)` and final `else { return NOTHING }` can never execute. Simplify to if(filter) return auth AND filter else return auth, or make the nothing-case explicit."
+     },
+     {
+      "file": "packages/lib/server/service/insightsBooking.ts",
+      "lines": [
+       76,
+       77
+      ],
+      "texto": "WHAT: `getBaseConditions` returns `filterConditions` alone (no authorization predicate) when `authConditions` is falsy (`else if (filterConditions) { return filterConditions; }`). WHY: The WHERE clause returned to consumers then contains no ownership/authorization restriction, so a caller using it would return every booking matching the filters (e.g. all bookings for the given eventTypeId/memberUserId) regardless of the requesting user's org/team membership \u2014 an authorization-boundary bypass if `getAuthorizationConditions()` ever yields a falsy value. HOW: Always AND the authorization predicate with the filters and fall back to `NOTHING_CONDITION` when no auth predicate exists, e.g. `return filterConditions ? Prisma.sql`(${authConditions}) AND (${filterConditions})` : authConditions;` (or keep the `NOTHING_CONDITION` default when auth is missing)."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#03",
+    "descricao": "The getBaseConditions test uses a single booking matching both auth and filter conditions, so it would pass even if the conditions were not combined.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts",
+      "lines": [
+       480,
+       491
+      ],
+      "texto": "The rewritten \"should combine authorization and filter conditions\" test cannot fail if the combination is broken. The fixture creates a single booking that satisfies the auth condition (userId = user.id AND teamId IS NULL) and the filter condition (eventTypeId = eventType.id) independently, so getBaseConditions returning auth-only, filter-only, or the AND combination all yield the same single-row result asserted here. Only a `1=0` result would be caught. Make the data distinguish the two: add a booking that matches the filter but not the auth (e.g. a team booking with the same eventTypeId), then assert the result excludes it, so that dropping either branch changes the returned rows."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-01",
+    "descricao": "The caching tests for getAuthorizationConditions/getFilterConditions were removed in the Prisma.sql conversion, leaving the cached-condition logic untested.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-02",
+    "descricao": "Claims getBaseConditions returns OR fragments without parentheses, so a caller appending `AND <extra>` would leak rows outside the authorization scope.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ }
+}

@@ -1,0 +1,11 @@
+{
+ "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+ "items": [
+  {
+   "id": "S3",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#02",
+   "newGroup": null,
+   "reason": "It asserts the same loss of traceID from 'Plugin Request Completed' logs after the refactor. The additional explanation and proposed fix do not change the claim."
+  }
+ ]
+}

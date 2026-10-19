@@ -1,0 +1,556 @@
+{
+ "dual-storage-architecture-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "dual-storage-architecture-grafana-codex#05",
+   "newGroup": null,
+   "reason": "legacy goroutine ctx derived from request ctx, cancelled"
+  },
+  {
+   "id": "S2",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "storage Create failure recorded with legacy metric"
+  },
+  {
+   "id": "S3",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "storage Update failure recorded with legacy metric"
+  },
+  {
+   "id": "S4",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Delete success metric uses name instead of options.Kind"
+  },
+  {
+   "id": "S5",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "legacy DeleteCollection recorded with storage metric"
+  },
+  {
+   "id": "S6",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "vague wrong metric label in mode3; label issue is name-vs-kind in Delete"
+  },
+  {
+   "id": "S7",
+   "match": "dual-storage-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Delete context uses d.Log instead of enriched log"
+  },
+  {
+   "id": "S8",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "storage Create failure attributed to legacy metric"
+  },
+  {
+   "id": "S9",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "storage Update failure attributed to legacy metric"
+  },
+  {
+   "id": "S10",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "legacy DeleteCollection recorded with storage metric"
+  },
+  {
+   "id": "S11",
+   "match": "dual-storage-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Delete context uses d.Log (also mentions name label, #03)"
+  },
+  {
+   "id": "S12",
+   "match": "dual-storage-architecture-grafana-codex#sncc-01",
+   "newGroup": null,
+   "reason": "Delete returns on NotFound before deleting legacy"
+  },
+  {
+   "id": "S13",
+   "match": "dual-storage-architecture-grafana-codex#05",
+   "newGroup": null,
+   "reason": "async legacy writes cancelled with request ctx"
+  },
+  {
+   "id": "S14",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Delete metric uses name as kind label"
+  },
+  {
+   "id": "S15",
+   "match": "dual-storage-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Delete context uses d.Log not log"
+  },
+  {
+   "id": "S16",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "storage Create failure recorded as legacy"
+  },
+  {
+   "id": "S17",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "storage Update failure recorded as legacy"
+  },
+  {
+   "id": "S18",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "legacy DeleteCollection recorded as storage"
+  },
+  {
+   "id": "S19",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Delete success uses name instead of options.Kind"
+  },
+  {
+   "id": "S20",
+   "match": "dual-storage-architecture-grafana-codex#05",
+   "newGroup": null,
+   "reason": "async legacy Create ctx cancelled with request"
+  },
+  {
+   "id": "S21",
+   "match": "dual-storage-architecture-grafana-codex#05",
+   "newGroup": null,
+   "reason": "async legacy Update ctx cancelled with request"
+  },
+  {
+   "id": "S22",
+   "match": "dual-storage-architecture-grafana-codex#05",
+   "newGroup": null,
+   "reason": "async legacy Delete ctx cancelled with request"
+  },
+  {
+   "id": "S23",
+   "match": "dual-storage-architecture-grafana-codex#07",
+   "newGroup": null,
+   "reason": "tests never wait/assert async legacy writes"
+  },
+  {
+   "id": "S24",
+   "match": "dual-storage-architecture-grafana-codex#13",
+   "newGroup": null,
+   "reason": "storage-failure Create test registers via setupLegacyFn, shared mock"
+  }
+ ],
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "migration indexes [0] of empty result"
+  },
+  {
+   "id": "S2",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "record_for_host does not downcase URI host (also port, #14)"
+  },
+  {
+   "id": "S3",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "before_validation host.sub! on nil host"
+  },
+  {
+   "id": "S4",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "update/destroy no nil check on where.first"
+  },
+  {
+   "id": "S5",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "case-sensitive host comparison"
+  },
+  {
+   "id": "S6",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "spec name embeddable_host blank no longer tests hosts"
+  },
+  {
+   "id": "S7",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "migration [0] on empty result"
+  },
+  {
+   "id": "S8",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "fabricator files swapped"
+  },
+  {
+   "id": "S9",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "spec name no longer matches behaviour"
+  },
+  {
+   "id": "S10",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "migration [0]['id'] on empty result"
+  },
+  {
+   "id": "S11",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "host.sub! nil guard"
+  },
+  {
+   "id": "S12",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "where.first nil in update/destroy"
+  }
+ ],
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": [
+  {
+   "id": "S1",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "working-hours end computed from slotStartTime (broad: also tz, split hours)"
+  },
+  {
+   "id": "S2",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "newGroup": null,
+   "reason": "dayjs === always false"
+  },
+  {
+   "id": "S3",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#05",
+   "newGroup": null,
+   "reason": "override check does not reject slots ending past override end"
+  },
+  {
+   "id": "S4",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "end computed from slotStartTime"
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "override.timeZone optional; other callers tz(undefined)"
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "+6:00 test does not discriminate old vs new logic"
+  },
+  {
+   "id": "S7",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "newGroup": null,
+   "reason": "dayjs === comparison"
+  },
+  {
+   "id": "S8",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "end from slotStartTime"
+  },
+  {
+   "id": "S9",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "end from slotStartTime"
+  },
+  {
+   "id": "S10",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#05",
+   "newGroup": null,
+   "reason": "slot end past override end accepted (also === #02)"
+  },
+  {
+   "id": "S11",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#04",
+   "newGroup": null,
+   "reason": "find rejects split working hours (also end, #01)"
+  },
+  {
+   "id": "S12",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "newGroup": null,
+   "reason": "dayjs === comparison"
+  }
+ ],
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "TopicUser.find_by nil -> 500"
+  },
+  {
+   "id": "S2",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#oph-01",
+   "newGroup": null,
+   "reason": "unsubscribe not idempotent, regular -> muted"
+  },
+  {
+   "id": "S3",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "find_by nil"
+  },
+  {
+   "id": "S4",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "spec never asserts per-topic unsubscribe link"
+  },
+  {
+   "id": "S5",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "find_by nil"
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "unsubscribe_link requires unsubscribe_url; other callers raise MissingInterpolationArgument"
+  },
+  {
+   "id": "S7",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "find_by nil"
+  },
+  {
+   "id": "S8",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "find_by nil"
+  },
+  {
+   "id": "S9",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#oph-01",
+   "newGroup": null,
+   "reason": "GET not idempotent, second visit mutes"
+  },
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "unsubscribe_link interpolation missing default unsubscribe_url"
+  }
+ ],
+ "async-import-of-the-appstore-packages-cal-com": [
+  {
+   "id": "S1",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "forEach async not awaited in wipemycalother reschedule"
+  },
+  {
+   "id": "S2",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "forEach async not awaited in vital reschedule"
+  },
+  {
+   "id": "S3",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "forEach async in bookings reschedule"
+  },
+  {
+   "id": "S4",
+   "match": "async-import-of-the-appstore-packages-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "import() in appStore literal runs eagerly"
+  },
+  {
+   "id": "S5",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "forEach async in bookings"
+  },
+  {
+   "id": "S6",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "forEach async in bookings"
+  },
+  {
+   "id": "S7",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "forEach async in bookings"
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "getCalendarCredentials returns Promise for calendar"
+  }
+ ],
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+  {
+   "id": "S1",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#03",
+   "newGroup": null,
+   "reason": "deleteCache does not invalidate connectedCalendars"
+  },
+  {
+   "id": "S2",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#07",
+   "newGroup": null,
+   "reason": "macOS-only sed -i"
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "googleChannelId exposed in user select"
+  },
+  {
+   "id": "S4",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#04",
+   "newGroup": null,
+   "reason": "hard-coded en-US locale"
+  },
+  {
+   "id": "S5",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#05",
+   "newGroup": null,
+   "reason": "stale migration warning"
+  },
+  {
+   "id": "S6",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#08",
+   "newGroup": null,
+   "reason": "plain Error -> 500 in deleteCacheHandler"
+  },
+  {
+   "id": "S7",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+   "newGroup": null,
+   "reason": "updateManyByCredentialId with empty data does not bump updatedAt"
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "V1 listener with V2 enabled calls throwing setPermissionsEnabled; different from orphaned-permissions claim"
+  },
+  {
+   "id": "S2",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#08",
+   "newGroup": null,
+   "reason": "Javadoc says returns true on void require methods"
+  },
+  {
+   "id": "S3",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#09",
+   "newGroup": null,
+   "reason": "canView ignores global MANAGE"
+  },
+  {
+   "id": "S4",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#05",
+   "newGroup": null,
+   "reason": "unused getEvaluationContext"
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "map roles test grants all scopes in one permission"
+  },
+  {
+   "id": "S6",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-02",
+   "newGroup": null,
+   "reason": "ClientPermissionsV2 throws UnsupportedOperationException incl. canExchangeTo for unupdated callers"
+  }
+ ],
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "getSubGroupsStream overloads still unguarded"
+  },
+  {
+   "id": "S2",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "reader thread not joined before assert"
+  },
+  {
+   "id": "S3",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#01",
+   "newGroup": null,
+   "reason": "getSubGroupsCount returns null, contract violation"
+  },
+  {
+   "id": "S4",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "reader thread not synchronised/joined"
+  },
+  {
+   "id": "S5",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "reader thread not joined"
+  }
+ ],
+ "advanced-query-processing-architecture-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "advanced-query-processing-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "double interpolation of ad hoc filters"
+  },
+  {
+   "id": "S2",
+   "match": "advanced-query-processing-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "interpolation runs twice"
+  },
+  {
+   "id": "S3",
+   "match": "advanced-query-processing-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "interpolated twice with filters"
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "brittle toHaveBeenCalledTimes(5)"
+  }
+ ],
+ "fixing-re-authentication-with-passkeys-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "per-user passkey gating after failed password leaks account existence"
+  }
+ ]
+}

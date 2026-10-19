@@ -1,0 +1,19 @@
+{
+ "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+ "prOriginal": {
+  "numero": 41249,
+  "url": "https://github.com/keycloak/keycloak/pull/41249",
+  "mergedAt": "2025-07-22",
+  "nota": "Known from earlier check, confirmed: gh pr view shows headRefOid 25bf964a (= benchmark head), merge commit 57972d85; the test file at 57972d85 is byte-identical to the benchmark head."
+ },
+ "tps": {
+  "fixing-re-authentication-with-passkeys-keycloak#snapi-01": {
+   "status": "pendente",
+   "corrigidoEm": null,
+   "removidoEm": null,
+   "diasNoAr": 452,
+   "reason": "The test moved to tests/webauthn/.../passwordless/PasskeysUsernamePasswordFormTest.java (new testsuite) but reauthenticationOfUserWithoutPasskey on main still sets passkeysEnabled(false) before asserting the webauth form is absent, so it short-circuits on isPasskeysEnabled(). UsernamePasswordForm.isConditionalPasskeysEnabled on main is unchanged (isPasskeysEnabled() && (user == null || isConfiguredFor(...))). The 2026-10-06 commit bf57c22456 added an assertion for a user whose passkey was removed, but that path renders via WebAuthnConditionalUIAuthenticator.createErrorResponse/fillContextForm, not the per-user guard, and the named test was not changed.",
+   "astra": []
+  }
+ }
+}

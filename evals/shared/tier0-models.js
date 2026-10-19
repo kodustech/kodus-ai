@@ -126,6 +126,7 @@ const TIER0 = {
     'claude-opus-5.5@sdk': { provider: 'claude_agent_sdk', sdkModel: 'claude-opus-5-5', keyEnvs: [] },
     // O Agent SDK (preset do Claude Code, loop do SDK) autenticado pela chave de API, nao pela assinatura.
     'claude-opus-5.5@sdk-api': { provider: 'claude_agent_sdk', sdkModel: 'claude-opus-5-5', sdkAuth: 'api', keyEnvs: ['API_ANTHROPIC_API_KEY'] },
+    'claude-sonnet-5.5@sdk-api': { provider: 'claude_agent_sdk', sdkModel: 'claude-sonnet-5-5', sdkAuth: 'api', keyEnvs: ['API_ANTHROPIC_API_KEY'] },
     // Mesmo gpt-6-sol pela API da OpenAI (#1821: separar o modelo da rota da assinatura).
     'gpt-6-sol@api': { provider: 'openai', byokNative: true, doModel: 'gpt-6-sol', keyEnvs: ['MATRIX_OPENAI_API_KEY', 'API_OPEN_AI_API_KEY', 'BYOK_OPENAI_API_KEY'] },
     'gpt-6.1-sol@api': { provider: 'openai', byokNative: true, doModel: 'gpt-6.1-sol', keyEnvs: ['MATRIX_OPENAI_API_KEY', 'API_OPEN_AI_API_KEY', 'BYOK_OPENAI_API_KEY'] },

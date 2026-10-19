@@ -1,0 +1,53 @@
+{
+ "caseId": "async-import-of-the-appstore-packages-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Describes the unawaited async forEach callbacks in wipemycalother rescheduling, causing incomplete deletions and failures that escape try/catch."
+  },
+  {
+   "id": "S2",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Describes the same unawaited async forEach callbacks in vital rescheduling explicitly covered by the issue."
+  },
+  {
+   "id": "S3",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Describes the issue's fire-and-forget calendar and video cancellations after getCalendar became async, in the request-reschedule loop."
+  },
+  {
+   "id": "S4",
+   "match": "async-import-of-the-appstore-packages-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "Describes the same eager execution of every import() in the appStore object literal; the rejected-promise detail extends that problem."
+  },
+  {
+   "id": "S5",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Describes discarded promises from the reschedule cancellation loop, allowing cleanup to remain unfinished and rejections to escape try/catch."
+  },
+  {
+   "id": "S6",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Describes the same unawaited async forEach cancellation callbacks and their incomplete-cleanup and error-handling consequences."
+  },
+  {
+   "id": "S7",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Describes getCalendar failures escaping try/catch because the reschedule loop discards its async callback promises, the same problem covered by the issue."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes a separate returned-value problem in getCalendarCredentials: its calendar property becomes a promise. Fixing that return shape would not fix either the cancellation loops or eager app imports."
+  }
+ ]
+}

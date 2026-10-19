@@ -1,0 +1,17 @@
+{
+ "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+ "items": [
+  {
+   "id": "S2",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#04",
+   "newGroup": null,
+   "reason": "It asserts the same claim that the raw queued datetime returned by to_dict() causes JSON serialization to fail when passed as Celery task kwargs."
+  },
+  {
+   "id": "S5",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#08",
+   "newGroup": null,
+   "reason": "It identifies the same allegedly ineffective queued-is-not-None assertion in test_to_dict because queued has a default. The additional examples and suggested equality assertion do not change the claim."
+  }
+ ]
+}

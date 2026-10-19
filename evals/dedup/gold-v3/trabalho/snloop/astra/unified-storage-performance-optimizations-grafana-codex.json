@@ -1,0 +1,47 @@
+{
+ "caseId": "unified-storage-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "unified-storage-performance-optimizations-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Describes the unlocked TotalDocs cache iteration racing with BuildIndex after the event goroutine starts."
+  },
+  {
+   "id": "S2",
+   "match": "unified-storage-performance-optimizations-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Describes concurrent builds for the same uncached key after removal of the build-wide lock, allowing duplicate indexes and cache overwrites."
+  },
+  {
+   "id": "S3",
+   "match": "unified-storage-performance-optimizations-grafana-codex#sncc-01",
+   "newGroup": null,
+   "reason": "Describes the unconditional postgres integration-test skip removing coverage of the changed storage-server startup path."
+  },
+  {
+   "id": "S4",
+   "match": "unified-storage-performance-optimizations-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Describes the startup TotalDocs call iterating the cache without synchronization while the event handler can publish indexes."
+  },
+  {
+   "id": "S5",
+   "match": "unified-storage-performance-optimizations-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Describes the same race between unlocked TotalDocs cache iteration and concurrent BuildIndex cache writes."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Objects to eager initialization making construction blocking and fallible. This differs from issue #03's missing context cancellation on initialization failure; changing initialization timing does not address that cleanup defect."
+  },
+  {
+   "id": "S7",
+   "match": "unified-storage-performance-optimizations-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Describes the same unlocked TotalDocs cache iteration racing with cache writes; adding the proposed read lock fixes issue #02."
+  }
+ ]
+}

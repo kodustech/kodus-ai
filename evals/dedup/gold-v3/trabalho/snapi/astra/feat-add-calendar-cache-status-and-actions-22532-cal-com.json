@@ -1,0 +1,17 @@
+{
+ "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+   "newGroup": null,
+   "reason": "Identifies the same empty update payload that prevents SelectedCalendar.updatedAt from refreshing, and suggests explicitly setting updatedAt."
+  },
+  {
+   "id": "S2",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#04",
+   "newGroup": null,
+   "reason": "Identifies the same hard-coded en-US locale used to format the cache timestamp instead of the user's locale."
+  }
+ ]
+}

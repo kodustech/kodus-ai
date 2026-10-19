@@ -1,0 +1,2081 @@
+{
+ "model": "sonnet-5.5",
+ "verificador": "claude-sonnet-5.5@sdk-api",
+ "versao": "hvsnapi-h1t10f",
+ "versaoDedup": "hvsnapi-dedup",
+ "prs": {
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9",
+      "S1",
+      "S6",
+      "S7",
+      "S10",
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13",
+      "S2",
+      "S5",
+      "S8",
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S6",
+      "S8",
+      "S11",
+      "S17"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S9"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:5-11: both computed keys `[z.string().toString()]` and `[z.string().optional().toString()]` evaluate to the same string (\"[object Object]\", since Zod schemas don't override toString), so the second (`z.unknown().optional()`) overwrites the first (`z.number()`).",
+       "reason": "The comment says the schema requires a numeric property named \"ZodString\" and that every response fails. In fact the key is not \"ZodString\", and the colliding keys leave only an optional unknown entry. Responses containing `access_token` therefore pass."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "The evidence quotes the repository's computed keys, but its claim rests on how JavaScript/Zod's toString behaves (that a Zod schema stringifies to \"[object Object]\" rather than \"ZodString\"). That is library/language behavior, not something the repository code states. It does not directly show any statement about what the file contains or does to be false."
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S7",
+      "S10",
+      "S12",
+      "S14",
+      "S16"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 1319,
+    "cacheRead": 0,
+    "output": 127,
+    "reasoning": 0,
+    "ms": 3658
+   }
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S1",
+      "S3",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9",
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S4",
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "apps/web/components/security/DisableTwoFactorModal.tsx:10 imports \"./TwoFactorAuthAPI\" (the security/ copy), whose signature at apps/web/components/security/TwoFactorAuthAPI.ts:22 is `disable(password: string, code: string)`. The only caller of the settings/ version, settings/DisableTwoFactorModal.tsx:58, already calls `disable(password, totpCode, backupCode)`.",
+       "reason": "The security/ modal calls a different, separate TwoFactorAuthAPI file that still takes two arguments, so there is no type error. The settings/ API's only caller was already updated."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checkers quote repository code showing the comment's factual claim is false. security/DisableTwoFactorModal.tsx:10 imports ./TwoFactorAuthAPI, which is the separate security/ copy whose signature is `disable(password: string, code: string)`, so its two-argument call type-checks. The only caller of the settings/ version, settings/DisableTwoFactorModal.tsx:58, already passes three arguments. So the claimed broken caller does not exist."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 1275,
+    "cacheRead": 0,
+    "output": 173,
+    "reasoning": 0,
+    "ms": 2836
+   }
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "grupos": []
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S5",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "app/views/layouts/embed.html.erb:11 uses `<%= request.referer %>` in an .html.erb template, which Rails HTML-escapes by default (' -> &#39;, < -> &lt;). Entities are not decoded inside <script>, so the referer cannot terminate the JS string literal or inject script.",
+       "reason": "The comment says the raw, unescaped referer breaks out of the string literal. ERB auto-escaping prevents that, so the XSS it describes is not possible."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "The evidence quotes the template line (`<%= request.referer %>` in .html.erb), but its rebuttal depends on Rails ERB auto-escaping and on how browsers treat HTML entities inside <script>. Both are framework and browser behavior, not something the repository code states. So this does not contradict a factual claim about what the repository code contains or does."
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 1239,
+    "cacheRead": 0,
+    "output": 129,
+    "reasoning": 0,
+    "ms": 3194
+   }
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S7"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "grep for `Fabricator(:embeddable_host` across the repo returns only spec/fabricators/category_fabricator.rb:1. spec/fabricators/embeddable_host_fabricator.rb defines only :category, :diff_category, :happy_category and :private_category (lines 1, 6, 11, 17).",
+       "reason": "The comment says :embeddable_host is defined twice and may raise DuplicateFabricatorError. It is defined once. The two files only have swapped contents, which is a naming problem and does not break the spec suite."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment says Fabricator(:embeddable_host) is defined twice, which could raise DuplicateFabricatorError. A repo-wide grep finds it only once, at category_fabricator.rb:1, and embeddable_host_fabricator.rb defines only the category fabricators (lines 1, 6, 11, 17). This quotes repository code and shows the comment's claim about which definitions exist is false."
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S2",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S12",
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 1322,
+    "cacheRead": 0,
+    "output": 150,
+    "reasoning": 0,
+    "ms": 3253
+   }
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "pkg/infra/tracing/tracing.go:91-97 registers log.RegisterContextualLogProvider returning []any{\"traceID\", traceID} from TraceIDFromContext; pkg/infra/log/log.go:203-217 FromContext applies all ctxLogProviders; logger_middleware.go:58 calls m.logger.FromContext(ctx).",
+       "reason": "The comment says nothing supplies the traceID through FromContext. A tracing-registered contextual log provider adds \"traceID\" to the logger FromContext returns, so the log keeps its traceID. The reviewer only searched pkg/infra/log and missed the registration in pkg/infra/tracing."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checker quotes repository code showing the comment's premise is false: tracing.go registers a contextual log provider that returns \"traceID\" from TraceIDFromContext, log.go's FromContext applies all registered providers, and logger_middleware.go:58 calls FromContext(ctx). This is a statement about what specific repository code does, and it refutes the claim that no traceID handling exists (the reviewer searched only pkg/infra/log)."
+     }
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 1273,
+    "cacheRead": 0,
+    "output": 162,
+    "reasoning": 0,
+    "ms": 4646
+   }
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "pkg/storage/unified/resource/server.go:293-318: `func (s *server) Init(ctx context.Context) error { s.once.Do(func() {...}); return s.initErr }`, with `once sync.Once` declared at line 288. The second Init call from tests (watcher_test.go:148, integration_test.go:51) is a no-op that returns the cached error.",
+       "reason": "The comment says double Init needs to be made safe and idempotent. It already is, because Init is wrapped in sync.Once. The reported problem with the redundant Init calls in the tests does not exist."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checker quotes the repository's Init implementation (server.go:293-318), which wraps its body in sync.Once and returns the cached initErr. This directly shows that a second Init call is already a safe, idempotent no-op, so the comment's claim that double Init needs to be made safe is false. This is a statement about what specific code in the repository does, not a language-behavior argument."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 1279,
+    "cacheRead": 0,
+    "output": 136,
+    "reasoning": 0,
+    "ms": 2755
+   }
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S20",
+     "membros": [
+      "S20"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11",
+      "S1",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S7",
+      "S16"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S8",
+      "S9",
+      "S14",
+      "S15"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S10",
+      "S17"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13",
+      "S1",
+      "S3",
+      "S4",
+      "S6",
+      "S7",
+      "S8",
+      "S10",
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S5",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S1",
+      "S3",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S6",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "src/sentry/conf/server.py:739 `CELERY_TASK_SERIALIZER = \"pickle\"` and :741 `CELERY_ACCEPT_CONTENT = {\"pickle\"}`; pickle serializes datetime fine, so the dict from AssignmentSource.to_dict() (asdict, sync.py:141-143) does not break apply_async.",
+       "reason": "The comment's failure depends on the task serializer being JSON, but Sentry configures Celery to use pickle, so the raw datetime in `queued` serializes without error and assignment syncing is not broken."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment's failure depends on the Celery task serializer being JSON. The checker quotes the repository's own configuration, src/sentry/conf/server.py:739 `CELERY_TASK_SERIALIZER = \"pickle\"` and :741 `CELERY_ACCEPT_CONTENT = {\"pickle\"}`, which applies to the task path the comment describes. That is a statement about how this repository configures the code path, and it shows the premise is false. The remark that pickle handles datetime is only supporting detail."
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 1249,
+    "cacheRead": 0,
+    "output": 189,
+    "reasoning": 0,
+    "ms": 3003
+   }
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S1",
+      "S7",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7",
+      "S1",
+      "S2",
+      "S4",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7",
+      "S2",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "async-import-of-the-appstore-packages-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2",
+      "S4",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S4"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:34-41: prisma.workflowReminder.deleteMany({ where: { method: EMAIL, scheduledDate: { lte: now } } }) with no cancelled filter, so rows left by the immediateDelete branch are cleaned up once their scheduledDate passes.",
+       "reason": "The comment says the cron cleanup only matches cancelled=true rows, so the row is never removed. The cron's deleteMany removes all past-due email reminders regardless of cancelled. The row is therefore eventually deleted, and the 'never removed' premise is false."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checker quotes repository code (scheduleEmailReminders.ts:34-41) where the cron's deleteMany removes all email reminders with scheduledDate <= now and has no cancelled filter. This directly contradicts the comment's factual claim that the cron cleanup only matches cancelled=true rows and that the row is never removed."
+     }
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 1286,
+    "cacheRead": 0,
+    "output": 126,
+    "reasoning": 0,
+    "ms": 2826
+   }
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S1",
+      "S8",
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12",
+      "S2",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7",
+      "S3",
+      "S10",
+      "S14"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S11",
+      "S15"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "advanced-query-processing-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "advanced-sql-analytics-framework-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S4",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "authzservice-improve-authz-caching-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "database-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7",
+      "S1",
+      "S3",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "UsersResource.java:453-460: searchForUser returns toRepresentation(...), and toRepresentation does `return userModels.filter(usersEvaluator::canView)` at line 460, after `usersEvaluator.grantIfNoPermission(session.getAttribute(UserModel.GROUPS) != null)` at line 459.",
+       "reason": "The comment says the per-user canView filter was removed and that no per-user check remains when the admin has no group view permissions. The filter is still applied to the search results in toRepresentation, so the reported bug does not exist."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checker quotes code in UsersResource.java (toRepresentation, line 460: `return userModels.filter(usersEvaluator::canView)`) showing the per-user canView filter is still applied to search results. This directly contradicts the comment's factual claim that the filter was removed and no per-user check remains."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 1282,
+    "cacheRead": 0,
+    "output": 116,
+    "reasoning": 0,
+    "ms": 2898
+   }
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+   "grupos": [
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13",
+      "S1",
+      "S3",
+      "S5",
+      "S7",
+      "S9",
+      "S11",
+      "S14"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S4",
+      "S6",
+      "S8",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "src/sentry/search/events/builder/discover.py:65-71 load_config returns DiscoverDatasetConfig(self) for Dataset.Events/Discover/Transactions/IssuePlatform; the errors builders in builder/errors.py (ErrorsQueryBuilder, ErrorsTimeseriesQueryBuilder, ErrorsTopEventsQueryBuilder) set no config_class, and no separate errors dataset config exists in search/events/datasets. upsampled_count is registered at datasets/discover.py:1042.",
+       "reason": "The comment assumes the errors dataset might use a config that lacks upsampled_count. The errors query builders use DiscoverDatasetConfig, which registers upsampled_count, so the claimed invalid-function failure does not occur."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checker quotes repository code: load_config in builder/discover.py returns DiscoverDatasetConfig for the relevant datasets, the errors builders set no config_class, no separate errors dataset config exists, and upsampled_count is registered at datasets/discover.py:1042. This directly refutes the comment's claim that the errors dataset config might lack the function registry."
+     }
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 1349,
+    "cacheRead": 0,
+    "output": 136,
+    "reasoning": 0,
+    "ms": 2882
+   }
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S1",
+      "S4",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S5",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  }
+ },
+ "sobre": "hvsnapi-h1t10",
+ "prompt": "c3"
+}

@@ -1,0 +1,11 @@
+{
+ "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This claims the user-without-passkey test disables passkeys realm-wide, so it cannot validate the per-user configuration check. The rejected test-coverage claim opa-02 concerns passkey failures during re-authentication and a different error-path helper."
+  }
+ ]
+}

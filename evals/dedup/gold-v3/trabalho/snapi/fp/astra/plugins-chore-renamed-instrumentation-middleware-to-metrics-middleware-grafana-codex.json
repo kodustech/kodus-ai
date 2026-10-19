@@ -1,0 +1,17 @@
+{
+ "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Asserts the same missing negative assertion for request-size metrics in the CheckHealth and CollectMetrics test cases."
+  },
+  {
+   "id": "S2",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Asserts the same loss of traceID from 'Plugin Request Completed' logs following removal of the explicit traceID parameter."
+  }
+ ]
+}

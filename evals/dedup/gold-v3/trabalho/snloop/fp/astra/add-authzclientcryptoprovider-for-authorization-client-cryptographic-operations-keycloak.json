@@ -1,0 +1,17 @@
+{
+ "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: readInteger passes an indefinite length of -1 to read(int), causing NegativeArraySizeException instead of IOException."
+  },
+  {
+   "id": "S6",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-03",
+   "newGroup": null,
+   "reason": "Same claim: integerToBytes truncates oversized ECDSA components, allegedly allowing non-canonical signatures to verify as different values and causing signature malleability."
+  }
+ ]
+}

@@ -1,0 +1,77 @@
+{
+ "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Reports the Italian TOTP instruction in the Lithuanian login bundle."
+  },
+  {
+   "id": "S2",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Reports the Italian TOTP instruction in the Lithuanian account bundle."
+  },
+  {
+   "id": "S3",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+   "newGroup": null,
+   "reason": "Reports Traditional Chinese text in the Simplified Chinese totpStep1 translation."
+  },
+  {
+   "id": "S4",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Reports the Italian TOTP instruction in the Lithuanian login bundle."
+  },
+  {
+   "id": "S5",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Reports the Italian TOTP instruction in the Lithuanian account bundle."
+  },
+  {
+   "id": "S6",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+   "newGroup": null,
+   "reason": "Reports Traditional Chinese text in the Simplified Chinese totpStep1 translation."
+  },
+  {
+   "id": "S7",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+   "newGroup": null,
+   "reason": "Reports overlapping prefix and suffix scans causing substring bounds exceptions instead of validation errors."
+  },
+  {
+   "id": "S8",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#10",
+   "newGroup": null,
+   "reason": "Reports Java MessageFormat syntax replacing i18next placeholders in the admin and account UI bundles, causing literal placeholders and choice text."
+  },
+  {
+   "id": "S9",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+   "newGroup": null,
+   "reason": "Reports overlapping prefix and suffix trimming causing substring bounds exceptions and crashing the verifier."
+  },
+  {
+   "id": "S10",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Reports the Italian TOTP instruction in the Lithuanian login bundle."
+  },
+  {
+   "id": "S11",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+   "newGroup": null,
+   "reason": "Reports Traditional Chinese text in the Simplified Chinese totpStep1 translation."
+  },
+  {
+   "id": "S12",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Requests positive test coverage for allowed HTML. No golden-set issue describes this coverage gap, and adding the test would not fix any listed problem."
+  }
+ ]
+}

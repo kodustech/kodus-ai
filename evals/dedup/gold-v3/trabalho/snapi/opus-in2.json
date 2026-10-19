@@ -1,0 +1,2542 @@
+{
+ "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "d38c4d5f7443223c81529c22470293771baf9f38",
+  "base": "7554b5e3c458dc79b591d5e874e79ab10cf30c2f",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/assets/stylesheets/mobile/modal.scss",
+    "lines": [
+     102,
+     102
+    ],
+    "texto": "WHAT: The light-theme value changed from scale-color($primary, $lightness: 70%) to 30%. WHY: This darkens the hint text in the light theme, a regression, and the secondary side no longer mirrors the original 70%. HOW: Use 70% for $primary and 30% for $secondary."
+   },
+   {
+    "id": "S2",
+    "file": "app/assets/stylesheets/desktop/topic-post.scss",
+    "lines": [
+     291,
+     291
+    ],
+    "texto": "WHAT: The light-theme value changed from scale-color($primary, $lightness: 30%) to 70%. WHY: The author link text becomes much lighter in the light theme, a regression. HOW: Use 30% for $primary and 70% for $secondary."
+   },
+   {
+    "id": "S3",
+    "file": "app/assets/stylesheets/mobile/topic-post.scss",
+    "lines": [
+     182,
+     182
+    ],
+    "texto": "WHAT: The light-theme value changed from scale-color($primary, $lightness: 20%) to 50% for the h3. WHY: The heading colour becomes lighter in the light theme, a regression. HOW: Use 20% for $primary and 80% for $secondary."
+   },
+   {
+    "id": "S4",
+    "file": "app/assets/stylesheets/desktop/user.scss",
+    "lines": [
+     522,
+     522
+    ],
+    "texto": "WHAT: The light-theme value for .name changed from scale-color($primary, $lightness: 30%) to 50%. WHY: The user name becomes lighter in the light theme, a regression. HOW: Use 30% for $primary and 70% for $secondary."
+   },
+   {
+    "id": "S5",
+    "file": "app/assets/stylesheets/mobile/user.scss",
+    "lines": [
+     497,
+     497
+    ],
+    "texto": "WHAT: The light-theme value for .name changed from scale-color($primary, $lightness: 30%) to 50%. WHY: The user name becomes lighter in the light theme, a regression. HOW: Use 30% for $primary and 70% for $secondary."
+   },
+   {
+    "id": "S6",
+    "file": "app/assets/stylesheets/mobile/modal.scss",
+    "lines": [
+     102,
+     102
+    ],
+    "texto": "`.custom-message-length` disagrees with desktop/modal.scss, which uses primary 70% / secondary 30%. This hunk changes the light colour from 70% to 30% and uses secondary 70%, so the mobile hint colour is darker in the light theme than it was and differs from desktop. Restore `scale-color($primary, $lightness: 70%)` with `scale-color($secondary, $lightness: 30%)`."
+   },
+   {
+    "id": "S7",
+    "file": "app/assets/stylesheets/mobile/topic-post.scss",
+    "lines": [
+     182,
+     182
+    ],
+    "texto": "The `h3` colour changed from primary 20% to 50% in the light theme. Desktop/topic-post.scss keeps primary 20% / secondary 80% for the same `h3`, so mobile now renders a lighter heading than before and than desktop. Use 20% / 80%."
+   },
+   {
+    "id": "S8",
+    "file": "app/assets/stylesheets/mobile/modal.scss",
+    "lines": [
+     102,
+     102
+    ],
+    "texto": "The light-theme value was changed from primary 70% to primary 30%, and the dark value is secondary 70%. The light colour is now much darker than before, and the pair is inverted compared with every other 70% conversion. It should be primary 70% / secondary 30%."
+   },
+   {
+    "id": "S9",
+    "file": "app/assets/stylesheets/desktop/topic-post.scss",
+    "lines": [
+     291,
+     291
+    ],
+    "texto": "The original light value was primary 30%, but the new code uses primary 70% with secondary 30%. This lightens the light-theme link colour by mistake. It should be primary 30% / secondary 70%."
+   },
+   {
+    "id": "S10",
+    "file": "app/assets/stylesheets/mobile/topic-post.scss",
+    "lines": [
+     182,
+     182
+    ],
+    "texto": "The h3 colour was primary 20%, but the replacement uses 50%/50%. This changes the light-theme appearance, and the dark value does not match the 20% to 80% pairing used elsewhere. It should be primary 20% / secondary 80%."
+   },
+   {
+    "id": "S11",
+    "file": "app/assets/stylesheets/desktop/user.scss",
+    "lines": [
+     522,
+     522
+    ],
+    "texto": "The `.name` colour was primary 30%, but the replacement uses 50%/50%. This changes the light-theme colour. It should be primary 30% / secondary 70%."
+   },
+   {
+    "id": "S12",
+    "file": "app/assets/stylesheets/desktop/topic-post.scss",
+    "lines": [
+     291,
+     291
+    ],
+    "texto": "The light-mode argument was changed from the original lightness 30% to 70%, so light-theme link text becomes much paler. The dark-mode value (secondary 30%) pairs with primary 70%, not with the original 30%. Use primary 30% and secondary 70%."
+   },
+   {
+    "id": "S13",
+    "file": "app/assets/stylesheets/mobile/modal.scss",
+    "lines": [
+     102,
+     102
+    ],
+    "texto": "The original light color was primary 70%, but the new pair uses primary 30%/secondary 70%. This darkens the light theme and swaps the intended lightness. Use primary 70% with secondary 30%."
+   },
+   {
+    "id": "S14",
+    "file": "app/assets/stylesheets/mobile/topic-post.scss",
+    "lines": [
+     182,
+     182
+    ],
+    "texto": "The h3 color was primary 20% originally, but the new light value is 50%. That changes the light theme and makes the heading too faint. Use primary 20% and secondary 80%."
+   },
+   {
+    "id": "S15",
+    "file": "app/assets/stylesheets/desktop/user.scss",
+    "lines": [
+     522,
+     522
+    ],
+    "texto": "The .name color was primary 30% originally, but it is now 50%/50%. This changes the light theme. Use primary 30% and secondary 70%."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+    "descricao": "In .topic-meta-data h5 a, the light-theme color changed from scale-color($primary, 30%) to 70% because the dark-light-choose arguments were inverted, making the link much paler in light themes.",
+    "textoGolden": "In .topic-meta-data h5 a, the original code had color: scale-color($primary, $lightness: 30%) but was changed to dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%)). The lightness for the light theme changed from 30% to 70%, which is a dramatic inversion",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/desktop/topic-post.scss",
+      "lines": [
+       291,
+       291
+      ],
+      "texto": "The light-theme argument was changed from the original lightness. WHAT: the original was `scale-color($primary, $lightness: 30%)`, but the new value uses `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))` \u2014 the first (light-theme) argument is now 70%, not 30%. WHY: this silently darkens the light-theme color for `.topic-meta-data h5 a` (post-author link) from a 30% to a 70% tint, a light-theme regression outside the PR's dark-theme-only intent; the values also are inverted relative to the (X, 100\u2212X) convention used everywhere else (should be 30/70). HOW: use `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/desktop/topic-post.scss",
+      "lines": [
+       291,
+       291
+      ],
+      "texto": "The original value was scale-color($primary, $lightness: 30%). After conversion the light-mode argument became $primary:70% and dark-mode $secondary:30% \u2014 both inverted away from the original 30%. Should be dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%)). As written the light-mode color is dramatically lighter than intended."
+     },
+     {
+      "file": "app/assets/stylesheets/desktop/topic-post.scss",
+      "lines": [
+       291,
+       291
+      ],
+      "texto": "This bold link inside `.reply`/`nav.post-controls` was originally `scale-color($primary, $lightness: 30%)`. The rewrite uses 70% as the light-theme argument, inverting the intended value (the complementary pair should be 30/70, not 70/30). The light theme now shows this link far lighter than before; the first argument must remain the original 30%."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+    "descricao": "In mobile .custom-message-length the light-theme lightness changed from 70% to 30% (inverted pair), making the hint text much darker than before and than desktop.",
+    "textoGolden": "In topic-post.css the original code used $lightness: 70% but the replacement uses $lightness: 30% for the light theme. This makes the text significantly darker than intended.",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/mobile/modal.scss",
+      "lines": [
+       102,
+       102
+      ],
+      "texto": "The light-theme argument was changed from the original lightness. WHAT: the original was `scale-color($primary, $lightness: 70%)`, but the new value is `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))` \u2014 the first argument is now 30%, not 70%. WHY: this changes the light-theme color of `.custom-message-length` from a 70% to a 30% tint (a light-theme regression), and the pair is inverted vs. the (X, 100\u2212X) convention; the desktop counterpart at desktop/modal.scss:94 correctly kept 70/30. HOW: use `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/mobile/modal.scss",
+      "lines": [
+       102,
+       102
+      ],
+      "texto": "The original `.custom-message-length` color was `scale-color($primary, $lightness: 70%)`. The refactor changed the light-theme argument to 30%, so the light theme now renders this hint much darker than before (a 40-point lightness jump). It also no longer matches its desktop counterpart (desktop/modal.scss keeps `70%, 30%`). The first argument must stay at the original 70%: `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/mobile/modal.scss",
+      "lines": [
+       100,
+       102
+      ],
+      "texto": "`.custom-message-length` now contradicts the desktop rule for the same class. desktop/modal.scss (line 94) converted the original `scale-color($primary, $lightness: 70%)` to `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))` (keeping 70%), while this hunk produced `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`, flipping the primary lightness 70\u219230. Both files started from 70%, so mobile should be 70/30 to agree with desktop and preserve the original value."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+    "descricao": "In desktop/user.scss .name the light-theme lightness was changed from 30% to 50%, lightening the name in light themes instead of only adding a dark-theme value.",
+    "textoGolden": "This change for desktop/user.css changes $primary from 30% to 50% for the light theme; most other changes preserve the original $primary value and move the complement to $secondary for dark. Consider reviewing this (also applies to a similar .name change in the mobile variant).",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/desktop/user.scss",
+      "lines": [
+       522,
+       522
+      ],
+      "texto": "The `.name` color was `scale-color($primary, $lightness: 30%)` and is now `50%` in the light branch. This changes the light-theme color. Use `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/desktop/user.scss",
+      "lines": [
+       522,
+       522
+      ],
+      "texto": "The .name color was scale-color($primary, $lightness: 30%) but the light argument was changed to 50%, so the light theme loses its contrast. Use dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))."
+     },
+     {
+      "file": "app/assets/stylesheets/desktop/user.scss",
+      "lines": [
+       522,
+       522
+      ],
+      "texto": "The .name light value was changed from primary 30% to 50%, which lightens the text in light mode. Use dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+    "descricao": "In mobile/user.scss .name the light-theme lightness was changed from 30% to 50% instead of preserving 30% with a 70% secondary for dark themes.",
+    "textoGolden": "In mobile/user.scss line 497, the lightness value for dark themes should be inverted to 70% instead of being changed to 50%. This change may lead to unintended visual regressions in light themes.",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/desktop/user.scss",
+      "lines": [
+       522,
+       522
+      ],
+      "texto": "The light-theme value no longer matches the original. WHAT: `.group-member-info .name` was `scale-color($primary, $lightness: 30%)` and now is `dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%))` (30% \u2192 50%). WHY: this lightens the name link in the light theme, an unintended light-theme change; the equivalent rule in common/base/user.scss:124 correctly preserved 30% (30/70). HOW: use `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/mobile/user.scss",
+      "lines": [
+       497,
+       497
+      ],
+      "texto": "The light-theme value no longer matches the original. WHAT: `.group-member-info .name` was `scale-color($primary, $lightness: 30%)` and now is `dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%))` (30% \u2192 50%). WHY: this lightens the name link in the light theme, an unintended light-theme change inconsistent with the mobile/desktop counterpart that preserved 30%; desktop/user.scss:522 has the same defect. HOW: use `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/desktop/user.scss",
+      "lines": [
+       522,
+       522
+      ],
+      "texto": ".group-member-info .name originally used scale-color($primary, $lightness: 30%). The conversion changed the light-mode argument to 50% (making it 50/50), altering the intended color. Should preserve the original: dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+    "descricao": "In mobile topic-post a.star h3 the light-theme lightness changed from 20% to 50%, fading the heading and diverging from the desktop 20%/80% conversion.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/mobile/topic-post.scss",
+      "lines": [
+       182,
+       182
+      ],
+      "texto": "The light-theme value no longer matches the original. WHAT: `.topic-map h3` was `scale-color($primary, $lightness: 20%)` and now is `dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%))` (20% \u2192 50%). WHY: this visibly lightens the topic-map heading in the light theme; the desktop counterpart at desktop/topic-post.scss:321 correctly kept 20% (20/80), so mobile diverged. HOW: use `dark-light-choose(scale-color($primary, $lightness: 20%), scale-color($secondary, $lightness: 80%))`."
+     },
+     {
+      "file": "app/assets/stylesheets/mobile/topic-post.scss",
+      "lines": [
+       182,
+       182
+      ],
+      "texto": "Original was scale-color($primary, $lightness: 20%). The conversion changed it to 50%/50%, but the desktop mirror of this rule (desktop/topic-post.scss h3) uses 20%/80%. The two files must agree; should be dark-light-choose(scale-color($primary, $lightness: 20%), scale-color($secondary, $lightness: 80%))."
+     },
+     {
+      "file": "app/assets/stylesheets/mobile/topic-post.scss",
+      "lines": [
+       182,
+       182
+      ],
+      "texto": "This `h3` was originally `scale-color($primary, $lightness: 20%)`. The rewrite changed the light-theme argument to 50%, so the light theme renders the heading lighter than before; the correct pair is 20/80, not 50/50. The first argument must keep the original 20%."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#07",
+    "descricao": "The comment describing the topic-list cell default color still names a plain scale-color($primary, 50%) rule that the PR replaced with dark-light-choose.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/base/discourse.scss",
+      "lines": [
+       72,
+       76
+      ],
+      "texto": "The comment at lines 72-74 states \"the default for table cells in topic list is scale-color($primary, $lightness: 50%)\", but the rule it documents was converted by this PR to `dark-light-choose(scale-color($primary, $lightness: X%), scale-color($secondary, $lightness: 100-X%))` (here for coldmap-high/med/low and in common/base/_topic-list.scss th/td). The prose still names a single `$primary` expression, so it no longer describes the code: a reader comparing the two will look for a plain `$primary` 50% rule that no longer exists. Update the comment to describe the dark-light-choose baseline (e.g. \"is dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%))\")."
+     }
+    ]
+   },
+   {
+    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#08",
+    "descricao": "In dark themes the notification badge background becomes a lightened $secondary while its text stays $secondary, giving dark text on a dark background with poor contrast.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/components/badges.css.scss",
+      "lines": [
+       239,
+       239
+      ],
+      "texto": "The dark-theme notification badge background now uses a lightened $secondary while its text still uses the unmodified $secondary. This puts dark text on a dark background for plain badges such as category unread counts in site-map.hbs:73; with $secondary black, the foreground is #000 and the background is approximately #4d4d4d (about 2.5:1 contrast), making the small count text difficult to read. Set the default badge foreground, including its &[href] rule, to a contrasting dark-theme color such as $primary when selecting this dark background."
+     }
+    ]
+   }
+  ]
+ },
+ "add-guest-management-functionality-to-existing-bookings-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "92f44dcea7ff19e9123a30c63c167a2938df5a55",
+  "base": "b004587262e8221083bafbe9a0c515e7becaa7b3",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     168,
+     168
+    ],
+    "texto": "WHAT: `sendAddGuestsEmails(evt, guests)` is passed the raw input list instead of the filtered `uniqueGuests`. WHY: emails to existing attendees are treated as new-guest emails, and blacklisted or duplicate guests that were never added are still treated as new guests. HOW: pass `uniqueGuests`."
+   },
+   {
+    "id": "S2",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     46,
+     48
+    ],
+    "texto": "WHAT: the team permission check combines `isTeamAdmin` and `isTeamOwner` with `&&`. WHY: team admins who are not owners are denied, because owner status is required in addition to admin status. HOW: use `||`."
+   },
+   {
+    "id": "S3",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     74,
+     78
+    ],
+    "texto": "WHAT: the blacklist and duplicate checks compare the guest string case-sensitively, while the blacklist entries are lowercased. WHY: a guest such as `Blocked@x.com` bypasses the blacklist and duplicates of existing attendees that differ only in case are added. HOW: lowercase the guest before comparing, and compare against lowercased attendee emails."
+   },
+   {
+    "id": "S4",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     74,
+     78
+    ],
+    "texto": "The blacklist is lowercased but the guest email is compared as-is, so a guest such as 'Blocked@Example.com' bypasses BLACKLISTED_GUEST_EMAILS. Lowercase the guest before calling includes."
+   },
+   {
+    "id": "S5",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     76,
+     76
+    ],
+    "texto": "The existing-attendee check uses a case-sensitive comparison, so a case variant of an existing attendee's email is added as a duplicate guest. Compare lowercased values."
+   },
+   {
+    "id": "S6",
+    "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+    "lines": [
+     43,
+     44
+    ],
+    "texto": "`message` is a template string like \"undefined: \" and is always truthy, so the `|| t(\"unable_to_add_guests\")` fallback never runs. When err.message is empty or err.data is missing, the user sees a garbled toast such as \"undefined: \". Build the message conditionally from err.message instead."
+   },
+   {
+    "id": "S7",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     92,
+     165
+    ],
+    "texto": "The attendees are committed to the DB before eventManager.updateCalendarAttendees runs, and that call is not guarded. If the calendar update throws, the mutation returns an error even though the guests were persisted and no emails were sent. A retry then fails with emails_must_be_unique_valid because the guests already exist. Wrap the calendar update in try/catch, or order the operations so the failure does not leave this half-applied state."
+   },
+   {
+    "id": "S8",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     74,
+     106
+    ],
+    "texto": "The uniqueness check reads the attendees and then inserts them without a transaction or a unique constraint. Concurrent addGuests calls for the same email both pass the filter and create duplicate attendee rows. The comparison is also case-sensitive, so the same address in a different case is treated as a new guest."
+   },
+   {
+    "id": "S9",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     46,
+     48
+    ],
+    "texto": "The permission check joins isTeamAdmin and isTeamOwner with &&, so a team admin who is not the owner (and an owner who is not an admin) is denied. The intent is admin OR owner; use ||."
+   },
+   {
+    "id": "S10",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     168,
+     168
+    ],
+    "texto": "The handler computes uniqueGuests (existing attendees and blacklisted emails removed) but passes the raw guests list to sendAddGuestsEmails. Existing attendees who were re-submitted are then treated as new and get a 'scheduled' email, and blacklisted addresses are treated as new too. Pass uniqueGuests."
+   },
+   {
+    "id": "S11",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     70,
+     78
+    ],
+    "texto": "The blacklist entries are lowercased, but the guest email is compared as submitted. A blacklisted address with different casing (e.g. Foo@x.com) bypasses the filter. Lowercase the guest before the includes check."
+   },
+   {
+    "id": "S12",
+    "file": "packages/ui/form/MultiEmail.tsx",
+    "lines": [
+     46,
+     46
+    ],
+    "texto": "The tooltip text \"Remove email\" is hard-coded in English and bypasses the translation mechanism (`t`) used for the other strings in this component. Non-English users will see an untranslated tooltip. Use a translation key via t()."
+   },
+   {
+    "id": "S13",
+    "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+    "lines": [
+     43,
+     44
+    ],
+    "texto": "The template string is always non-empty, so the `|| t(\"unable_to_add_guests\")` fallback never runs. The toast also shows a raw tRPC code prefix such as \"FORBIDDEN: \" to the user. Build the message from the translated error only when err.message exists, and otherwise use unable_to_add_guests."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+    "descricao": "isTeamAdminOrOwner combines isTeamAdmin and isTeamOwner with &&, so only team owners pass; team admins who are not organizer or attendee are wrongly rejected with FORBIDDEN.",
+    "textoGolden": "The logic for checking team admin/owner permissions is incorrect. This condition uses AND (&&) which requires both isTeamAdmin AND isTeamOwner to be true, but it should use OR (||) since a user needs to be either an admin OR an owner to have permission.",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       46,
+       48
+      ],
+      "texto": "WHAT: isTeamAdminOrOwner is computed with && instead of ||. WHY: isTeamAdmin returns truthy for role ADMIN or OWNER while isTeamOwner returns true only for OWNER, so the && expression is only true for OWNERs; team ADMINs are treated as unauthorized and get FORBIDDEN when adding guests, contradicting the variable's intent. HOW: use `(await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) || (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0))`."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       46,
+       48
+      ],
+      "texto": "The flag is named `isTeamAdminOrOwner` but is computed with `&&` (both admin AND owner). A team admin who is not the owner, or the owner who is not flagged admin, will fail this check, so the guard at line 54 wrongly throws FORBIDDEN for legitimate admins/owners. Use `||` between isTeamAdmin and isTeamOwner."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       46,
+       48
+      ],
+      "texto": "The variable `isTeamAdminOrOwner` names an OR condition, but the code combines `isTeamAdmin(...)` and `isTeamOwner(...)` with `&&`, so it is true only when the user is both admin AND owner. Either the name is wrong or the operator is; as written the permission check at line 54 denies a plain team admin, contradicting what the identifier promises. Use `||` to match the name (or rename if AND is intended)."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+    "descricao": "The guest blacklist is lowercased but incoming guest emails are compared without normalization, so a blacklisted address submitted with different casing bypasses BLACKLISTED_GUEST_EMAILS and is added and emailed.",
+    "textoGolden": "The addGuests.handler.ts blacklist check uses blacklistedGuestEmails.includes(guest) after lowercasing the blacklist but not the input guest emails, allowing attackers to bypass BLACKLISTED_GUEST_EMAILS restrictions by submitting emails with uppercase characters.",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       70,
+       78
+      ],
+      "texto": "WHAT: The blacklist is compared case-sensitively against guest input while blacklistedGuestEmails are lowercased. WHY: blacklistedGuestEmails entries are lowercased but the filter compares `guest` verbatim (`!blacklistedGuestEmails.includes(guest)`); an authenticated user can add a blacklisted address simply by changing its case (e.g. `Foo@bar.com` vs `foo@bar.com`), bypassing the configured BLACKLISTED_GUEST_EMAILS restriction. HOW: normalize the guest before comparison, e.g. `!blacklistedGuestEmails.includes(guest.toLowerCase())`."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       70,
+       78
+      ],
+      "texto": "Case-sensitivity bypass of the guest blacklist. `blacklistedGuestEmails` is lowercased on the list side (line 71) but the input side is compared raw: `blacklistedGuestEmails.includes(guest)` (line 77). A guest email submitted with any different casing (e.g. `Foo@Bar.com` when the blacklist holds `foo@bar.com`) passes the filter and is persisted, defeating BLACKLISTED_GUEST_EMAILS. Normalize the input before comparison, e.g. filter on `!blacklistedGuestEmails.includes(guest.toLowerCase())` (and likewise lowercase `guest` for the attendee dedup check)."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       70,
+       78
+      ],
+      "texto": "WHAT: BLACKLISTED_GUEST_EMAILS entries are lowercased but the incoming guest string is compared without lowercasing/normalizing. WHY: an attacker bypasses the blocklist with case variation (e.g. Spam@Example.com) and gets added/emailed."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#03",
+    "descricao": "The server never deduplicates the guests array, so a request with the same email twice inserts duplicate attendee rows for the booking.",
+    "textoGolden": "uniqueGuests filters out existing attendees and blacklisted emails but does not deduplicate duplicates within the input; createMany can insert duplicate attendee rows if the client submits repeated emails.",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       74,
+       78
+      ],
+      "texto": "WHAT: uniqueGuests filter only dedupes against existing booking.attendees with case-sensitive === and never dedupes duplicates within the input guests array itself (server schema has no uniqueness refine unlike the client). WHY: a request with the same new email twice creates duplicate attendee rows via createMany."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       74,
+       106
+      ],
+      "texto": "uniqueGuests filters only against existing attendees/blacklist but never dedupes guests[] itself and schema has no uniqueness check. A request like guests=[a@x.com,a@x.com] passes the filter twice and createMany inserts duplicate attendee rows or throws an unhandled DB unique-constraint exception. Dedupe/normalize input (and reject intra-request duplicates) before createMany."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       74,
+       78
+      ],
+      "texto": "uniqueGuests filters against existing attendees but does not deduplicate addresses within the incoming guests array. A direct mutation with the same new address twice inserts two Attendee records and sends duplicate invitations because the server schema permits duplicates and the Attendee model has no unique booking/email constraint. Deduplicate normalized input before filtering and inserting."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#04",
+    "descricao": "Check-then-insert without a transaction or unique constraint lets two concurrent addGuests calls for the same email both pass the existing-attendee check and create duplicate attendees.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       26,
+       106
+      ],
+      "texto": "Race condition: findFirst check for existing attendees then booking.update+createMany is not atomic. Two concurrent addGuests calls with the same new email both see it as absent and both insert, creating duplicates. Guard with a unique constraint and handle conflict or run in a transaction/serializable check."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       92,
+       106
+      ],
+      "texto": "Check-then-insert race: the handler reads `booking.attendees` at the start, filters against it, then inserts in a separate `prisma.booking.update ... createMany` with no transaction or unique guard. Two concurrent addGuests calls for the same guest both see it as absent and both insert, producing duplicate attendees. Wrap the read+filter+insert in a transaction (or rely on a unique constraint on (bookingId, email) and handle the conflict) so concurrent requests cannot both succeed."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#05",
+    "descricao": "Attendee authorization and existing-attendee dedup compare emails case-sensitively, so an attendee with differently-cased stored email is FORBIDDEN and a case-variant of an existing attendee is added again.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       52,
+       76
+      ],
+      "texto": "Inconsistent email normalization for identity checks. Both the authorization check `attendee.email === user.email` (line 52) and the existing-attendee dedup `guest === attendee.email` (line 76) use strict case-sensitive equality, while emails are treated as case-insensitive everywhere else in this handler (the blacklist block directly below lowercases). Consequence: a legitimate attendee whose stored casing differs from their session email is wrongly FORBIDDEN, and a guest differing from an existing attendee only by case is duplicated rather than filtered. Compare on a normalized form (both sides `.toLowerCase()`), consistent with the blacklist normalization."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+    "descricao": "The handler passes the unfiltered guests list to sendAddGuestsEmails, which uses it to pick who gets AttendeeScheduledEmail, so existing attendees included in the request receive a new-booking confirmation instead of the add-guests email.",
+    "textoGolden": "The sendAddGuestsEmails function in email-manager.ts passes the full calendarEvent.attendees array when determining which attendees receive AttendeeScheduledEmail vs AttendeeAddGuestsEmail, but checks if newGuests.includes(attendee.email) where newGuests is the input guests array.",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       167,
+       168
+      ],
+      "texto": "WHAT: sendAddGuestsEmails(evt, guests) passes the raw input guests instead of the filtered uniqueGuests. WHY: already-existing attendees included in the request are misclassified as newGuests in email-manager and receive AttendeeScheduledEmail instead of AttendeeAddGuestsEmail (wrong notification)."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       167,
+       168
+      ],
+      "texto": "Dead-transform / wrong input: `uniqueGuests` is computed (dedup vs existing attendees + blacklist) and written to DB, but `sendAddGuestsEmails(evt, guests)` passes the original `guests`. Existing attendees re-submitted are then `includes()`-matched as new and get AttendeeScheduledEmail instead of AttendeeAddGuestsEmail. Pass `uniqueGuests`."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       167,
+       169
+      ],
+      "texto": "Pass `uniqueGuests` (the filtered set written to DB) to sendAddGuestsEmails instead of raw `guests`; the email layer assumes newGuests exactly equals newly created attendees for its Scheduled vs AddGuests branch."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#08",
+    "descricao": "EventManager is created with the requesting user's credentials, so when a non-organizer adds guests the organizer's calendar event is not updated (or the wrong account is used) for references without a credentialId.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       158,
+       162
+      ],
+      "texto": "EventManager is initialized with the requesting user's credentials rather than the booking organizer's credentials. When an attendee or team owner adds guests to a booking whose calendar reference lacks credentialId, updateAllCalendarEvents selects credentials by type from the caller's calendars, so the organizer's event is not updated or the update targets the wrong account. Load credentials for booking.userId and initialize the manager with the booking owner."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#09",
+    "descricao": "Claims a failing calendar update at addGuests.handler.ts:165 aborts the mutation after guests are persisted; the calendar update path already swallows provider errors.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       165,
+       171
+      ],
+      "texto": "The attendees are written to the database at line 92, but `eventManager.updateCalendarAttendees` at line 165 runs outside the try/catch. If it throws, the mutation returns an error even though the guests are already persisted, so the DB and the calendar are out of sync. No emails are sent, and a retry then fails with 'emails_must_be_unique_valid'. Catch and handle the calendar update failure after the DB write."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       165,
+       165
+      ],
+      "texto": "The attendees are already committed to the DB when `eventManager.updateCalendarAttendees` is awaited without a try/catch. If the calendar sync throws, the mutation returns an error and skips the emails, although the guests were added. The caller sees a failure for a partly applied change and may retry. Handle calendar sync failure as best-effort, as the email send is, or run it before the DB write."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#10",
+    "descricao": "Claims any attendee can add guests and trigger invites; this is the deliberate permission model of the new feature.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       52,
+       56
+      ],
+      "texto": "Any attendee, matched only by email, is allowed to add arbitrary guests to a booking, and the handler then sends emails and calendar invites on the organizer's behalf. Any attendee can use this to send invites to arbitrary addresses. Restrict the action to the organizer and team admins, or verify that the attendee's email is confirmed."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#11",
+    "descricao": "The guests array has no server-side size limit, so any authorized caller, including an attendee, can add thousands of guests and trigger an unbounded batch of inserts and emails.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts",
+      "lines": [
+       3,
+       6
+      ],
+      "texto": "WHAT: guests is an unbounded z.array(z.string().email()) with no max length. WHY: any authorized caller (including a mere attendee) can submit thousands of emails causing unbounded createMany inserts plus unbounded Promise.all email fanout in sendAddGuestsEmails."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts",
+      "lines": [
+       5,
+       5
+      ],
+      "texto": "The mutation accepts an unbounded guest array that is persisted and immediately expanded into concurrent emails to every attendee. For non-seated bookings each email's ICS serializes the full attendee list, so adding N guests creates O(N) concurrent sends and O(N\u00b2) aggregate attachment work; repeated additions also resend to all existing attendees. Enforce a server-side guest-count and total-attendee limit before insertion and bound notification concurrency."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#12",
+    "descricao": "The Remove email tooltip in MultiEmail is a hard-coded English string instead of a translation key.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/ui/form/MultiEmail.tsx",
+      "lines": [
+       44,
+       51
+      ],
+      "texto": "Tooltip content=\"Remove email\" is hard-coded English user-facing text bypassing i18n while surrounding strings in the same file/PR use t(). Wrap it in t() e.g. content={t(\"remove_email\")} and add the key to locales."
+     },
+     {
+      "file": "packages/ui/form/MultiEmail.tsx",
+      "lines": [
+       46,
+       46
+      ],
+      "texto": "`Tooltip content=\"Remove email\"` is a hard-coded English user-facing string, while the surrounding code in this same component routes user text through `t()` (e.g. `t(\"add_another\")` on line 69). This string bypasses the translation mechanism and will never be localised; it should use a translation key."
+     },
+     {
+      "file": "packages/ui/form/MultiEmail.tsx",
+      "lines": [
+       46,
+       46
+      ],
+      "texto": "The new removal tooltip hard-codes `Remove email`, so users in non-English locales see English text even though the neighbouring controls use `t(...)` and this component already obtains `t` from useLocale. Route this tooltip through a translation key (and supply its English translation) rather than using the literal."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#13",
+    "descricao": "The onError fallback to unable_to_add_guests is unreachable because the template-string message is always truthy.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+      "lines": [
+       42,
+       44
+      ],
+      "texto": "Unreachable fallback: `message` is a template string `${code}: ${...}` which is always truthy, so `message || t(\"unable_to_add_guests\")` never takes the fallback. Build message conditionally or test the underlying parts for emptiness."
+     },
+     {
+      "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+      "lines": [
+       42,
+       45
+      ],
+      "texto": "In `onError`, `message` is always a non-empty template string (`\"${err.data?.code}: ${t(err.message)}\"`), so the fallback `|| t(\"unable_to_add_guests\")` is unreachable and the newly added `unable_to_add_guests` translation is never shown. The user is instead shown a raw error code prefix like `BAD_REQUEST: ...` rather than the translated message; the fallback and code prefix handling should be corrected so the intended translated text reaches the user."
+     },
+     {
+      "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+      "lines": [
+       43,
+       44
+      ],
+      "texto": "The error message is built as a template string, so it is always truthy. The `|| t(\"unable_to_add_guests\")` fallback is therefore dead code, and the user can see \"undefined: ...\" or an untranslated raw message. Use `err.message ? t(err.message) : t(\"unable_to_add_guests\")`."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#14",
+    "descricao": "After a validation failure followed by a successful add, isInvalidEmail stays true, so the stale emails_must_be_unique_valid error shows the next time the dialog is opened.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+      "lines": [
+       35,
+       41
+      ],
+      "texto": "WHAT: addGuestsMutation onSuccess resets multiEmailValue and closes the dialog but never resets isInvalidEmail. WHY: after one failed validation the red emails_must_be_unique_valid error persists on the next open/successful add."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#16",
+    "descricao": "sendAddGuestsEmails ignores the event type's disableStandardEmails settings, so hosts and attendees receive add-guests emails even when standard emails are disabled.",
+    "textoGolden": "The `sendAddGuestsEmails` function does not check the `disableStandardEmails` flags in the `EventType` metadata, which may result in sending emails to hosts/attendees even when standard emails are disabled for the event type.",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#e2b-01",
+    "descricao": "The add-guests handler omits booking.iCalUID from the CalendarEvent, so the add-guests emails' .ics attachments use booking.uid as UID and recipients' calendars treat them as a new event rather than an update of the original booking invite.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#sncc-01",
+    "descricao": "The addGuests FORBIDDEN error uses the translation key you_do_not_have_permission, which is missing from the locale files, so the dialog shows the raw key to users.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#opa-01",
+    "descricao": "The comment in MultiEmailLazy.tsx (\"These are like 40kb\") is copied from the phone input lazy loader and does not apply to MultiEmail, which only uses existing UI components.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "replays-self-serve-bulk-delete-system-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "ea188e2d736fd6ed27c1dba8aae63b7268e2a7a9",
+  "base": "49a275847631e231672d01b5dcd66558c069d25b",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+    "lines": [
+     118,
+     119
+    ],
+    "texto": "WHAT: error_ids are zipped with `events.values()` by position. WHY: nodestore get_multi returns a dict that omits missing nodes and has no ordering guarantee, so ids, titles and timestamps can be mismatched, or the wrong events attributed, in the summary sent to Seer. HOW: iterate over the node_id/event_id pairs and look up `events.get(node_id)`."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+    "lines": [
+     45,
+     60
+    ],
+    "texto": "WHAT: Neither `age` nor `timestamp` is required, and the mutual-exclusion validators only run when the field is present and use truthiness. WHY: a report with neither field, or with `age: 0` alongside a timestamp, passes validation although the spec requires exactly one. HOW: add a `validate()` method that checks `('age' in attrs) != ('timestamp' in attrs)`."
+   },
+   {
+    "id": "S3",
+    "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+    "lines": [
+     56,
+     61
+    ],
+    "texto": "WHAT: The hook now returns `data` from useQuery, which is undefined until the first fetch completes (and the previous value is also undefined then). WHY: consumers that expect a TagCollection object get undefined instead of the `{}` the old implementation returned, which can crash on key access. HOW: default to `{}`, e.g. `attributes: (isFetching ? previous : data) ?? {}`."
+   },
+   {
+    "id": "S4",
+    "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+    "lines": [
+     164,
+     174
+    ],
+    "texto": "WHAT: With the `use-table-widget-visualization` flag on, TableWidgetVisualization is rendered with hardcoded empty `columns` and empty `tableData`, ignoring `result`. WHY: every table widget renders empty when the flag is enabled. HOW: build tableData and columns from `result.data` and `result.meta`, or keep the old renderer until that is wired."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/projectoptions/defaults.py",
+    "lines": [
+     205,
+     205
+    ],
+    "texto": "WHAT: The default for `sentry:autofix_automation_tuning` changed from \"low\" to \"off\" (also in constants.py). WHY: projects that never set the option silently lose automatic autofix, a behavior change unrelated to the replays bulk-delete feature in this PR. HOW: if intended, ship it as a separate change with a migration or rollout plan."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+    "lines": [
+     107,
+     120
+    ],
+    "texto": "error_ids are zipped positionally with events.values(), but nodestore get_multi returns a dict keyed by node_id that omits missing nodes. If any event is missing or the dict order differs, ids get paired with the wrong event data, and the filter on `data is not None` never fires. Iterate over the node_id to event_id mapping and look up each event by node_id instead."
+   },
+   {
+    "id": "S7",
+    "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+    "lines": [
+     107,
+     120
+    ],
+    "texto": "zip(error_ids, events.values()) assumes get_multi returns values in the same order as error_ids and with no missing nodes. Dict order or omitted keys mismatch event ids with data. Look up each node_id explicitly instead."
+   },
+   {
+    "id": "S8",
+    "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+    "lines": [
+     50,
+     60
+    ],
+    "texto": "The mutual-exclusion check uses truthiness, so age=0 or timestamp=0 is treated as absent and a report containing both fields is accepted. Check key presence instead."
+   },
+   {
+    "id": "S9",
+    "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+    "lines": [
+     111,
+     114
+    ],
+    "texto": "On this unauthenticated endpoint, the validation-failure path logs the entire attacker-supplied raw report at warning level. Report urls and bodies can contain tokens, query-string secrets or PII, and the log size is unbounded. Log only the validation errors and a few safe fields, such as the report type, instead of the full report."
+   },
+   {
+    "id": "S10",
+    "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+    "lines": [
+     107,
+     120
+    ],
+    "texto": "error_ids are zipped positionally with `events.values()`. nodestore get_multi returns a dict keyed by node id that can omit missing nodes, so the ids misalign with the event data and ErrorEvent ids are wrong. Look up each event by its node_id key instead of zipping."
+   },
+   {
+    "id": "S11",
+    "file": "static/app/views/explore/hooks/useGetTraceItemAttributeValues.spec.tsx",
+    "lines": [
+     114,
+     147
+    ],
+    "texto": "The number-type test mocks the endpoint with a matcher on `query.query`, but the hook sends `substringMatch`, so the mock can never match. The `not.toHaveBeenCalled()` assertion therefore passes even if the number guard is removed. Match on `substringMatch` or omit the matcher so the assertion can fail."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#01",
+    "descricao": "The age/timestamp mutual-exclusion validators check truthiness via initial_data.get(), so a zero value is treated as absent and a report carrying both fields passes validation.",
+    "textoGolden": "Validation logic incorrectly uses .get('timestamp'), which treats a timestamp of 0 as absent. It should directly check 'timestamp' in self.initial_data to ensure proper field presence detection, preventing both 'age=0' and 'timestamp' from passing mutual-exclusion validation.",
+    "comentarios": [
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       47,
+       59
+      ],
+      "texto": "The timestamp/age validators test truthiness and make both fields optional instead of enforcing exactly one field. Reports with both age=0 and timestamp=0, or with neither field, pass validation despite violating the stated mutually exclusive report formats. Enforce field presence and exclusivity in object-level validate using key membership rather than truthiness."
+     },
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       50,
+       59
+      ],
+      "texto": "Check key presence rather than truthiness when enforcing age/timestamp mutual exclusion. Both fields permit 0, so a report with age=0 and timestamp=0 passes both validators even though both fields are present; a zero-valued counterpart also bypasses the corresponding check. Use `\"age\" in self.initial_data` and `\"timestamp\" in self.initial_data` (or object-level validation) and add zero-value tests."
+     },
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       50,
+       59
+      ],
+      "texto": "Check field presence rather than truthiness when enforcing timestamp/age exclusivity. A report containing both `timestamp: 0` and `age: 0` passes both validators, despite the declared constraint that they must not coexist; with only one zero value, validation is also asymmetric. Use membership checks on initial_data (or object-level validation) and add zero-value mixed-field tests."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#02",
+    "descricao": "The validation-failure warning logs the entire raw, attacker-controlled browser report instead of a redacted subset.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       111,
+       114
+      ],
+      "texto": "The new validation-failure warning logs `raw_report`, the full unvalidated report object supplied by the caller. This endpoint is public and unauthenticated (permission_classes = (), @csrf_exempt), so the payload is attacker-controlled, and browser report bodies routinely carry sensitive values (CSP blocked-uri/document-uri/script-sample, sourceFile, plus the full user_agent). Logging the raw payload on every validation failure writes potentially sensitive data into application logs; log only the report `type` (or a sanitized/redacted subset) instead of the entire raw object."
+     },
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       111,
+       114
+      ],
+      "texto": "Do not attach the complete raw report to the validation warning. Browser reports contain page URLs (potentially including tokens or personal data in query strings) and arbitrary body contents. Any invalid field now causes that entire payload to be emitted at warning level, exposing it in operational logs even where the existing info-level request logging is filtered out. Log the failed field names/report type or a redacted diagnostic instead."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#06",
+    "descricao": "fetch_error_details pairs error_ids positionally with nodestore get_multi values, but get_multi does not preserve input order (cached items are appended last) and drops missing nodes, so error details get attached to the wrong error IDs.",
+    "textoGolden": "Using zip(error_ids, events.values()) assumes the get_multi result preserves the input order; dict value order is not guaranteed to match error_ids, so event data can be paired with the wrong ID (missing nodes also shift alignment).",
+    "comentarios": [
+     {
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       110,
+       120
+      ],
+      "texto": "WHAT: fetch_error_details zips error_ids with events.values() instead of mapping by node_id, misaligning ids to payloads and dropping/mismatching on missing keys. WHY: assigns wrong title/message/timestamp to wrong error id and yields incorrect Seer logs. HOW: look up each node_id in the get_multi dict (e.g. dict keyed by node_id) and preserve error_ids order."
+     },
+     {
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       104,
+       120
+      ],
+      "texto": "`zip(error_ids, events.values())` assumes `nodestore.backend.get_multi(node_ids)` values preserve input order and that all keys exist. Dict values give no such guarantee; missing keys shorten/misalign the zip, attaching the wrong event payload to the wrong error_id. Lookup per-id: iterate node_ids/error_ids and do `events.get(node_id)` instead of zipping with `.values()`."
+     },
+     {
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       104,
+       121
+      ],
+      "texto": "fetch_error_details pairs IDs to payloads with zip(error_ids, events.values()) where events is dict from nodestore get_multi. Values order need not match IDs and missing keys misalign, attaching wrong title/message to wrong error. Look up per node_id instead."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#07",
+    "descricao": "The Snuba replay lookup for error IDs runs even when enable_error_context=false, adding a needless query (and failure point) to opt-out requests.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       67,
+       77
+      ],
+      "texto": "The new Snuba replay lookup executes even when enable_error_context=false. Every opt-out summary request incurs an unnecessary database round trip and can now fail on Snuba availability even though it only needs recording storage. Evaluate the flag first and perform the replay lookup only when error context is enabled."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#12",
+    "descricao": "With the use-table-widget-visualization flag on, the widget renders TableWidgetVisualization with hardcoded empty columns and data instead of the query results, so every table widget shows an empty table.",
+    "textoGolden": "Hardcoded empty data passed to TableWidgetVisualization causes it to always render an empty table instead of displaying actual results when the feature flag is enabled.",
+    "comentarios": [
+     {
+      "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+      "lines": [
+       164,
+       174
+      ],
+      "texto": "WHAT: the `use-table-widget-visualization` branch renders `<TableWidgetVisualization columns={[]} tableData={{data: [], meta: {fields: {}, units: {}}}} />`, hardcoding empty rows and no columns instead of the actual query result. WHY: when the feature flag is enabled for an org, every table widget renders an empty table and silently drops `result.data`/`result.meta`/`columns`, a functional regression for all dashboard table widgets. HOW: build `columns`/`tableData` from the existing `result` (and `widget.queries[i].fields`/`fieldAliases`) rather than the empty placeholder objects."
+     },
+     {
+      "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+      "lines": [
+       164,
+       174
+      ],
+      "texto": "In the new feature-flagged branch, TableWidgetVisualization is rendered with hardcoded empty props: columns={[]} (an empty array, which is truthy for the `columns ?? fallback` logic, so no columns are derived) and tableData={data: [], meta: {fields: {}, units: {}}}. All the real result data computed above (result.data, result.meta, fields, fieldAliases, eventView) is discarded, so any organization with 'use-table-widget-visualization' enabled gets an empty table instead of the query results. Pass the actual result data/columns into the visualization (or keep the old StyledSimpleTableChart) until the widget is properly wired."
+     },
+     {
+      "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+      "lines": [
+       164,
+       174
+      ],
+      "texto": "With the 'use-table-widget-visualization' feature enabled, TableWidgetVisualization is rendered with columns=[] and empty data/meta instead of result.data and result.meta. Every table widget therefore renders empty for orgs with the flag. Fix: pass tableData={{data: result.data, meta: result.meta}} and build columns from the fields."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#13",
+    "descricao": "The custom cell renderers fall back to default rendering on any falsy return (0, '', null), not only undefined, so a renderer cannot render zero or an empty cell.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "static/app/views/dashboards/widgets/tableWidget/defaultTableCellRenderers.tsx",
+      "lines": [
+       70,
+       73
+      ],
+      "texto": "The documented custom-renderer contract says fallback runs when the callback returns undefined, but `if (cell)` also falls back for valid ReactNode results such as `0`, an empty string, or `null`. A caller trying to render zero or deliberately suppress a cell instead gets the default field rendering. Check `cell !== undefined` here and in the head-cell renderer so the implementation honors the advertised contract."
+     },
+     {
+      "file": "static/app/views/dashboards/widgets/tableWidget/defaultTableCellRenderers.tsx",
+      "lines": [
+       70,
+       72
+      ],
+      "texto": "Use `cell !== undefined` instead of `if (cell)` to select the custom renderer result, and apply the same correction to the header renderer. The API documents undefined as the fallback sentinel, but valid ReactNode results such as numeric 0, an empty string, or null are falsy. A custom renderer returning 0 or intentionally hiding a cell with null therefore unexpectedly renders the default value instead."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#19",
+    "descricao": "The attribute-keys query key no longer includes the organization slug, so two organizations with the same filters share a cache entry and switching orgs can show the previous org's attribute names.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+      "lines": [
+       39,
+       41
+      ],
+      "texto": "The new attribute query key omits the organization even though its query function fetches an organization-specific endpoint. Switching organizations with identical project selections such as all projects and the same date range reuses the singleton query client's prior organization's attribute metadata, including while the new request refetches. Include organization.slug or organization.id in the query key."
+     },
+     {
+      "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+      "lines": [
+       39,
+       42
+      ],
+      "texto": "Include the organization slug in this query key. The new useGetTraceItemAttributeKeys implementation fetches `/organizations/${organization.slug}/trace-items/attributes/`, but makeTraceItemAttributeKeysQueryOptions contains no organization identity. Two organizations with identical filters (particularly the default all-project selection) therefore share this cache entry. Switching organizations can display the previous organization's attribute names, and concurrently mounted consumers can reuse a request for the wrong organization. Preserve the organization-specific cache identity that the previous endpoint-based key provided."
+     },
+     {
+      "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+      "lines": [
+       39,
+       42
+      ],
+      "texto": "Include the organization slug or ID in this query key. The query function fetches `/organizations/${organization.slug}/trace-items/attributes/`, but the key contains only query options. Two organizations with the same project selection (especially the all-projects selection), date range and dataset therefore share a cache entry. Switching organizations can display the previous organization's attributes, and overlapping requests can populate the shared entry with the wrong organization's result."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#20",
+    "descricao": "The UseTraceItemAttributeBaseProps doc says only LOGS is supported, although the hooks are also used with SPANS.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "static/app/views/explore/types.tsx",
+      "lines": [
+       9,
+       12
+      ],
+      "texto": "The new shared prop documentation claims the endpoint currently supports only LOGS, but this PR also uses these hooks with TraceItemDataset.SPANS (for example in TransactionNameSearchBar). Update this comment to describe both supported datasets; as written it incorrectly tells callers that a supported and actively used input is unsupported."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#sncc-01",
+    "descricao": "Error event timestamps (seconds) are compared with replay recording event timestamps (milliseconds), so errors are not interleaved chronologically with breadcrumbs.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#sncc-03",
+    "descricao": "dedupedYAxes is now just [yAxis], so its name misdescribes the code.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-01",
+    "descricao": "Every paginated breadcrumb-summary request queries the replay and fetches all of its error events from nodestore with no cap, adding latency and memory proportional to the replay's error count on each page.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-02",
+    "descricao": "HIDDEN_ATTRIBUTES is applied only when a search query is present; the no-search early return shows all attributes, so the hidden attributes still appear in the default span attributes view.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-03",
+    "descricao": "The bulk delete test sets max_segment_id to None to cover the new guard in _make_recording_filenames, but it mocks delete_matched_rows, so the guard is never executed and removing it would not fail the test.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "github-oauth-security-enhancement-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "bb75657fc8f13923c1d7983f422290908a1e7310",
+  "base": "344aa102e7818606e29426ebe69d5a680d8727c6",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     481,
+     482
+    ],
+    "texto": "WHAT: When no Integration row exists for installation_id yet, the pipeline advances without comparing the authenticated GitHub user to the installer. WHY: An attacker can start the flow with a victim's installation_id before the installation webhook has created the Integration row, and the new sender-validation is skipped. HOW: Do not advance on DoesNotExist. Fail the request, or defer validation to the step that builds the integration, where the installation sender can be fetched and compared with github_authenticated_user."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     501,
+     504
+    ],
+    "texto": "WHAT: integration.metadata[\"sender\"][\"login\"] is indexed without guarding for a missing key. WHY: An Integration row without sender metadata raises KeyError and returns a 500 in the install flow. HOW: Read it with .get chaining, for example (integration.metadata.get('sender') or {}).get('login'). Treat a missing value as a mismatch and return the error page."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     412,
+     413
+    ],
+    "texto": "The OAuth `state` value, which acts as the CSRF secret bound to the pipeline, is compared to `pipeline.signature` with `!=`. That comparison is not constant-time, so response timing can leak information about the expected value. Use `constant_time_compare` (django.utils.crypto) instead."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     129,
+     146
+    ],
+    "texto": "error() calls _(error_short) on a runtime variable, so the short messages never reach the translation catalog. Before this change, the strings were literal _(\"...\") calls that could be extracted. Pass already-translated strings (for example module-level constants wrapped in _()) and use them directly in the payload."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     501,
+     505
+    ],
+    "texto": "The new check indexes integration.metadata[\"sender\"][\"login\"] directly. Existing Integration rows whose metadata has no \"sender\" (for example the webhook has not arrived yet, or the row is older) now raise KeyError and return a 500, where this path used to proceed to next_step(). Read it defensively with .get and render the error view when it is missing."
+   },
+   {
+    "id": "S6",
+    "file": "tests/sentry/integrations/github/test_integration.py",
+    "lines": [
+     385,
+     396
+    ],
+    "texto": "The installation-not-found test now passes because of a state mismatch, not a missing installation. It sends state 'ddd023...', which differs from the pipeline signature, so OAuthLoginView returns 'Invalid installation request.' before GitHubInstallation runs. Use the valid signature state so the request reaches the installation lookup, and assert on that path's outcome."
+   },
+   {
+    "id": "S7",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     501,
+     505
+    ],
+    "texto": "`integration.metadata[\"sender\"][\"login\"]` raises KeyError (an unhandled 500) when the existing Integration's metadata has no \"sender\" entry, for example older integrations or ones not created from the installation webhook. Read it defensively and treat a missing value as a failed verification: `(integration.metadata.get(\"sender\") or {}).get(\"login\")`."
+   },
+   {
+    "id": "S8",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     423,
+     434
+    ],
+    "texto": "`safe_urlopen` and `get_user_info` are called outside the try block, so a network error or a bad response from GitHub raises an unhandled exception instead of rendering the error page. Wrap the token exchange and user-info fetch so that any failure returns `error(...)`."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#01",
+    "descricao": "error() calls _(error_short) on a variable and callers pass plain literals, so the short error strings are no longer extractable for translation.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       129,
+       146
+      ],
+      "texto": "The helper calls `_(error_short)` on a variable, and callers pass plain string literals. The translation extractor cannot see these strings, so the short error messages sent to the user are no longer translatable; the old code wrapped the literals directly in `_()`. Mark the literals with gettext_lazy at the call sites and the default, and pass them through without wrapping again."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       129,
+       146
+      ],
+      "texto": "error_short strings bypass translation extraction: _(error_short) uses a variable so makemessages cannot collect them. Wrap literals at definition/call sites, e.g. error_short=_(\"Invalid installation request.\") and pass _(\"...\") literals, then use data error value directly without re-wrapping."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       132,
+       141
+      ],
+      "texto": "Translate the short-message literals at their definition/call sites instead of calling `_(error_short)` on a variable. Django's message extraction cannot extract the default `\"Invalid installation request.\"` or the plain-string arguments at the two call sites from this dynamic gettext invocation. The existing pending-deletion and already-installed messages previously appeared directly inside `_()`; this refactor removes their extraction sites, and the new default message cannot enter translation catalogs. Use a translated default and translated arguments, then place `error_short` directly into the payload so these user-facing errors remain localizable."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#02",
+    "descricao": "The org parameter of error()/get_document_origin is actually the active-organization context, not an Organization, so the name is misleading.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       149,
+       152
+      ],
+      "texto": "The parameter is named `org` but the code treats it as the pipeline's active-organization context: it dereferences `org.organization` and every caller (error() and the GitHubInstallation sites) passes `self.active_organization`, not an Organization. The name misstates the argument's type/contract \u2014 a caller following the name and passing a real Organization would hit AttributeError on `.organization`. Rename the parameter (e.g. `active_organization`) and correct the corresponding name in `error()` at line 131 so the two signatures match what is actually passed."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#03",
+    "descricao": "The GitHub OAuth state is pipeline.signature, a static md5 of the pipeline view names, instead of a per-attempt random nonce, so it gives no CSRF protection.",
+    "textoGolden": "OAuth state uses pipeline.signature (static) instead of a per-request random value",
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       401,
+       412
+      ],
+      "texto": "The OAuth state is pipeline.signature, which Pipeline.__init__ computes solely from pipeline view class names and therefore shares across all users and installation attempts. An attacker can obtain an OAuth code for their own GitHub account and send a callback using this known state to a victim with an active installation pipeline, binding the attacker's GitHub identity to the victim's flow instead of rejecting the forged callback. Generate a random per-attempt nonce, store it in pipeline state, and validate that nonce on the OAuth callback."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       401,
+       413
+      ],
+      "texto": "Do not use pipeline.signature as OAuth state. It is a deterministic MD5 of the pipeline identifiers, not an unpredictable nonce tied to this user's authorization attempt (the tests reuse it across users). An attacker can know the expected state and submit a callback containing a code authorized under the attacker's GitHub account, defeating the OAuth login-CSRF protection and the intended binding to the installing user. Generate a cryptographically random per-attempt state, store it in the session/pipeline, and validate and consume it on callback."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#05",
+    "descricao": "The new OAuth step's token exchange and user lookup are not wrapped in error handling, so GitHub/network failures surface as 500s instead of the installation-failed page.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       423,
+       425
+      ],
+      "texto": "The token request is executed outside the try block. If GitHub's token endpoint is unavailable or the request fails with a connection/timeout error, safe_urlopen raises before the guarded response parsing is reached, and this new installation step returns an unhandled server error instead of the installation-failed response. Include the request itself in the error handling and handle the relevant transport exceptions."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       423,
+       436
+      ],
+      "texto": "WHAT: safe_urlopen token exchange and get_user_info() (which calls resp.raise_for_status()) are called with no exception handling. WHY: Any network error, timeout, or non-2xx from GitHub bubbles up as an unhandled exception and 500s the install instead of rendering the invalid-request page. HOW: Wrap the exchange plus get_user_info in try/except and return error() on failure."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       422,
+       436
+      ],
+      "texto": "safe_urlopen() and get_user_info() are called outside any try/except, so network errors, non-2xx responses, or API failures raise unhandled exceptions instead of returning error(). Wrap the token exchange + user-info fetch in try/except and return error() on failure, matching the handled missing-access_token path."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#06",
+    "descricao": "When no Integration exists yet for the installation_id the pipeline advances without comparing the OAuth user to the installer, bypassing the new ownership check.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       481,
+       482
+      ],
+      "texto": "The missing Integration branch advances the pipeline without verifying that github_authenticated_user installed the supplied installation_id. When the installation webhook has not created a record, or the local record was deleted, finish_pipeline calls build_integration using app credentials and attaches the installation without checking the OAuth user's access, allowing a user with another account's installation ID to bypass the new ownership check. Fail closed until trusted installer information is available and apply the ownership check before every successful next_step."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       481,
+       482
+      ],
+      "texto": "The record-absent path advances the pipeline before checking whether the authenticated GitHub user installed this app. Installation IDs arrive from the request, and a missing Integration record (for example before the installation webhook is processed) does not establish ownership. As a result, this path can attach an installation belonging to a different GitHub user despite the new authenticity check. Verify the authenticated user's authorization for the installation before advancing in this branch too, rather than relying on the webhook-created record existing."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       481,
+       482
+      ],
+      "texto": "When no Integration row exists for the installation_id, the code calls next_step() without comparing the OAuth-authenticated GitHub user to the installer. An attacker can supply an installation_id they do not own before the installation webhook has created the row, and bypass the new verification. Do not skip the check in this branch. Either fail closed, or verify ownership another way, for example by confirming the user can access the installation through the GitHub API."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#09",
+    "descricao": "The installer check indexes integration.metadata['sender']['login'] without checking that sender exists, raising KeyError for integrations created without sender metadata.",
+    "textoGolden": "The code attempts to access integration.metadata[sender][login] without checking for the existence of the sender key. This causes a KeyError for integrations where the sender metadata was not set during creation",
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       500,
+       505
+      ],
+      "texto": "integration.metadata[\"sender\"][\"login\"] is indexed without checking that \"sender\" exists, so an ACTIVE integration whose metadata has no sender raises KeyError (500) here. metadata[\"sender\"] is only populated when state.get(\"sender\") is set (integration.py:376-377), and the only writer of that state is the installation webhook (webhook.py:202-208); integrations created through the pipeline itself carry no sender (confirmed by installation.py:44 which explicitly guards `if \"sender\" not in integration.metadata`, and by the pipeline-created integration in test_integration.py:730-743). Previously this branch only bound state and called pipeline.next_step(), so this crash is newly introduced. Fix: guard the lookup, e.g. `if pipeline.fetch_state(\"github_authenticated_user\") != (integration.metadata.get(\"sender\") or {}).get(\"login\"):` and decide the desired fallback when sender is absent."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       500,
+       505
+      ],
+      "texto": "`integration.metadata[\"sender\"][\"login\"]` can raise KeyError. build_integration (line 376-377) only sets metadata[\"sender\"] when state.get(\"sender\") is truthy, so an existing Integration without a sender entry makes this subscripting throw an unhandled KeyError (500) instead of routing to the intended error page. Use `integration.metadata.get(\"sender\", {}).get(\"login\")` (and treat a missing sender as a failed verification) so the mismatch/absence case returns error() rather than crashing."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       501,
+       503
+      ],
+      "texto": "The new ownership check indexes integration.metadata['sender']['login'] even though GitHubIntegrationProvider.build_integration omits sender for normal pipeline-created integrations. Reconnecting an existing active integration without an OrganizationIntegration and without webhook-populated sender now raises KeyError and returns a server error rather than an installation failure. Handle missing sender explicitly and return the invalid-installation response when trusted installer metadata is unavailable."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#10",
+    "descricao": "test_installation_not_found uses a wrong OAuth state, so it fails at the state check and never reaches the installation-not-found path it is meant to test.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/integrations/github/test_integration.py",
+      "lines": [
+       385,
+       396
+      ],
+      "texto": "First response (installation_id) is overwritten by second response (bad state) with no assertion, so the Integration.DoesNotExist / not-ACTIVE branch in GitHubInstallation is never verified. Keep/assert the first flow through a valid OAuth step to reach the installation check instead of only asserting the OAuth state-mismatch error."
+     },
+     {
+      "file": "tests/sentry/integrations/github/test_integration.py",
+      "lines": [
+       388,
+       396
+      ],
+      "texto": "This test no longer verifies the \"installation not found\" path it exists for. The second GET supplies state=ddd023d87a913d5226e2a882c4c4cc05, which is not the github pipeline signature (that is the 9cae5e88803f35ed7970fc131e6e65d3 asserted in test_github_setup and reused elsewhere). OAuthLoginView.dispatch (integration.py:412-413) therefore returns error() before GitHubInstallation runs, producing the same generic \"Invalid installation request.\" message and the same failed template via the state-mismatch branch. The Integration.DoesNotExist handling at integration.py:493-498 is never reached, so the test would still pass if that handling were removed or broken. Use the real pipeline state so the request advances into GitHubInstallation, or assert on something that distinguishes the state-mismatch branch from the missing-installation branch."
+     },
+     {
+      "file": "tests/sentry/integrations/github/test_integration.py",
+      "lines": [
+       388,
+       396
+      ],
+      "texto": "The replacement assertion no longer verifies that a nonexistent installation is rejected: 'Invalid installation request.' is also returned for a state mismatch, missing access token, or missing authenticated login before GitHubInstallation is reached. This test can therefore pass with installation-not-found handling broken if the callback fails OAuth validation instead. Establish a successful OAuth exchange with the actual pipeline state and verify that the nonexistent installation lookup is reached and rejected, rather than accepting this shared authentication-error message alone."
+     }
+    ]
+   }
+  ]
+ },
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "6048e2a86b50e81e1e3b1b467dfea5a895add3dc",
+  "base": "d1440bb5d2f2190ad7ae1d26c165f970055b5370",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+    "lines": [
+     53,
+     77
+    ],
+    "texto": "WHAT: The cancel loop sits in one try/catch and the DB deletes are only awaited after the loop, so one failed SendGrid request aborts the whole batch. WHY: Reminders already cancelled in SendGrid are never deleted, and later reminders are skipped, so cancelled emails can still be sent and the same rows are retried on every cron run. HOW: Wrap each iteration in its own try/catch and delete the DB row right after its successful cancel request."
+   },
+   {
+    "id": "S2",
+    "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+    "lines": [
+     484,
+     497
+    ],
+    "texto": "WHAT: The delete helpers are async and now do the DB write (mark cancelled or delete) themselves, but they are called without await and are no longer part of Promise.all. WHY: The handler can respond before the reminder is flagged as cancelled, particularly on serverless, so the reminder email or SMS is still sent for a cancelled booking. HOW: Collect the returned promises and await them with the other promises."
+   },
+   {
+    "id": "S3",
+    "file": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+    "lines": [
+     197,
+     232
+    ],
+    "texto": "`deleteScheduledEmailReminder` and its `immediateDelete` flag are misnamed. With `immediateDelete=true` it only cancels the SendGrid batch and returns, without deleting the DB row. Otherwise it only sets `cancelled: true`, and deletion is left to the cron job. Callers such as the workflow-delete path read this as deleting the reminder. Rename them (e.g. `cancelScheduledEmailReminder` / `immediateCancel`) or make the behaviour match the name."
+   },
+   {
+    "id": "S4",
+    "file": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+    "lines": [
+     213,
+     223
+    ],
+    "texto": "The immediateDelete branch cancels the SendGrid batch and returns without deleting the WorkflowReminder row. The handleNewBooking reschedule caller passes true on the assumption that the reminder is removed, as deleteScheduledSMSReminder does. The old booking's email reminder rows therefore stay in the DB, neither deleted nor flagged cancelled, so the cron never cleans them up. Delete the row after the cancel request."
+   },
+   {
+    "id": "S5",
+    "file": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+    "lines": [
+     213,
+     223
+    ],
+    "texto": "The immediateDelete branch cancels the SendGrid batch and returns without deleting the WorkflowReminder row or setting cancelled. The row stays in the database as scheduled, and the cron cleanup only matches cancelled=true rows, so it is never removed. This is reachable on reschedule in handleNewBooking, which passes immediateDelete=true. Delete the row after the cancel request succeeds."
+   },
+   {
+    "id": "S6",
+    "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+    "lines": [
+     53,
+     77
+    ],
+    "texto": "All cancellations share one try/catch, so a single failing SendGrid cancel request aborts the loop before any DB deletes run. The same poisoned row is retried on every cron run and blocks every later cancelled reminder, which can then be sent despite the cancellation. Wrap each reminder in its own try/catch and delete or skip it individually."
+   },
+   {
+    "id": "S7",
+    "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+    "lines": [
+     484,
+     497
+    ],
+    "texto": "The reminder cleanup used to be awaited through the Promise.all of the prisma deletes. The managers now do the DB delete or update themselves, but the handler calls them without await, so the booking cancellation can return before the reminders are cancelled or deleted. Collect the returned promises and include them in the awaited Promise.all."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+    "descricao": "Reminder cancel helpers are called without await inside forEach when bookings are cancelled/rescheduled or workflows edited, so the handler can return before reminders are cancelled or deleted and failures are unobserved.",
+    "textoGolden": "Asynchronous functions deleteScheduledEmailReminder and deleteScheduledSMSReminder are called without await inside forEach loops. This occurs during booking rescheduling/cancellation, and workflow/workflow step deletion/updates. Consequently, scheduled workflow reminders may not be reliably cancelled, potentially leaving them active.",
+    "comentarios": [
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       484,
+       493
+      ],
+      "texto": "WHAT: async deleteScheduledEmailReminder/deleteScheduledSMSReminder called inside forEach without collecting/awaiting promises. WHY: handler returns before cancels complete and rejections are unobserved, so cancellations are lost and reminder emails/SMS are still sent (same fire-and-forget pattern repeated in handleNewBooking:966, bookings.tsx:488, workflows.tsx:212/376/519/574)."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       485,
+       495
+      ],
+      "texto": "Cancellation now delegates the database update/deletion to asynchronous reminder helpers without awaiting them, while removing reminder deletes from the awaited promise list. The handler can finish before cancelled flags or unscheduled-reminder deletions are persisted, allowing a subsequent scheduler run to schedule a cancelled booking's reminder and leaving cancellation work unfinished when a serverless invocation terminates. Collect and await the helper promises; apply the same correction to the modified rescheduling and workflow-update callers that discard these promises."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       485,
+       495
+      ],
+      "texto": "Await the reminder cancellation promises before completing the cancellation request. These helpers now own persistence of cancellation: email awaits a workflowReminder update and SMS awaits Twilio before deleting the row. The forEach discards their promises, and removing remindersToDelete from the awaited promise list removes the previous guarantee that reminder state is cleared before the handler returns. In a serverless request the outstanding operations can be interrupted after the response, leaving reminders active for a cancelled booking. Collect these helper promises and include them in the awaited Promise.all."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+    "descricao": "The cron cancels SendGrid sends for cancelled reminders in one try around the whole loop, so one failing cancel aborts all remaining cancellations and the row deletions, and the failing row blocks later runs.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "lines": [
+       43,
+       77
+      ],
+      "texto": "WHAT: remindersToCancel loop awaits SendGrid cancel per-reminder inside one try and only runs Prisma deletes after the loop, with no method filter. WHY: a single throw (e.g. null SMS referenceId sent as batch_id, or one SendGrid error) aborts the loop and skips Promise.all deletes, leaving all other cancelled emails still scheduled so they are still sent."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "lines": [
+       66,
+       74
+      ],
+      "texto": "Successful cancellation records are only deleted after every SendGrid request in the loop succeeds. If a later request fails, the catch skips all queued Prisma deletions; the next run retries an already-cancelled batch, which SendGrid rejects with 400, and aborts before processing the remaining reminders. Await each reminder's database deletion immediately after its successful cancellation and isolate errors per reminder so one failed batch does not block the others."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "lines": [
+       53,
+       76
+      ],
+      "texto": "Handle cancellation failures per reminder rather than around the entire batch. If one SendGrid request rejects (for example, for an expired or invalid batch ID), the loop exits before cancelling the remaining reminders, and Promise.all is never reached, so even earlier successfully cancelled reminders remain in the database. The failed record stays eligible for the next run and can repeatedly block other cancellations until their emails are sent. Execute each successful deletion and isolate failures so the worker continues processing the remaining reminders."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#05",
+    "descricao": "Email reminders for cancelled bookings are only flagged cancelled and cancelled in SendGrid by the cron later, so reminders close to their send time can still be delivered.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "lines": [
+       46,
+       48
+      ],
+      "texto": "Deferred cancellation includes reminders less than ten minutes from their scheduled send time, when SendGrid no longer permits cancellation. A booking cancelled in that interval is only marked cancelled locally by deleteScheduledEmailReminder, and the cron's POST is rejected, so its email is still delivered. Process cancellation before SendGrid's ten-minute cutoff and explicitly handle cancellations that arrive after that deadline rather than relying on this cron query to stop delivery."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#06",
+    "descricao": "The cron cancels SendGrid scheduled sends one at a time with sequential awaits, which is slower than batching.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "lines": [
+       53,
+       74
+      ],
+      "texto": "The new cancel loop performs a sequentially awaited SendGrid HTTP request (`await client.request(...)`) for each reminder returned by an unbounded `findMany` (no `take`), then deletes them. WHY: this is O(N) serial network round-trips per cron run; if many reminders are cancelled at once (e.g. a bulk event-type disable or booking cancellation wave) the cron handler can block for a long time on serial SendGrid latency. HOW: fan the independent SendGrid cancel requests out with `Promise.all`, and/or bound the query with `take` plus pagination, then batch the DB deletes."
+     },
+     {
+      "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "lines": [
+       56,
+       64
+      ],
+      "texto": "WHAT: SendGrid cancel issued with sequential await inside for loop over remindersToCancel. WHY: cron blocks O(N) sequential network round-trips instead of parallel batch, materially slowing the hourly schedule job as cancelled backlog grows."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#11",
+    "descricao": "deleteScheduledEmailReminder and its immediateDelete flag do not delete anything; the names no longer describe the behaviour.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+      "lines": [
+       197,
+       232
+      ],
+      "texto": "`deleteScheduledEmailReminder` and its `immediateDelete` flag no longer match what the code does. The default path only marks the reminder `cancelled: true`, and the `immediateDelete` path only sends a cancel request to the email provider. Neither path deletes the scheduled send or the row, unlike the SMS counterpart, which still deletes. Rename them (for example `cancelScheduledEmailReminder` and `immediateCancel`) or document the behaviour."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#13",
+    "descricao": "deleteScheduledSMSReminder deletes the DB row only after a successful Twilio cancel, so a cancel failure leaves the reminder row behind now that callers no longer delete it.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/ee/workflows/lib/reminders/smsReminderManager.ts",
+      "lines": [
+       177,
+       186
+      ],
+      "texto": "twilio.cancelSMS and prisma.workflowReminder.delete share one try block. If the Twilio cancel throws, the DB row is never deleted. The reminder row then stays behind for a booking that was cancelled, rescheduled or deleted, because the callers no longer delete rows themselves. Delete the row in a finally block, or handle the cancel failure separately so the delete still runs."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#14",
+    "descricao": "Prisma is imported in workflows.tsx but no longer used.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/workflows.tsx",
+      "lines": [
+       1,
+       10
+      ],
+      "texto": "`Prisma` is imported as a value (line 9) but is no longer used anywhere in this file. This PR removed the only usages (`Prisma.BatchPayload` in the now-deleted `remindersToDelete` / `deleteReminderPromise` declarations), while the import was kept. WHY: the repo's ESLint `no-unused-vars` rule will fail CI/build for an unused import. HOW: remove `Prisma` from the import list (and keep `import type { PrismaPromise }` as a type-only import)."
+     }
+    ]
+   },
+   {
+    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#prod-01",
+    "descricao": "The cron route sets the API key only on @sendgrid/mail, so the new @sendgrid/client cancellation requests are unauthenticated and reminders for cancelled bookings stay scheduled.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feature-automatically-downsize-large-images-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "ffbaf8c54269df2ce510de91245760fddce09896",
+  "base": "3f71fa15c93bb0b751bb92abae1b5dc9a21bd4ca",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     145,
+     151
+    ],
+    "texto": "WHAT: `self.downsize` is defined twice, and the second definition (from, to, dimensions, opts={}) overrides the first (from, to, max_width, max_height, opts={}). WHY: existing callers such as `resize_emoji.rb` (`OptimizedImage.downsize(path, path, 100, 100, opts)`) now pass 5 arguments to a method that takes at most 4, so they raise ArgumentError and emoji resizing breaks. HOW: keep one definition that handles both call styles, for example `def self.downsize(from, to, *args)` that takes the opts hash from the end and builds dimensions from either one string or width and height. Alternatively, update the emoji caller to pass \"100x100\" and remove the dead first definition."
+   },
+   {
+    "id": "S2",
+    "file": "app/assets/javascripts/discourse/lib/utilities.js",
+    "lines": [
+     182,
+     184
+    ],
+    "texto": "The size limit is hard-coded to 10MB for every upload type, but only images are auto-downsized. Non-image uploads such as attachments are still limited by their site setting (max_attachment_size_kb). The file_too_large alert therefore shows a wrong limit, and oversized attachments pass the client check. Keep the site setting for non-images and use 10MB only for images."
+   },
+   {
+    "id": "S3",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     145,
+     151
+    ],
+    "texto": "`self.downsize` is defined twice, and the second definition `(from, to, dimensions, opts)` replaces the first `(from, to, max_width, max_height, opts)`. The existing caller `OptimizedImage.downsize(path, path, 100, 100, opts)` in app/jobs/regular/resize_emoji.rb now passes 5 arguments to a method that takes at most 4, so it raises ArgumentError. Keep one definition that handles both call forms, or update the emoji job to pass \"100x100\"."
+   },
+   {
+    "id": "S4",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     149,
+     151
+    ],
+    "texto": "The new `downsize(from, to, dimensions, opts)` redefines the earlier five-argument `downsize`, so only the new signature exists. The existing caller `app/jobs/regular/resize_emoji.rb:14` still calls `OptimizedImage.downsize(path, path, 100, 100, opts)`, which now raises ArgumentError and breaks emoji resizing. Update that caller to pass \"100x100\", or give the new method a different name."
+   },
+   {
+    "id": "S5",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     145,
+     151
+    ],
+    "texto": "`downsize` is defined twice, and the second definition (from, to, dimensions, opts) overrides the first (from, to, max_width, max_height, opts). The existing caller `OptimizedImage.downsize(path, path, 100, 100, opts)` in app/jobs/regular/resize_emoji.rb:14 now raises ArgumentError, because it passes 5 arguments to a method that takes 3 plus an optional opts hash. Update that caller to pass a single dimensions string such as \"100x100\", and remove the dead first definition."
+   },
+   {
+    "id": "S6",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     145,
+     151
+    ],
+    "texto": "`downsize` is defined twice, and the later 3-arg definition (from, to, dimensions, opts) replaces the 4-arg one. The existing caller in app/jobs/regular/resize_emoji.rb:14 still calls `downsize(path, path, 100, 100, opts)`. That call now binds 100 as `dimensions` and 100 as `opts`, so `opts[:allow_animation]` fails and the emoji resize job breaks. Remove the 4-arg definition and update the caller to pass \"100x100\"."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#01",
+    "descricao": "downsize is defined twice in OptimizedImage; the new (from, to, dimensions, opts) version overrides the (max_width, max_height) one, so existing callers such as ResizeEmoji that pass width and height now raise ArgumentError.",
+    "textoGolden": "The downsize method is defined twice. The second definition, which expects a single dimensions string parameter, overrides the first, which expected separate max_width and max_height parameters. This makes the original method unreachable and breaks existing code that calls it with separate width and height arguments.",
+    "comentarios": [
+     {
+      "file": "app/models/optimized_image.rb",
+      "lines": [
+       149,
+       151
+      ],
+      "texto": "WHAT: A second `def self.downsize(from, to, dimensions, opts={})` is defined that overrides the existing `downsize(from, to, max_width, max_height, opts={})` at lines 145-147. WHY: Ruby uses the last definition, so the effective downsize now only accepts 3-4 args, and the existing caller app/jobs/regular/resize_emoji.rb:14 (`OptimizedImage.downsize(path, path, 100, 100, opts)`) passes 5 args and raises ArgumentError (wrong number of arguments, given 5, expected 3..4), breaking emoji resizing. HOW: Remove the duplicate; keep a single downsize method whose signature matches all callers (the 4-arg uploads_controller call `downsize(path, path, \"80%\", allow_animation: ...)` and the 5-arg ResizeEmoji call), or rename one of them."
+     },
+     {
+      "file": "app/models/optimized_image.rb",
+      "lines": [
+       145,
+       151
+      ],
+      "texto": "`downsize` is defined twice: the original 5-param form `downsize(from, to, max_width, max_height, opts)` at lines 145-147 and the new 4-param form `downsize(from, to, dimensions, opts)` at lines 149-151. Ruby keeps only the last definition, so the effective signature is now 4 params and the 5-param version is dead code. The pre-existing consumer app/jobs/regular/resize_emoji.rb:14 still calls `OptimizedImage.downsize(path, path, 100, 100, opts)` with 5 positional args, which now raises ArgumentError on every emoji resize. Either update that caller to the new `dimensions` form or remove the redundant override so the old signature keeps working."
+     },
+     {
+      "file": "app/models/optimized_image.rb",
+      "lines": [
+       145,
+       151
+      ],
+      "texto": "`self.downsize` is defined twice in the same class scope (line 145 `(from, to, max_width, max_height, opts={})` and the new line 149 `(from, to, dimensions, opts={})`). Ruby keeps only the last definition, so the 4-argument version is dead and unreachable. The existing caller `OptimizedImage.downsize(path, path, 100, 100, opts)` in app/jobs/regular/resize_emoji.rb:14 passes 5 arguments and will now raise ArgumentError (expected 3..4). Remove the duplicate definition (keep only the `dimensions`-based one, or convert resize_emoji's call), otherwise emoji resizing breaks."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#02",
+    "descricao": "The client-side upload size check hardcodes 10 MB instead of the per-type max_<type>_size_kb setting, so attachment limits diverge from the server: larger allowed attachments are blocked and smaller limits are only enforced server-side.",
+    "textoGolden": "Hardcoding maxSizeKB = 10 * 1024 ignores Discourse.SiteSettings['max_' + type + '_size_kb'], so the client-side limit can diverge from server-side and per-type settings (also applies to the 413 handler below).",
+    "comentarios": [
+     {
+      "file": "utilities.js",
+      "lines": [
+       179,
+       249
+      ],
+      "texto": "Hardcoded max size literal 10 * 1024 replaces site-setting-derived max size. Behavioral concern outside assigned class."
+     },
+     {
+      "file": "app/assets/javascripts/discourse/lib/utilities.js",
+      "lines": [
+       182,
+       182
+      ],
+      "texto": "The fixed 10 MB client limit is applied to attachments as well as images, replacing max_attachment_size_kb. Sites configured to allow attachments larger than 10 MB can no longer upload those valid files through the composer, although UploadValidator still permits them. Apply the new input ceiling only to images and retain the configured attachment limit."
+     },
+     {
+      "file": "app/assets/javascripts/discourse/lib/utilities.js",
+      "lines": [
+       180,
+       184
+      ],
+      "texto": "WHAT: Client check hardcodes maxSizeKB to 10*1024 instead of Discourse.SiteSettings['max_'+type+'_size_kb'], losing image vs attachment distinction. WHY: Sites with smaller max_attachment_size_kb pass client validation then fail server-side, and sites with limits >10MB incorrectly block valid uploads with wrong max_size_kb message. HOW: Restore per-type SiteSetting lookup (keep 10MB only as image downsize ceiling)."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#03",
+    "descricao": "The upload downsizing passes a percentage ('80%') as dimensions, but for animated GIFs the gifsicle path uses --resize-fit, which expects WxH geometry, so downsizing silently fails.",
+    "textoGolden": "Passing 80% as the dimensions can fail for animated GIFs when allow_animated_thumbnails is true, since the animated path uses gifsicle --resize-fit which expects WxH geometry, not a percentage; downsizing would then silently fail.",
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       67,
+       67
+      ],
+      "texto": "The controller passes the percentage string `\"80%\"` as the dimensions argument to `OptimizedImage.downsize`, but the consumer requires explicit `WxH` geometry: the code this PR deleted built exactly `\"#{width}x#{height}\"`, and the animated path runs `gifsicle --resize-fit #{dimensions}`, which rejects a percentage. Pass an explicit size (e.g. a computed `\"WxH\"` from the max KB target) so the auto-downsize actually reduces the file, rather than silently no-oping and leaving oversized uploads."
+     },
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       63,
+       70
+      ],
+      "texto": "Caller passes \"80%\" as dimensions to OptimizedImage.downsize, but the downsize/optimize instruction builders in optimized_image.rb expect explicit \"WxH\" geometry (interpolated as -resize #{dimensions}\\>). A bare percentage does not satisfy that contract and will produce a malformed geometry. Fix the caller to supply WxH dimensions or add explicit percentage handling to the callee."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#04",
+    "descricao": "Auto-downsizing passes the upload tempfile path, which lacks a .gif extension, so the animated branch is never chosen and convert keeps only the first frame, flattening oversized animated GIFs.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       64,
+       70
+      ],
+      "texto": "WHAT: The new auto-downsize call passes a tempfile path whose name has no `.GIF` extension, so `optimize` never selects the animated branch (`method_name += \"_animated\" if opts[:allow_animation] && from =~ /\\.GIF$/i`) and uses `downsize_instructions`, which runs `convert from[0]` and keeps only the first frame. WHY: Animated GIFs larger than max_image_size_kb that are uploaded through this path have their animation flattened to a single frame even though SiteSetting.allow_animated_thumbnails is enabled. HOW: Detect the image type from the original filename/content-type rather than the tempfile path (or pass a flag) so the gifsicle animated downsize path is used for GIF inputs."
+     },
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       67,
+       67
+      ],
+      "texto": "Passing the multipart tempfile path to downsize prevents animation detection when that path does not end in .gif, even when allow_animated_thumbnails is enabled. OptimizedImage.optimize checks the path suffix and otherwise uses convert with input[0], so oversized animated GIF uploads are permanently flattened to their first frame. Preserve the original image extension in the processing path or pass the image format explicitly to select animated processing."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#05",
+    "descricao": "The comment promises images are reduced to the allowed size, but the loop only tries five 80% reductions with no guarantee of reaching the limit.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       63,
+       70
+      ],
+      "texto": "The comment says large images are \"automatically reduced to allowed size\", but the loop only resizes by 80% up to 5 attempts (\u22480.33\u00d7 of the original in the best case) and then stops without any check that the result actually meets `max_image_size_kb`. The prose promises a guarantee the code does not provide; either make the loop actually converge to the allowed size or reword the comment to state that the image is only attempted to be reduced."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#06",
+    "descricao": "The downsize retry loop ignores the false return of a failed conversion and repeats the same failing ImageMagick call up to five times.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       66,
+       68
+      ],
+      "texto": "The retry loop ignores downsize's false return value and retries failed conversions while the file remains oversized. convert_with returns false on converter failure, so an unsupported or malformed oversized image launches the same failing external conversion up to five times per upload without any changed input. Break on a failed downsize result and return an upload error rather than repeating the conversion."
+     },
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       64,
+       69
+      ],
+      "texto": "WHAT: Downsize loop ignores OptimizedImage.downsize return value and retries up to 5 times unconditionally while checking tempfile.size. WHY: Failed converts (e.g. SVG, invalid 80%> geometry, corrupt image) burn 5 ImageMagick runs then Upload.create_for still runs with oversized/unmodified file and fails validation, wasting CPU and breaking the feature. HOW: Break on false return and handle failure."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#08",
+    "descricao": "Claims up to five synchronous ImageMagick runs per oversized upload block request threads and enable DoS.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       63,
+       69
+      ],
+      "texto": "WHAT: Up to 5 synchronous OptimizedImage.downsize + ImageOptim convert runs execute inline in create_upload request cycle for every oversized image. WHY: Blocks the Rails request thread with CPU-intensive shell-outs per upload, enabling easy request-thread exhaustion/DoS with large images. HOW: Move downsizing to background job or enforce single-pass/timeout."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#09",
+    "descricao": "Claims the downsize loop checking tempfile.size may never terminate because of a stale cached size, causing infinite loops.",
+    "textoGolden": "The loop checking `tempfile.size` may never terminate correctly due to stale cached size, leading to potential infinite loops or incorrect file handling after modifications.",
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#sncc-01",
+    "descricao": "The 413 upload error message states a hard-coded 10 MB maximum that may not match the limit the server or web server actually enforces.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#opa-01",
+    "descricao": "The upload tempfile path, which for API URL uploads embeds the request-controlled type param, is now passed to OptimizedImage.downsize and run unescaped in a shell via backticks, allowing command injection through type.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "advanced-sql-analytics-framework-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "f3317b329b4eb8fd96f99dd86525bc4a22d20248",
+  "base": "cbe1e7d63f098e306058c0fbcab2f5c30602fa7d",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     194,
+     200
+    ],
+    "texto": "WHAT: enableSqlExpressions negates the feature flag and then returns false on both paths, so it always returns false. WHY: the flag is never honored and the dead branch hides the real intent, so SQL expressions stay disabled even if the flag is turned on, and the logic misleads maintainers. HOW: either return a constant false with a clear comment for a hard disable, or return `h.features.IsEnabledGlobally(featuremgmt.FlagSqlExpressions)` if the flag should control it."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     194,
+     200
+    ],
+    "texto": "enableSqlExpressions returns false on every path. The flag check is inverted into `enabled` and then discarded, so SQL expressions are rejected even when FlagSqlExpressions is on. Return the flag's value directly."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     194,
+     200
+    ],
+    "texto": "enableSqlExpressions returns false on every path, so the feature flag is ignored and every SQL expression query is rejected, even when FlagSqlExpressions is enabled. Return the flag's actual value, e.g. `return h.features.IsEnabledGlobally(featuremgmt.FlagSqlExpressions)`."
+   },
+   {
+    "id": "S4",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     194,
+     200
+    ],
+    "texto": "enableSqlExpressions returns false on every path, including when FlagSqlExpressions is enabled. ReadQuery therefore rejects every SQL expression with \"sqlExpressions is not implemented\" and the feature flag has no effect. It should return h.features.IsEnabledGlobally(featuremgmt.FlagSqlExpressions)."
+   },
+   {
+    "id": "S5",
+    "file": "pkg/expr/sql_command.go",
+    "lines": [
+     96,
+     100
+    ],
+    "texto": "SQLCommand.Execute used to run the query through duck.DB. It now calls the stub sql.DB, whose QueryFramesInto always returns \"not implemented\". Any SQL expression that reaches Execute fails, and TablesList in parser.go fails the same way. The consumers were not updated for the loss of the working implementation."
+   },
+   {
+    "id": "S6",
+    "file": "pkg/expr/reader.go",
+    "lines": [
+     194,
+     200
+    ],
+    "texto": "`enableSqlExpressions` reads as a check that the feature is enabled. It stores the negated flag in a variable called `enabled` and always returns false, even when FlagSqlExpressions is on. Rename it to match what it does, or make it return the flag's actual value."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "advanced-sql-analytics-framework-grafana-codex#06",
+    "descricao": "The variable in TablesList is still named duckDB although it no longer holds a DuckDB instance.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/expr/sql/parser.go",
+      "lines": [
+       22,
+       26
+      ],
+      "texto": "After replacing `duck.NewInMemoryDB()` with local `NewInMemoryDB()` and removing the duck import, the local `duckDB` still carries the old implementation name though it is no longer a duck DB. Rename to `db`/`sqlDB` (as done in sql_command.go) so identifier matches code."
+     }
+    ]
+   },
+   {
+    "issueId": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+    "descricao": "enableSqlExpressions returns false on both branches, so ReadQuery rejects every SQL expression query as not implemented even when the sqlExpressions feature flag is enabled.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "advanced-sql-analytics-framework-grafana-codex#oph-02",
+    "descricao": "The variable `enabled` in enableSqlExpressions holds the negated flag value, so it is true when SQL expressions are disabled and the name states the opposite of its value.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "async-import-of-the-appstore-packages-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "820d7fa87e0c824c5dee8082a33efadb1a2566f7",
+  "base": "ba9688a04a8398c9a8332ee7061bfae2f2efd524",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/trpc/server/routers/viewer/bookings.tsx",
+    "lines": [
+     553,
+     556
+    ],
+    "texto": "WHAT: `forEach(async ...)` does not await its callbacks, so the `await getCalendar(...)` and the following `deleteEvent` run detached from the surrounding try/catch. WHY: the reschedule flow continues and responds before the calendar events are deleted, and a failure becomes an unhandled promise rejection instead of being caught. HOW: use `await Promise.all(bookingRefsFiltered.map(async (bookingRef) => {...}))`, or a `for...of` loop with `await`. The same change is needed in the vital and wipemycalother reschedule.ts files."
+   },
+   {
+    "id": "S2",
+    "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+    "lines": [
+     458,
+     461
+    ],
+    "texto": "WHAT: the recurring-event cancellation path still uses `.forEach(async (credential) => {...})`, and the callback now awaits getCalendar. WHY: the awaits inside it are not awaited by the handler, so the calendar updates can run after the handler returns, and any rejection is unhandled. HOW: replace it with `for (const credential of ...)` using await, or `await Promise.all(map(...))`."
+   },
+   {
+    "id": "S3",
+    "file": "packages/app-store/index.ts",
+    "lines": [
+     3,
+     30
+    ],
+    "texto": "WHAT: the appStore object holds `import(...)` promises, which start loading all 29 app modules as soon as index.ts is evaluated. WHY: this defeats the goal of lazy loading, because every app module is still loaded on first import. A rejected import is also an unhandled rejection at module load. HOW: make each entry a thunk, `() => import(\"./x\")`, and call it only when the app is needed."
+   },
+   {
+    "id": "S4",
+    "file": "packages/trpc/server/routers/viewer/bookings.tsx",
+    "lines": [
+     553,
+     556
+    ],
+    "texto": "The `forEach(async ...)` callback discards the promises, so the enclosing try/catch no longer catches errors from `getCalendar` or `deleteEvent`. These errors become unhandled rejections, and the handler can return before the calendar deletes finish. Collect the promises with `map` and `await Promise.all(...)` inside the try block."
+   },
+   {
+    "id": "S5",
+    "file": "packages/trpc/server/routers/viewer/bookings.tsx",
+    "lines": [
+     553,
+     556
+    ],
+    "texto": "The forEach callback was made async, so the awaited getCalendar/deleteEvent calls are not awaited by the caller. Rejections escape the surrounding try/catch as unhandled promise rejections, and the reschedule continues before the calendar deletions finish. Collect the promises and await them, for example `await Promise.all(bookingRefsFiltered.map(async (bookingRef) => {...}))`."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "async-import-of-the-appstore-packages-cal-com#02",
+    "descricao": "Async callbacks passed to forEach after getCalendar became async are never awaited, so calendar and video cancellations run fire-and-forget, may not finish, and their errors escape the surrounding try/catch as unhandled rejections.",
+    "textoGolden": "The code uses forEach with async callbacks, which causes asynchronous operations (e.g., calendar/video event deletions, payment refunds) to run concurrently without being awaited. This 'fire-and-forget' behavior leads to unhandled promise rejections, race conditions, and incomplete cleanup, as surrounding try-catch blocks cannot properly handle errors from these unawaited promises. Replace forEach with for...of loops or Promise.all() with map() to ensure proper sequential execution and error handling.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/vital/lib/reschedule.ts",
+      "lines": [
+       125,
+       128
+      ],
+      "texto": "The async forEach callback moves calendar factory exceptions outside the surrounding try/catch because forEach discards its returned promise. An invalid encrypted Exchange credential throws during CalendarService construction, now producing an unhandled rejection while Reschedule continues and returns success instead of logging the error; the identical regression occurs in wipemycalother/lib/reschedule.ts. Await Promise.all over bookingRefsFiltered.map(async ...) inside the try block, or use an awaited for...of loop, so factory and deletion failures reach the catch."
+     },
+     {
+      "file": "packages/app-store/vital/lib/reschedule.ts",
+      "lines": [
+       125,
+       128
+      ],
+      "texto": "The new async forEach callback is not awaited. If getCalendar rejects (for example, the dynamically imported calendar module fails to load or its service constructor throws), the callback produces a rejected promise that forEach discards; the surrounding try/catch cannot catch it. Previously a synchronous getCalendar failure reached that catch. Await Promise.all(bookingRefsFiltered.map(async ...)) or use an awaited for...of loop so these failures remain handled and calendar cleanup completes before rescheduling continues. Apply the same fix to the equivalent changed loop in wipemycalother/lib/reschedule.ts."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       458,
+       470
+      ],
+      "texto": "WHAT: credentials.filter(...).forEach(async (credential) => { await getCalendar; apiDeletes.push(...) }) pushes to apiDeletes asynchronously after outer code consumes it. WHY: outer apiDeletes is awaited elsewhere while async callbacks have not yet pushed, so recurring-event deletions are lost/partial and errors are unobserved. HOW: replace with for...of with await or collect promises via map + await Promise.all."
+     }
+    ]
+   },
+   {
+    "issueId": "async-import-of-the-appstore-packages-cal-com#sncc-01",
+    "descricao": "Each import(...) in the appStore object literal runs when app-store/index.ts is imported, so all integrations still load at startup instead of lazily, while every entry becomes a promise.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "79d11c4890cc4792e3dc3535af59e4e5f7a2739d",
+  "base": "10aca5552314d6e5c9226f3c6d0107861c38c693",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+    "lines": [
+     71,
+     73
+    ],
+    "texto": "WHAT: readInteger passes the result of readLength to read(length) without checking for -1, which readLength returns for an indefinite-length encoding. WHY: a malformed signature makes read() throw NegativeArraySizeException, an unchecked exception, where callers expect an IOException. HOW: throw IOException when length < 0 in readInteger, and in read(int) as well."
+   },
+   {
+    "id": "S2",
+    "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+    "lines": [
+     60,
+     67
+    ],
+    "texto": "getBouncyCastleProvider() is named and documented in the CryptoProvider contract as returning the BouncyCastle provider. Here it returns whatever JDK provider backs the default KeyStore type (e.g. SUN), so callers that read the name will assume BC features. Add a comment or Javadoc stating that this provider deliberately returns a non-BouncyCastle JDK provider."
+   },
+   {
+    "id": "S3",
+    "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+    "lines": [
+     41,
+     57
+    ],
+    "texto": "The test uses one default (P-256) EC key for ES256, ES384 and ES512, and only round-trips through the same converter. For ES384 and ES512 the r and s values are never full-size (48 or 66 bytes), so the truncation, padding and sign-byte paths are never exercised. A symmetric bug would also go unnoticed. Generate a key on the matching curve for each algorithm (secp256r1, secp384r1, secp521r1) and assert the concatenated length equals signLength. Also verify the re-encoded DER signature with Signature.verify."
+   },
+   {
+    "id": "S4",
+    "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+    "lines": [
+     114,
+     115
+    ],
+    "texto": "These two ASN1Encoder instances are created and written to, but their results are never used. The return statement builds new encoders for the same values. Remove the dead computation."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#02",
+    "descricao": "concatenatedRSToASN1DER encodes r and s into two throwaway ASN1Encoder instances before re-encoding them in the return statement.",
+    "textoGolden": "Dead code exists where ASN1Encoder instances are created and written to, but their results are immediately discarded. The actual encoding is performed by new ASN1Encoder instances created in the subsequent return statement, rendering the earlier operations useless.",
+    "comentarios": [
+     {
+      "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+      "lines": [
+       114,
+       115
+      ],
+      "texto": "Dead computation: the two ASN1Encoder.create().write(...) calls allocate encoders and encode rBigInteger/sBigInteger, but their results are discarded \u2014 the returned DER comes entirely from the expression at lines 117-121, which re-encodes the same BigIntegers. These two statements have no effect and should be removed (they are a leftover from an earlier formulation)."
+     },
+     {
+      "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+      "lines": [
+       114,
+       115
+      ],
+      "texto": "Remove these two discarded encoder writes. Each allocates an encoder and encodes a BigInteger, but neither result participates in the returned signature; lines 119\u2013120 repeat both writes on fresh encoders. This performs redundant encoding and allocations on every concatenated-signature conversion."
+     },
+     {
+      "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+      "lines": [
+       114,
+       115
+      ],
+      "texto": "The two statements `ASN1Encoder.create().write(rBigInteger);` and `ASN1Encoder.create().write(sBigInteger);` encode values and discard the results. The return expression re-encodes the same values, so these lines are dead computation left over from a copy-paste or refactor. Remove them."
+     }
+    ]
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#04",
+    "descricao": "order() is added to CryptoProvider as an abstract method, breaking source and binary compatibility for existing third-party CryptoProvider implementations.",
+    "textoGolden": "Abstract order() method on CryptoProvider may break backward compatibility with existing implementations",
+    "comentarios": [
+     {
+      "file": "common/src/main/java/org/keycloak/common/crypto/CryptoProvider.java",
+      "lines": [
+       39,
+       44
+      ],
+      "texto": "order() was added as an abstract method to the public CryptoProvider interface. CryptoIntegration.detectProvider now invokes order() on every ServiceLoader-discovered CryptoProvider via Comparator.comparingInt(CryptoProvider::order). Any CryptoProvider implementation compiled against the previous interface (an external or separately built provider jar on the classpath) will throw AbstractMethodError at detection time, i.e. during AuthzClient.create()/server bootstrap, before any provider is usable. Giving order() a default implementation (e.g. default int order() { return 0; }) avoids the binary-incompatibility."
+     }
+    ]
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#05",
+    "descricao": "detectProvider no longer fails when several crypto providers are present; with Default, FIPS and Elytron all at order 200, ties are resolved by classpath order and a FIPS deployment can silently run with the non-FIPS provider.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+      "lines": [
+       54,
+       72
+      ],
+      "texto": "WHAT: detectProvider sorts by order() reversed and silently picks index 0, removing the previous multiple-providers error. WHY: Default/FIPS/Elytron all return order 200, so ambiguous classpath (e.g. default+FIPS) now nondeterministically picks one by ServiceLoader order instead of failing fast, risking wrong FIPS vs non-FIPS crypto. HOW: only auto-ignore lower-order providers; throw when the top two have equal order()."
+     },
+     {
+      "file": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+      "lines": [
+       56,
+       62
+      ],
+      "texto": "Reject ambiguous highest-priority providers rather than silently taking the first. Both DefaultCryptoProvider and FIPS1402Provider return order 200 in this PR, so when both are present the stable sort leaves the decision to ServiceLoader discovery order. A deployment expecting FIPS can therefore initialize the ordinary Bouncy Castle provider without an error; previously this mixed classpath failed closed. Preserve the error for tied highest-priority providers (or require an explicit security-mode/provider choice), while still allowing the lower-priority authz-client fallback."
+     },
+     {
+      "file": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+      "lines": [
+       56,
+       72
+      ],
+      "texto": "detectProvider() no longer fails fast when multiple CryptoProviders are present and instead silently picks the first after sorting by order() descending. All Keycloak providers return the same order (DefaultCryptoProvider, FIPS1402Provider, WildFlyElytronProvider all return 200), so a tie between two providers is broken by the non-deterministic ServiceLoader iteration order rather than the intended priority. The previous code threw an IllegalStateException forcing the classpath to be corrected; now a deployment with two provider jars (exactly the 'multiple providers on classpath' scenario this PR enables) can silently select the unintended provider \u2014 e.g. a non-FIPS/strict provider when FIPS is required \u2014 with no error. Use a stable tie-breaker (delegate to the provider name/type) or reject equal top orders instead of relying on ServiceLoader order."
+     }
+    ]
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#07",
+    "descricao": "Claims a wrong-length JOSE signature causes an unchecked exception in concatenatedRSToASN1DER; verifiers catch it and report verification failure, as with the existing providers.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+      "lines": [
+       103,
+       122
+      ],
+      "texto": "WHAT: concatenatedRSToASN1DER splits signature without validating signature.length==signLength. WHY: short JOSE input throws ArrayIndexOutOfBoundsException and long input is silently truncated to signLength, breaking the ECDSACryptoProvider contract (IOException on malformed) used by verifier contexts. HOW: check length upfront and throw IOException."
+     },
+     {
+      "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+      "lines": [
+       103,
+       112
+      ],
+      "texto": "concatenatedRSToASN1DER never validates signature.length == signLength before System.arraycopy(signature,0,r,1,len) / (signature,len,s,1,len). A short JWS signature throws unchecked ArrayIndexOutOfBoundsException instead of the declared IOException, breaking verification on attacker-controlled input. Validate length and throw IOException."
+     }
+    ]
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#10",
+    "descricao": "The ES384 and ES512 tests sign with the same default P-256 key, so the converter is never tested with real P-384 or P-521 signatures.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+      "lines": [
+       39,
+       43
+      ],
+      "texto": "Single default EC keypair reused for ES256/ES384/ES512: testES384/testES512 names claim larger curves but body signs with the same P-256 key and only pads to larger signLength, so full-width 384/521-bit handling is never exercised. Generate a per-algorithm keypair with the correct curve (e.g. secp256r1/secp384r1/secp521r1) before signing."
+     },
+     {
+      "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+      "lines": [
+       41,
+       42
+      ],
+      "texto": "Every case generates a default EC key rather than a key on the curve associated with the named algorithm. On the standard JDK this is P-256, so testES384 and testES512 just pad P-256 signature components to larger lengths. A converter that discards nonzero high bytes beyond 32 bytes would still pass all three cases. Initialize the key generator with the appropriate curve per case (P-256, P-384, and P-521) so the larger-component conversions are actually tested."
+     },
+     {
+      "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+      "lines": [
+       41,
+       42
+      ],
+      "texto": "Generate a key on the curve corresponding to each tested algorithm rather than using the provider's default EC curve for all three tests. On the standard JDK this generates a P-256 key even for testES384 and testES512, so those tests merely pad P-256 integers to larger output lengths and never exercise actual P-384/P-521 signature encoding (including P-521's long-form sequence length)."
+     }
+    ]
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#11",
+    "descricao": "The test only checks a round trip between the two new converters and never verifies the re-encoded DER against the original signature or with Signature.verify, so mutually consistent bugs go undetected.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+      "lines": [
+       46,
+       57
+      ],
+      "texto": "Tautological round-trip assertion: rsConcat2 is derived from rsConcat via encode+decode that are inverses if self-consistent, so assertArrayEquals(rsConcat,rsConcat2) passes even if both directions are wrong. Verify against external oracle: Signature.initVerify + verify(asn1Des) and/or compare rsConcat to expected split, not just to itself."
+     },
+     {
+      "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+      "lines": [
+       52,
+       56
+      ],
+      "texto": "The test only checks self-consistency: it asserts asn1derToConcatenatedRS(g(asn1derToConcatenatedRS(sign))) == asn1derToConcatenatedRS(sign), i.e. that concatenatedRSToASN1DER is a right inverse of asn1derToConcatenatedRS. It never compares against the original DER `sign`, never verifies the ECDSA signature, and never asserts the emvider output is canonical DER. Because the decoder it reads back with (ASN1Decoder.readLength) accepts non-canonical long-form lengths (e.g. 0x81) and validates only tag numbers, a regression in ASN1Encoder.writeLength that always emitted long form would still round-trip and the test would still pass, even though the produced signature would no longer be valid DER and would be rejected by the Keycloak server / a JDK Signature.verify. Assert the encoded signature is valid DER (e.g. verify it with a JDK Signature, or compare asn1derToConcatenatedRS(sign) against a known-good width-padded r||s and assert its length equals algorithm.getSignatureLength())."
+     },
+     {
+      "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+      "lines": [
+       53,
+       56
+      ],
+      "texto": "The assertion only establishes agreement between the two new conversion routines, not correctness of the converted signature. For example, swapping r and s in both routines makes this entire round trip pass, although the DER result no longer verifies the signed data. Verify `asn1Des` with the public key and original data (or compare against an independently specified encoding) so mutually compensating conversion defects fail the test."
+     }
+    ]
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-02",
+    "descricao": "getBouncyCastleProvider in AuthzClientCryptoProvider returns the JDK default KeyStore provider instead of BouncyCastle, contrary to the CryptoProvider contract.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "da09bc0808e7c6df1bc10e00d5acf764d94c7cc7",
+  "base": "c9a47dd0cebd121ff73f24e1f8c1829579daf8e3",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/lib/server/service/insightsBooking.ts",
+    "lines": [
+     105,
+     107
+    ],
+    "texto": "WHAT: The eventTypeId filter is built as an unparenthesized `a OR b`, and a single filter is returned as-is from the public getFilterConditions. WHY: Any caller that combines it with `AND` without wrapping it gets the wrong SQL precedence, which would silently widen results beyond the filter and the authorization conditions. HOW: Wrap the whole expression in parentheses."
+   },
+   {
+    "id": "S2",
+    "file": "packages/lib/server/service/insightsBooking.ts",
+    "lines": [
+     72,
+     80
+    ],
+    "texto": "getAuthorizationConditions() always returns a non-null Prisma.Sql, so the `else if (filterConditions)` and final `else` (NOTHING_CONDITION) branches in getBaseConditions can never execute. Drop them and keep only the auth-and-filter and auth-only cases."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#01",
+    "descricao": "In getBaseConditions, the branches for a missing authorization condition are unreachable because getAuthorizationConditions always returns a Prisma.Sql.",
+    "textoGolden": "In getBaseConditions(), the else if (filterConditions) and final else branches are unreachable. This is because getAuthorizationConditions() always returns a non-null Prisma.Sql object, making authConditions always truthy, which means only the first two if/else if conditions are ever evaluated.",
+    "comentarios": [
+     {
+      "file": "packages/lib/server/service/insightsBooking.ts",
+      "lines": [
+       72,
+       80
+      ],
+      "texto": "getAuthorizationConditions() always returns a non-null Prisma.Sql, so the `else if (filterConditions)` and final `else` branches (returning NOTHING_CONDITION) in getBaseConditions can never execute. Simplify to: if filterConditions, combine it with authConditions; otherwise return authConditions."
+     },
+     {
+      "file": "packages/lib/server/service/insightsBooking.ts",
+      "lines": [
+       68,
+       81
+      ],
+      "texto": "Unreachable branches in getBaseConditions: authConditions is always a truthy Prisma.Sql object (never null, NOTHING is `1=0`), so `else if (filterConditions)` and final `else { return NOTHING }` can never execute. Simplify to if(filter) return auth AND filter else return auth, or make the nothing-case explicit."
+     },
+     {
+      "file": "packages/lib/server/service/insightsBooking.ts",
+      "lines": [
+       76,
+       77
+      ],
+      "texto": "WHAT: `getBaseConditions` returns `filterConditions` alone (no authorization predicate) when `authConditions` is falsy (`else if (filterConditions) { return filterConditions; }`). WHY: The WHERE clause returned to consumers then contains no ownership/authorization restriction, so a caller using it would return every booking matching the filters (e.g. all bookings for the given eventTypeId/memberUserId) regardless of the requesting user's org/team membership \u2014 an authorization-boundary bypass if `getAuthorizationConditions()` ever yields a falsy value. HOW: Always AND the authorization predicate with the filters and fall back to `NOTHING_CONDITION` when no auth predicate exists, e.g. `return filterConditions ? Prisma.sql`(${authConditions}) AND (${filterConditions})` : authConditions;` (or keep the `NOTHING_CONDITION` default when auth is missing)."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#03",
+    "descricao": "The getBaseConditions test uses a single booking matching both auth and filter conditions, so it would pass even if the conditions were not combined.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts",
+      "lines": [
+       480,
+       491
+      ],
+      "texto": "The rewritten \"should combine authorization and filter conditions\" test cannot fail if the combination is broken. The fixture creates a single booking that satisfies the auth condition (userId = user.id AND teamId IS NULL) and the filter condition (eventTypeId = eventType.id) independently, so getBaseConditions returning auth-only, filter-only, or the AND combination all yield the same single-row result asserted here. Only a `1=0` result would be caught. Make the data distinguish the two: add a booking that matches the filter but not the auth (e.g. a team booking with the same eventTypeId), then assert the result excludes it, so that dropping either branch changes the returned rows."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-01",
+    "descricao": "The caching tests for getAuthorizationConditions/getFilterConditions were removed in the Prisma.sql conversion, leaving the cached-condition logic untested.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-02",
+    "descricao": "Claims getBaseConditions returns OR fragments without parentheses, so a caller appending `AND <extra>` would leak rows outside the authorization scope.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "4def149a50c4b9b2c24fbb753ac60fe4f4df0cac",
+  "base": "c834e7473c02f11451216b3fbf355f953cfd95e9",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+    "lines": [
+     139,
+     157
+    ],
+    "texto": "WHAT: The reader thread is never joined before the assertion on caughtExceptions. WHY: A read still in flight when deletedAll is set can fail after the assertion has run, so the regression test can pass without detecting the concurrency bug. HOW: Keep the Thread reference, call join() after deletedAll.set(true), and only then assert."
+   },
+   {
+    "id": "S2",
+    "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+    "lines": [
+     136,
+     157
+    ],
+    "texto": "The reader thread is never joined and there is no guarantee it overlaps with the deletes. The assertion can run before the reader has done any read, or before an in-flight read throws, so the test passes even if the NPE/race bug is reintroduced. Keep the Thread reference, wait (e.g. a CountDownLatch) for the first read before deleting, and join() the thread after setting deletedAll and before asserting."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#01",
+    "descricao": "The cached GroupAdapter.getSubGroupsCount returns null when the group was deleted concurrently, violating the GroupModel contract that it never returns null and risking NPEs in callers that unbox it.",
+    "textoGolden": "Returning null from getSubGroupsCount() violates the GroupModel contract (Javadoc says it never returns null) and may lead to NPEs in callers that expect a non-null count.",
+    "comentarios": [
+     {
+      "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+      "lines": [
+       274,
+       275
+      ],
+      "texto": "WHAT: `getSubGroupsCount()` now returns `null` when the delegate model is gone, violating the `GroupModel.getSubGroupsCount()` contract whose javadoc (GroupModel.java:296) states 'Never returns null'. WHY: In-repo callers happen to tolerate a Long null, but any caller that unboxes the result (`long c = group.getSubGroupsCount()`) or does arithmetic on it will NPE, converting the old NPE into a different one. HOW: return a non-null sentinel such as `0L` (and assert the empty/absent case explicitly), or update the interface contract to document a nullable return."
+     },
+     {
+      "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+      "lines": [
+       274,
+       275
+      ],
+      "texto": "getSubGroupsCount() now returns null when the cached delegate is gone (modelSupplier.get() == null), whereas before this change the method delegate-called getGroupModel().getSubGroupsCount(), which could not yield null (a missing delegate surfaced as an exception instead). The declared type Long is now genuinely nullable in a path that previously always produced a value or threw, so any caller that relies on the old contract \u2014 unboxing the result (e.g. `group.getSubGroupsCount() > 0`, `long n = group.getSubGroupsCount()`, or passing it to a primitive-typed parameter) \u2014 will now throw a NullPointerException instead of getting a value or the previous exception. Since consumers were not updated for the new nullable contract, either keep the non-null behavior for callers that cannot handle null or audit/update every caller of GroupModel.getSubGroupsCount() to null-check before use."
+     },
+     {
+      "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+      "lines": [
+       274,
+       275
+      ],
+      "texto": "getSubGroupsCount() now returns null when modelSupplier.get() is null, but the count is consumed as a number by brief-representation building; the sibling cache entity changed in this PR (CachedGroup) handles the same 'model unavailable' case by returning a non-null default (getRoleMappings returns Collections.emptySet(), and the subGroups/attributes loaders are built with non-null empty defaults). Returning null here breaks that convention and can surface as an unboxing/NPE on the consumer side of the read path. Return a non-null value (e.g., 0) or only null if the GroupModel contract explicitly declares it nullable."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+    "descricao": "The concurrency regression test never waits for the reader thread before asserting no exceptions, so it can pass even when the concurrent-deletion NPE still occurs.",
+    "textoGolden": "The reader thread isn\u2019t waited for; flipping deletedAll to true and asserting immediately can race and miss exceptions added just after the flag change, making this test flaky.",
+    "comentarios": [
+     {
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+      "lines": [
+       136,
+       157
+      ],
+      "texto": "The reader thread is started but never synchronized with: the test does not wait for it to complete a read before deleting, and does not join it before asserting caughtExceptions is empty. The deletes can finish before the reader reads at all, or a failing read can land after the assertion, so the test passes even with the bug present. Use a CountDownLatch counted down after the reader's first successful read, start deleting only after it fires, and join the thread (after setting deletedAll) before asserting."
+     },
+     {
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+      "lines": [
+       149,
+       157
+      ],
+      "texto": "WHAT: The reader thread started at line 139-149 is never joined before `assertThat(caughtExceptions, Matchers.empty())` runs. WHY: The reader can be mid-request when `deletedAll.set(true)` executes; if that request throws (e.g., reading a group deleted concurrently), the exception is appended to `caughtExceptions` AFTER the assertion has already evaluated, so the test can pass even when the NPE regression it targets is present (and is flaky). HOW: after `deletedAll.set(true)`, `thread.join(<timeout>)` (storing the Thread reference) before the assertion."
+     },
+     {
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+      "lines": [
+       139,
+       157
+      ],
+      "texto": "The reader Thread is started but never joined, so the assertion at line 157 can execute before the reader has completed a single groups() read (or while a read that would throw the NPE is still in flight). If the GroupAdapter.getSubGroupsCount null-model NullPointerException were reintroduced, this test could still pass because caughtExceptions is asserted empty before the racing reader thread has recorded anything. Capture the Thread, then join it (e.g. Thread reader = new Thread(...); reader.start(); ... deletions ...; deletedAll.set(true); reader.join();) before asserting so the test actually waits on the condition it verifies."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#03",
+    "descricao": "The reader thread's stop flag is set only after all deletions succeed, so a failing delete leaves a non-daemon thread polling indefinitely.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+      "lines": [
+       139,
+       155
+      ],
+      "texto": "WHAT: The reader loop `while (!deletedAll.get())` has no termination guarantee and `deletedAll.set(true)` at line 155 only runs after the delete loop at 152-154 completes. WHY: If any `group(groupUuid).remove()` throws, `deletedAll` is never set, so the non-daemon thread loops forever and the test JVM hangs. HOW: set the thread as daemon and/or wrap deletion in try/finally so `deletedAll.set(true)` always executes."
+     },
+     {
+      "file": "GroupTest.java",
+      "lines": [
+       117,
+       158
+      ],
+      "texto": "The test has a mid-loop abort hazard."
+     },
+     {
+      "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+      "lines": [
+       152,
+       155
+      ],
+      "texto": "The reader's stop flag is set only after every deletion succeeds, with no finally block. If any remove() throws, the test exits with a live non-daemon thread that keeps issuing requests and collecting exceptions indefinitely, interfering with teardown and potentially preventing JVM termination. Put stop signaling and reader termination in a finally block around deletion."
+     }
+    ]
+   }
+  ]
+ },
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "62bf98939eda58f0d0a1a41a58aa6d4ecdc24dba",
+  "base": "8671f860469d6d95e54df3e13f77ebc401249489",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+    "lines": [
+     59,
+     62
+    ],
+    "texto": "testMissingOptionOnSave only asserts that stdout has no 'Missing required argument'. That also holds when the command is blocked by the disabled-feature guard, so the added --features flag is never verified. Assert something positive, such as the 'Metadata:' output or exit code 0."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#03",
+    "descricao": "testFeatureNotEnabled only covers the metadata subcommand, so the feature guard in the check subcommand is untested.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+      "lines": [
+       46,
+       50
+      ],
+      "texto": "testFeatureNotEnabled only launches the `metadata` subcommand and never the `check` subcommand. Removing the feature guard from UpdateCompatibilityCheck.run() would therefore not fail any test. It also doesn't assert the exit code (FEATURE_DISABLED=4). Add a case for `check` and assert the exit code on both."
+     },
+     {
+      "file": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+      "lines": [
+       46,
+       50
+      ],
+      "texto": "WHAT: testFeatureNotEnabled only exercises the metadata subcommand disabled path and never the check subcommand. WHY: the feature gate in UpdateCompatibilityCheck.run can be removed or broken without failing any test since no assertion covers its disabled message/exit code. HOW: also launch/assert the check command without --features (e.g. parameterize over metadata and check subcommands or add a second Launch)."
+     },
+     {
+      "file": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+      "lines": [
+       46,
+       50
+      ],
+      "texto": "testFeatureNotEnabled only exercises the metadata subcommand, leaving the identical ROLLING_UPDATES gate in UpdateCompatibilityCheck unverified. If the Check gate were removed, the suite still passes. Parameterize/add a second @Launch for {UpdateCompatibility.NAME, UpdateCompatibilityCheck.NAME} (with required --file or not) asserting the disabled message and FEATURE_DISABLED exit code."
+     }
+    ]
+   },
+   {
+    "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#04",
+    "descricao": "The disabled-feature test checks only the error message, not that the command exits with FEATURE_DISABLED (4).",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+      "lines": [
+       46,
+       50
+      ],
+      "texto": "The new disabled-feature test only verifies the error text, not the failure exit status. If the metadata command still prints this diagnostic but exits with 0 (or another incorrect code) instead of FEATURE_DISABLED (4), this test would still pass. Assert that cliResult.exitCode() equals CompatibilityResult.FEATURE_DISABLED so the test actually protects the new disabled-feature failure contract."
+     }
+    ]
+   },
+   {
+    "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#oph-01",
+    "descricao": "testMissingOptionOnSave only asserts a message is absent, so it would still pass if --features=rolling-updates were not honoured and the command failed with the feature-disabled error.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ }
+}

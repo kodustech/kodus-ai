@@ -1,0 +1,29 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims a missing null check for the Groups type resource in hasPermission(), causing an NPE. None of the rejected issues describes this cause."
+  },
+  {
+   "id": "S4",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#10",
+   "newGroup": null,
+   "reason": "Repeats the claim that testManageGroupMembership does not establish that the group-level manage-membership permission is exercised. The suggested assertions and negative case add detail to the same test-coverage concern."
+  },
+  {
+   "id": "S8",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-01",
+   "newGroup": null,
+   "reason": "Describes the same removed canView filter and allegedly unrestricted search for callers without user-view permission or group grants."
+  },
+  {
+   "id": "S11",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes the same missing null check on getResourceTypeResource() as S3. Its lower confidence does not change the asserted defect."
+  }
+ ]
+}

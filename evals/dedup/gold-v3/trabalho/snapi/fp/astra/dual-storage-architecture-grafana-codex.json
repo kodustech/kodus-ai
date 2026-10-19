@@ -1,0 +1,11 @@
+{
+ "caseId": "dual-storage-architecture-grafana-codex",
+ "items": [
+  {
+   "id": "S18",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The comment claims legacy-store errors are silently discarded in dualwriter_mode3.go. None of the rejected issues concerns error logging; they concern test assertions, object aliasing in a goroutine, or an empty comment."
+  }
+ ]
+}

@@ -1,0 +1,550 @@
+{
+ "add-guest-management-functionality-to-existing-bookings-cal-com": [
+  {
+   "id": "S1",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "newGroup": null,
+   "reason": "Raw guests passed to sendAddGuestsEmails instead of uniqueGuests, existing attendees get scheduled email."
+  },
+  {
+   "id": "S2",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#08",
+   "newGroup": null,
+   "reason": "EventManager built from requesting user credentials instead of organizer."
+  },
+  {
+   "id": "S3",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#11",
+   "newGroup": null,
+   "reason": "Unbounded guests array with no size cap lets attendees trigger mass inserts/emails; broader comment includes the cap issue."
+  },
+  {
+   "id": "S4",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "newGroup": null,
+   "reason": "isTeamAdmin && isTeamOwner should be ||."
+  },
+  {
+   "id": "S5",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "newGroup": null,
+   "reason": "Guest email not lowercased before blacklist comparison (broader, also covers attendee dedup)."
+  },
+  {
+   "id": "S6",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "newGroup": null,
+   "reason": "Case-sensitive blacklist bypass."
+  },
+  {
+   "id": "S7",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#12",
+   "newGroup": null,
+   "reason": "Hard-coded Remove email tooltip not translated."
+  },
+  {
+   "id": "S8",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "newGroup": null,
+   "reason": "isTeamAdminOrOwner uses && instead of ||."
+  },
+  {
+   "id": "S9",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "newGroup": null,
+   "reason": "Case-sensitive blacklist bypass."
+  },
+  {
+   "id": "S10",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#13",
+   "newGroup": null,
+   "reason": "Template string always truthy, fallback unreachable."
+  },
+  {
+   "id": "S11",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Toast exposes raw server error messages; no golden issue covers information disclosure in the error toast."
+  },
+  {
+   "id": "S12",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "newGroup": null,
+   "reason": "Case-sensitive blacklist bypass (broader, also dedup)."
+  },
+  {
+   "id": "S13",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#13",
+   "newGroup": null,
+   "reason": "Template string always truthy, fallback dead."
+  },
+  {
+   "id": "S14",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#09",
+   "newGroup": null,
+   "reason": "updateCalendarAttendees failure after DB write not handled."
+  },
+  {
+   "id": "S15",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#04",
+   "newGroup": null,
+   "reason": "Check-then-insert race inserting duplicate attendees concurrently."
+  },
+  {
+   "id": "S16",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "newGroup": null,
+   "reason": "Guest not lowercased before blacklist comparison (broader, also dedup)."
+  },
+  {
+   "id": "S17",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "newGroup": null,
+   "reason": "Raw guests passed to sendAddGuestsEmails."
+  },
+  {
+   "id": "S18",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "newGroup": null,
+   "reason": "Raw guests passed to sendAddGuestsEmails."
+  }
+ ],
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": [
+  {
+   "id": "S1",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+   "newGroup": null,
+   "reason": "Numeric get_item_key with math.floor/ceil on datetime raises TypeError on audit log endpoint."
+  },
+  {
+   "id": "S2",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Negative offset sliced into Django queryset in OptimizedCursorPaginator."
+  },
+  {
+   "id": "S3",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "BasePaginator passes negative prev offsets into slice causing error."
+  },
+  {
+   "id": "S4",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Negative offset sliced into Django queryset in OptimizedCursorPaginator."
+  },
+  {
+   "id": "S5",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Negative offset sliced into Django queryset in OptimizedCursorPaginator."
+  },
+  {
+   "id": "S6",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+   "newGroup": null,
+   "reason": "math.floor on datetime raises TypeError in OptimizedCursorPaginator."
+  },
+  {
+   "id": "S7",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#snapi-01",
+   "newGroup": null,
+   "reason": "Comments in get_result falsely claim Django handles negative slicing and permission checks."
+  },
+  {
+   "id": "S8",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#02",
+   "newGroup": null,
+   "reason": "BasePaginator comment claims negative offsets are handled, misdescribing the clamp."
+  },
+  {
+   "id": "S9",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#04",
+   "newGroup": null,
+   "reason": "OptimizedCursorPaginator docstring misdescribes the implementation."
+  },
+  {
+   "id": "S10",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+   "newGroup": null,
+   "reason": "Numeric get_item_key on datetime ordering raises TypeError."
+  },
+  {
+   "id": "S11",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Negative offsets in the advanced branch reach Django slicing; fix rejects/clamps them."
+  },
+  {
+   "id": "S12",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#02",
+   "newGroup": null,
+   "reason": "BasePaginator comment about negative offsets is untrue; revert the hunk."
+  },
+  {
+   "id": "S13",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Advanced path passes negative offset into queryset slice."
+  },
+  {
+   "id": "S14",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "BasePaginator clamp change lets negative prev offsets reach unsupported slice."
+  }
+ ],
+ "add-html-sanitizer-for-translated-message-resources-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Lithuanian TOTP step replaced with Italian text."
+  },
+  {
+   "id": "S2",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Lithuanian TOTP step replaced with Italian text."
+  },
+  {
+   "id": "S3",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+   "newGroup": null,
+   "reason": "zh_CN totpStep1 in Traditional Chinese."
+  },
+  {
+   "id": "S4",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Lithuanian TOTP step replaced with Italian text."
+  },
+  {
+   "id": "S5",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Lithuanian TOTP step replaced with Italian text."
+  },
+  {
+   "id": "S6",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+   "newGroup": null,
+   "reason": "zh_CN totpStep1 in Traditional Chinese."
+  },
+  {
+   "id": "S7",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+   "newGroup": null,
+   "reason": "Independent prefix/suffix trimming overlaps, substring throws."
+  },
+  {
+   "id": "S8",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#10",
+   "newGroup": null,
+   "reason": "UI bundles switched to MessageFormat syntax that i18next does not interpolate."
+  },
+  {
+   "id": "S9",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+   "newGroup": null,
+   "reason": "Independent prefix/suffix trimming overlaps, substring throws."
+  },
+  {
+   "id": "S10",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Lithuanian TOTP step replaced with Italian text."
+  },
+  {
+   "id": "S11",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+   "newGroup": null,
+   "reason": "zh_CN totpStep1 in Traditional Chinese."
+  },
+  {
+   "id": "S12",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Missing positive test for allowed HTML; test-coverage suggestion not in golden set."
+  }
+ ],
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "newGroup": null,
+   "reason": "canManage() accepts VIEW scope."
+  },
+  {
+   "id": "S2",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "newGroup": null,
+   "reason": "Resource id used instead of group id in getGroupIdsWithViewPermission."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Possible NPE when type resource is null in hasPermission; not a golden issue."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Test does not assert membership and grants overlapping permissions; not in golden set."
+  },
+  {
+   "id": "S5",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "newGroup": null,
+   "reason": "canManage() accepts VIEW scope."
+  },
+  {
+   "id": "S6",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+   "newGroup": null,
+   "reason": "requireManageMembers Javadoc references canManageMembership."
+  },
+  {
+   "id": "S7",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#07",
+   "newGroup": null,
+   "reason": "Javadoc says Stream but returns Set."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Removed per-user canView filter in searchForUser may leave search unfiltered; different from legacy-resource filter issue #04."
+  },
+  {
+   "id": "S9",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "newGroup": null,
+   "reason": "Resource UUID used instead of group id (name) in getGroupIdsWithViewPermission."
+  },
+  {
+   "id": "S10",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "newGroup": null,
+   "reason": "canManage() accepts VIEW scope."
+  },
+  {
+   "id": "S11",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Missing null check on getResourceTypeResource in hasPermission."
+  }
+ ],
+ "fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "totalPages off by one at exact multiples."
+  },
+  {
+   "id": "S2",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-01",
+   "newGroup": null,
+   "reason": "add_members re-adds existing members, unique index violation 500."
+  },
+  {
+   "id": "S3",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02",
+   "newGroup": null,
+   "reason": "Unbounded/unvalidated client limit in members endpoint."
+  },
+  {
+   "id": "S4",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "totalPages off by one."
+  },
+  {
+   "id": "S5",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "totalPages off by one."
+  },
+  {
+   "id": "S6",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "totalPages off by one."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "group.users.delete raises RecordNotFound for non-members; different from primary_group_id cleanup (#10)."
+  },
+  {
+   "id": "S8",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#12",
+   "newGroup": null,
+   "reason": "Spec uses PUT for a DELETE-only route."
+  },
+  {
+   "id": "S9",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Default 50 limit truncates public members page with no pagination."
+  }
+ ],
+ "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": [
+  {
+   "id": "S1",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "MetricAlertDetectorHandler does not implement abstract methods, TypeError."
+  },
+  {
+   "id": "S2",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#04",
+   "newGroup": null,
+   "reason": "Mock occurrence builder ignores value, tests cannot detect wrong value."
+  },
+  {
+   "id": "S3",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "Abstract methods unimplemented, TypeError."
+  },
+  {
+   "id": "S4",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#01",
+   "newGroup": null,
+   "reason": "Stale TODO about becoming a stateful detector."
+  },
+  {
+   "id": "S5",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#03",
+   "newGroup": null,
+   "reason": "evaluate docstring says list, returns dict."
+  },
+  {
+   "id": "S6",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "Abstract methods unimplemented, TypeError."
+  },
+  {
+   "id": "S7",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "Abstract methods unimplemented, TypeError."
+  }
+ ],
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": [
+  {
+   "id": "S1",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#03",
+   "newGroup": null,
+   "reason": "Upsampling decision uses outer dataset instead of scoped_dataset."
+  },
+  {
+   "id": "S2",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04",
+   "newGroup": null,
+   "reason": "Substring match for event.type:error misclassifies negated/compound queries."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Truthiness check drops a 0 sample rate; golden #06 is about missing validation of invalid values, a different problem."
+  },
+  {
+   "id": "S4",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#03",
+   "newGroup": null,
+   "reason": "Outer dataset instead of scoped_dataset."
+  },
+  {
+   "id": "S5",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04",
+   "newGroup": null,
+   "reason": "Substring match misclassifies negated/OR queries."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Test comments say 1 event while assertions expect 10; not in golden set."
+  },
+  {
+   "id": "S7",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#05",
+   "newGroup": null,
+   "reason": "Transaction test cannot detect wrongful upsampling since weight is 1."
+  }
+ ],
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Hard subscript on end_timestamp_precise raises KeyError for spans missing the field."
+  },
+  {
+   "id": "S2",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#03",
+   "newGroup": null,
+   "reason": "ZUNIONSTORE default SUM aggregate corrupts scores of duplicate payloads."
+  },
+  {
+   "id": "S3",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+   "newGroup": null,
+   "reason": "max_segment_spans no longer enforced, hardcoded 1000 in Lua."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Module docstring still describes plain sets; not in golden set."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Hard key lookup on end_timestamp_precise raises KeyError."
+  },
+  {
+   "id": "S6",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#04",
+   "newGroup": null,
+   "reason": "Old SET keys cause WRONGTYPE with zset ops during rollout."
+  }
+ ],
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#03",
+   "newGroup": null,
+   "reason": "FromContext returns fresh TestLogger instead of receiver."
+  },
+  {
+   "id": "S2",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Test still named TestInstrumentationMiddleware."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Request-completed log loses traceID after contextual logger refactor; not in golden set."
+  }
+ ],
+ "frontend-asset-optimization-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "frontend-asset-optimization-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Cache not re-checked after acquiring write lock."
+  }
+ ]
+}

@@ -1,0 +1,78 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "a308075bc39b77ed7059b0cae9d443d669a7bf98",
+  "head": "de628295646d0848226618108a52f2f1e5d04ac0",
+  "issues": {
+   "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#snapi-01": {
+    "comentarios": [
+     {
+      "gid": "sonnet-snapi:S4",
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       473,
+       482
+      ],
+      "texto": "WHAT: In the non-credentialId branch, the loop deletes with the same `uid` and `externalCalendarId` of the current reference against every user calendar credential. WHY: With multiple calendar references, each reference now triggers deletes across all credentials, which produces duplicate or wrong-target delete calls and errors."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The legacy branch (handleCancelBooking.ts:473-482) keeps the pre-existing behaviour of trying each reference's own uid/externalCalendarId against every calendar credential; the PR only runs it per reference (find->filter at :419), so each reference's event is deleted, with distinct uids, not duplicates. Failed wrong-provider deletes are swallowed by Promise.allSettled (:656), as before."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The PR changes reference selection to iterate every calendar reference (packages/features/bookings/lib/handleCancelBooking.ts:418\u2013424), while the fallback sends each reference\u2019s identifiers to every calendar credential without matching its provider or account (475\u2013480). Wrong-account deletions can reject, as Office365 propagates deletion errors (packages/app-store/office365calendar/lib/CalendarService.ts:111\u2013121); these rejections also skip cancellation emails (handleCancelBooking.ts:656\u2013665)."
+     }
+    ]
+   }
+  }
+ },
+ "dual-storage-architecture-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "66c4dff17e9147b11fb9b14c6ed63089a599da65",
+  "head": "e369f24665ec70e1e3700f457d25ef83301d931a",
+  "issues": {
+   "dual-storage-architecture-grafana-codex#snapi-01": {
+    "comentarios": [
+     {
+      "gid": "sonnet-snapi:S18",
+      "file": "dualwriter_mode3.go",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "Legacy-store errors are now dropped without being logged. This is an observability problem: failures from the legacy store become invisible. Log these errors, as the previous code did."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "medium",
+      "text": "In dualwriter_mode3.go the legacy writes moved into goroutines that only call recordLegacyDuration(err != nil, ...) (Create, Update, Delete, DeleteCollection); the previous log.Error calls for legacy failures were removed. Failures are still counted in metrics, so the effect is loss of error detail in logs, not a behaviour change."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The PR removes legacy-error logging; the replacement goroutines only pass error booleans to metrics in pkg/apiserver/rest/dualwriter_mode3.go:55-56,112-113,139-140,165-166. Those helpers only observe histograms (pkg/apiserver/rest/metrics.go:54-61), so failure counts remain observable but the actual error details are lost, impairing diagnosis."
+     }
+    ]
+   }
+  }
+ }
+}

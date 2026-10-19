@@ -1,0 +1,41 @@
+{
+ "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Alongside the rollback claim, the comment identifies the non-atomic statistics increment inside validation, which is explicitly part of issue #05."
+  },
+  {
+   "id": "S2",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Describes the same case-sensitive blocked-email lookup that allows capitalization changes to bypass a block."
+  },
+  {
+   "id": "S3",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Describes the same missing normalization and case-sensitive lookup of blocked email addresses."
+  },
+  {
+   "id": "S4",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Describes the same generic invalid-email message replacing the server's blocked or not-allowed rejection reason."
+  },
+  {
+   "id": "S5",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Identifies the same non-atomic read-modify-write of match_count that loses increments during concurrent signup attempts."
+  },
+  {
+   "id": "S6",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Describes the same statistics mutation during validation and duplicate increments caused by calling valid? followed by save."
+  }
+ ]
+}

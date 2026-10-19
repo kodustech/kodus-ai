@@ -1,0 +1,149 @@
+{
+ "caseId": "dual-storage-architecture-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "dual-storage-architecture-grafana-codex#05",
+   "newGroup": null,
+   "reason": "The asynchronous legacy writes inherit request cancellation and can abort when the handler returns."
+  },
+  {
+   "id": "S2",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage.Create failures are incorrectly recorded in the legacy duration metric."
+  },
+  {
+   "id": "S3",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage.Update failures are incorrectly recorded in the legacy duration metric."
+  },
+  {
+   "id": "S4",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Delete's success metric uses the object name instead of options.Kind, producing per-object label values."
+  },
+  {
+   "id": "S5",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Legacy.DeleteCollection measurements are incorrectly attributed to the storage metric."
+  },
+  {
+   "id": "S6",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "The general report of incorrect metric labels encompasses Delete's use of the object name in the kind label."
+  },
+  {
+   "id": "S7",
+   "match": "dual-storage-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Delete installs d.Log in the context instead of the enriched per-call logger."
+  },
+  {
+   "id": "S8",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage.Create failures and their duration are incorrectly attributed to the legacy metric."
+  },
+  {
+   "id": "S9",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage.Update failures are recorded through recordLegacyDuration using the storage start time."
+  },
+  {
+   "id": "S10",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Legacy.DeleteCollection emits a storage duration observation instead of a legacy observation."
+  },
+  {
+   "id": "S11",
+   "match": "dual-storage-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "The comment explicitly identifies Delete's loss of enriched logging fields by putting d.Log in the context. It additionally describes the metric-label problem in issue #03."
+  },
+  {
+   "id": "S12",
+   "match": "dual-storage-architecture-grafana-codex#sncc-01",
+   "newGroup": null,
+   "reason": "Delete returns on unified-storage NotFound before attempting legacy deletion, preventing deletion of legacy-only objects."
+  },
+  {
+   "id": "S13",
+   "match": "dual-storage-architecture-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Background legacy writes inherit request cancellation and can terminate before completing; the proposed fix detaches cancellation."
+  },
+  {
+   "id": "S14",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Delete puts object names into the kind metric label, causing per-object cardinality."
+  },
+  {
+   "id": "S15",
+   "match": "dual-storage-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Delete propagates d.Log instead of the request-scoped logger containing the added fields."
+  },
+  {
+   "id": "S16",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage.Create errors are recorded under the legacy metric instead of the storage metric."
+  },
+  {
+   "id": "S17",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage.Update errors and duration are recorded under the legacy metric instead of the storage metric."
+  },
+  {
+   "id": "S18",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "The legacy DeleteCollection call is measured with recordStorageDuration instead of recordLegacyDuration."
+  },
+  {
+   "id": "S19",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Successful Delete measurements use name instead of options.Kind for the kind label."
+  },
+  {
+   "id": "S20",
+   "match": "dual-storage-architecture-grafana-codex#05",
+   "newGroup": null,
+   "reason": "The asynchronous legacy Create inherits request cancellation and can abort after unified storage has committed."
+  },
+  {
+   "id": "S21",
+   "match": "dual-storage-architecture-grafana-codex#05",
+   "newGroup": null,
+   "reason": "The asynchronous legacy Update inherits request cancellation and can leave legacy storage stale."
+  },
+  {
+   "id": "S22",
+   "match": "dual-storage-architecture-grafana-codex#05",
+   "newGroup": null,
+   "reason": "The asynchronous legacy Delete inherits request cancellation and can leave the legacy object undeleted."
+  },
+  {
+   "id": "S23",
+   "match": "dual-storage-architecture-grafana-codex#07",
+   "newGroup": null,
+   "reason": "The tests neither wait for nor verify asynchronous legacy writes, so removing those writes would leave the tests passing."
+  },
+  {
+   "id": "S24",
+   "match": "dual-storage-architecture-grafana-codex#13",
+   "newGroup": null,
+   "reason": "The storage-failure Create test configures its error through setupLegacyFn and only works because both backends share one mock."
+  }
+ ]
+}

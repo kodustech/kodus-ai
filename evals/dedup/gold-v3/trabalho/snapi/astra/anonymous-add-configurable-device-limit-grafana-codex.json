@@ -1,0 +1,35 @@
+{
+ "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Describes the same premature cache insertion that lets a rejected device bypass the limit on subsequent requests."
+  },
+  {
+   "id": "S2",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Describes the same non-atomic count followed by insertion, allowing concurrent new devices to exceed the limit."
+  },
+  {
+   "id": "S3",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#09",
+   "newGroup": null,
+   "reason": "Describes the same synchronous tagging in Authenticate that adds database latency to the authentication request path."
+  },
+  {
+   "id": "S4",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#09",
+   "newGroup": null,
+   "reason": "Includes the same synchronous tagging problem that makes authentication wait for database operations. The additional context-cancellation and panic-recovery concerns do not change that match."
+  },
+  {
+   "id": "S5",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Describes the same count-and-insert race that allows concurrent requests to exceed deviceLimit."
+  }
+ ]
+}

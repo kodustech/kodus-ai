@@ -1,0 +1,41 @@
+{
+ "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Reports the duplicate downsize definition overriding the original signature and breaking the five-argument emoji resize caller."
+  },
+  {
+   "id": "S2",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Reports the hardcoded 10 MB client limit ignoring the configured attachment limit, allowing oversized attachments and displaying an incorrect limit."
+  },
+  {
+   "id": "S3",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Reports the duplicate downsize definition causing ArgumentError for the existing five-argument emoji resize call."
+  },
+  {
+   "id": "S4",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Reports the replacement downsize signature breaking the unchanged five-argument emoji resize caller."
+  },
+  {
+   "id": "S5",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Reports the duplicate downsize definition overriding the original method and breaking emoji resizing through an argument-count mismatch."
+  },
+  {
+   "id": "S6",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Identifies the same duplicate definition and incompatible emoji resize call. Its argument-binding explanation is incorrect, but fixing the described signature mismatch also fixes the golden issue."
+  }
+ ]
+}

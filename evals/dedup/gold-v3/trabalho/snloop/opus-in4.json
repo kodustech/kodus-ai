@@ -1,0 +1,2543 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "de628295646d0848226618108a52f2f1e5d04ac0",
+  "base": "a308075bc39b77ed7059b0cae9d443d669a7bf98",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/core/EventManager.ts",
+    "lines": [
+     119,
+     119
+    ],
+    "texto": "WHAT: `mainHostDestinationCalendar.integration` is dereferenced without optional chaining, but the destructure from an empty or null destinationCalendar yields undefined. WHY: any Google Meet booking with no destination calendar (now `[]` or null) throws a TypeError in `create` instead of falling back to Cal Video. HOW: use optional chaining."
+   },
+   {
+    "id": "S2",
+    "file": "packages/core/EventManager.ts",
+    "lines": [
+     208,
+     209
+    ],
+    "texto": "WHAT: updateLocation now builds references from `result.externalId` and `result.credentialId`, but CalendarManager.updateEvent returns neither field. WHY: after editing a booking's location, the calendar references are written with undefined externalCalendarId and credentialId. Later updates and cancellations then lose the exact calendar and credential. HOW: return `externalId` (the externalCalendarId argument) and `credentialId: credential.id` from CalendarManager.updateEvent, or keep the previous fallback."
+   },
+   {
+    "id": "S3",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     147,
+     154
+    ],
+    "texto": "WHAT: `selectedCalendar` is now undefined when no destination calendar matches the credentialId. The 'primary' fallback is applied only to the insert, so the follow-up `events.patch` for the hangout link uses `calendarId: undefined`. WHY: the patch fails for Meet bookings without a matching destination calendar, so the description never gets the hangout link. A destination calendar with no credentialId is also ignored. HOW: compute `const calendarId = selectedCalendar || \"primary\"` and use it in both insert and patch."
+   },
+   {
+    "id": "S4",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     254,
+     256
+    ],
+    "texto": "WHAT: the fallback `find(cal => cal.externalId === externalCalendarId)` is evaluated only when externalCalendarId is falsy, so it can never match any calendar. WHY: updateEvent and deleteEvent no longer fall back to the destination calendar's externalId and pass an undefined calendarId to Google. HOW: fall back to the first destination calendar's externalId, e.g. `mainHostDestinationCalendar?.externalId`."
+   },
+   {
+    "id": "S5",
+    "file": "packages/features/bookings/lib/handleNewBooking.ts",
+    "lines": [
+     1077,
+     1079
+    ],
+    "texto": "WHAT: team members' destination calendars are appended with `evt.destinationCalendar?.push(...)`, which does nothing when evt.destinationCalendar is null. WHY: for a COLLECTIVE event where neither the event type nor the organizer has a destination calendar, the other hosts' calendars are silently dropped. HOW: assign a new array, e.g. `evt.destinationCalendar = [...(evt.destinationCalendar ?? []), ...teamDestinationCalendars]`."
+   },
+   {
+    "id": "S6",
+    "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+    "lines": [
+     73,
+     77
+    ],
+    "texto": "WHAT: createEvent always uses the first destination calendar's externalId and ignores which credential is creating the event. EventManager now calls createEvent once per host credential with the same multi-host event. WHY: for a collective event, the second host's Office365 credential posts to the first host's calendar id, so the call fails or lands in the wrong calendar. The Lark service has the same pattern. HOW: accept the credentialId argument and pick `destinationCalendar.find(c => c.credentialId === credentialId)`, as the Google service does."
+   },
+   {
+    "id": "S7",
+    "file": "packages/core/EventManager.ts",
+    "lines": [
+     118,
+     119
+    ],
+    "texto": "When `evt.destinationCalendar` is null or empty, the destructured `mainHostDestinationCalendar` is undefined. Line 119 then reads `.integration` on it without optional chaining, which throws a TypeError. This happens for Google Meet bookings by a user with no destination calendar, and it aborts event creation instead of falling back to Cal Video. Use optional chaining on the property access."
+   },
+   {
+    "id": "S8",
+    "file": "packages/core/EventManager.ts",
+    "lines": [
+     118,
+     119
+    ],
+    "texto": "Destructuring the first element of an empty destinationCalendar array yields undefined, and `mainHostDestinationCalendar.integration` is then dereferenced without optional chaining. This throws a TypeError for Google Meet bookings with no destination calendar, where it should fall back to Cal Video. Use `mainHostDestinationCalendar?.integration`."
+   },
+   {
+    "id": "S9",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     254,
+     256
+    ],
+    "texto": "The fallback branch runs only when externalCalendarId is falsy, yet it searches destinationCalendar for an entry whose externalId equals that falsy value. It never matches, so the destination calendar fallback is lost and calendarId becomes undefined. The same pattern is in deleteEvent. Fall back to the first destination calendar's externalId instead."
+   },
+   {
+    "id": "S10",
+    "file": "packages/core/EventManager.ts",
+    "lines": [
+     119,
+     119
+    ],
+    "texto": "`mainHostDestinationCalendar` is undefined when `evt.destinationCalendar` is empty or null, and `.integration` is read without optional chaining. This throws a TypeError for a Google Meet booking with no destination calendar, where it should fall back to Cal Video. Use `mainHostDestinationCalendar?.integration`."
+   },
+   {
+    "id": "S11",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     254,
+     256
+    ],
+    "texto": "The fallback branch runs only when `externalCalendarId` is falsy, then searches for a calendar whose externalId equals that same falsy value. It always yields undefined, so the destination calendar is never used as a fallback in updateEvent; deleteEvent has the same defect. Fall back to the main host destination calendar's externalId instead."
+   },
+   {
+    "id": "S12",
+    "file": "packages/core/EventManager.ts",
+    "lines": [
+     170,
+     170
+    ],
+    "texto": "credentialId is now set to undefined for non-calendar results, so video references lose the credentialId that `result.credentialId` used to supply. Later deletes or updates of the video reference cannot find its credential. Use `result.credentialId` for both branches."
+   },
+   {
+    "id": "S13",
+    "file": "EventManager.ts",
+    "lines": [
+     100,
+     215
+    ],
+    "texto": "EventManager reads `.integration` on a possibly undefined first destination calendar, which breaks the empty and null arrays that other files now produce. Guard against an undefined first element (and null/empty arrays) before accessing `.integration`."
+   },
+   {
+    "id": "S14",
+    "file": "EventManager.ts",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "The legacy branch of createAllCalendarEvents drops the externalId, and Google's createEvent now matches only by credentialId. This finding is less certain because the reviewer did not read that code in EventManager. Pass the externalId through in the legacy branch so Google's createEvent can match the destination calendar correctly."
+   },
+   {
+    "id": "S15",
+    "file": "EventManager.ts",
+    "lines": [
+     585,
+     615
+    ],
+    "texto": "The `message` variable in the catch block is now unused. This is dead code rather than a comment or string mismatch, so remove it or use it."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#02",
+    "descricao": "Claims the optional chaining in mainHostDestinationCalendar?.integration is redundant because a ternary already checks it.",
+    "textoGolden": "The optional chaining on mainHostDestinationCalendar?.integration is redundant since you already check mainHostDestinationCalendar in the ternary condition.",
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+    "descricao": "When externalCalendarId is absent, updateEvent/deleteEvent look for a destination calendar whose externalId equals that absent value, so the lookup never matches and the configured destination calendar is no longer used.",
+    "textoGolden": "Logic error: when externalCalendarId is provided, you're searching for a calendar where externalId === externalCalendarId, but this will always fail since you're looking for a calendar that matches itself. Should likely find by credentialId or use different logic.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       254,
+       256
+      ],
+      "texto": "WHAT: The fallback `event.destinationCalendar?.find((cal) => cal.externalId === externalCalendarId)?.externalId` only executes when `externalCalendarId` is falsy, so it compares `cal.externalId` against `null`/`undefined` and matches nothing (the same wrong pattern is duplicated in deleteEvent at lines 315-317).\nWHY: When `updateEvent`/`deleteEvent` are called without an externalCalendarId, `selectedCalendar`/`calendarId` now resolves to `undefined` instead of the host's destination calendar externalId (old code fell back to `event.destinationCalendar?.externalId`), so the Google API is invoked with an undefined calendarId and the update/delete targets the wrong (or default) calendar or errors.\nHOW: Find the destination calendar for the current credential (e.g. by credentialId) rather than comparing `externalId` to the already-falsy `externalCalendarId`, or restore the single fallback `event.destinationCalendar?.[0]?.externalId`."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       254,
+       256
+      ],
+      "texto": "Dead computation in the fallback: the else branch runs only when externalCalendarId is falsy, yet it calls `event.destinationCalendar?.find((cal) => cal.externalId === externalCalendarId)`, comparing every cal.externalId to undefined. Nothing can match, so selectedCalendar is always undefined and the fallback that previously returned `event.destinationCalendar?.externalId` is lost. Match the intended criterion (destination calendar's own externalId/credentialId), not the already-falsy externalCalendarId."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       315,
+       317
+      ],
+      "texto": "Same dead-computation defect in deleteEvent: the else branch executes only when externalCalendarId is falsy, yet the predicate `(cal) => cal.externalId === externalCalendarId` compares against undefined and can never match, so calendarId falls through to \"primary\" and the event is deleted from the wrong calendar instead of the booking's destination calendar. Fix the predicate to use the destination calendar's externalId (or credentialId) rather than the falsy externalCalendarId."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#04",
+    "descricao": "The organization slug is now set only when team billing is enabled (inverted condition), so with billing both slug and requestedSlug are set and without billing neither is.",
+    "textoGolden": "Logic inversion in organization creation: The slug property is now conditionally set when IS_TEAM_BILLING_ENABLED is true, instead of when it's false as originally intended. This change, combined with requestedSlug still being set when IS_TEAM_BILLING_ENABLED is true, results in both properties being set when billing is enabled, and neither when disabled",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/organizations/create.handler.ts",
+      "lines": [
+       151,
+       151
+      ],
+      "texto": "Organization creation no longer assigns a slug when team billing is disabled, while requestedSlug is also omitted in that mode. New self-hosted organizations therefore have neither publication field, and publish.handler rejects them because requestedSlug is missing. Restore the non-billing slug assignment."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/organizations/create.handler.ts",
+      "lines": [
+       148,
+       152
+      ],
+      "texto": "WHAT: slug spread condition was inverted from ...(!IS_TEAM_BILLING_ENABLED && {slug}) to ...(IS_TEAM_BILLING_ENABLED ? {slug} : {}). WHY: organizations get slug when billing enabled and lose it when disabled, opposite of prior contract and breaking slug/requestedSlug pairing. HOW: restore negation for slug branch."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05",
+    "descricao": "Office365 (and Lark) createEvent ignore the new credentialId argument and always use the first destination calendar, so in collective bookings other hosts' credentials target the organizer's calendar instead of their own.",
+    "textoGolden": "The Calendar interface now requires createEvent(event, credentialId), but some implementations (e.g., Lark/Office365) still declare createEvent(event) only\u2014this breaks the interface contract (also applies to other locations in the PR).",
+    "comentarios": [
+     {
+      "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+      "lines": [
+       73,
+       76
+      ],
+      "texto": "Office365 creation always selects the first host's destination despite being invoked separately with each host's credential. A collective booking with distinct Office365 calendars sends the second host's token to the first host's calendar ID, causing failed or incorrectly targeted creation. Accept the credentialId supplied by CalendarManager and select the matching destination."
+     },
+     {
+      "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+      "lines": [
+       73,
+       76
+      ],
+      "texto": "Select the destination belonging to the current credential rather than always taking the first array entry. EventManager now calls createEvent once per destination with that destination's credential, while passing the full event array each time. In a collective booking with two Outlook hosts, the second host therefore attempts to insert into the first host's calendar using the second host's token, typically failing instead of creating the second calendar event. Accept the credentialId passed by CalendarManager and match the destination by that ID (or pass a destination-specific event)."
+     },
+     {
+      "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+      "lines": [
+       72,
+       76
+      ],
+      "texto": "Select the destination belonging to the credential passed by CalendarManager, rather than always selecting the first array element. EventManager now invokes creation for each collective host with the full destination array. A second Office365 host therefore attempts to write to the first host's calendar using its own token, causing creation to fail or target the wrong calendar; meanwhile the saved reference records the second host's externalId."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#06",
+    "descricao": "Claims updateAllCalendarEvents passes an undefined credential to updateEvent when reference.credentialId points to a credential that cannot be found.",
+    "textoGolden": "The `credential` may be undefined when passed to `updateEvent` if `reference.credentialId` is set but the credential is not found. This can lead to a runtime error when `updateEvent` is called with an undefined credential, which should be handled to prevent crashes.",
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+    "descricao": "The Google Meet fallback reads mainHostDestinationCalendar.integration without optional chaining, so a Meet booking with a null or empty destinationCalendar throws instead of falling back to Cal Video.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       119,
+       119
+      ],
+      "texto": "WHAT: `mainHostDestinationCalendar.integration` is dereferenced without optional chaining after destructuring `const [mainHostDestinationCalendar] = evt.destinationCalendar ?? []`.\nWHY: The previous code was `evt.destinationCalendar?.integration !== \"google_calendar\"`, which was null-safe; now when `destinationCalendar` is null/empty (e.g. handleNewBooking.ts:1063-1067 sets it to `null` when neither eventType nor organizer has one) and `evt.location === MeetLocationType`, destructuring yields `undefined` and `.integration` throws `TypeError: Cannot read properties of undefined`, crashing the booking creation flow.\nHOW: Use `mainHostDestinationCalendar?.integration !== \"google_calendar\"`."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       118,
+       119
+      ],
+      "texto": "`mainHostDestinationCalendar` can be `undefined` because `evt.destinationCalendar` may now be null or an empty array (callers such as handleNewBooking pass `: null` / `: []`). The old code used `evt.destinationCalendar?.integration`, but the new line dereferences `mainHostDestinationCalendar.integration` without optional chaining, throwing `TypeError: Cannot read properties of undefined (reading 'integration')` whenever `evt.location === MeetLocationType`. Use `mainHostDestinationCalendar?.integration !== \"google_calendar\"` to preserve the null-safe fallback."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       118,
+       119
+      ],
+      "texto": "The Meet-location fallback destructures `const [mainHostDestinationCalendar] = evt.destinationCalendar ?? []` and then reads `mainHostDestinationCalendar.integration` without optional chaining. When `destinationCalendar` is an empty array (which this PR now produces in many callers, e.g. handleCancelBooking.ts, the payment webhooks, confirm/editLocation/deleteCredential/requestReschedule handlers all set `[]` when there is no destination calendar), the destructured value is `undefined` and `.integration` throws `TypeError: Cannot read properties of undefined (reading 'integration')`, aborting event creation. Use `mainHostDestinationCalendar?.integration` to preserve the previous optional-chained behavior."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+    "descricao": "For collective events whose organizer has no destination calendar, destinationCalendar is null and the optional push drops all other hosts' destination calendars, so those hosts never get calendar events.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/bookings/lib/handleNewBooking.ts",
+      "lines": [
+       1077,
+       1078
+      ],
+      "texto": "WHAT: `evt.destinationCalendar?.push(...teamDestinationCalendars)` silently does nothing when `evt.destinationCalendar` is `null`.\nWHY: For a COLLECTIVE event where neither `eventType.destinationCalendar` nor `organizerUser.destinationCalendar` exists, the evt field is set to `null` (lines 1063-1067), so the collected `teamDestinationCalendars` of the other hosts are dropped and those hosts are never invited \u2014 defeating the multi-host support this PR adds.\nHOW: Initialize to an array (e.g. `evt.destinationCalendar ?? []` before pushing, or default the field to `[]` instead of `null`) so team destination calendars are always appended."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleNewBooking.ts",
+      "lines": [
+       1077,
+       1078
+      ],
+      "texto": "The optional push discards all collected team destinations when the organizer has no destination calendar. A collective booking with configured secondary hosts therefore creates none of their calendar events even though teamDestinationCalendars contains them. Initialize the array before appending the team destinations."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleNewBooking.ts",
+      "lines": [
+       1077,
+       1079
+      ],
+      "texto": "Initialize destinationCalendar to an array before appending collective hosts' destinations. When neither the event type nor organizer has a destination, it is set to null above, so optional push silently discards all the computed teamDestinationCalendars. Hosts with configured destination calendars consequently receive no calendar events."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#09",
+    "descricao": "Video booking references are now saved without their credentialId, so cancelling the booking can no longer find the video credential and the meeting is not deleted.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       169,
+       170
+      ],
+      "texto": "WHAT: `credentialId: isCalendarType ? result.credentialId : undefined` drops the previous non-calendar fallback `result.credentialId`.\nWHY: For non-calendar results (video events) `referencesToCreate` now stores `credentialId: undefined` where it previously stored `result.credentialId`, so the persisted video reference loses its credentialId; later code that looks the reference up by credentialId (e.g. handleCancelBooking.ts:491-502 deleting the video meeting, or EventManager.updateLocation) can no longer resolve the credential and the meeting is not cleaned up.\nHOW: Keep the fallback for non-calendar results: `credentialId: isCalendarType ? result.credentialId : result.credentialId` (i.e. just `result.credentialId` for both branches)."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       170,
+       170
+      ],
+      "texto": "The reference mapping discards credentialId for every video result. createMeeting returns the video credential ID, and handleCancelBooking only deletes a video meeting when its reference has that ID, so newly created video meetings are left behind on cancellation. Preserve result.credentialId for video results as well."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       170,
+       170
+      ],
+      "texto": "Retain result.credentialId for non-calendar references as well. The previous mapping saved the dedicated video integration's credential ID; this change unconditionally replaces it with undefined for video results, losing the association needed to identify the account that created the meeting during subsequent lifecycle operations."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#10",
+    "descricao": "createAllCalendarEvents and updateAllCalendarEvents fetch each missing host credential with a separate findUnique inside the loop instead of one batched query.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       341,
+       355
+      ],
+      "texto": "WHAT: The new `for (const destination of event.destinationCalendar)` loop performs a `prisma.credential.findUnique` on every destination whose credential is not found in the cached `this.calendarCredentials` (line 344); the same per-reference DB lookup was added in updateAllCalendarEvents at line 517.\nWHY: For collective bookings with multiple hosts this turns one in-memory lookup into up to N sequential database round-trips added to the booking-creation hot path, scaling with host count.\nHOW: Resolve all missing credential ids in a single batched query (`prisma.credential.findMany({ where: { id: { in: missingIds } } })`) before the loop and build a lookup map."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#12",
+    "descricao": "updateLocation stores externalCalendarId and credentialId from updateEvent's result, which never returns them, so calendar references rewritten on location edit lose their calendar and credential and later updates or cancellations misroute.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       208,
+       209
+      ],
+      "texto": "updateLocation now reads externalId and credentialId exclusively from results, but CalendarManager.updateEvent returns neither field. Calendar references produced by location editing consequently lose their calendar and credential routing information, breaking subsequent updates or cancellation, particularly for secondary collective hosts. Return those fields from updateEvent or preserve them from the corresponding booking reference."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#13",
+    "descricao": "Cancelling all remaining occurrences of a recurring collective booking deletes only the first calendar reference of each booking, repeated once per host, so the other hosts' events stay on their calendars.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       423,
+       424
+      ],
+      "texto": "The new per-reference loop runs the recurring-series deletion branch for every host, but that branch still iterates only bookingToDelete.user.credentials and selects the first calendar reference in each occurrence. Canceling all remaining collective occurrences repeatedly deletes the owner's events while leaving secondary hosts' events untouched. For each occurrence, delete the reference matching the current host credential using the resolved calendarCredential."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       449,
+       457
+      ],
+      "texto": "For cancel-all-remaining recurring collective bookings, delete each updated booking's reference matching the current outer reference/credential. The new outer loop iterates all calendar references, but this inner block still iterates only the organizer's credentials and takes the first calendar reference of each booking. Every outer iteration therefore repeats deletion of the first host's event, while the additional hosts' recurring events remain on their calendars after cancellation."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#14",
+    "descricao": "Google createEvent picks the target calendar only by matching credentialId, so destination calendars without a credentialId are ignored and events are created on the primary calendar instead.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       145,
+       154
+      ],
+      "texto": "createEvent now picks the target calendar only by matching credentialId. Destination calendars without a credentialId (handled by EventManager's integration-based branch) never match, so events are inserted into \"primary\" instead of the configured destination externalId as before."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#15",
+    "descricao": "For destination calendars without a credentialId, createEvent is called without the externalId, so the booking reference is stored with an undefined externalCalendarId.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       376,
+       381
+      ],
+      "texto": "In the no-credentialId branch createEvent(c, event) is called without externalId, so EventResult.externalId is undefined. The booking reference's externalCalendarId, which used to come from evt.destinationCalendar.externalId, is now not stored, which breaks later update/delete targeting. Pass destination.externalId."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       375,
+       381
+      ],
+      "texto": "In the branch for destinations without a credentialId, `createEvent(c, event)` is called without the externalId argument. CalendarManager.createEvent only returns `externalId` when it is passed in, and EventManager now stores `result.externalId` as externalCalendarId, so these booking references are saved with an undefined externalCalendarId. Pass `destination.externalId` as the third argument, so the producer returns what the consumer stores."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-01",
+    "descricao": "When cancelling a recurring booking with multiple calendar references, the recurring-event deletion over all remaining bookings and credentials runs once per reference, causing duplicate delete calls and errors.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-03",
+    "descricao": "loadUsers forwards raw Prisma error messages to the client in a 400 response, exposing internal model and query details.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#opa-01",
+    "descricao": "loadUsers throws a plain Error for an empty/invalid dynamicUserList, which the catch block converts into a generic 500 'Unable to load users', hiding a client input error behind a server error.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#opa-02",
+    "descricao": "Collective bookings now push every team member's DestinationCalendar row (externalId, credentialId, userId) into evt.destinationCalendar, and since evt is spread into the webhook payload these other members' calendar identifiers are sent to webhook subscribers.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#prod-01",
+    "descricao": "In Google createEvent, when no destination calendar matches the credentialId, the hangout-link events.patch is called with an undefined calendarId and fails, so the Meet link is not added to the event description.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "notification-rule-processing-engine-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "8df850371034b73dc4dd9908cc30fa09f12a1f97",
+  "base": "47e5bd23163e6037fc0741068ac78930bba2769f",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx",
+    "lines": [
+     165,
+     175
+    ],
+    "texto": "WHAT: The Delete menu item is rendered only when `canDelete && rulerRule`, but the list view now passes only `promRule`, so `rulerRule` is undefined. WHY: Grafana rules in the list view can no longer be deleted from the More menu. The new GrafanaGroupLoader test also expects only 4 menu items, which hides the regression. HOW: Make `handleDelete` and `useDeleteModal` accept an identifier, or build a ruler-less delete path for prom rules, and drop the `rulerRule` guard."
+   },
+   {
+    "id": "S2",
+    "file": "public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx",
+    "lines": [
+     104,
+     106
+    ],
+    "texto": "WHAT: The silence drawer renders only when `rulerRuleType.grafana.alertingRule(rule)` is true, but the list view passes only `promRule`, so `rule` is undefined. WHY: The 'Silence notifications' menu item is shown from the grafana prom ability, but clicking it sets `showSilenceDrawer` and no drawer appears. HOW: Render the drawer from `promRule` when `rule` is absent, or have SilenceGrafanaRuleDrawer accept a prom rule or uid."
+   },
+   {
+    "id": "S3",
+    "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+    "lines": [
+     308,
+     313
+    ],
+    "texto": "WHAT: `useAllGrafanaPromRuleAbilities(undefined)`, which is what skipToken resolves to, still returns supported abilities such as Duplicate (`loading` is false and `MaybeSupported` is AlwaysSupported). WHY: AlertRuleMenu ORs these with the ruler abilities, so Duplicate can show for data-source rules whose ruler is unsupported, gated only by Grafana's create permission. HOW: When `rule` is undefined, return NotSupported for every ability."
+   },
+   {
+    "id": "S4",
+    "file": "public/app/features/alerting/unified/rule-list/FilterView.tsx",
+    "lines": [
+     157,
+     162
+    ],
+    "texto": "WHAT: The `key` prop was dropped from `GrafanaRuleListItem` in the `rules.map` for the 'grafana' case (the other branches still set it). WHY: React cannot reconcile the list items. It logs a missing-key warning and can mismatch state and DOM when pages are appended or reordered. HOW: Add `key={key}`."
+   },
+   {
+    "id": "S5",
+    "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+    "lines": [
+     323,
+     326
+    ],
+    "texto": "WHAT: The Export, Pause, Restore and DeletePermanently abilities in the prom hook are gated on `prometheusRuleType.grafana.alertingRule`, whereas the ruler hook used `rulerRuleType.grafana.rule`, which includes recording rules. WHY: Grafana recording rules lose Export and Pause in the list view menu. HOW: Gate these on `prometheusRuleType.grafana.rule(rule)` and keep `alertingRule` only for Silence."
+   },
+   {
+    "id": "S6",
+    "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx",
+    "lines": [
+     16,
+     28
+    ],
+    "texto": "This PR removed the ruler group query, so GrafanaGroupLoader now loads only from the Prometheus endpoint. The component docstring still says it loads from 'Prometheus and Ruler endpoints', and the `expectedRulesCount` doc still says the 'Ruler response might contain different number of rules'. Update both comments so they describe a Prometheus-only loader."
+   },
+   {
+    "id": "S7",
+    "file": "public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx",
+    "lines": [
+     104,
+     106
+    ],
+    "texto": "RuleActionsButtons now supports prom-only usage (`rule` undefined, as in the Grafana list view), and AlertRuleMenu enables the Silence item from prom-rule abilities. The silence drawer still renders only when the ruler rule is a Grafana alerting rule, so in the list view clicking 'Silence notifications' sets state but nothing opens. Render the drawer from the prom rule as well, or fetch the ruler rule on demand."
+   },
+   {
+    "id": "S8",
+    "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx",
+    "lines": [
+     85,
+     102
+    ],
+    "texto": "The test is named 'should render More button with action menu options' but only asserts that the More button exists, that its aria-label is 'More', and that its text content contains 'More'. It never opens the menu or checks any option, so it would pass even if every menu action disappeared. Either rename it to match what it checks, or click the button and assert on the menu items."
+   },
+   {
+    "id": "S9",
+    "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+    "lines": [
+     308,
+     318
+    ],
+    "texto": "When useAllGrafanaPromRuleAbilities is called with an undefined rule (the skipToken path used for non-Grafana rules), it still reports abilities as supported. Duplicate becomes [true, grafana create permission] because MaybeSupported is AlwaysSupported. AlertRuleMenu ORs this with the ruler abilities, so a cloud/Mimir rule can get a Duplicate action from Grafana permissions that its own ruler ability reports as unsupported. Return NotSupported for every ability when rule is undefined."
+   },
+   {
+    "id": "S10",
+    "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+    "lines": [
+     308,
+     313
+    ],
+    "texto": "When `rule` is undefined (the skipToken case), useAllGrafanaPromRuleAbilities still reports Duplicate as supported. AlertRuleMenu ORs this with the ruler ability, so non-Grafana (cloud) rules can show Duplicate based on Grafana create permission. Make every ability unsupported when `rule` is undefined or not a Grafana rule."
+   },
+   {
+    "id": "S11",
+    "file": "public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx",
+    "lines": [
+     104,
+     106
+    ],
+    "texto": "AlertRuleMenu shows 'Silence notifications' for list-view rules based on promRule, but the silence drawer renders only when the ruler rule is a Grafana alerting rule. In the list view `rule` is undefined, so clicking Silence does nothing. The drawer needs to be supported with a promRule-only path."
+   },
+   {
+    "id": "S12",
+    "file": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx",
+    "lines": [
+     165,
+     175
+    ],
+    "texto": "canDelete can now be true from the Grafana prom ability, but the Delete item is still gated on `rulerRule`, which is undefined for list-view rules. Delete therefore never appears there, even though the ability check passes. Render Delete using the identifier when no rulerRule exists."
+   },
+   {
+    "id": "S13",
+    "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+    "lines": [
+     308,
+     315
+    ],
+    "texto": "When useAllGrafanaPromRuleAbilities is called with an undefined rule (the skipToken case), `loading` is false, so MaybeSupported becomes AlwaysSupported. Duplicate is then reported as [true, grafana create permission] even though there is no Grafana rule. AlertRuleMenu ORs this with the ruler ability, so non-Grafana rules can show Duplicate. Treat an undefined rule as NotSupported."
+   },
+   {
+    "id": "S14",
+    "file": "public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx",
+    "lines": [
+     104,
+     106
+    ],
+    "texto": "The Silence menu item is enabled from the prom-rule ability, but the SilenceGrafanaRuleDrawer renders only when a ruler `rule` exists. In the new list view only `promRule` is passed, so clicking Silence sets state and nothing opens. Render the drawer for Grafana prom alerting rules too, or give the drawer a prom-rule input."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#01",
+    "descricao": "The pause menu item is still gated on a Grafana ruler rule, but the list view now passes only the Prometheus rule, so Pause/Resume disappears for list-view rules even when the user may pause them.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx",
+      "lines": [
+       83,
+       83
+      ],
+      "texto": "The new Prometheus-based pause ability cannot display Pause or Resume for list-view rules because the menu still requires rulerRuleType.grafana.rule(rulerRule) before rendering MenuItemPauseRule. GrafanaRuleListItem now supplies only promRule, so these actions disappear even for editable rules. Adapt the pause menu item to accept the Grafana identifier and Prometheus pause state, or load the ruler rule on demand."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#02",
+    "descricao": "The Delete menu item still requires a ruler rule, which list-view Grafana rules no longer provide, so users with delete permission lose the Delete action.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx",
+      "lines": [
+       85,
+       87
+      ],
+      "texto": "The new Prometheus-based delete ability is still gated by `canDelete && rulerRule` when rendering the Delete item. Both Grafana list-view paths now omit rulerRule, so users with delete permission lose the Delete action entirely. Render deletion using the available identifier and group identifier instead of requiring the ruler DTO, adapting the callback contract accordingly."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#03",
+    "descricao": "When the Grafana prom-rule branch is skipped (datasource rules), useAllGrafanaPromRuleAbilities(undefined) still reports Duplicate as supported and allowed by Grafana create permission, and AlertRuleMenu ORs it with the ruler ability, so Duplicate appears on cloud rules even when the ruler check denies it.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx",
+      "lines": [
+       89,
+       92
+      ],
+      "texto": "WHAT: canDuplicate ORs ruler ability with grafana ability where grafana path is skipToken=>undefined for cloud rules, and useAllGrafanaPromRuleAbilities(undefined) returns Duplicate=[true,true] whenever the user has global Grafana create permission. WHY: Any user with Grafana rule-create gets Duplicate menu item on cloud/Mimir rules even when ruler abilities deny it \u2014 incorrect authorization gating. HOW: Return NotSupported for all abilities when rule is skipToken/undefined, or gate grafana branch on prometheusRuleType.grafana.rule(promRule) before ORing."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       307,
+       314
+      ],
+      "texto": "useAllGrafanaPromRuleAbilities returns AlwaysSupported for Duplicate when rule is undefined (skipToken): loading is false from the !rule early-return, so MaybeSupported=true and duplicateSupported=true. ORed in AlertRuleMenu/RuleActionsButtons this leaks Grafana create permission into non-Grafana rules. Gate MaybeSupported/duplicateSupported on rule existence (e.g. NotSupported when !rule)."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       287,
+       318
+      ],
+      "texto": "useAllGrafanaPromRuleAbilities must return NotSupported for all actions when rule is undefined (skipToken). Currently MaybeSupported falls back to AlwaysSupported when !loading, so Duplicate=[true, global-create] is true for a cloud rule passed as skipToken, and AlertRuleMenu/RuleActionsButtons OR-logic then incorrectly enables Duplicate (and Explore). Guard with if (!rule) return all-NotSupported abilities or make MaybeSupported require rule."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#04",
+    "descricao": "The refactor of useAllAlertRuleAbilities into useAllRulerRuleAbilities drops the isFederatedRuleGroup check (isFederated is hardcoded false), so federated Mimir rules are reported as editable and deletable.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       223,
+       228
+      ],
+      "texto": "useAllAlertRuleAbilities now delegates to useAllRulerRuleAbilities, which hardcodes isFederated = false. The previous isFederatedRuleGroup(rule.group) check is gone, so federated Mimir rules are no longer treated as immutable and can show edit and delete abilities. Keep the federation check in this wrapper, or pass the federation state into the shared hook."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       227,
+       228
+      ],
+      "texto": "Delegating useAllAlertRuleAbilities to useAllRulerRuleAbilities discards the group's federation status and replaces the previous isFederatedRuleGroup(rule.group) check with a constant false. Legacy RuleActionsButtons consequently enables editing rules in groups with source_tenants, although these groups were explicitly immutable before this change. Preserve the CombinedRule federation check in the wrapper or pass federation status into the delegated ability calculation."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       227,
+       228
+      ],
+      "texto": "Preserve the federated-group immutability check when delegating this CombinedRule hook. Previously useAllAlertRuleAbilities inspected rule.group with isFederatedRuleGroup and disabled modification/removal for federated rules. The replacement delegates to a hook that hardcodes isFederated=false and receives no group information. Existing useAlertRuleAbility/useAlertRuleAbilities consumers therefore now receive supported update/delete abilities for federated rules when datasource permissions allow them, exposing operations that the previous contract explicitly prohibited. Pass the federation state through or retain that restriction in this wrapper."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#05",
+    "descricao": "The Grafana prom-rule abilities gate Pause, Restore, Export and DeletePermanently on alertingRule(rule) while the comment claims it checks Grafana-managed rules, so Grafana recording rules lose these actions in the list view.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       301,
+       302
+      ],
+      "texto": "The comment says all GrafanaPromRuleDTO rules are Grafana-managed, but the variable it describes is `isAlertingRule`. That variable is true only for alerting rules and false for Grafana recording rules. Fix the comment, or rename the variable, so it says the check is for alerting rules. As written, readers will expect Pause, Export and Silence to be enabled for recording rules."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       301,
+       328
+      ],
+      "texto": "The comment says all GrafanaPromRuleDTO rules are Grafana-managed, but the check used is alertingRule(rule), which is false for recording rules. Pause, Restore, ModifyExport and DeletePermanently are therefore wrongly disabled for Grafana recording rules, where the old isGrafanaManagedAlertRule check allowed them. Use prometheusRuleType.grafana.rule(rule) for these abilities, and keep alertingRule only for Silence."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#06",
+    "descricao": "The comment claims GrafanaPromRuleDTO abilities have no loading state, but the next line makes support depend on the folder loading flag.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       308,
+       309
+      ],
+      "texto": "The comment says there is no loading state, but the next line is `loading ? NotSupported : AlwaysSupported`. `loading` comes from the folder fetch. Update the comment to say that support depends on the folder loading state."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#07",
+    "descricao": "The Grafana branch of the filtered rule list renders GrafanaRuleListItem without a key prop, so React reconciles the streaming list by index and warns about missing keys.",
+    "textoGolden": "The rendered GrafanaRuleListItem is missing the required key prop for React list items. This can cause rendering issues when the list order changes.",
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/rule-list/FilterView.tsx",
+      "lines": [
+       157,
+       162
+      ],
+      "texto": "WHAT: The grafana branch of the filtered list renders <GrafanaRuleListItem .../> without a `key` prop, dropping the `key={key}` that the replaced <GrafanaRuleLoader key={key} .../> had. WHY: `rules.map` renders a dynamic list keyed by getRuleKey/hashRule; without a key React logs duplicate-key warnings and reconciles rows by index, so as the async rule stream updates/reorders the wrong rule row can be reused/mutated (stale state, swapped actions). HOW: add `key={key}` (the value is already destructured on line 152) to the <GrafanaRuleListItem> element."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/FilterView.tsx",
+      "lines": [
+       157,
+       162
+      ],
+      "texto": "WHAT: Grafana branch of FilterViewResults renders GrafanaRuleListItem without key={key} while datasource and unknown branches pass key. WHY: Breaks React list reconciliation \u2014 wrong item reuse, stale actions/state and console key warnings for every Grafana hit. HOW: Add key={key} to the GrafanaRuleListItem element."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#08",
+    "descricao": "The test named 'should render More button with action menu options' only checks the More button exists, never the menu options.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx",
+      "lines": [
+       85,
+       101
+      ],
+      "texto": "The test 'should render More button with action menu options' only checks that the More button exists. It finds the button by name 'More', so the aria-label and text assertions are tautological. It would pass even if the menu had no actions or the abilities were broken. Click the button and assert the expected menu items, or rename the test to match what it checks."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx",
+      "lines": [
+       85,
+       102
+      ],
+      "texto": "Test named 'should render More button with action menu options' never verifies any action menu option: the body only asserts the More button exists and has aria-label/text 'More'. It would still pass if the dropdown were rendered empty (Silence/Duplicate/Copy link/Export all missing), i.e. the behaviour the name promises is not covered. Either open the menu and assert the menu items, or rename the test to reflect that it only checks the trigger button's rendering/accessibility."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx",
+      "lines": [
+       85,
+       102
+      ],
+      "texto": "Test named 'should render More button with action menu options' never opens the menu nor asserts menu items \u2014 it only checks More button presence/aria/text. Click More and assert expected menuitems (or rename to 'should render More button') so it fails if menu actions break."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#09",
+    "descricao": "GrafanaGroupLoader's JSDoc still says it loads from Prometheus and Ruler endpoints after the ruler query was removed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx",
+      "lines": [
+       24,
+       28
+      ],
+      "texto": "The JSDoc for GrafanaGroupLoader still says \"Loads an evaluation group from Prometheus and Ruler endpoints.\" but this PR removed the ruler API query entirely \u2014 the component now only calls useGetGrafanaGroupsQuery (Prometheus). The documentation describes a data source the function no longer consumes; update it to state only the Prometheus endpoint is loaded (and the same stale \"Ruler response\" reference in the expectedRulesCount prop doc at lines 18\u201319 should be corrected)."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#11",
+    "descricao": "For list-view Grafana rules RuleActionsButtons gets only promRule, so the Silence menu item is shown but the silence drawer, still gated on a ruler alerting rule, never renders and clicking Silence does nothing.",
+    "textoGolden": "RuleActionsButtons is invoked with only promRule, but SilenceGrafanaRuleDrawer inside RuleActionsButtons still depends on a Grafana Ruler rule being present, so for Grafana rules coming from list views the 'Silence notifications' menu entry (now driven by Grafana Prom abilities) will toggle showSilenceDrawer without ever rendering the drawer. This means clicking 'Silence notifications' for these rules has no visible effect, even when abilities indicate silencing is allowed.",
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx",
+      "lines": [
+       47,
+       47
+      ],
+      "texto": "Passing only promRule enables the Silence notifications menu item but leaves RuleActionsButtons.V2 unable to render its silence drawer, which is guarded by rulerRuleType.grafana.alertingRule(rule). Clicking Silence only updates showSilenceDrawer and displays nothing because rule is undefined. Update the drawer to accept a rule UID\u2014the inspected SilenceGrafanaRuleDrawer only needs grafana_alert.uid\u2014and allow the Prometheus alerting-rule path to render it."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx",
+      "lines": [
+       47,
+       47
+      ],
+      "texto": "The new list item passes only promRule to RuleActionsButtons, but that component renders SilenceGrafanaRuleDrawer only under `rulerRuleType.grafana.alertingRule(rule) && showSilenceDrawer`. With rule undefined, clicking the newly enabled 'Silence notifications' action only sets state and never opens a drawer. Adapt the silence rendering path to load/use the rule by its Prometheus identifier before switching this caller to promRule-only."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx",
+      "lines": [
+       130,
+       144
+      ],
+      "texto": "WHAT: getEditableIdentifier now enables a prom-only path (Grafana uid identifier with rulerRule undefined) but the silence drawer still renders only when rulerRuleType.grafana.alertingRule(rule) is true. WHY: In the list view Silence menu item can be shown via grafana abilities, clicking it sets showSilenceDrawer but the drawer never mounts, so Silence silently does nothing. HOW: Gate the drawer on promRule as well or provide a prom-based silence drawer."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#opa-01",
+    "descricao": "RulesTable RBAC tests only mock useGrafanaPromRuleAbilities and leave useRulerRuleAbilities denied, so the ruler-based Delete permission branch of AlertRuleMenu is never tested.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feature-automatically-downsize-large-images-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "ffbaf8c54269df2ce510de91245760fddce09896",
+  "base": "3f71fa15c93bb0b751bb92abae1b5dc9a21bd4ca",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     145,
+     151
+    ],
+    "texto": "WHAT: `OptimizedImage.downsize` is defined twice, once with 5 arguments and once with 4, and the second definition overrides the first. WHY: `Jobs::ResizeEmoji` (app/jobs/regular/resize_emoji.rb:14) still calls `downsize(path, path, 100, 100, opts)`. That is 5 arguments against a method that accepts at most 4, so it raises ArgumentError and emoji are never downsized. HOW: keep one `downsize` method, for example `def self.downsize(from, to, dimensions, opts={})`, and update the emoji job to pass `\"100x100\"`. Alternatively, give the two forms different method names."
+   },
+   {
+    "id": "S2",
+    "file": "app/controllers/uploads_controller.rb",
+    "lines": [
+     64,
+     70
+    ],
+    "texto": "WHAT: The controller passes the percentage string \"80%\" with `allow_animation` enabled. For GIFs, `optimize` then picks `downsize_instructions_animated`, which runs `gifsicle --resize-fit 80%`. WHY: `--resize-fit` takes WxH, not a percentage, so the command fails. `convert_with` returns false, the result is ignored, and the loop retries 5 times without shrinking the file, so oversized animated GIFs are never reduced. HOW: use a percentage-capable option for animated GIFs, for example `--scale 0.8` in the animated instructions. Alternatively, compute explicit WxH dimensions from FastImage. Also stop the loop when downsize returns false."
+   },
+   {
+    "id": "S3",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     145,
+     151
+    ],
+    "texto": "`downsize` is defined twice, and Ruby has no overloading, so the second definition `(from, to, dimensions, opts)` replaces the first `(from, to, max_width, max_height, opts)`. The existing caller in app/jobs/regular/resize_emoji.rb passes `(path, path, 100, 100, opts)`, which is five arguments, so it now raises ArgumentError. Keep one `downsize` and update its callers to match, for example by having resize_emoji.rb pass \"100x100\"."
+   },
+   {
+    "id": "S4",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     145,
+     151
+    ],
+    "texto": "`downsize` is defined twice, and the second definition (from, to, dimensions, opts) replaces the first (from, to, max_width, max_height, opts). The existing caller `ResizeEmoji` (app/jobs/regular/resize_emoji.rb:14) calls `OptimizedImage.downsize(path, path, 100, 100, opts)` with 5 arguments, so it now raises ArgumentError. Fix this by keeping a single `downsize` that supports both call shapes, or by updating the emoji job to pass \"100x100\"."
+   },
+   {
+    "id": "S5",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     145,
+     151
+    ],
+    "texto": "`downsize` is defined twice, and the second definition `(from, to, dimensions, opts)` silently replaces the `(from, to, max_width, max_height, opts)` one. The existing caller in app/jobs/regular/resize_emoji.rb (`downsize(path, path, 100, 100, opts)`) now passes 5 arguments and raises ArgumentError. Keep one signature, for example by having the new overload accept either a dimensions string or width and height, or by updating the emoji caller to pass \"100x100\"."
+   },
+   {
+    "id": "S6",
+    "file": "app/controllers/uploads_controller.rb",
+    "lines": [
+     67,
+     67
+    ],
+    "texto": "The controller passes the percentage \"80%\" with `allow_animation` enabled. For GIFs, `downsize_instructions_animated` builds a gifsicle `--resize-fit 80%` command, but gifsicle expects WxH. The command fails, `convert_with` returns false, and the file is never shrunk, so the loop repeats 5 times with no effect. Use explicit dimensions for animated GIFs, or skip the animation option here."
+   },
+   {
+    "id": "S7",
+    "file": "utilities.js",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "The error alerts now show a hardcoded 10 MB limit. This is a wrong/misleading message rather than a data leak (outside the reviewer's sensitive-data-exposure scope), but the displayed limit should not be hardcoded and should reflect the actual configured limit."
+   },
+   {
+    "id": "S8",
+    "file": "app/assets/javascripts/discourse/lib/utilities.js",
+    "lines": [
+     182,
+     185
+    ],
+    "texto": "The 'file too large' alert now reports a hard-coded 10 MB limit, but the server still enforces the per-type site settings such as max_attachment_size_kb. Users can be told a limit that is not the real one. Keep the setting-based value for the message, and use 10 MB only as the cap for images that will be downsized."
+   },
+   {
+    "id": "S9",
+    "file": "app/assets/javascripts/discourse/lib/utilities.js",
+    "lines": [
+     246,
+     247
+    ],
+    "texto": "The 413 handler now tells the user the maximum is a hard-coded 10 MB. This ignores the configured size settings, so the message can disagree with the actual limit."
+   },
+   {
+    "id": "S10",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     145,
+     151
+    ],
+    "texto": "`OptimizedImage.downsize` is defined twice. The second definition `(from, to, dimensions, opts={})` silently replaces the first `(from, to, max_width, max_height, opts={})`. The existing caller `resize_emoji.rb` calls `downsize(path, path, 100, 100, opts)` with 5 arguments and will now raise ArgumentError. Update that caller to pass `\"100x100\"`, or keep a single `downsize` that accepts both forms."
+   },
+   {
+    "id": "S11",
+    "file": "app/assets/javascripts/discourse/lib/utilities.js",
+    "lines": [
+     182,
+     182
+    ],
+    "texto": "The client-side size check hard-codes 10MB and ignores the `max_<type>_size_kb` site setting. Attachments or avatars with a smaller configured limit pass the client check. The error message then reports 10MB instead of the real limit. Use the site setting for non-image types, and use 10MB only for images, which the server now downsizes."
+   },
+   {
+    "id": "S12",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     145,
+     151
+    ],
+    "texto": "`OptimizedImage.downsize` is defined twice, and the second definition `(from, to, dimensions, opts={})` silently replaces the first `(from, to, max_width, max_height, opts={})`. The existing caller `resize_emoji.rb` calls `downsize(path, path, 100, 100, opts)` with 5 arguments, so it now raises ArgumentError and the emoji resize job fails. Keep a single `downsize` that supports both call styles, or update the emoji caller to pass `\"100x100\"`."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#01",
+    "descricao": "downsize is defined twice in OptimizedImage; the new (from, to, dimensions, opts) version overrides the (max_width, max_height) one, so existing callers such as ResizeEmoji that pass width and height now raise ArgumentError.",
+    "textoGolden": "The downsize method is defined twice. The second definition, which expects a single dimensions string parameter, overrides the first, which expected separate max_width and max_height parameters. This makes the original method unreachable and breaks existing code that calls it with separate width and height arguments.",
+    "comentarios": [
+     {
+      "file": "app/models/optimized_image.rb",
+      "lines": [
+       149,
+       151
+      ],
+      "texto": "WHAT: A second `def self.downsize(from, to, dimensions, opts={})` is defined that overrides the existing `downsize(from, to, max_width, max_height, opts={})` at lines 145-147. WHY: Ruby uses the last definition, so the effective downsize now only accepts 3-4 args, and the existing caller app/jobs/regular/resize_emoji.rb:14 (`OptimizedImage.downsize(path, path, 100, 100, opts)`) passes 5 args and raises ArgumentError (wrong number of arguments, given 5, expected 3..4), breaking emoji resizing. HOW: Remove the duplicate; keep a single downsize method whose signature matches all callers (the 4-arg uploads_controller call `downsize(path, path, \"80%\", allow_animation: ...)` and the 5-arg ResizeEmoji call), or rename one of them."
+     },
+     {
+      "file": "app/models/optimized_image.rb",
+      "lines": [
+       145,
+       151
+      ],
+      "texto": "`downsize` is defined twice: the original 5-param form `downsize(from, to, max_width, max_height, opts)` at lines 145-147 and the new 4-param form `downsize(from, to, dimensions, opts)` at lines 149-151. Ruby keeps only the last definition, so the effective signature is now 4 params and the 5-param version is dead code. The pre-existing consumer app/jobs/regular/resize_emoji.rb:14 still calls `OptimizedImage.downsize(path, path, 100, 100, opts)` with 5 positional args, which now raises ArgumentError on every emoji resize. Either update that caller to the new `dimensions` form or remove the redundant override so the old signature keeps working."
+     },
+     {
+      "file": "app/models/optimized_image.rb",
+      "lines": [
+       145,
+       151
+      ],
+      "texto": "`self.downsize` is defined twice in the same class scope (line 145 `(from, to, max_width, max_height, opts={})` and the new line 149 `(from, to, dimensions, opts={})`). Ruby keeps only the last definition, so the 4-argument version is dead and unreachable. The existing caller `OptimizedImage.downsize(path, path, 100, 100, opts)` in app/jobs/regular/resize_emoji.rb:14 passes 5 arguments and will now raise ArgumentError (expected 3..4). Remove the duplicate definition (keep only the `dimensions`-based one, or convert resize_emoji's call), otherwise emoji resizing breaks."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#02",
+    "descricao": "The client-side upload size check hardcodes 10 MB instead of the per-type max_<type>_size_kb setting, so attachment limits diverge from the server: larger allowed attachments are blocked and smaller limits are only enforced server-side.",
+    "textoGolden": "Hardcoding maxSizeKB = 10 * 1024 ignores Discourse.SiteSettings['max_' + type + '_size_kb'], so the client-side limit can diverge from server-side and per-type settings (also applies to the 413 handler below).",
+    "comentarios": [
+     {
+      "file": "utilities.js",
+      "lines": [
+       179,
+       249
+      ],
+      "texto": "Hardcoded max size literal 10 * 1024 replaces site-setting-derived max size. Behavioral concern outside assigned class."
+     },
+     {
+      "file": "app/assets/javascripts/discourse/lib/utilities.js",
+      "lines": [
+       182,
+       182
+      ],
+      "texto": "The fixed 10 MB client limit is applied to attachments as well as images, replacing max_attachment_size_kb. Sites configured to allow attachments larger than 10 MB can no longer upload those valid files through the composer, although UploadValidator still permits them. Apply the new input ceiling only to images and retain the configured attachment limit."
+     },
+     {
+      "file": "app/assets/javascripts/discourse/lib/utilities.js",
+      "lines": [
+       180,
+       184
+      ],
+      "texto": "WHAT: Client check hardcodes maxSizeKB to 10*1024 instead of Discourse.SiteSettings['max_'+type+'_size_kb'], losing image vs attachment distinction. WHY: Sites with smaller max_attachment_size_kb pass client validation then fail server-side, and sites with limits >10MB incorrectly block valid uploads with wrong max_size_kb message. HOW: Restore per-type SiteSetting lookup (keep 10MB only as image downsize ceiling)."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#03",
+    "descricao": "The upload downsizing passes a percentage ('80%') as dimensions, but for animated GIFs the gifsicle path uses --resize-fit, which expects WxH geometry, so downsizing silently fails.",
+    "textoGolden": "Passing 80% as the dimensions can fail for animated GIFs when allow_animated_thumbnails is true, since the animated path uses gifsicle --resize-fit which expects WxH geometry, not a percentage; downsizing would then silently fail.",
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       67,
+       67
+      ],
+      "texto": "The controller passes the percentage string `\"80%\"` as the dimensions argument to `OptimizedImage.downsize`, but the consumer requires explicit `WxH` geometry: the code this PR deleted built exactly `\"#{width}x#{height}\"`, and the animated path runs `gifsicle --resize-fit #{dimensions}`, which rejects a percentage. Pass an explicit size (e.g. a computed `\"WxH\"` from the max KB target) so the auto-downsize actually reduces the file, rather than silently no-oping and leaving oversized uploads."
+     },
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       63,
+       70
+      ],
+      "texto": "Caller passes \"80%\" as dimensions to OptimizedImage.downsize, but the downsize/optimize instruction builders in optimized_image.rb expect explicit \"WxH\" geometry (interpolated as -resize #{dimensions}\\>). A bare percentage does not satisfy that contract and will produce a malformed geometry. Fix the caller to supply WxH dimensions or add explicit percentage handling to the callee."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#04",
+    "descricao": "Auto-downsizing passes the upload tempfile path, which lacks a .gif extension, so the animated branch is never chosen and convert keeps only the first frame, flattening oversized animated GIFs.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       64,
+       70
+      ],
+      "texto": "WHAT: The new auto-downsize call passes a tempfile path whose name has no `.GIF` extension, so `optimize` never selects the animated branch (`method_name += \"_animated\" if opts[:allow_animation] && from =~ /\\.GIF$/i`) and uses `downsize_instructions`, which runs `convert from[0]` and keeps only the first frame. WHY: Animated GIFs larger than max_image_size_kb that are uploaded through this path have their animation flattened to a single frame even though SiteSetting.allow_animated_thumbnails is enabled. HOW: Detect the image type from the original filename/content-type rather than the tempfile path (or pass a flag) so the gifsicle animated downsize path is used for GIF inputs."
+     },
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       67,
+       67
+      ],
+      "texto": "Passing the multipart tempfile path to downsize prevents animation detection when that path does not end in .gif, even when allow_animated_thumbnails is enabled. OptimizedImage.optimize checks the path suffix and otherwise uses convert with input[0], so oversized animated GIF uploads are permanently flattened to their first frame. Preserve the original image extension in the processing path or pass the image format explicitly to select animated processing."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#05",
+    "descricao": "The comment promises images are reduced to the allowed size, but the loop only tries five 80% reductions with no guarantee of reaching the limit.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       63,
+       70
+      ],
+      "texto": "The comment says large images are \"automatically reduced to allowed size\", but the loop only resizes by 80% up to 5 attempts (\u22480.33\u00d7 of the original in the best case) and then stops without any check that the result actually meets `max_image_size_kb`. The prose promises a guarantee the code does not provide; either make the loop actually converge to the allowed size or reword the comment to state that the image is only attempted to be reduced."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#06",
+    "descricao": "The downsize retry loop ignores the false return of a failed conversion and repeats the same failing ImageMagick call up to five times.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       66,
+       68
+      ],
+      "texto": "The retry loop ignores downsize's false return value and retries failed conversions while the file remains oversized. convert_with returns false on converter failure, so an unsupported or malformed oversized image launches the same failing external conversion up to five times per upload without any changed input. Break on a failed downsize result and return an upload error rather than repeating the conversion."
+     },
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       64,
+       69
+      ],
+      "texto": "WHAT: Downsize loop ignores OptimizedImage.downsize return value and retries up to 5 times unconditionally while checking tempfile.size. WHY: Failed converts (e.g. SVG, invalid 80%> geometry, corrupt image) burn 5 ImageMagick runs then Upload.create_for still runs with oversized/unmodified file and fails validation, wasting CPU and breaking the feature. HOW: Break on false return and handle failure."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#08",
+    "descricao": "Claims up to five synchronous ImageMagick runs per oversized upload block request threads and enable DoS.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       63,
+       69
+      ],
+      "texto": "WHAT: Up to 5 synchronous OptimizedImage.downsize + ImageOptim convert runs execute inline in create_upload request cycle for every oversized image. WHY: Blocks the Rails request thread with CPU-intensive shell-outs per upload, enabling easy request-thread exhaustion/DoS with large images. HOW: Move downsizing to background job or enforce single-pass/timeout."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#09",
+    "descricao": "Claims the downsize loop checking tempfile.size may never terminate because of a stale cached size, causing infinite loops.",
+    "textoGolden": "The loop checking `tempfile.size` may never terminate correctly due to stale cached size, leading to potential infinite loops or incorrect file handling after modifications.",
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#sncc-01",
+    "descricao": "The 413 upload error message states a hard-coded 10 MB maximum that may not match the limit the server or web server actually enforces.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#opa-01",
+    "descricao": "The upload tempfile path, which for API URL uploads embeds the request-controlled type param, is now passed to OptimizedImage.downsize and run unescaped in a shell via backticks, allowing command injection through type.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "3162ad68a5c87666788b27a44eb31235025091a9",
+  "base": "de11fb0166a7244115bb066edd65ec0d6b7e365c",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     253,
+     257
+    ],
+    "texto": "WHAT: `isinstance(process, multiprocessing.Process)` is False for spawn-context processes, which are `SpawnProcess` instances. WHY: a hung flusher process is never killed before `_create_process_for_shards` starts a replacement, so two flushers run on the same shards and hung processes leak on each restart; the old code called `kill()` unconditionally. HOW: check `not isinstance(process, threading.Thread)`, or use `multiprocessing.process.BaseProcess`."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     31,
+     32
+    ],
+    "texto": "The docstring says the flusher 'Creates one process per shard', but the code creates min(max_processes, len(assigned_shards)) processes and assigns several shards to each one round-robin. The new `--flusher-processes` option defaults to 1, so by default every shard shares a single process. Reword the docstring to describe the capped, shared-process behaviour."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     199,
+     199
+    ],
+    "texto": "The wait_produce timer is tagged with `shards`, but every other new metric in this change (flusher.produce, segment_size_bytes, flusher_unhealthy) uses the tag `shard`. The inconsistent key splits the dashboards and makes the tag disagree with its neighbours. Use `shard` here too."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     337,
+     347
+    ],
+    "texto": "When the join deadline expires, the loop `break`s out of the per-process loop, so `terminate()` is never called on the remaining processes. Those flusher processes are left running. Skip only the waiting part (don't `break`), and still terminate each process."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     199,
+     199
+    ],
+    "texto": "The `wait_produce` timer is tagged `shards`, while the sibling `produce` timer and `segment_size_bytes` metric use `shard` for the same value. Dashboards and queries that group by `shard` will miss this metric. Use the same tag key, `shard`, here."
+   },
+   {
+    "id": "S6",
+    "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+    "lines": [
+     60,
+     62
+    ],
+    "texto": "`time.sleep` is monkeypatched to a no-op at the start of the test. The added `time.sleep(0.1)`, meant to give the flusher threads time to run, therefore waits for nothing and does not make the test deterministic. Capture the real sleep before patching, or poll until `messages` is non-empty."
+   },
+   {
+    "id": "S7",
+    "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+    "lines": [
+     57,
+     64
+    ],
+    "texto": "The added `time.sleep(0.1)` to wait for the flusher threads is a no-op, because `time.sleep` is monkeypatched to a lambda at the top of the test. `step.join()` then sets `stopped` and the flusher thread may exit before flushing, so the `(msg,) = messages` assertion races. Wait on a condition instead, for example poll `messages` with a deadline using the real sleep captured before patching."
+   },
+   {
+    "id": "S8",
+    "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+    "lines": [
+     113,
+     123
+    ],
+    "texto": "test_flusher_processes_limit only checks the process count and that the shard total is 4. It would still pass if every shard were assigned to one process, or if the shared processes never flushed anything. Assert the actual distribution (each process gets 2 shards, no duplicates) and submit spans to different shards to verify they are flushed."
+   },
+   {
+    "id": "S9",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     253,
+     259
+    ],
+    "texto": "The restart path used to always kill the unhealthy flusher process. It now kills only if `isinstance(process, multiprocessing.Process)`, but processes come from `mp_context.Process` (`SpawnProcess`), which is not a subclass of `multiprocessing.Process`. A hung process is therefore never killed, and a replacement is started for the same shards while the old one keeps running. Check `not isinstance(process, threading.Thread)`, or call `kill()` unconditionally as before, catching ValueError."
+   },
+   {
+    "id": "S10",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     253,
+     259
+    ],
+    "texto": "The `isinstance(process, multiprocessing.Process)` guard is False for `SpawnProcess` objects (they subclass `BaseProcess`, not `multiprocessing.context.Process`). A hung flusher is therefore never killed, and a replacement is started on the same shards, so two flushers run on those shards at once. Guard with `not isinstance(process, threading.Thread)`, or check for `hasattr(process, 'kill')`, so real processes are killed before restart."
+   },
+   {
+    "id": "S11",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     336,
+     347
+    ],
+    "texto": "When the join deadline expires, the loop `break`s and skips `terminate()` for all remaining processes. Those flusher processes are left running after shutdown. Replace the `break` with a `continue` that still falls through to the terminate step, or terminate all processes in a separate pass after the wait loop."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#01",
+    "descricao": "The wait_produce timer is tagged with 'shards' while sibling flusher metrics use 'shard' for the same value, so per-shard dashboards miss it.",
+    "textoGolden": "In the SpanFlusher flush loop, metric tags inconsistently use 'shard' (e.g., in spans.buffer.flusher.produce and spans.buffer.segment_size_bytes) and 'shards' (in spans.buffer.flusher.wait_produce) for the same shard identifier value. This prevents correct metric aggregation across flush stages \u2014 dashboards and alerts filtering by tag 'shard' will miss data tagged as 'shards' and vice versa.",
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       199,
+       199
+      ],
+      "texto": "The `spans.buffer.flusher.wait_produce` timer is tagged with the key `\"shards\"`, while the other two metrics emitted in this same loop (`spans.buffer.flusher.produce` at line 185 and `spans.buffer.segment_size_bytes` at line 195) use the key `\"shard\"`. All three carry the same `shard_tag` value, so this is a pure key-name disagreement: any dashboard or alert that groups/filters by the `shard` tag will silently receive no data from `wait_produce`. Rename the tag key to `\"shard\"` so all flusher metrics share one tag."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       199,
+       199
+      ],
+      "texto": "The `spans.buffer.flusher.wait_produce` timer is tagged with key `shards` while every sibling metric introduced/updated in the same method (`spans.buffer.flusher.produce`, `spans.buffer.segment_size_bytes`) uses the singular key `shard`. Anything consuming this metric family by the `shard` tag (dashboards, alerts, tag-based aggregation) will silently receive no data for `wait_produce`, and per-shard breakdowns of produce latency will be incomplete. Change the tag to `tags={\"shard\": shard_tag}` so the tag contract matches the other flusher metrics."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       199,
+       199
+      ],
+      "texto": "The wait_produce timer tags with \"shards\", while the sibling metrics in the same loop use \"shard\" for the same value (shard_tag). Use one tag key, \"shard\", so queries and dashboards that group by it cover all of these metrics."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#02",
+    "descricao": "The time.sleep(0.1) added to test_basic to let flusher threads process is a no-op because the test monkeypatches time.sleep.",
+    "textoGolden": "The test_basic function in test_consumer.py uses a monkeypatched time.sleep that returns immediately, but then calls time.sleep(0.1) expecting it to actually wait.",
+    "comentarios": [
+     {
+      "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+      "lines": [
+       60,
+       62
+      ],
+      "texto": "WHAT: The added synchronization point `time.sleep(0.1)` added after the second `step.poll()` is neutralized by the test's own `monkeypatch.setattr(\"time.sleep\", lambda _: None)` at line 15 (same `time` module), so it does not actually wait. WHY: The comment says it 'Give[s] flusher threads time to process after drift change', but the call is a no-op, so the test still races the background flusher thread before `step.join()` and is liable to be flaky / to not exercise the intended post-drift flush path. HOW: Use a non-monkeypatched wait (e.g. capture the real sleep before patching, or use the flusher's thread/process join, or poll until `messages` is non-empty with a real timeout)."
+     },
+     {
+      "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+      "lines": [
+       60,
+       62
+      ],
+      "texto": "The added `time.sleep(0.1)` does not wait: line 15 of the same test does `monkeypatch.setattr(\"time.sleep\", lambda _: None)`, which replaces `sleep` on the global `time` module, so this call (and the flusher's own `time.sleep`) is a no-op. The comment 'Give flusher threads time to process after drift change' is therefore false \u2014 the call returns instantly and provides no synchronisation, so the test does not actually wait for the flusher to process after the drift change. Either synchronise on a real condition (e.g. wait until the expected message is produced) or, if the original `time.sleep` is needed here, patch a module-scoped reference instead of the global `time.sleep`."
+     },
+     {
+      "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+      "lines": [
+       60,
+       62
+      ],
+      "texto": "The added `time.sleep(0.1)` is a no-op because the test patches `time.sleep` to `lambda _: None`, so nothing waits for the flusher threads before `step.join()` and the `messages` assertion. Replace it with a condition-based wait, such as polling until `messages` is non-empty with a deadline. Use the real sleep saved before patching if a delay is needed."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+    "descricao": "The restart path only kills a hung flusher if it is a multiprocessing.Process, but spawn-context workers are SpawnProcess, so hung processes are never killed and a duplicate flusher is started for the same shards.",
+    "textoGolden": "Because flusher processes are created via multiprocessing.get_context('spawn').Process, they are instances of multiprocessing.context.SpawnProcess, which on POSIX is not a subclass of multiprocessing.Process, so this isinstance check will always be false and hung processes won't be killed here.",
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       253,
+       255
+      ],
+      "texto": "The new isinstance(process, multiprocessing.Process) guard does not match the SpawnProcess instances created by self.mp_context.Process. When a worker hangs, the guard skips kill() and the replacement starts while the original worker remains alive, allowing overlapping flushing of the same shards if the original resumes and leaking hung workers. Check against multiprocessing.process.BaseProcess or self.mp_context.Process, and kill and join the old worker before replacing it."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       253,
+       255
+      ],
+      "texto": "The workers are created with get_context(\"spawn\").Process, which produces SpawnProcess instances; these are not instances of multiprocessing.Process (the default-context Process class). Consequently this guard skips kill() for actual production workers. When a worker hangs, the replacement starts while the original remains alive and can resume flushing the same shards. Use multiprocessing.process.BaseProcess or the spawn-context Process class for the check, and fix the identical check in join() so shutdown also terminates surviving workers."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       254,
+       255
+      ],
+      "texto": "Workers created by multiprocessing.get_context(\"spawn\").Process are SpawnProcess instances, not instances of the separate multiprocessing.Process class. Consequently this guard skips kill() for production workers. When a live worker exceeds max-unhealthy-seconds, the code starts a replacement and overwrites its handle while the original is still running. If the original resumes, both workers flush the same shards, and repeated hangs can exceed the configured process limit. Check against multiprocessing.process.BaseProcess (or explicitly distinguish threads) and stop the old worker before replacing it."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+    "descricao": "join() breaks out of the per-process loop when the shared deadline expires, skipping termination of the remaining flusher processes and leaving them running after shutdown.",
+    "textoGolden": "Breaking out of the loop when the deadline has elapsed can skip terminating remaining flusher processes, potentially leaving them running after shutdown; consider ensuring termination is attempted even if the deadline is exceeded.",
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       338,
+       341
+      ],
+      "texto": "join() breaks out of the worker loop when the shared deadline expires, skipping cleanup for every remaining worker. If next_step.join consumes the timeout or an earlier worker exhausts it, remaining flushers can continue running after shutdown or partition reassignment. Use the deadline only to limit waiting and still terminate and reap every remaining process."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       337,
+       341
+      ],
+      "texto": "Do not break out of worker cleanup when the join deadline expires. If the first worker consumes the timeout, the next iteration breaks before terminating that worker or any subsequent workers. They may still be blocked in Redis or producer calls despite the shared stopped flag, leaving old workers running after strategy shutdown/reassignment. Apply the deadline only to waiting, and perform termination cleanup for every worker regardless of remaining time (using a type check that recognizes spawn-context workers)."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       337,
+       344
+      ],
+      "texto": "join() waits for processes sequentially against a single shared deadline and breaks without terminating remaining processes once it expires, leaking them."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#05",
+    "descricao": "The SpanFlusher docstring says it creates one process per shard, but shards are distributed across at most max_processes processes.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       30,
+       32
+      ],
+      "texto": "The docstring says the flusher \"Creates one process per shard for parallel processing,\" but the code at lines 60-66 shares shards across a capped number of processes (num_processes = min(self.max_processes, len(buffer.assigned_shards)); each shard assigned via i % self.num_processes). With the new --flusher-processes default of 1, a single process handles every shard, so the documented contract is the opposite of the behaviour this PR introduces (confirmed by test_flusher_processes_limit, which asserts 4 shards served by 2 processes). Update the docstring to say shards are distributed across up to max_processes flusher processes."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       31,
+       32
+      ],
+      "texto": "The new docstring says this creates one process per shard, but workers are capped by max_processes and shards are distributed among them. In particular, the CLI default of 1 means all assigned shards share one process. Describe capped workers with potentially multiple shards per worker so callers do not rely on per-shard process isolation."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       31,
+       32
+      ],
+      "texto": "The docstring says the flusher 'Creates one process per shard', but the number of processes is capped by max_processes (--flusher-processes), and shards are shared across processes via i % num_processes. Reword it to say that shards are distributed across at most max_processes processes."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#06",
+    "descricao": "max_processes uses a truthiness fallback, so --flusher-processes 0 silently becomes one process per shard instead of being rejected.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       51,
+       51
+      ],
+      "texto": "`max_processes or len(buffer.assigned_shards)` treats a falsy value as 'not provided'. The new `--flusher-processes` click option is `type=int`, so a user can pass `0`; that legitimate-but-falsy value is discarded and the flusher silently spawns one process per shard instead of honoring the requested limit. Use an explicit None check, e.g. `self.max_processes = max_processes if max_processes is not None else len(buffer.assigned_shards)` (and validate/reject 0 upstream)."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       51,
+       51
+      ],
+      "texto": "An explicit max_processes=0 is treated as an omitted limit by `or`, so passing `--flusher-processes 0` starts one process per assigned shard instead of respecting or rejecting the supplied zero limit. The CLI accepts zero as an integer and the factory forwards it unchanged. Default only when max_processes is None, and explicitly validate that supplied process limits are positive so zero cannot silently enable potentially many workers."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       51,
+       51
+      ],
+      "texto": "`max_processes or len(buffer.assigned_shards)` uses a truthiness test, so an explicit 0 is treated as 'unset' and silently expands to one process per shard. Use `max_processes if max_processes is not None else len(buffer.assigned_shards)` and reject values below 1."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#07",
+    "descricao": "A negative --flusher-processes value is not validated and makes SpanFlusher construction fail with KeyError.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       60,
+       66
+      ],
+      "texto": "`flusher_processes` is not validated to be >= 1. `self.max_processes = max_processes or len(buffer.assigned_shards)` lets a negative value through (it is truthy), so `self.num_processes = min(self.max_processes, len(...))` becomes negative and `range(self.num_processes)` is empty, leaving `process_to_shards_map` as `{}`. The following loop computes `process_index = i % self.num_processes`, which for any negative divisor is 0, so `self.process_to_shards_map[0].append(shard)` raises KeyError and the consumer fails to construct. Since `flusher_processes` is exposed as an int CLI option (`--flusher-processes`), a negative value is reachable from configuration. Guard with `max(1, self.num_processes)` / validate the input."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       60,
+       66
+      ],
+      "texto": "negative max_processes flows through `or` guard into min() -> empty map -> KeyError on i % num_processes; empty assigned_shards yields zero processes."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08",
+    "descricao": "submit() queries cluster-wide Redis memory once per flusher buffer, repeating identical INFO calls per process on every submit.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       299,
+       301
+      ],
+      "texto": "The new loop calls get_memory_info() once per flusher buffer even though SpansBuffer.get_memory_info delegates to iter_cluster_memory_usage(self.client), which fetches INFO for the entire Redis cluster regardless of assigned_shards. With P flusher processes and memory backpressure enabled, each submitted batch now performs P identical cluster-wide memory queries on the consumer thread instead of one, increasing Redis traffic and blocking ingestion. Fetch cluster memory information once from a single buffer."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       299,
+       301
+      ],
+      "texto": "submit() loop calls buffer.get_memory_info() per flusher but each call is cluster-wide from same client, repeating identical INFO N\u00d7 per submit."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#10",
+    "descricao": "_create_process_for_shard is added but never called.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       127,
+       132
+      ],
+      "texto": "WHAT: `_create_process_for_shard(self, shard)` is newly added but has no caller anywhere (grep for `_create_process_for_shard(` finds only its definition); the restart path actually used is `_create_process_for_shards(process_index, shards)`. WHY: This is dead code that indicates the intended per-shard restart wiring was left incomplete \u2014 any future caller relying on restarting only the process owning a given shard will silently do nothing, and it is confusing which restart path is authoritative. HOW: Remove `_create_process_for_shard`, or wire it into `_ensure_processes_alive` if per-shard restart was intended."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#12",
+    "descricao": "test_flusher_processes_limit counts assigned shards instead of checking that each shard is assigned exactly once.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+      "lines": [
+       119,
+       121
+      ],
+      "texto": "The assertion counts shard entries rather than verifying shard assignment. A broken distribution such as {0: [0, 1], 1: [0, 1]} still passes all assertions in this test while shards 2 and 3 are never flushed. Assert that the flattened mapping contains exactly the expected assigned shards, with no duplicates (and verify each worker's shard buffer uses that mapping), rather than only asserting a total of four."
+     }
+    ]
+   }
+  ]
+ },
+ "database-performance-optimizations-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "04cfa3bfd469c035ff8b35f9a66867c4e8d5dcf4",
+  "base": "a886bd3c79a417a70b51509384d1f1ec3e87e96b",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "lines": [
+     534,
+     537
+    ],
+    "texto": "WHAT: Each cleanup batch calls r.log.Error with the full `ids` slice and the SQL condition, both before and after the delete, in all three cleanup paths (lines 534/537, 554/557, 576/579). WHY: This writes error-level logs even on success, including every iteration that finds nothing. The ID list can reach the batch size (up to 32767 in the new test), so the logs grow very large and trigger false error alerts. HOW: Remove these log calls, or demote them to Debug and drop the `ids` payload."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/services/cleanup/cleanup.go",
+    "lines": [
+     77,
+     77
+    ],
+    "texto": "WHAT: The cleanup service ticker interval is changed from 10 minutes to 1 minute. This is unrelated to the deadlock fix and looks like a debugging change. WHY: Every cleanup job (annotations, temp files, expired sessions and others) runs 10 times as often on every instance, which adds database load and contention. HOW: Restore `time.Minute * 10`."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "lines": [
+     608,
+     618
+    ],
+    "texto": "The batch size used to be only a LIMIT value, so any size worked. deleteByIDs now binds one placeholder per ID and special-cases only SQLite. A configured AnnotationCleanupJobBatchSize above the bind-parameter limit of MySQL or Postgres (65535) will make every cleanup DELETE fail. Inline the IDs for all dialects when the batch is large, or split the IDs into chunks below the limit."
+   },
+   {
+    "id": "S4",
+    "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "lines": [
+     534,
+     537
+    ],
+    "texto": "Routine cleanup batches are logged at Error level with the full list of annotation IDs and the raw SQL condition. With batch sizes in the thousands, this writes huge log lines every minute and puts internal row identifiers and query text into the error log. Log only counts at Debug level and drop the `ids` and `cond` fields. The same pattern is repeated for the count-based cleanup and the tag cleanup."
+   },
+   {
+    "id": "S5",
+    "file": "pkg/services/annotations/annotationsimpl/cleanup_test.go",
+    "lines": [
+     82,
+     96
+    ],
+    "texto": "The case \"running the max count delete again should not remove any annotations\" no longer runs the cleanup a second time. After the refactor each case creates fresh data, so it runs one cleanup on 9 annotations (3 per type). It no longer verifies that a repeated run is idempotent. Either run cleaner.Run twice in this case and assert the second run affects 0 rows, or rename the case."
+   },
+   {
+    "id": "S6",
+    "file": "xorm_store.go",
+    "lines": [
+     534,
+     579
+    ],
+    "texto": "The r.log.Error calls at lines 534, 537, 554, 557, 576 and 579 log routine progress at Error level. This is a log-level problem: use Info or Debug for routine progress messages and keep Error for actual failures."
+   },
+   {
+    "id": "S7",
+    "file": "cleanup.go",
+    "lines": [
+     77,
+     77
+    ],
+    "texto": "The cleanup interval was changed from 10 minutes to 1 minute at line 77, while clean() still uses timeout = 9 * time.Minute. This looks like a leftover debug change and should probably be reverted to the original 10-minute interval."
+   },
+   {
+    "id": "S8",
+    "file": "pkg/services/cleanup/cleanup.go",
+    "lines": [
+     77,
+     77
+    ],
+    "texto": "The cleanup ticker was changed from 10 minutes to 1 minute, but `clean()` still uses a 9-minute timeout that was sized for a 10-minute interval. Cleanup now runs far more often than that timeout assumes, and a long run can overlap the next tick. This looks like a leftover debugging change and should be reverted to 10 minutes."
+   },
+   {
+    "id": "S9",
+    "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "lines": [
+     534,
+     537
+    ],
+    "texto": "Routine, successful batch progress is logged with `r.log.Error`, and the full ID list and an always-nil `err` are included. This floods error logs on every cleanup batch (the same pattern appears at 554/557 and 576/579). Remove these debug logs, or use Debug level without dumping the IDs."
+   },
+   {
+    "id": "S10",
+    "file": "xorm_store.go",
+    "lines": [
+     500,
+     667
+    ],
+    "texto": "On MySQL and Postgres, deleteByIDs uses one placeholder per ID. Both databases cap bind parameters at 65535, and the batch size is configurable with no upper bound, so a large batch size could exceed the limit and make the delete fail. Consider capping the batch size or chunking the IDs. The reviewer flagged this as a low-confidence finding."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#04",
+    "descricao": "Leftover debug logs in the annotation cleanup emit Error-level entries with the full ID list on every batch, flooding error logs during normal operation.",
+    "textoGolden": "The code uses Error log level for what appears to be debugging information. This will pollute error logs in production. Consider using Debug or Info level instead.",
+    "comentarios": [
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       528,
+       538
+      ],
+      "texto": "WHAT: Leftover debug logging calls r.log.Error on every cleanup batch (also duplicated at lines 554-557 and 576-579) dumping full ids slice, cond, and nil err at Error level. WHY: Fires Error-level log per batch and serializes up to AnnotationCleanupJobBatchSize IDs (32767 in new test), spamming error logs/monitoring on every normal cleanup run. HOW: Downgrade to Debug or remove; do not log full ids at Error."
+     },
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       534,
+       537
+      ],
+      "texto": "WHAT: Leftover debug logging calls `r.log.Error(\"Annotations to clean by time\", \"count\", len(ids), \"ids\", ids, ...)` (and the identical Error-level logs for 'by count' and 'Tags to clean', lines 554/557/576/579) run on every batch in production. WHY: These log the full ID slice (up to AnnotationCleanupJobBatchSize, e.g. 32767 elements) at Error severity on every cleanup iteration, flooding logs with false error noise and large payloads for a normal successful operation, and can trigger error-based alerting. HOW: Remove these log lines, or downgrade to Debug and drop the full `ids` slice (log only the count)."
+     },
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       534,
+       579
+      ],
+      "texto": "Avoid using Error-level logging on the normal cleanup path. The new r.log.Error calls emit count, ids, cond, and err at lines 534/537, 554/557, and 576/579 during non-error execution, creating log noise; consider downgrading or removing these logs on the normal path."
+     }
+    ]
+   },
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#05",
+    "descricao": "The comment states SQLite's parameter limit is 999, which is only true for SQLite versions before 3.32.0.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       605,
+       607
+      ],
+      "texto": "The comment states that SQLite has a parameter limit of 999, but SQLite >= 3.32.0 defaults to 32766 (as the added integration test also recognizes). This branch is choosing a conservative compatibility threshold, not expressing the limit of every SQLite database. Document 999 as the older-version/compatibility threshold so maintainers do not mistake this constant for the actual limit on modern SQLite."
+     }
+    ]
+   },
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#06",
+    "descricao": "On MySQL and Postgres, deleteByIDs binds one placeholder per ID without limit, so a cleanup batch size above 65535 makes every DELETE fail.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       605,
+       618
+      ],
+      "texto": "The bind-parameter workaround only handles SQLite's limit; the placeholder branch is used for every other engine with len(ids) placeholders and no bound. The previous implementation had no bind parameters, so this path is new. Postgres (extended protocol) and MySQL both cap bind parameters at 65535, so a configured AnnotationCleanupJobBatchSize larger than that makes this DELETE fail at Exec with a parameter-limit error instead of cleaning anything. Clamp the number of ids per DELETE (e.g. chunk into <=1000/<=65535 id sub-batches) for all dialects, not just SQLite."
+     },
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       614,
+       618
+      ],
+      "texto": "On Postgres and MySQL, deleteByIDs binds one placeholder per ID with no cap. A configured AnnotationCleanupJobBatchSize above the driver's bind-parameter limit (65535) makes every cleanup batch fail, and the cleanup job then never finishes. Split the IDs into chunks below the limit, or inline the integer IDs as the SQLite branch does."
+     }
+    ]
+   },
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#07",
+    "descricao": "The SQLite inline ID list is built with repeated fmt.Sprintf concatenation, which is quadratic in batch size.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       608,
+       613
+      ],
+      "texto": "WHAT: SQLite large-batch IN-list built with repeated fmt.Sprintf(\"%s, %d\", values, v) in a loop over ids. WHY: Quadratic string copying on large batches (e.g. 32767 IDs in added test) during cleanup, a background job path. HOW: Build with strings.Builder or strings.Join."
+     },
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       609,
+       612
+      ],
+      "texto": "The SQLite literal-ID path rebuilds the entire accumulated string for every ID, making SQL construction quadratic in batch size. Large batches explicitly supported by this PR, including the 32,767 setting in the integration test, generate substantial repeated copying and allocation before each delete, consuming cleanup time and memory. Build the list with strings.Builder and append each formatted ID once."
+     }
+    ]
+   },
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#08",
+    "descricao": "The cleanup service ticker was changed from 10 minutes to 1 minute, running every cleanup job ten times as often and increasing database load.",
+    "textoGolden": "The cleanup job ticker was changed from 10 minutes to 1 minute, which can lead to increased database load and contention due to more frequent execution of cleanup tasks. This change should be reviewed to ensure it aligns with performance expectations.",
+    "comentarios": [
+     {
+      "file": "pkg/services/cleanup/cleanup.go",
+      "lines": [
+       74,
+       78
+      ],
+      "texto": "WHAT: Cleanup ticker changed from 10 minutes to 1 minute with no justification. WHY: Runs all 8 cleanup jobs including the new multi-query (SELECT+DELETE per batch) annotation cleanup 10x more often, multiplying DB load. HOW: Revert to 10 minutes or justify the frequency change separately."
+     },
+     {
+      "file": "pkg/services/cleanup/cleanup.go",
+      "lines": [
+       77,
+       77
+      ],
+      "texto": "WHAT: The cleanup job ticker interval was changed from `time.Minute * 10` to `time.Minute * 1`. WHY: This runs all cleanup jobs (annotations, expired snapshots/versions/images, short URLs, query history) 10\u00d7 more frequently, multiplying background DB load and lock contention \u2014 the opposite of the deadlock mitigation this PR targets \u2014 and appears to be a debug leftover unrelated to the described change. HOW: Restore the ticker to `time.Minute * 10`."
+     },
+     {
+      "file": "pkg/services/cleanup/cleanup.go",
+      "lines": [
+       76,
+       77
+      ],
+      "texto": "The cleanup ticker was changed from `time.Minute * 10` to `time.Minute * 1`, a 10x increase in how often the entire cleanup job runs. This job also drives the annotation/tag cleanup path changed in this PR, which now fetches ID batches into memory and emits Error-level logs per batch, so running it every minute substantially increases DB load and log volume with no functional benefit. Unless a 1-minute cadence is explicitly intended, this should stay at 10 minutes (it reads like a leftover from testing)."
+     }
+    ]
+   },
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#oph-01",
+    "descricao": "The 'running the max count delete again' test case no longer runs cleanup a second time after the PR's per-subtest seeding and cleanup, so it does not verify that a repeated max-count cleanup deletes nothing.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "unified-storage-performance-optimizations-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "26fed312840cd76b766cbd2158e17a7e6c0ec548",
+  "base": "871af07203177ce59a24e742107119409274f48a",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/storage/unified/resource/search.go",
+    "lines": [
+     216,
+     216
+    ],
+    "texto": "WHAT: The new `s.search.TotalDocs()` call runs after the event-handling goroutine has started, and the bleve implementation iterates `b.cache` without holding `cacheMu`. WHY: `handleEvent` can call `BuildIndex`, which writes `b.cache` under the lock, while `TotalDocs` reads the map unlocked. That is a concurrent map read and write, a fatal runtime error that crashes the process at startup. HOW: Take `b.cacheMu.RLock()` inside `bleveBackend.TotalDocs`."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/storage/unified/search/bleve.go",
+    "lines": [
+     137,
+     139
+    ],
+    "texto": "WHAT: Removing the function-wide `cacheMu` lock from BuildIndex means concurrent callers can build the same key at once. WHY: `getOrCreateIndex` does a GetIndex-then-build check with no per-key guard. Concurrent searches or events for a missing index each build a full index, and the last one overwrites the cached entry while the earlier one leaks. For file-backed indexes, `bleve.New` on the same directory fails for the second caller. HOW: Add a per-key singleflight or mutex in the build path, and re-check the cache under the lock before storing."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/server/module_server_test.go",
+    "lines": [
+     35,
+     38
+    ],
+    "texto": "The unconditional skip for postgres means this test cannot fail on that backend. It is the only coverage for the storage-server startup path, which this PR changes (Init now runs in NewResourceServer, and search init runs before the watcher). A regression in startup would therefore go unnoticed on postgres. Fix the underlying Drone failure, or make the skip conditional on the Drone environment and link a tracking issue, instead of skipping everywhere."
+   },
+   {
+    "id": "S4",
+    "file": "pkg/storage/unified/resource/search.go",
+    "lines": [
+     216,
+     216
+    ],
+    "texto": "The new `s.search.TotalDocs()` call iterates the bleve backend's `cache` map without holding `cacheMu`. The init goroutine that runs handleEvent is already running, and it can add entries through BuildIndex. The BuildIndex-wide lock was removed in this PR, so a concurrent map iteration and write can hit Go's fatal 'concurrent map iteration and map write'. Fix: make TotalDocs take `b.cacheMu.RLock()` before ranging over the map."
+   },
+   {
+    "id": "S5",
+    "file": "pkg/storage/unified/search/bleve.go",
+    "lines": [
+     137,
+     139
+    ],
+    "texto": "search.go `init` now calls `TotalDocs()` right after starting the watch-event goroutine, and `handleEvent` can run `BuildIndex` concurrently. `BuildIndex` now writes `b.cache` under `cacheMu`, but `TotalDocs` ranges over `b.cache` without taking `cacheMu.RLock()`. That is a concurrent map read and write, which can crash the process with a fatal error. Take `cacheMu.RLock()` in `TotalDocs`."
+   },
+   {
+    "id": "S6",
+    "file": "pkg/storage/unified/resource/server.go",
+    "lines": [
+     258,
+     262
+    ],
+    "texto": "NewResourceServer now runs s.Init(ctx) synchronously. Construction used to be cheap and never failed on init, and now it blocks on lifecycle hooks, a full search index build and DB stats queries. Any init error, such as DB not ready or migrations not run, now makes the constructor return nil, and callers that built the server first and initialised it later cannot do that any more. Keep the lazy Init, or have callers call Init explicitly at startup, instead of failing construction."
+   },
+   {
+    "id": "S7",
+    "file": "search/bleve.go",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "TotalDocs iterates over b.cache without holding a lock, which is a data race with concurrent cache writes. The reviewer noted this as outside their review class. Guard the iteration with the appropriate mutex (e.g. a read lock)."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#01",
+    "descricao": "BuildIndex now locks only the final cache assignment, so concurrent callers for the same uncached key all build the same expensive index in parallel and the last one overwrites the others.",
+    "textoGolden": "A race condition in BuildIndex allows multiple goroutines to concurrently build the same expensive index for the same key. This is caused by moving the b.cacheMu lock from protecting the entire function to only protecting the final cache assignment. ",
+    "comentarios": [
+     {
+      "file": "pkg/storage/unified/search/bleve.go",
+      "lines": [
+       137,
+       139
+      ],
+      "texto": "WHAT: Removing the function-wide `b.cacheMu.Lock()/defer Unlock()` and keeping only the lock around `b.cache[key]=idx` removes the only thing that serialized GetIndex against an in-flight build. WHY: getOrCreateIndex (resource/search.go:287-307) does GetIndex -> if nil -> build; previously BuildIndex held the write lock for its whole body so a concurrent caller's GetIndex (RLock) blocked until the first build cached the index and then saw it (no second build). Now GetIndex can return nil while a build for the same key is still running, so two requests/watch events build the SAME key concurrently \u2014 producing two distinct index instances where the caller holding the non-cached one never observes later writes (stale search results), and, for file-backed indices (size > FileThreshold), two concurrent `bleve.New(dir, mapper)` opening the same on-disk directory. HOW: guard the build per key (e.g. re-check the cache under the write lock after acquiring it, or use a per-key single-flight/lock so only one build runs per NamespacedResource), rather than relying on a global write lock held for the entire body."
+     },
+     {
+      "file": "pkg/storage/unified/search/bleve.go",
+      "lines": [
+       137,
+       139
+      ],
+      "texto": "The cache mutex was moved to cover only the cache assignment, removing the serialization that previously surrounded the whole BuildIndex. Two concurrent BuildIndex calls for the same key can now both construct an index (including `bleve.New(dir, mapper)` on the same on-disk path) and both write `b.cache[key]`; the second overwrites the first, so callers get distinct index instances for one key and writes made through the losing instance are invisible to readers of the cached one (and the file-backed build may collide on the same directory). Keep the build for a given key serialized (e.g. restore the lock around the build, or take a per-key lock) instead of locking only the map write."
+     },
+     {
+      "file": "pkg/storage/unified/search/bleve.go",
+      "lines": [
+       137,
+       139
+      ],
+      "texto": "Locking only cache publication allows concurrent requests for the same uncached key to build separate indexes and overwrite each other's cache entries. Search and handleEvent both call getOrCreateIndex, whose GetIndex previously blocked behind the build-wide lock; now an event can update one newly built index before another build replaces it, losing that update from subsequent search results and leaving the discarded index open. Serialize builds per NamespacedResource and recheck the cache after acquiring that per-key guard."
+     }
+    ]
+   },
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#02",
+    "descricao": "The new startup log calls TotalDocs, which iterates the index cache without a lock, after the event goroutine that can add indexes has started, so a concurrent map read and write can crash the process.",
+    "textoGolden": "Calling s.search.TotalDocs() here may race with concurrent index creation: TotalDocs iterates b.cache without synchronization, and the event watcher goroutine started just above could trigger BuildIndex writes concurrently, potentially causing a concurrent map read/write panic.",
+    "comentarios": [
+     {
+      "file": "pkg/storage/unified/resource/search.go",
+      "lines": [
+       216,
+       216
+      ],
+      "texto": "The newly added `s.search.TotalDocs()` call is unsafe: `bleveBackend.TotalDocs()` (pkg/storage/unified/search/bleve.go:144-150) iterates `b.cache` without holding `cacheMu`, while the bleve.go hunk in this same PR keeps `cacheMu` for the `b.cache[key] = idx` write only. Because search.go:207-213 already started the watch-event goroutine that can call `build` \u2192 `BuildIndex` \u2192 cache write, line 216 can iterate the map concurrently with that write, causing a `concurrent map iteration and map write` panic or data race. Either guard the `TotalDocs` read with `cacheMu`, or move this call to a point where no build can run concurrently."
+     },
+     {
+      "file": "pkg/storage/unified/resource/search.go",
+      "lines": [
+       216,
+       216
+      ],
+      "texto": "The new startup log calls TotalDocs after launching the write-event listener, but bleveBackend.TotalDocs iterates b.cache without cacheMu.RLock. A write event for an unindexed resource can concurrently publish an index through BuildIndex, causing a map iteration/write race and potentially a fatal runtime error during initialization. Protect TotalDocs cache iteration with the same read lock used by GetIndex."
+     },
+     {
+      "file": "pkg/storage/unified/search/bleve.go",
+      "lines": [
+       137,
+       139
+      ],
+      "texto": "BuildIndex now writes b.cache under Lock while TotalDocs (called from search.init after the watch goroutine starts) ranges over b.cache without any lock. This can cause a concurrent map read/write fatal error. Fix by taking cacheMu.RLock in TotalDocs."
+     }
+    ]
+   },
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#03",
+    "descricao": "NewResourceServer returns an error when Init fails without cancelling the server context created earlier.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/storage/unified/resource/server.go",
+      "lines": [
+       258,
+       262
+      ],
+      "texto": "WHAT: NewResourceServer now calls s.Init(ctx) and, on error, returns `nil, err` without invoking the `cancel` func created at line 229 and without running any lifecycle cleanup. WHY: Init may have already started long-lived goroutines \u2014 searchSupport.init's event-consumption loop uses context.Background() (resource/search.go:202) and initWatcher starts a watcher bound to s.ctx (server.go:752-770) \u2014 so if search.init succeeds and initWatcher (or a later step) fails, the constructor discards the server while those goroutines keep running with no way to stop them, leaking the internal context and watcher goroutines. HOW: on the error path call `cancel()` (and any needed lifecycle.Stop) before returning, or defer the cancel until success."
+     },
+     {
+      "file": "pkg/storage/unified/resource/server.go",
+      "lines": [
+       258,
+       262
+      ],
+      "texto": "WHAT: NewResourceServer calls s.Init(ctx) synchronously but returns nil,err without calling the cancel created for s.ctx. WHY: Failed startup leaks the server context (and any lifecycle/watch resources partially started by Init), leaving goroutines/channel watches alive. HOW: On Init error call s.cancel() (and lifecycle Stop cleanup) before returning."
+     }
+    ]
+   },
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#sncc-01",
+    "descricao": "The PR skips the storage-server module integration test on postgres instead of fixing the failure, removing coverage of the new eager initialization on postgres.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "79d11c4890cc4792e3dc3535af59e4e5f7a2739d",
+  "base": "10aca5552314d6e5c9226f3c6d0107861c38c693",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+    "lines": [
+     71,
+     73
+    ],
+    "texto": "WHAT: `readInteger` passes the result of `readLength()` straight to `read(length)`, and `readLength()` returns -1 for indefinite-length encoding (0x80). WHY: a malformed signature makes `new byte[-1]` throw an unchecked `NegativeArraySizeException` instead of the declared `IOException`, so callers that only handle `IOException` fail unexpectedly on untrusted input. HOW: reject negative lengths in `readInteger` and `readNext`, or make `read(int)` throw `IOException` when `length < 0`."
+   },
+   {
+    "id": "S2",
+    "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+    "lines": [
+     114,
+     115
+    ],
+    "texto": "These two statements create ASN1Encoder instances and encode r and s, but the results are discarded. The return statement re-encodes both values with new encoders, so this is dead computation left over from a refactor. Remove them."
+   },
+   {
+    "id": "S3",
+    "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+    "lines": [
+     60,
+     67
+    ],
+    "texto": "getBouncyCastleProvider() is part of the CryptoProvider contract and its name says it returns the BouncyCastle provider. This implementation returns whichever JDK provider backs the default KeyStore type (e.g. SUN), so callers that read the name get a non-BouncyCastle provider. Document that this lightweight provider has no BouncyCastle and returns the JDK default provider, or throw UnsupportedOperationException like the other unsupported methods."
+   },
+   {
+    "id": "S4",
+    "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+    "lines": [
+     39,
+     57
+    ],
+    "texto": "The test uses one default-curve (P-256) key for ES256, ES384 and ES512. For ES384 and ES512 the converters get 32-byte r and s but are told to produce 96 and 132-byte output, so only the padding branch runs. Real P-384 and P-521 signature sizes, and the truncation and sign-byte handling, are never exercised. Generate a key on the curve that matches each algorithm (secp256r1, secp384r1, secp521r1) via ECGenParameterSpec."
+   },
+   {
+    "id": "S5",
+    "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+    "lines": [
+     53,
+     56
+    ],
+    "texto": "The only assertion compares two decodes of the same data (rsConcat against rsConcat2). It never checks that the re-encoded DER matches the signature the JCA produced, and it never verifies the signature. An encoder/decoder pair with a symmetric bug would pass. Assert that asn1Des equals the original `sign`, or verify the re-encoded signature with the public key."
+   },
+   {
+    "id": "S6",
+    "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+    "lines": [
+     151,
+     163
+    ],
+    "texto": "integerToBytes silently truncates an ECDSA r or s value that is larger than the curve size, keeping only the low-order bytes. Malformed or non-canonical DER signatures are therefore accepted and verified as a different signature, which makes signatures malleable. Reject oversized values instead: strip at most one leading zero sign byte, and throw if the remaining length exceeds qLength."
+   },
+   {
+    "id": "S7",
+    "file": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+    "lines": [
+     55,
+     72
+    ],
+    "texto": "Providers with equal order() (Default, Elytron and FIPS all return 200) are tie-broken only by ServiceLoader/classpath order, which is not guaranteed. The previous 'multiple providers' error is gone, so a misconfigured classpath now silently picks an arbitrary provider (for example non-FIPS instead of FIPS). Fail when the top two providers share the same order, or add a deterministic tie-breaker."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#02",
+    "descricao": "concatenatedRSToASN1DER encodes r and s into two throwaway ASN1Encoder instances before re-encoding them in the return statement.",
+    "textoGolden": "Dead code exists where ASN1Encoder instances are created and written to, but their results are immediately discarded. The actual encoding is performed by new ASN1Encoder instances created in the subsequent return statement, rendering the earlier operations useless.",
+    "comentarios": [
+     {
+      "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+      "lines": [
+       114,
+       115
+      ],
+      "texto": "Dead computation: the two ASN1Encoder.create().write(...) calls allocate encoders and encode rBigInteger/sBigInteger, but their results are discarded \u2014 the returned DER comes entirely from the expression at lines 117-121, which re-encodes the same BigIntegers. These two statements have no effect and should be removed (they are a leftover from an earlier formulation)."
+     },
+     {
+      "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+      "lines": [
+       114,
+       115
+      ],
+      "texto": "Remove these two discarded encoder writes. Each allocates an encoder and encodes a BigInteger, but neither result participates in the returned signature; lines 119\u2013120 repeat both writes on fresh encoders. This performs redundant encoding and allocations on every concatenated-signature conversion."
+     },
+     {
+      "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+      "lines": [
+       114,
+       115
+      ],
+      "texto": "The two statements `ASN1Encoder.create().write(rBigInteger);` and `ASN1Encoder.create().write(sBigInteger);` encode values and discard the results. The return expression re-encodes the same values, so these lines are dead computation left over from a copy-paste or refactor. Remove them."
+     }
+    ]
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#04",
+    "descricao": "order() is added to CryptoProvider as an abstract method, breaking source and binary compatibility for existing third-party CryptoProvider implementations.",
+    "textoGolden": "Abstract order() method on CryptoProvider may break backward compatibility with existing implementations",
+    "comentarios": [
+     {
+      "file": "common/src/main/java/org/keycloak/common/crypto/CryptoProvider.java",
+      "lines": [
+       39,
+       44
+      ],
+      "texto": "order() was added as an abstract method to the public CryptoProvider interface. CryptoIntegration.detectProvider now invokes order() on every ServiceLoader-discovered CryptoProvider via Comparator.comparingInt(CryptoProvider::order). Any CryptoProvider implementation compiled against the previous interface (an external or separately built provider jar on the classpath) will throw AbstractMethodError at detection time, i.e. during AuthzClient.create()/server bootstrap, before any provider is usable. Giving order() a default implementation (e.g. default int order() { return 0; }) avoids the binary-incompatibility."
+     }
+    ]
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#05",
+    "descricao": "detectProvider no longer fails when several crypto providers are present; with Default, FIPS and Elytron all at order 200, ties are resolved by classpath order and a FIPS deployment can silently run with the non-FIPS provider.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+      "lines": [
+       54,
+       72
+      ],
+      "texto": "WHAT: detectProvider sorts by order() reversed and silently picks index 0, removing the previous multiple-providers error. WHY: Default/FIPS/Elytron all return order 200, so ambiguous classpath (e.g. default+FIPS) now nondeterministically picks one by ServiceLoader order instead of failing fast, risking wrong FIPS vs non-FIPS crypto. HOW: only auto-ignore lower-order providers; throw when the top two have equal order()."
+     },
+     {
+      "file": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+      "lines": [
+       56,
+       62
+      ],
+      "texto": "Reject ambiguous highest-priority providers rather than silently taking the first. Both DefaultCryptoProvider and FIPS1402Provider return order 200 in this PR, so when both are present the stable sort leaves the decision to ServiceLoader discovery order. A deployment expecting FIPS can therefore initialize the ordinary Bouncy Castle provider without an error; previously this mixed classpath failed closed. Preserve the error for tied highest-priority providers (or require an explicit security-mode/provider choice), while still allowing the lower-priority authz-client fallback."
+     },
+     {
+      "file": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+      "lines": [
+       56,
+       72
+      ],
+      "texto": "detectProvider() no longer fails fast when multiple CryptoProviders are present and instead silently picks the first after sorting by order() descending. All Keycloak providers return the same order (DefaultCryptoProvider, FIPS1402Provider, WildFlyElytronProvider all return 200), so a tie between two providers is broken by the non-deterministic ServiceLoader iteration order rather than the intended priority. The previous code threw an IllegalStateException forcing the classpath to be corrected; now a deployment with two provider jars (exactly the 'multiple providers on classpath' scenario this PR enables) can silently select the unintended provider \u2014 e.g. a non-FIPS/strict provider when FIPS is required \u2014 with no error. Use a stable tie-breaker (delegate to the provider name/type) or reject equal top orders instead of relying on ServiceLoader order."
+     }
+    ]
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#07",
+    "descricao": "Claims a wrong-length JOSE signature causes an unchecked exception in concatenatedRSToASN1DER; verifiers catch it and report verification failure, as with the existing providers.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+      "lines": [
+       103,
+       122
+      ],
+      "texto": "WHAT: concatenatedRSToASN1DER splits signature without validating signature.length==signLength. WHY: short JOSE input throws ArrayIndexOutOfBoundsException and long input is silently truncated to signLength, breaking the ECDSACryptoProvider contract (IOException on malformed) used by verifier contexts. HOW: check length upfront and throw IOException."
+     },
+     {
+      "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+      "lines": [
+       103,
+       112
+      ],
+      "texto": "concatenatedRSToASN1DER never validates signature.length == signLength before System.arraycopy(signature,0,r,1,len) / (signature,len,s,1,len). A short JWS signature throws unchecked ArrayIndexOutOfBoundsException instead of the declared IOException, breaking verification on attacker-controlled input. Validate length and throw IOException."
+     }
+    ]
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#10",
+    "descricao": "The ES384 and ES512 tests sign with the same default P-256 key, so the converter is never tested with real P-384 or P-521 signatures.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+      "lines": [
+       39,
+       43
+      ],
+      "texto": "Single default EC keypair reused for ES256/ES384/ES512: testES384/testES512 names claim larger curves but body signs with the same P-256 key and only pads to larger signLength, so full-width 384/521-bit handling is never exercised. Generate a per-algorithm keypair with the correct curve (e.g. secp256r1/secp384r1/secp521r1) before signing."
+     },
+     {
+      "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+      "lines": [
+       41,
+       42
+      ],
+      "texto": "Every case generates a default EC key rather than a key on the curve associated with the named algorithm. On the standard JDK this is P-256, so testES384 and testES512 just pad P-256 signature components to larger lengths. A converter that discards nonzero high bytes beyond 32 bytes would still pass all three cases. Initialize the key generator with the appropriate curve per case (P-256, P-384, and P-521) so the larger-component conversions are actually tested."
+     },
+     {
+      "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+      "lines": [
+       41,
+       42
+      ],
+      "texto": "Generate a key on the curve corresponding to each tested algorithm rather than using the provider's default EC curve for all three tests. On the standard JDK this generates a P-256 key even for testES384 and testES512, so those tests merely pad P-256 integers to larger output lengths and never exercise actual P-384/P-521 signature encoding (including P-521's long-form sequence length)."
+     }
+    ]
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#11",
+    "descricao": "The test only checks a round trip between the two new converters and never verifies the re-encoded DER against the original signature or with Signature.verify, so mutually consistent bugs go undetected.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+      "lines": [
+       46,
+       57
+      ],
+      "texto": "Tautological round-trip assertion: rsConcat2 is derived from rsConcat via encode+decode that are inverses if self-consistent, so assertArrayEquals(rsConcat,rsConcat2) passes even if both directions are wrong. Verify against external oracle: Signature.initVerify + verify(asn1Des) and/or compare rsConcat to expected split, not just to itself."
+     },
+     {
+      "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+      "lines": [
+       52,
+       56
+      ],
+      "texto": "The test only checks self-consistency: it asserts asn1derToConcatenatedRS(g(asn1derToConcatenatedRS(sign))) == asn1derToConcatenatedRS(sign), i.e. that concatenatedRSToASN1DER is a right inverse of asn1derToConcatenatedRS. It never compares against the original DER `sign`, never verifies the ECDSA signature, and never asserts the emvider output is canonical DER. Because the decoder it reads back with (ASN1Decoder.readLength) accepts non-canonical long-form lengths (e.g. 0x81) and validates only tag numbers, a regression in ASN1Encoder.writeLength that always emitted long form would still round-trip and the test would still pass, even though the produced signature would no longer be valid DER and would be rejected by the Keycloak server / a JDK Signature.verify. Assert the encoded signature is valid DER (e.g. verify it with a JDK Signature, or compare asn1derToConcatenatedRS(sign) against a known-good width-padded r||s and assert its length equals algorithm.getSignatureLength())."
+     },
+     {
+      "file": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+      "lines": [
+       53,
+       56
+      ],
+      "texto": "The assertion only establishes agreement between the two new conversion routines, not correctness of the converted signature. For example, swapping r and s in both routines makes this entire round trip pass, although the DER result no longer verifies the signed data. Verify `asn1Des` with the public key and original data (or compare against an independently specified encoding) so mutually compensating conversion defects fail the test."
+     }
+    ]
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-02",
+    "descricao": "getBouncyCastleProvider in AuthzClientCryptoProvider returns the JDK default KeyStore provider instead of BouncyCastle, contrary to the CryptoProvider contract.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "5f8a130277dbddc95d133cd2832be639baf89213",
+  "base": "e25638dab0d4b98f99c8fe8976ccaae8f4fb9db3",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/models/blocked_email.rb",
+    "lines": [
+     11,
+     19
+    ],
+    "texto": "WHAT: should_block? updates the match statistics inside User validation, which runs inside the user save transaction. WHY: when the block fails the user save, the transaction is rolled back and the match_count/last_match_at update is lost, so blocked attempts are not recorded in production. HOW: Persist the stats outside the user transaction, for example with an atomic `update_all` on a separate connection or after the request, instead of `record.save` inside validation. Also make the increment atomic: `BlockedEmail.where(id: record.id).update_all(['match_count = match_count + 1, last_match_at = ?', Time.zone.now])`."
+   },
+   {
+    "id": "S2",
+    "file": "app/models/blocked_email.rb",
+    "lines": [
+     12,
+     12
+    ],
+    "texto": "WHAT: The blocked email lookup uses exact case-sensitive equality (`where(email: email)`). WHY: A blocked address such as bad@spam.org can be bypassed by signing up as Bad@Spam.org, and the unique index does not prevent case variants. HOW: Normalize emails to lowercase on save and compare with `lower(email) = ?` using the downcased input."
+   },
+   {
+    "id": "S3",
+    "file": "app/models/blocked_email.rb",
+    "lines": [
+     11,
+     19
+    ],
+    "texto": "BlockedEmail.should_block? looks the address up with a case-sensitive exact match, and nothing normalizes the stored or submitted email. A blocked address like bad@spammers.org can be bypassed by registering Bad@Spammers.org, because email is case-insensitive in practice. Normalize both sides, for example by downcasing on save and on lookup, or by comparing with lower(email)."
+   },
+   {
+    "id": "S4",
+    "file": "app/assets/javascripts/discourse/controllers/create_account_controller.js",
+    "lines": [
+     69,
+     74
+    ],
+    "texto": "Emails rejected by the server (blocked, domain not allowed, or already taken) are shown inline with the generic 'user.email.invalid' text. That message says the address is malformed, which contradicts the real server-side reason. Use a distinct message, for example a new 'user.email.rejected' key, or store and show the server's error text for that email."
+   },
+   {
+    "id": "S5",
+    "file": "app/models/blocked_email.rb",
+    "lines": [
+     11,
+     19
+    ],
+    "texto": "`should_block?` increments `match_count` with a non-atomic read-modify-write (`record.match_count += 1; record.save`). Concurrent signups with the same blocked email overwrite each other, so increments are lost and the statistics are corrupted. Use an atomic SQL update such as `BlockedEmail.where(id: record.id).update_all(['match_count = match_count + 1, last_match_at = ?', Time.zone.now])`."
+   },
+   {
+    "id": "S6",
+    "file": "lib/validators/email_validator.rb",
+    "lines": [
+     13,
+     15
+    ],
+    "texto": "The validator calls `BlockedEmail.should_block?`, which writes to the database (counter and timestamp), so validation has side effects. `UsersController#create` calls `user.valid?` and then `user.save`, which validates again, so one signup attempt increments `match_count` twice. Validation runs the check on every `valid?` call, so the statistics are inflated. Keep the validator read-only, or record the match once in the controller or a save callback."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#02",
+    "descricao": "When the server rejects an email, the signup form marks it with the generic 'invalid email' text instead of the server's reason (blocked or not allowed).",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/discourse/controllers/create_account_controller.js",
+      "lines": [
+       69,
+       74
+      ],
+      "texto": "The message shown for a rejected email disagrees with the reason the code is reacting to. This branch fires when the server rejected the email (result.errors.email), and this PR gives that condition its own server string \u2014 user.email.blocked, added in config/locales/server.en.yml as \"is not allowed.\" \u2014 but the client re-labels it with the generic I18n.t('user.email.invalid'). A user whose address is perfectly well-formed but blocked/hosted on a blacklisted domain is therefore told their email is invalid, contradicting the reason just returned by the server. Use the blocked/not-allowed message (and add a matching client locale key) instead of user.email.invalid. Notice the same generic string is used at line ~94 for validation failures, so it should not be reused to represent a distinct server-side rejection."
+     }
+    ]
+   },
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+    "descricao": "BlockedEmail.should_block? looks up the email with a case-sensitive exact match and no normalisation, so changing the letter case of a blocked address bypasses the block list.",
+    "textoGolden": "The case-sensitive email lookup in `BlockedEmail.should_block?` creates a bypass risk, allowing 'User@Example.com' to bypass a block on 'user@example.com'. This can lead to unauthorized access to blocked users.",
+    "comentarios": [
+     {
+      "file": "app/models/blocked_email.rb",
+      "lines": [
+       12,
+       12
+      ],
+      "texto": "Blocked-email lookup compares the raw email without normalizing its domain. A signup for block@SPAMFROMHOME.ORG does not match a blocked record for block@spamfromhome.org despite identifying the same mailbox, allowing the signup restriction to be bypassed by changing domain capitalization. Normalize domains using Email.downcase both when storing blocked emails and when looking them up."
+     },
+     {
+      "file": "app/models/blocked_email.rb",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "Canonicalize blocked emails consistently with the application's Email.downcase identity handling, both when storing entries and when looking them up. This exact equality query is case-sensitive, and BlockedEmail's validation callback only defaults action_type. A block-list entry such as `Block@SpamFromHome.org` therefore does not block the same identity submitted/stored as `block@spamfromhome.org`. This is particularly relevant to the explicitly supported manually populated block list. Normalize existing/imported entries as well as new ones, and add a test with differing casing between the stored entry and the lookup."
+     },
+     {
+      "file": "app/models/blocked_email.rb",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "Case-sensitivity bypass: BlockedEmail.where(email: email) is exact case-sensitive with no normalization, while sibling checks are case-insensitive. Normalize (downcase/strip) on write and lookup."
+     }
+    ]
+   },
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+    "descricao": "BlockedEmail.should_block? updates match_count and last_match_at as a side effect of email validation, so each signup attempt (validated twice) inflates the counter and concurrent updates can lose increments.",
+    "textoGolden": "BlockedEmail.should_block_email? method has side effects during a read operation - it updates statistics even when just checking if an email should be blocked. This could cause race conditions in concurrent environments and makes the method name misleading.",
+    "comentarios": [
+     {
+      "file": "app/models/blocked_email.rb",
+      "lines": [
+       11,
+       18
+      ],
+      "texto": "WHAT: should_block? mutates match_count/last_match_at via read-modify-write save inside a validator. WHY: Every validation call (including re-validations of the same attempt or attempts failing on unrelated fields like username) inflates stats, and concurrent signups lose increments with no atomic update. HOW: Move stats update out of validation or use atomic increment (update_counters/increment_counter) only on actual blocked rejections."
+     },
+     {
+      "file": "app/models/blocked_email.rb",
+      "lines": [
+       11,
+       19
+      ],
+      "texto": "WHAT: `should_block?` mutates state (increments `match_count`, sets `last_match_at`, calls `record.save`) inside a method that is invoked from the model validation callback, and the signup controller runs validation twice per attempt (`user.valid?` at users_controller.rb:168 then `user.save` at :172). WHY: a single signup attempt increments `match_count` twice and rewrites `last_match_at`, so the per-email block statistics the feature was built to track are wrong. HOW: make the read side non-mutating for validation and record the match separately (e.g. move the increment out of validation, or guard it so it runs once per attempt), keeping the predicate pure."
+     },
+     {
+      "file": "app/models/blocked_email.rb",
+      "lines": [
+       13,
+       17
+      ],
+      "texto": "WHAT: `record.match_count += 1; record.last_match_at = ...; record.save` is a non-atomic read-modify-write with no lock or unique constraint protection. WHY: two concurrent signup attempts with the same blocked email can both read the same `match_count` and one write overwrites the other, losing counts, so the tracked statistics drift under load. HOW: use an atomic update such as `BlockedEmail.where(id: record.id).update_all('match_count = match_count + 1, last_match_at = ...')` or a database-level counter increment."
+     }
+    ]
+   },
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#07",
+    "descricao": "Claims the 'returns false' spec cannot distinguish nil from false because be_false is a truthiness matcher.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "spec/models/blocked_email_spec.rb",
+      "lines": [
+       22,
+       24
+      ],
+      "texto": "This test is named \"returns false if a record with the email doesn't exist,\" but it cannot verify that. `BlockedEmail.should_block?` returns `record && record.action_type == actions[:block]`, which yields `nil` (not `false`) when no record exists, and under this suite's RSpec 2 semantics `subject.should be_false` is a truthiness matcher that passes for any falsy value including `nil`. The assertion therefore passes on the nil the code actually returns and would only fail on an outright `true`; it does not pin the `false`/`nil` distinction its name asserts. Assert the value exactly (e.g. `subject.should == false`, or `be_falsey`/`be_nil` if nil is intended) so a regression returning a non-false falsy value is caught."
+     }
+    ]
+   },
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#08",
+    "descricao": "The domain whitelist/blacklist regex @(domains) is not anchored at the end, so an address like user@example.com.evil.com matches a whitelist entry for example.com and bypasses the restriction.",
+    "textoGolden": "The regex pattern @(#{domains}) in email_in_restriction_setting? method only matches domain suffixes, not full domains with proper boundary anchoring. An attacker can register evil.example.com to bypass a whitelist entry for example.com.",
+    "comentarios": [
+     {
+      "file": "lib/validators/email_validator.rb",
+      "lines": [
+       18,
+       22
+      ],
+      "texto": "WHAT: email_in_restriction_setting? builds unanchored Regexp \"@(domains)\" with only '.' escaped. WHY: Whitelist 'gmail.com' substring-matches 'victim@gmail.com.evil.com', so an attacker registers with an unapproved domain and bypasses the allow-list; blacklist similarly over/under-matches and other regex metachars are unescaped. HOW: Anchor and escape domains (e.g. Regexp.escape per domain split on '|' plus /\\A[^@\\s]+@(?:domain)\\z/i)."
+     }
+    ]
+   },
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#prod-01",
+    "descricao": "Emails rejected by the server are cached in rejectedEmails for the controller's lifetime and never cleared, so an address that later becomes valid keeps failing client-side validation until reload.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "e944e2acf1e64421860a8e827f93ad06c169621b",
+  "base": "272cfc68dcc88615396ae62ed1571918e9c58ad3",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+    "lines": [
+     381,
+     381
+    ],
+    "texto": "WHAT: The cleanup is registered for the literal alias \"alias\" rather than the IDP just created (\"idp-alias-\" + i). WHY: The cleanup removes a non-existent IDP, so the 20 created IDPs (and idp-alias-20 at line 425) are never cleaned up and leak into later tests sharing the realm, which can change login-IDP counts. HOW: Capture the alias in a final variable and register `testRealm().identityProviders().get(alias)::remove`."
+   },
+   {
+    "id": "S2",
+    "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+    "lines": [
+     100,
+     100
+    ],
+    "texto": "WHAT: remove() now calls idpDelegate.getByAlias(alias) unconditionally, bypassing the cache. WHY: it adds a DB query on every removal even when the IDP is in the cache. HOW: Reuse getByAlias(alias) (cached) or only hit the delegate in the invalidated branch."
+   },
+   {
+    "id": "S3",
+    "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+    "lines": [
+     382,
+     418
+    ],
+    "texto": "The invalidation hooks use LoginFilter.getLoginPredicate(), which now excludes org-linked IDPs that are not BROKER_PUBLIC. getForLogin(mode, organizationId) caches per-org results that may include those IDPs, so changes to them never invalidate the cache and it goes stale. Use an invalidation check that matches what getForLogin actually returns, for example by ignoring the public/org clause for IDPs linked to an organization."
+   },
+   {
+    "id": "S4",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+    "lines": [
+     381,
+     381
+    ],
+    "texto": "The cleanup registered for each created IDP removes the literal alias \"alias\" instead of the alias just created (\"idp-alias-\" + i). The created providers are never cleaned up and the cleanup targets a nonexistent IDP. This can leak state into other tests. The same mistake is repeated for idp-alias-20."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+    "descricao": "The test registers cleanup for the literal alias \"alias\" instead of the created IDP aliases, so the created identity providers are never cleaned up.",
+    "textoGolden": "Cleanup reference uses incorrect alias - should be 'idp-alias-' + i instead of 'alias'.",
+    "comentarios": [
+     {
+      "file": "testCacheIDPForLogin",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The cleanup registers `identityProviders().get(\"alias\")::remove` inside the loop, and also for idp-alias-20. \"alias\" is a literal string rather than the actual IDP alias, so none of the created IDPs is ever cleaned up. Use the real alias (e.g. the loop's alias variable / \"idp-alias-20\") when registering the cleanup. As written, the 21 leaked providers can skew later tests that count IDPs or login caches."
+     },
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+      "lines": [
+       381,
+       381
+      ],
+      "texto": "The cleanup is registered for the literal alias \"alias\" rather than the IDP just created (\"idp-alias-\" + i). The 20 created IDPs are never removed, and the same applies to the cleanup at line 425 for \"idp-alias-20\". Use the actual alias, e.g. get(\"idp-alias-\" + i)::remove, so the IDPs don't leak into other tests."
+     },
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+      "lines": [
+       381,
+       381
+      ],
+      "texto": "The cleanup registered here uses the literal alias \"alias\", but the provider just created has alias \"idp-alias-\" + i. The same mismatch is repeated at line 425 for \"idp-alias-20\". The cleanup can never find/remove the created providers (null dereference/404 on remove, or at best a silent no-op), so none of the 21 IDPs this test creates are cleaned up and the realm is left polluted for later tests. Use the actual alias, e.g. `testRealm().identityProviders().get(\"idp-alias-\" + i)::remove` and `get(\"idp-alias-20\")::remove`."
+     }
+    ]
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#05",
+    "descricao": "On a partial cache miss getForLogin merges the previously read login query into a newly revisioned entry, so a concurrent invalidation can be lost and stale IDP IDs for other organizations persist.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+      "lines": [
+       236,
+       240
+      ],
+      "texto": "Do not merge the previously read query into a newly revisioned entry without verifying its revision. A reader can obtain a query containing organization A's IDs, then another transaction disables a provider or changes its organization and invalidates this key. When the reader requests an uncached organization B, this branch obtains a fresh revision but copies the old A results into the new query and publishes it using the current counter. Subsequent A requests receive stale membership indefinitely (a disabled or moved provider still exists, so the null-ID fallback does not repair it). Rebuild rather than copy after invalidation, or ensure the old query's revision is still valid atomically before publishing the merged entry."
+     }
+    ]
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#08",
+    "descricao": "Login-cache invalidation on update compares the organization-aware enabled state, so changing a broker to private while its organization is disabled skips invalidation and leaves the now-private IDP in the cached login list.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+      "lines": [
+       405,
+       406
+      ],
+      "texto": "The early return compares the original IDP's organization-aware enabled state rather than the persisted enabled state used to populate the login cache. If a cached public IDP's organization is disabled and an admin changes BROKER_PUBLIC to false, the original predicate is false because the organization is disabled and the updated predicate is false because the broker is private, so the stale ID remains cached; re-enabling the organization displays the now-private broker because the login bean only rechecks isEnabled. Compare raw persisted models for login-cache invalidation, for example by loading the original through idpDelegate.getById before applying this predicate."
+     }
+    ]
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#11",
+    "descricao": "The LoginFilter javadoc still claims its constants are all criteria for login availability although getLoginPredicate now also checks organization link and BROKER_PUBLIC.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "server-spi/src/main/java/org/keycloak/models/IdentityProviderStorageProvider.java",
+      "lines": [
+       252,
+       256
+      ],
+      "texto": "getLoginPredicate now also filters on organization link plus the BROKER_PUBLIC config (line 254), but the enum's javadoc directly above (lines 215-217) still states that the enum \"contains all fields that are considered when deciding if a provider should be available for login or not\", presenting ENABLED/LINK_ONLY/HIDE_ON_LOGIN as the exhaustive criteria. Any reader \u2014 or a future LoginFilter constant added against that documented assumption \u2014 will believe organization link and BROKER_PUBLIC play no role. Update the javadoc to include the organization-link/public-broker condition, or move the condition into a documented LoginFilter constant."
+     }
+    ]
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#13",
+    "descricao": "The login-cache test creates only public org-linked IDPs, so the new BROKER_PUBLIC check in getLoginPredicate is not covered.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+      "lines": [
+       369,
+       388
+      ],
+      "texto": "Test fixture never covers the new BROKER_PUBLIC branch: all org-linked IDPs are created public, so reverting the getLoginPredicate public-check leaves all counts unchanged and the test still passes. Add at least one org-linked non-public (BROKER_PUBLIC false/missing) enabled IDP and assert it is excluded from getForLogin counts."
+     }
+    ]
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#14",
+    "descricao": "The test never consumes or asserts getForLogin's returned providers and never repeats a query, so the cache-hit path that builds the result is untested and could return wrong IDPs without failing.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+      "lines": [
+       401,
+       414
+      ],
+      "texto": "Consume and assert the results of getForLogin, including a repeat query for the same mode/organization to exercise a cache hit. All calls in this test discard the returned stream and assert only IdentityProviderListQuery contents. The implementation populates that query before reconstructing the returned models, so returning an empty stream (or the wrong providers) at line 254 would still pass the entire test. Assert the expected provider identities on both the initial query and the cached query, rather than only the internal cached count."
+     }
+    ]
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#opa-01",
+    "descricao": "Adding the organization/BROKER_PUBLIC check to the shared LoginFilter.getLoginPredicate also changes IdentityProviderBean.federatedProviderPredicate, so with organizations disabled a user's linked IdP that has an organizationId but is not public is no longer shown on the login page.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#snapi-01",
+    "descricao": "remove() always queries idpDelegate.getByAlias(alias), adding a database lookup on every IDP removal even when the cached entry already holds the model.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "62bf98939eda58f0d0a1a41a58aa6d4ecdc24dba",
+  "base": "8671f860469d6d95e54df3e13f77ebc401249489",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "operator/src/test/java/org/keycloak/operator/testsuite/integration/UpgradeTest.java",
+    "lines": [
+     105,
+     116
+    ],
+    "texto": "WHAT: The `rolling-updates` feature is enabled only after the early `return kc` for a null update strategy, so null-strategy runs deploy without the feature. WHY: Those runs (testImageChange-null, testCacheMaxCount-null) expect a rolling-upgrade status, but the update-compatibility commands exit with FEATURE_DISABLED (4) when the feature is off, so the test may fail or not exercise the intended path. HOW: Enable the feature before the null-strategy early return and set the update spec only when a strategy is given."
+   },
+   {
+    "id": "S2",
+    "file": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+    "lines": [
+     46,
+     50
+    ],
+    "texto": "testFeatureNotEnabled only launches `update-compatibility metadata` without the feature, so the gate added to UpdateCompatibilityCheck.run() is untested and could be removed without any test failing. Add a case for the `check` subcommand without --features and assert exit code 4 (CompatibilityResult.FEATURE_DISABLED)."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#03",
+    "descricao": "testFeatureNotEnabled only covers the metadata subcommand, so the feature guard in the check subcommand is untested.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+      "lines": [
+       46,
+       50
+      ],
+      "texto": "testFeatureNotEnabled only launches the `metadata` subcommand and never the `check` subcommand. Removing the feature guard from UpdateCompatibilityCheck.run() would therefore not fail any test. It also doesn't assert the exit code (FEATURE_DISABLED=4). Add a case for `check` and assert the exit code on both."
+     },
+     {
+      "file": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+      "lines": [
+       46,
+       50
+      ],
+      "texto": "WHAT: testFeatureNotEnabled only exercises the metadata subcommand disabled path and never the check subcommand. WHY: the feature gate in UpdateCompatibilityCheck.run can be removed or broken without failing any test since no assertion covers its disabled message/exit code. HOW: also launch/assert the check command without --features (e.g. parameterize over metadata and check subcommands or add a second Launch)."
+     },
+     {
+      "file": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+      "lines": [
+       46,
+       50
+      ],
+      "texto": "testFeatureNotEnabled only exercises the metadata subcommand, leaving the identical ROLLING_UPDATES gate in UpdateCompatibilityCheck unverified. If the Check gate were removed, the suite still passes. Parameterize/add a second @Launch for {UpdateCompatibility.NAME, UpdateCompatibilityCheck.NAME} (with required --file or not) asserting the disabled message and FEATURE_DISABLED exit code."
+     }
+    ]
+   },
+   {
+    "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#04",
+    "descricao": "The disabled-feature test checks only the error message, not that the command exits with FEATURE_DISABLED (4).",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+      "lines": [
+       46,
+       50
+      ],
+      "texto": "The new disabled-feature test only verifies the error text, not the failure exit status. If the metadata command still prints this diagnostic but exits with 0 (or another incorrect code) instead of FEATURE_DISABLED (4), this test would still pass. Assert that cliResult.exitCode() equals CompatibilityResult.FEATURE_DISABLED so the test actually protects the new disabled-feature failure contract."
+     }
+    ]
+   },
+   {
+    "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#oph-01",
+    "descricao": "testMissingOptionOnSave only asserts a message is absent, so it would still pass if --features=rolling-updates were not honoured and the command failed with the feature-disabled error.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ }
+}

@@ -1,0 +1,41 @@
+{
+ "caseId": "feat-2fa-backup-codes-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-2fa-backup-codes-cal-com#07",
+   "newGroup": null,
+   "reason": "Describes the same non-atomic backup-code consumption, allowing concurrent reuse and overwriting other code removals."
+  },
+  {
+   "id": "S2",
+   "match": "feat-2fa-backup-codes-cal-com#07",
+   "newGroup": null,
+   "reason": "Describes the same read-modify-write race that lets concurrent logins consume the same backup code twice."
+  },
+  {
+   "id": "S3",
+   "match": "feat-2fa-backup-codes-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "Describes the same non-constant-time Array.indexOf comparison leaking timing information about backup codes."
+  },
+  {
+   "id": "S4",
+   "match": "feat-2fa-backup-codes-cal-com#04",
+   "newGroup": null,
+   "reason": "Describes the same incorrectly named TwoFactor export in BackupCode.tsx."
+  },
+  {
+   "id": "S5",
+   "match": "feat-2fa-backup-codes-cal-com#14",
+   "newGroup": null,
+   "reason": "Describes the same disable-endpoint log message incorrectly referring to backup-code login."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reports a required backupCode argument missing from another disable() caller, causing a type-check failure. No golden-set issue describes this API signature mismatch."
+  }
+ ]
+}

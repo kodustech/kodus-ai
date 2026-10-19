@@ -1,0 +1,11 @@
+{
+ "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This claims an unparenthesized eventTypeId OR expression can widen results when combined with AND. None of the rejected issues describe this SQL precedence problem; the rejected authorization claim concerns fetching member user IDs only when child teams exist."
+  }
+ ]
+}

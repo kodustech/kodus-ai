@@ -1,0 +1,549 @@
+{
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": [
+  {
+   "id": "S1",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#14",
+   "newGroup": null,
+   "reason": "prisma used without import in Salesforce getClient."
+  },
+  {
+   "id": "S2",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#13",
+   "newGroup": null,
+   "reason": "Salesforce getClient refreshes token and writes credential on every construction."
+  },
+  {
+   "id": "S3",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+   "newGroup": null,
+   "reason": "Computed z.string().toString() keys produce literal key, schema broken."
+  },
+  {
+   "id": "S4",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#07",
+   "newGroup": null,
+   "reason": "Hardcoded \"refresh_token\" placeholder overwrites real refresh token."
+  },
+  {
+   "id": "S5",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "newGroup": null,
+   "reason": "Google stores safeParse wrapper instead of .data as credential key."
+  },
+  {
+   "id": "S6",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "Sync mode returns raw fetch Response while callers expect provider shapes."
+  },
+  {
+   "id": "S7",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "Zoho Bigin reads tokenInfo.data on raw Response returned in sync mode; same raw-Response issue."
+  },
+  {
+   "id": "S8",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#11",
+   "newGroup": null,
+   "reason": "Office365 tokenResponse.success check is dead and error logging dropped."
+  },
+  {
+   "id": "S9",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01",
+   "newGroup": null,
+   "reason": "Webhook secret compared with non-constant-time !==."
+  },
+  {
+   "id": "S10",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "newGroup": null,
+   "reason": "Zoho Bigin passes credentialId instead of userId."
+  },
+  {
+   "id": "S11",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "newGroup": null,
+   "reason": "Google stores safeParse wrapper as credential key."
+  },
+  {
+   "id": "S12",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "newGroup": null,
+   "reason": "Zoho Bigin passes credentialId as calcomUserId."
+  },
+  {
+   "id": "S13",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01",
+   "newGroup": null,
+   "reason": "Webhook secret compared with !==, timing leak."
+  },
+  {
+   "id": "S14",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Empty-string fallback for encryption key; not a golden issue."
+  },
+  {
+   "id": "S15",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "newGroup": null,
+   "reason": "Google stores safeParse wrapper as credential key."
+  },
+  {
+   "id": "S16",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "newGroup": null,
+   "reason": "Zoho Bigin passes credentialId instead of userId."
+  },
+  {
+   "id": "S17",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "newGroup": null,
+   "reason": "Google stores safeParse wrapper as credential key."
+  },
+  {
+   "id": "S18",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "newGroup": null,
+   "reason": "Zoho Bigin passes credentialId instead of userId."
+  },
+  {
+   "id": "S19",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "Sync mode returns raw fetch Response, callers read .data."
+  },
+  {
+   "id": "S20",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "newGroup": null,
+   "reason": "Google stores safeParse wrapper as credential key."
+  },
+  {
+   "id": "S21",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "newGroup": null,
+   "reason": "Zoho Bigin passes credentialId as userId (also mentions Response shape)."
+  },
+  {
+   "id": "S22",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+   "newGroup": null,
+   "reason": "Computed keys in minimumTokenResponseSchema are literal strings."
+  },
+  {
+   "id": "S23",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#07",
+   "newGroup": null,
+   "reason": "Literal \"refresh_token\" placeholder overwrites stored refresh token."
+  }
+ ],
+ "implement-access-token-context-encoding-framework-keycloak": [
+  {
+   "id": "S1",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "isAccessTokenId wrong offset and inverted comparison."
+  },
+  {
+   "id": "S2",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Constructor null-checks grantType twice instead of rawTokenId."
+  },
+  {
+   "id": "S3",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "isAccessTokenId wrong offset and inverted comparison."
+  },
+  {
+   "id": "S4",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "rawTokenId null check applied to grantType."
+  },
+  {
+   "id": "S5",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "AssertEvents.isAccessTokenId inverted and wrongly indexed."
+  },
+  {
+   "id": "S6",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "isAccessTokenId wrong substring and inverted comparison."
+  },
+  {
+   "id": "S7",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "isAccessTokenId wrong offset and inverted check."
+  },
+  {
+   "id": "S8",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Null check tests grantType instead of rawTokenId."
+  },
+  {
+   "id": "S9",
+   "match": "implement-access-token-context-encoding-framework-keycloak#03",
+   "newGroup": null,
+   "reason": "Javadoc says 3-letter shortcut but 2 chars required."
+  },
+  {
+   "id": "S10",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "isAccessTokenId reads grant shortcut at wrong offset; same matcher bug."
+  },
+  {
+   "id": "S11",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "isAccessTokenId comparison inverted; same matcher bug."
+  },
+  {
+   "id": "S12",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "isAccessTokenId never validates grant shortcut (offset + inversion)."
+  },
+  {
+   "id": "S13",
+   "match": "implement-access-token-context-encoding-framework-keycloak#04",
+   "newGroup": null,
+   "reason": "testIncorrectGrantType catches RuntimeException, passes on NPE."
+  }
+ ],
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+  {
+   "id": "S1",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "Strategy close shuts down shared factory pool; next strategy uses dead pool, offsets committed."
+  },
+  {
+   "id": "S2",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "newGroup": null,
+   "reason": "Unbounded queues, no backpressure."
+  },
+  {
+   "id": "S3",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#01",
+   "newGroup": null,
+   "reason": "Offset gaps permanently block commits."
+  },
+  {
+   "id": "S4",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#05",
+   "newGroup": null,
+   "reason": "Error test assertion passes only because commit loop has not fired yet (timing)."
+  },
+  {
+   "id": "S5",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "newGroup": null,
+   "reason": "Backpressure claim false; queues unbounded."
+  },
+  {
+   "id": "S6",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03",
+   "newGroup": null,
+   "reason": "Failed items marked complete in finally, contradicting docstring."
+  },
+  {
+   "id": "S7",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "Shared pool shut down by strategy close; rebalance reuses dead pool."
+  },
+  {
+   "id": "S8",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#01",
+   "newGroup": null,
+   "reason": "Committable scan requires consecutive offsets; gaps stall commits."
+  },
+  {
+   "id": "S9",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "Shared pool shut down by strategy close; rebalance reuses dead pool."
+  },
+  {
+   "id": "S10",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "Shared pool shut down by strategy close; rebalance reuses dead pool."
+  },
+  {
+   "id": "S11",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#04",
+   "newGroup": null,
+   "reason": "Test docstring says errors must not block commits but asserts nothing committed."
+  },
+  {
+   "id": "S12",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#17",
+   "newGroup": null,
+   "reason": "Ordering test only checks count, cannot detect out-of-order."
+  }
+ ],
+ "advanced-sql-analytics-framework-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "enableSqlExpressions returns false on all paths; flag ignored."
+  },
+  {
+   "id": "S2",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "enableSqlExpressions always false; flag ignored."
+  },
+  {
+   "id": "S3",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "Both branches return false; flag ignored."
+  },
+  {
+   "id": "S4",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "Always returns false, flag never honoured (also notes inverted variable name)."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Misleading \"not implemented\" error message; not a golden issue."
+  },
+  {
+   "id": "S6",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "Always returns false; flag ignored."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "TablesList depends on stub DB that always fails, so every SQL command fails; not a golden issue."
+  },
+  {
+   "id": "S8",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "Always returns false even when flag enabled."
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Stub DB makes every SQL expression fail; same as S7."
+  },
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Existing SQL tests not updated for stubbed DB."
+  }
+ ],
+ "sms-workflow-reminder-retry-count-tracking-cal-com": [
+  {
+   "id": "S1",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "retryCount>1 delete branch lacks SMS method filter."
+  },
+  {
+   "id": "S2",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
+   "newGroup": null,
+   "reason": "Unguarded retryCount update in catch aborts the cron loop."
+  },
+  {
+   "id": "S3",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#03",
+   "newGroup": null,
+   "reason": "Cleanup comment omits retryCount>1 deletion branch."
+  },
+  {
+   "id": "S4",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "retryCount branch lacks method filter."
+  },
+  {
+   "id": "S5",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "retryCount branch lacks method filter."
+  },
+  {
+   "id": "S6",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
+   "newGroup": null,
+   "reason": "Unguarded retryCount update in catch escapes loop."
+  },
+  {
+   "id": "S7",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "retryCount branch not restricted to SMS."
+  }
+ ],
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+  {
+   "id": "S1",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+   "newGroup": null,
+   "reason": "Single try around SendGrid cancel loop; one failure aborts rest."
+  },
+  {
+   "id": "S2",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+   "newGroup": null,
+   "reason": "Reminder cancel helpers called without await in handleCancelBooking."
+  },
+  {
+   "id": "S3",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#11",
+   "newGroup": null,
+   "reason": "deleteScheduledEmailReminder/immediateDelete names no longer match behaviour."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "immediateDelete email branch never deletes or marks the reminder row, leaving orphan rows; not a golden issue."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "immediateDelete email branch leaves orphan reminder rows."
+  },
+  {
+   "id": "S6",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+   "newGroup": null,
+   "reason": "One failing SendGrid cancel aborts the shared loop."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "immediateDelete email branch leaves stale reminder row."
+  }
+ ],
+ "anonymous-add-configurable-device-limit-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Beyond-limit test never verifies existing device update."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "ProvideAnonDBStore int64 param breaks wire providers; not a golden issue."
+  },
+  {
+   "id": "S3",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Cache key set before CreateOrUpdateDevice; rejected device bypasses limit."
+  },
+  {
+   "id": "S4",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Cache key set before CreateOrUpdateDevice; limit bypassed."
+  },
+  {
+   "id": "S5",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Cache key set before store call and kept on failure; limit bypassed."
+  },
+  {
+   "id": "S6",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Non-atomic count-then-insert lets concurrent devices exceed limit."
+  }
+ ],
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "website_name not in untrusted_attributes; leaks hidden website."
+  },
+  {
+   "id": "S2",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Case-sensitive host comparison."
+  },
+  {
+   "id": "S3",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "website_name leaks untrusted users website."
+  },
+  {
+   "id": "S4",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "website_name not untrusted; leaks hidden website."
+  },
+  {
+   "id": "S5",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "website_name not in untrusted_attributes."
+  },
+  {
+   "id": "S6",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "First-label strip treats public-suffix siblings as same domain."
+  }
+ ],
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Optional.get() without presence check in login bean; not a golden issue."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Raw recovery codes passed in plaintext to user-storage provider; not a golden issue."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Raw recovery codes passed unhashed to federated provider."
+  },
+  {
+   "id": "S4",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#06",
+   "newGroup": null,
+   "reason": "Federated recovery credential handled via local store update/remove after use; covers local-only removal."
+  }
+ ],
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": []
+}

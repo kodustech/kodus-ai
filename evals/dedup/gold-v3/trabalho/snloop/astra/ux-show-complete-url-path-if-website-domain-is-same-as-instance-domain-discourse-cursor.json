@@ -1,0 +1,41 @@
+{
+ "caseId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "The comment identifies website_name leaking a hidden website because it is missing from untrusted_attributes, matching issue #06."
+  },
+  {
+   "id": "S2",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "The comment identifies case-sensitive hostname comparisons causing same-domain URLs to lose their path, matching issue #01."
+  },
+  {
+   "id": "S3",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "The comment describes the same missing trust gate on website_name and resulting disclosure of a hidden website; the empty link is an additional consequence."
+  },
+  {
+   "id": "S4",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "The comment identifies website_name exposing website information withheld by untrusted_attributes, matching issue #06."
+  },
+  {
+   "id": "S5",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "The comment identifies the missing untrusted_attributes entry for website_name, which exposes hidden website information and produces an empty link."
+  },
+  {
+   "id": "S6",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "The comment identifies first-label stripping incorrectly treating unrelated hosts under shared public suffixes as the same domain, matching issue #04."
+  }
+ ]
+}

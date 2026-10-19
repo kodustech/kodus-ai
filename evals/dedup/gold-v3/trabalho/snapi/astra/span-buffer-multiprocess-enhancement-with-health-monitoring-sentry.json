@@ -1,0 +1,53 @@
+{
+ "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "The SpawnProcess type check skips killing hung workers before replacement, leaving duplicate flushers for the same shards. The additional shutdown observation describes the same incorrect type guard."
+  },
+  {
+   "id": "S2",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "newGroup": null,
+   "reason": "The shared join deadline causes the cleanup loop to break, skipping termination of remaining workers."
+  },
+  {
+   "id": "S3",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#02",
+   "newGroup": null,
+   "reason": "The added sleep is neutralized by the test's monkeypatch and provides no synchronization with the flusher thread."
+  },
+  {
+   "id": "S4",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#05",
+   "newGroup": null,
+   "reason": "The docstring incorrectly promises one process per shard despite distributing shards across a capped number of processes."
+  },
+  {
+   "id": "S5",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#01",
+   "newGroup": null,
+   "reason": "The wait_produce metric uses 'shards' while sibling metrics use 'shard', breaking consistent per-shard queries."
+  },
+  {
+   "id": "S6",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "The incorrect multiprocessing.Process check skips killing SpawnProcess workers, allowing replacements to overlap with hung workers."
+  },
+  {
+   "id": "S7",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "The restart guard does not recognize SpawnProcess instances, leaving old workers alive when replacements start."
+  },
+  {
+   "id": "S8",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#01",
+   "newGroup": null,
+   "reason": "The wait_produce timer publishes the shard identifier under 'shards' instead of the sibling metrics' 'shard' tag."
+  }
+ ]
+}

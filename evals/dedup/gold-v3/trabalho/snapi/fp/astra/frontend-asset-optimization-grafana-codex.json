@@ -1,0 +1,11 @@
+{
+ "caseId": "frontend-asset-optimization-grafana-codex",
+ "items": [
+  {
+   "id": "S2",
+   "match": "frontend-asset-optimization-grafana-codex#02",
+   "newGroup": null,
+   "reason": "It asserts the same unconditional cache assignment defect: a failed load overwrites a previously valid cached value with nil."
+  }
+ ]
+}

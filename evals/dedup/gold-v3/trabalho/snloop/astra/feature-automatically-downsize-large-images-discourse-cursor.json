@@ -1,0 +1,77 @@
+{
+ "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "The duplicate downsize definition overrides the original signature and breaks ResizeEmoji's five-argument call."
+  },
+  {
+   "id": "S2",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Passing 80% to gifsicle --resize-fit fails because it requires WxH geometry. The retry behavior is additional detail about that failure."
+  },
+  {
+   "id": "S3",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "The second downsize definition replaces the first, causing ResizeEmoji's five-argument call to raise ArgumentError."
+  },
+  {
+   "id": "S4",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "The duplicate downsize definitions leave a signature incompatible with the existing ResizeEmoji caller."
+  },
+  {
+   "id": "S5",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "The overriding downsize definition causes the existing five-argument emoji resize call to fail."
+  },
+  {
+   "id": "S6",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "The animated GIF command incorrectly uses percentage geometry with gifsicle --resize-fit, preventing downsizing."
+  },
+  {
+   "id": "S7",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#sncc-01",
+   "newGroup": null,
+   "reason": "The comment broadly identifies misleading upload error alerts that report a hard-coded 10 MB maximum, including the 413 message."
+  },
+  {
+   "id": "S8",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "The client validation's hard-coded size replaces the per-type setting and produces an incorrect limit in its alert."
+  },
+  {
+   "id": "S9",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#sncc-01",
+   "newGroup": null,
+   "reason": "The 413 handler reports a hard-coded 10 MB maximum that can differ from the enforced limit."
+  },
+  {
+   "id": "S10",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "The second downsize definition overrides the original signature and breaks the five-argument emoji resize call."
+  },
+  {
+   "id": "S11",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "The client size check ignores per-type settings in favor of 10 MB, allowing files above smaller configured limits and displaying an incorrect maximum."
+  },
+  {
+   "id": "S12",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "The duplicate downsize definition makes ResizeEmoji's existing five-argument call raise ArgumentError."
+  }
+ ]
+}

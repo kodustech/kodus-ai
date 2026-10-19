@@ -1,0 +1,507 @@
+{
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": [
+  {
+   "id": "S1",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "newGroup": null,
+   "reason": "Google credential stores the safeParse wrapper instead of .data."
+  },
+  {
+   "id": "S2",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+   "newGroup": null,
+   "reason": "Computed z.string().toString() keys are literal keys, not wildcards."
+  },
+  {
+   "id": "S3",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "newGroup": null,
+   "reason": "Zoho Bigin passes credentialId where userId is expected."
+  },
+  {
+   "id": "S4",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#13",
+   "newGroup": null,
+   "reason": "Salesforce refreshes token and writes DB on every connection setup."
+  },
+  {
+   "id": "S5",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01",
+   "newGroup": null,
+   "reason": "Webhook secret compared with non-constant-time !==."
+  },
+  {
+   "id": "S6",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "newGroup": null,
+   "reason": "Google credential stores the safeParse wrapper instead of .data."
+  },
+  {
+   "id": "S7",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "newGroup": null,
+   "reason": "Zoho Bigin passes credentialId where userId is expected."
+  },
+  {
+   "id": "S8",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "newGroup": null,
+   "reason": "Google credential stores the safeParse wrapper instead of .data."
+  },
+  {
+   "id": "S9",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+   "newGroup": null,
+   "reason": "Computed z.string().toString() keys are literal keys, not wildcards."
+  },
+  {
+   "id": "S10",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "newGroup": null,
+   "reason": "Zoho Bigin passes credentialId where userId is expected."
+  },
+  {
+   "id": "S11",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "newGroup": null,
+   "reason": "Google credential stores the safeParse wrapper instead of .data."
+  },
+  {
+   "id": "S12",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "newGroup": null,
+   "reason": "Zoho Bigin passes credentialId where userId is expected."
+  },
+  {
+   "id": "S13",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "In sync mode refreshOAuthTokens returns a raw fetch Response while callers (zoho/hubspot/google) expect their own shapes."
+  },
+  {
+   "id": "S14",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "newGroup": null,
+   "reason": "Zoho Bigin passes credentialId where userId is expected."
+  },
+  {
+   "id": "S15",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "JSDoc misdescribing appData.type as slug; no golden issue covers it."
+  },
+  {
+   "id": "S16",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "newGroup": null,
+   "reason": "Zoho Bigin passes credentialId where userId is expected."
+  },
+  {
+   "id": "S17",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "newGroup": null,
+   "reason": "Google credential stores the safeParse wrapper instead of .data."
+  }
+ ],
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Category and embeddable_host fabricator file contents swapped."
+  },
+  {
+   "id": "S2",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "lower(host) compared to un-downcased URI host."
+  },
+  {
+   "id": "S3",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "update/destroy use .first without nil check -> 500 on unknown id."
+  },
+  {
+   "id": "S4",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Migration indexes execute(...)[0] without empty-result guard (also mentions interpolation, secondary)."
+  },
+  {
+   "id": "S5",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "lower(host) compared to un-downcased URI host."
+  },
+  {
+   "id": "S6",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "lower(host) compared to un-downcased URI host."
+  },
+  {
+   "id": "S7",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Category and embeddable_host fabricator file contents swapped."
+  },
+  {
+   "id": "S8",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "Spec title \"false if embeddable_host is blank\" no longer matches what it tests."
+  },
+  {
+   "id": "S9",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "Spec \"false if embeddable_host is blank\" passes for an unrelated reason."
+  },
+  {
+   "id": "S10",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "before_validation calls sub! on nil host."
+  },
+  {
+   "id": "S11",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "update/destroy use .first without nil check -> 500 on unknown id."
+  },
+  {
+   "id": "S12",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Migration indexes execute(...)[0] without empty-result guard."
+  },
+  {
+   "id": "S13",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Migration indexes execute(...)[0] without empty-result guard."
+  }
+ ],
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+  {
+   "id": "S1",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "Strategy close/terminate shuts down the factory-owned shared pool, breaking the next strategy after rebalance."
+  },
+  {
+   "id": "S2",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#01",
+   "newGroup": null,
+   "reason": "get_committable_offsets requires contiguous offsets; Kafka gaps stall commits."
+  },
+  {
+   "id": "S3",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "newGroup": null,
+   "reason": "Unbounded queues, no backpressure despite docstring."
+  },
+  {
+   "id": "S4",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "Strategy close/terminate shuts down the factory-owned shared pool."
+  },
+  {
+   "id": "S5",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03",
+   "newGroup": null,
+   "reason": "Failed items have offsets completed in finally, contradicting commit-only-after-success guarantee."
+  },
+  {
+   "id": "S6",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "newGroup": null,
+   "reason": "Unbounded queues, docstring claims backpressure."
+  },
+  {
+   "id": "S7",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#04",
+   "newGroup": null,
+   "reason": "Error-handling test asserts no commit, contradicting its docstring that errors do not block commits."
+  },
+  {
+   "id": "S8",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03",
+   "newGroup": null,
+   "reason": "Worker completes offset in finally even when processing raised."
+  },
+  {
+   "id": "S9",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "Strategy close/terminate/join shuts down the factory-owned shared pool."
+  },
+  {
+   "id": "S10",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "Strategy close shuts down shared pool; next strategy reuses dead pool and commits unprocessed offsets."
+  },
+  {
+   "id": "S11",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "Scan start max(last_committed+1,min_offset) skips a gap after pruning."
+  }
+ ],
+ "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": [
+  {
+   "id": "S1",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "MetricAlertDetectorHandler leaves abstract methods unimplemented -> TypeError."
+  },
+  {
+   "id": "S2",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "MetricAlertDetectorHandler leaves abstract methods unimplemented -> TypeError."
+  },
+  {
+   "id": "S3",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#04",
+   "newGroup": null,
+   "reason": "Mock occurrence builder ignores value argument."
+  },
+  {
+   "id": "S4",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "MetricAlertDetectorHandler leaves abstract methods unimplemented -> TypeError."
+  },
+  {
+   "id": "S5",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#03",
+   "newGroup": null,
+   "reason": "evaluate docstring says list, returns dict."
+  },
+  {
+   "id": "S6",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#01",
+   "newGroup": null,
+   "reason": "Stale TODO about becoming a stateful detector."
+  },
+  {
+   "id": "S7",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "MetricAlertDetectorHandler leaves abstract methods unimplemented -> TypeError."
+  },
+  {
+   "id": "S8",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "MetricAlertDetectorHandler leaves abstract methods unimplemented -> TypeError."
+  }
+ ],
+ "database-performance-optimizations-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Leftover Error-level debug logs with full ID lists every batch."
+  },
+  {
+   "id": "S2",
+   "match": "database-performance-optimizations-grafana-codex#08",
+   "newGroup": null,
+   "reason": "Cleanup ticker changed 10m -> 1m."
+  },
+  {
+   "id": "S3",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Leftover Error-level debug logs with full ID lists every batch."
+  },
+  {
+   "id": "S4",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Leftover Error-level debug logs with full ID lists every batch."
+  },
+  {
+   "id": "S5",
+   "match": "database-performance-optimizations-grafana-codex#08",
+   "newGroup": null,
+   "reason": "Cleanup ticker changed 10m -> 1m."
+  },
+  {
+   "id": "S6",
+   "match": "database-performance-optimizations-grafana-codex#06",
+   "newGroup": null,
+   "reason": "One placeholder per ID on MySQL/Postgres; batch >65535 fails."
+  },
+  {
+   "id": "S7",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Leftover Error-level debug logs on normal progress."
+  }
+ ],
+ "notification-rule-processing-engine-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "notification-rule-processing-engine-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Grafana prom abilities grant Duplicate when rule undefined; ORed into cloud rules."
+  },
+  {
+   "id": "S2",
+   "match": "notification-rule-processing-engine-grafana-codex#04",
+   "newGroup": null,
+   "reason": "isFederated hardcoded false; federated rules become editable."
+  },
+  {
+   "id": "S3",
+   "match": "notification-rule-processing-engine-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Grafana prom abilities grant Duplicate when rule undefined; ORed into cloud rules."
+  },
+  {
+   "id": "S4",
+   "match": "notification-rule-processing-engine-grafana-codex#05",
+   "newGroup": null,
+   "reason": "alertingRule() gating drops Pause/Restore/Export/DeletePermanently for recording rules."
+  },
+  {
+   "id": "S5",
+   "match": "notification-rule-processing-engine-grafana-codex#05",
+   "newGroup": null,
+   "reason": "alertingRule() gating drops Pause/Restore/Export/DeletePermanently for recording rules."
+  },
+  {
+   "id": "S6",
+   "match": "notification-rule-processing-engine-grafana-codex#04",
+   "newGroup": null,
+   "reason": "isFederated hardcoded false; federated rules become editable."
+  }
+ ],
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Hard key lookup of end_timestamp_precise in factory.py; no golden issue covers it."
+  },
+  {
+   "id": "S2",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "Redirect loop limit cut 10000 -> 1000."
+  },
+  {
+   "id": "S3",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#04",
+   "newGroup": null,
+   "reason": "Sets -> sorted sets under same key names cause WRONGTYPE during rollout."
+  },
+  {
+   "id": "S4",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+   "newGroup": null,
+   "reason": "max_segment_spans no longer enforced; hardcoded 1000 in Lua."
+  },
+  {
+   "id": "S5",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#08",
+   "newGroup": null,
+   "reason": "Tests use identical end timestamps and never exceed 1000 spans."
+  },
+  {
+   "id": "S6",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+   "newGroup": null,
+   "reason": "max_segment_spans no longer enforced; hardcoded 1000 in Lua."
+  }
+ ],
+ "authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Cached denial stays stale for TTL after grants; golden #05 is about full reload on deny, a different problem."
+  },
+  {
+   "id": "S2",
+   "match": "authzservice-improve-authz-caching-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Denial cache key joined with underscores can collide."
+  },
+  {
+   "id": "S3",
+   "match": "authzservice-improve-authz-caching-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Denial-cache test seeds permCache false, so it proves nothing."
+  },
+  {
+   "id": "S4",
+   "match": "authzservice-improve-authz-caching-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Denial cache key joined with underscores can collide."
+  },
+  {
+   "id": "S5",
+   "match": "authzservice-improve-authz-caching-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Denial-cache test seeds permCache false, so it proves nothing."
+  }
+ ],
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "remove() does an extra getByAlias DB query every call; no golden issue covers it."
+  },
+  {
+   "id": "S2",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Cleanup registers literal alias \"alias\" instead of created IDP."
+  },
+  {
+   "id": "S3",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Cleanup registers literal alias \"alias\" instead of created IDP."
+  }
+ ],
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Test does not assert request size metric absent; no golden issue covers it."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "traceID log param removed may be lost; unrelated to TestLogger.FromContext (#03)."
+  }
+ ],
+ "fixing-re-authentication-with-passkeys-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Test disables passkeys realm-wide so it does not exercise per-user check; #06 is only a stale comment."
+  }
+ ],
+ "advanced-query-processing-architecture-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "advanced-query-processing-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Split queries interpolated before splitting and again on execution, applying ad hoc filters twice."
+  }
+ ],
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": []
+}

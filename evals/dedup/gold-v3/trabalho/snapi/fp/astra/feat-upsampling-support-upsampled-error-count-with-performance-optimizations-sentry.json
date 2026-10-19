@@ -1,0 +1,11 @@
+{
+ "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "Both claim that upsampled_count is registered only in DiscoverDatasetConfig, causing errors-dataset queries to fail with an unknown-function error if they use a separate function registry."
+  }
+ ]
+}

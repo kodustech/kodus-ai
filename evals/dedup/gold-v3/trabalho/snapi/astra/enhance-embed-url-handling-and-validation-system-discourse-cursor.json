@@ -1,0 +1,71 @@
+{
+ "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes JavaScript injection through the referer interpolated into the embed layout. No golden issue describes this interpolation vulnerability."
+  },
+  {
+   "id": "S2",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#16",
+   "newGroup": null,
+   "reason": "Both describe contents << mutating the caller's string, including failure on frozen strings."
+  },
+  {
+   "id": "S3",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+   "newGroup": null,
+   "reason": "Both describe protocol-relative URLs being incorrectly rewritten onto the article host, breaking links and images."
+  },
+  {
+   "id": "S4",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Both describe substring-based postMessage origin validation accepting origins that should fail exact origin comparison."
+  },
+  {
+   "id": "S5",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "Both describe unescaped URL interpolation in the import footer allowing HTML injection into unsanitized posts."
+  },
+  {
+   "id": "S6",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#33",
+   "newGroup": null,
+   "reason": "Both describe the URL and username prerequisite tests passing without exercising their guards because feed polling remains disabled."
+  },
+  {
+   "id": "S7",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+   "newGroup": null,
+   "reason": "Both describe protocol-relative href/src URLs being rewritten to the wrong host."
+  },
+  {
+   "id": "S8",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Both describe missing feed content causing i.content.scrub to raise and abort processing of subsequent items."
+  },
+  {
+   "id": "S9",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#17",
+   "newGroup": null,
+   "reason": "Both describe concurrent imports racing between the existing-embed check and creation, causing an unhandled unique-index violation."
+  },
+  {
+   "id": "S10",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#29",
+   "newGroup": null,
+   "reason": "Describes the same Disqus importer regression: switching to import_remote requires live HTTP retrieval, and a failed link aborts the import."
+  },
+  {
+   "id": "S11",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-03",
+   "newGroup": null,
+   "reason": "Both describe embed.css and embed.js missing from the asset precompile list, breaking production embed pages."
+  }
+ ]
+}

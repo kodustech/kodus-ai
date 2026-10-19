@@ -1,0 +1,41 @@
+{
+ "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Both identify missing test coverage for successfully updating an existing device when the device limit is reached."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This reports stale Wire provider registration after the constructor gained an int64 parameter. No golden-set issue describes this dependency-injection problem."
+  },
+  {
+   "id": "S3",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Both describe caching a device before successful admission, allowing requests after a limit rejection to bypass enforcement."
+  },
+  {
+   "id": "S4",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Both describe the retained cache entry after ErrDeviceLimitReached allowing subsequent requests to authenticate."
+  },
+  {
+   "id": "S5",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#07",
+   "newGroup": null,
+   "reason": "The comment includes the same limit bypass caused by caching before the store call succeeds; its additional mention of transient errors does not change the match."
+  },
+  {
+   "id": "S6",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Both describe the non-atomic count followed by insertion that allows concurrent new devices to exceed the configured limit."
+  }
+ ]
+}

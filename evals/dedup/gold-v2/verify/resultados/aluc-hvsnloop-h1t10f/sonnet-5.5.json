@@ -1,0 +1,2775 @@
+{
+ "model": "sonnet-5.5",
+ "verificador": "claude-sonnet-5.5@api",
+ "versao": "hvsnloop-h1t10f",
+ "versaoDedup": "hvsnloop-dedup",
+ "prs": {
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7",
+      "S1",
+      "S8",
+      "S10",
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S9",
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "packages/core/CalendarManager.ts:330-348 wraps `calendar.updateEvent(...)` in `.catch(async (e) => { log.error(\"updateEvent failed\", ...); ... return undefined; })`. packages/core/EventManager.ts:815 and 921 also wrap `updateAllCalendarEvents` in try/catch, which returns failure results. A calendar failure therefore does not throw out of `updateCalendarAttendees` (EventManager.ts:596-602). The handler still reaches `sendAddGuestsEmails` at addGuests.handler.ts:168.",
+       "reason": "The comment says a calendar failure propagates and skips the emails, but the calendar update path catches and logs errors and returns failure results instead of throwing."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checker quotes repository code showing the claim is false. CalendarManager.ts:330-348 wraps `calendar.updateEvent` in a `.catch` that logs and returns undefined. EventManager.ts:815 and 921 wrap `updateAllCalendarEvents` in try/catch. So `updateCalendarAttendees` doesn't throw on a calendar failure, and the handler still reaches `sendAddGuestsEmails`. This contradicts the comment's claim that the failure is unhandled and skips the emails."
+     }
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S18",
+     "membros": [
+      "S18",
+      "S1",
+      "S17"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12",
+      "S5",
+      "S6",
+      "S9",
+      "S16"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 1397,
+    "cacheRead": 0,
+    "output": 245,
+    "reasoning": 0,
+    "ms": 5744
+   }
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S1",
+      "S3",
+      "S5",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "apps/web/pages/api/webhook/app-credential.ts:19-21 returns 403 unless APP_CREDENTIAL_SHARING_ENABLED, which packages/lib/constants.ts:103-104 defines as `process.env.CALCOM_WEBHOOK_SECRET && process.env.CALCOM_APP_CREDENTIAL_ENCRYPTION_KEY`. The handler fails fast when the key is unset, so the `|| \"\"` fallback at line 58 is never reached.",
+       "reason": "The handler already rejects requests with a 403 when the encryption key is unset, so the empty-string fallback is unreachable and the reported weak-default problem does not occur."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "The checker does not dispute that the `|| \"\"` fallback exists at line 58. It argues the fallback cannot be reached because an earlier guard returns 403 when the key is unset. That is an unreachable-branch argument, so it argues against the comment instead of contradicting a statement about what the code contains."
+     }
+    },
+    {
+     "rep": "S22",
+     "membros": [
+      "S22",
+      "S3"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "parseRefreshTokenResponse.ts:8 `[z.string().toString()]: z.number(),` and line 10 `[z.string().optional().toString()]: z.unknown().optional(),`. Zod schemas don't override toString (I couldn't check, because node_modules isn't installed). If so, both computed keys evaluate to the same string, \"[object Object]\", not \"ZodString\". The later key then overwrites the earlier one, so the number requirement is replaced by an optional unknown. Only `access_token: z.string()` is required, so parses succeed.",
+       "reason": "The two computed keys collide, so the later optional z.unknown() overwrites the required z.number(). The schema therefore does not fail every parse as the comment says."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "The checker quotes the repository's schema lines, but its argument depends on how Zod and JavaScript behave. It says Zod schemas don't override toString, so both computed keys become \"[object Object]\" and the later key overwrites the earlier one. The checker admits it couldn't verify this because node_modules isn't installed. That is a claim about library and language behavior, not something the repository code shows directly."
+     }
+    },
+    {
+     "rep": "S23",
+     "membros": [
+      "S23",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S20",
+     "membros": [
+      "S20",
+      "S5",
+      "S11",
+      "S15",
+      "S17"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S19",
+     "membros": [
+      "S19",
+      "S6",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S21",
+     "membros": [
+      "S21",
+      "S10",
+      "S12",
+      "S16",
+      "S18"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 2711,
+    "cacheRead": 0,
+    "output": 630,
+    "reasoning": 270,
+    "ms": 5116
+   }
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "grupos": []
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S7",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "config/site_settings.yml:348-351 sets `queue_jobs: test: false`, so app/jobs/base.rb:168-172 runs `klass.new.perform(opts)` inline. app/jobs/regular/retrieve_topic.rb:17 then calls `TopicRetriever.new(...).retrieve`, which is what the spec expects (spec line 43-44).",
+       "reason": "In the test environment queue_jobs is false, so Jobs.enqueue executes RetrieveTopic synchronously and it calls TopicRetriever.new(...).retrieve, which satisfies the spec's mocks."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checkers quote repository code. `config/site_settings.yml` sets `queue_jobs` to false in the test environment, so `app/jobs/base.rb` runs the job inline. `retrieve_topic.rb` then calls `TopicRetriever.new(...).retrieve`. This shows the spec and the implementation do not disagree, which contradicts the comment's claim that the example fails."
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12",
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 1331,
+    "cacheRead": 0,
+    "output": 437,
+    "reasoning": 0,
+    "ms": 5399
+   }
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S5",
+      "S10",
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S9",
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4",
+      "S5",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "pkg/server/wire.go:374-375 lists `anonstore.ProvideAnonDBStore` and the Bind inside a large provider set. impl.go:43 calls `anonstore.ProvideAnonDBStore(sqlStore, cfg.AnonymousDeviceLimit)` directly. impl.go:61 calls `api.NewAnonDeviceServiceAPI(cfg, a.anonStore, ...)` directly. A grep found no other injected consumer of `anonstore.AnonStore`.",
+       "reason": "Nothing in the wire graph needs AnonStore, and wire only resolves the providers a requested type depends on. The unused provider with an int64 parameter in a shared set therefore does not break wire generation or the build."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "The checker's evidence confirms the comment's factual claims: wire.go still lists the provider and the bind, and impl.go calls the constructor directly. It disputes only whether that breaks the build. That depends on how wire resolves providers, which is tool behavior and not something the repository code shows."
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 1412,
+    "cacheRead": 0,
+    "output": 423,
+    "reasoning": 0,
+    "ms": 4625
+   }
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "pkg/infra/tracing/tracing.go:91-93 registers a contextual log provider: `log.RegisterContextualLogProvider(func(ctx) ... if traceID := TraceIDFromContext(ctx, false); traceID != \"\" { return []any{\"traceID\", traceID}, true }`. pkg/infra/log/log.go:203-210 shows FromContext iterating over all ctxLogProviders and adding their args.",
+       "reason": "FromContext does add traceID through the tracing service's registered contextual log provider, and the current LoggerMiddleware has no explicit traceID, so the claimed loss of correlation does not happen."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checker quotes repository code showing the comment's claim is false. The claim is that ConcreteLogger.FromContext does not add traceID. pkg/infra/tracing/tracing.go registers a contextual log provider that returns traceID, and pkg/infra/log/log.go FromContext iterates over all registered providers and adds their args. Both statements are about what specific code in this repository does."
+     }
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 1383,
+    "cacheRead": 0,
+    "output": 196,
+    "reasoning": 0,
+    "ms": 2998
+   }
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S23",
+     "membros": [
+      "S23"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S24",
+     "membros": [
+      "S24"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13",
+      "S1",
+      "S20",
+      "S21",
+      "S22"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16",
+      "S2",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S17",
+      "S3",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11",
+      "S4",
+      "S19"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S18",
+     "membros": [
+      "S18",
+      "S5",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S1",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9",
+      "S3",
+      "S10",
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S6",
+      "S7",
+      "S10",
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S4",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "AbstractUsernameFormAuthenticator.java:146 `context.clearUser();` in getUser() runs before getUserFromForm, and `context.setUser(user)` (line 197) only runs in validateUser after the password check passes. So in a normal login, context.getUser() is null when badPasswordHandler (line 224) calls challenge(). When the user was set earlier (line 139-141), it is the already-identified user, not a submitted username.",
+       "reason": "The attempted user is never set in the context during a failed-password challenge, so the override's isConditionalPasskeysEnabled(context.getUser()) cannot leak whether the submitted username exists."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checker quotes repository code (AbstractUsernameFormAuthenticator: clearUser() at line 146 before user lookup, setUser only after password validation at line 197). That shows the comment's claim that the attempted user is still set in the context when badPasswordHandler calls challenge() is false."
+     }
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 1429,
+    "cacheRead": 0,
+    "output": 372,
+    "reasoning": 0,
+    "ms": 4334
+   }
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "common/src/main/java/org/keycloak/common/Profile.java:162-163 and 305-307. ADMIN_FINE_GRAINED_AUTHZ and ADMIN_FINE_GRAINED_AUTHZ_V2 share the unversioned key \"admin-fine-grained-authz\". configure() sets features.put(f, f == enabledFeature), so only one version is enabled. It also throws ProfileException \"Multiple versions of the same feature ... should not be enabled\" (line 284). When V2 is on, V1 is off, and the listener's `Profile.isFeatureEnabled(ADMIN_FINE_GRAINED_AUTHZ)` check at AdminPermissions.java:77 is false.",
+       "reason": "V1 and V2 are versions of the same feature and cannot both be enabled, so the V1-gated listener never reaches the throwing V2 setPermissionsEnabled."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checker quotes Profile.java. V1 and V2 share a feature key, configure() enables only one version, and a ProfileException is thrown if several versions are enabled. This contradicts the comment's premise that V1 and V2 can both be enabled, so the V1-gated listener never reaches the throwing V2 method."
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 1644,
+    "cacheRead": 0,
+    "output": 383,
+    "reasoning": 0,
+    "ms": 4322
+   }
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "server-spi/.../IdentityProviderStorageProvider.java:180 `searchOptions.put(OrganizationModel.BROKER_PUBLIC, \"true\");` in the ORG_ONLY/ALL branch of getForLogin. Line 254 has the matching predicate `idp.getOrganizationId() == null || Boolean.parseBoolean(idp.getConfig().get(OrganizationModel.BROKER_PUBLIC))`.",
+       "reason": "getForLogin only returns org-linked IDPs that are BROKER_PUBLIC, so it never returns the non-public ones, and the invalidation predicate matches what the cache holds."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "The checker quotes the BROKER_PUBLIC filter in getForLogin. It then concludes that getForLogin \"never returns\" non-public org IDPs and that the invalidation predicate is therefore the right one. That is an argument that the reported case can't happen and that the gate is correct. It doesn't show that a specific statement in the comment is false. The quoted lines are also from the ORG_ONLY/ALL branch, not necessarily the per-organization path the comment is about."
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 1410,
+    "cacheRead": 0,
+    "output": 861,
+    "reasoning": 638,
+    "ms": 8107
+   }
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S6",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S1",
+      "S3",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9",
+      "S1",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S1",
+      "S6",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "src/sentry/pipeline/base.py:133 `self.signature = md5_text(*pipe_ids).hexdigest()` makes the state a constant, so the test's hard-coded state is valid. tests/.../test_integration.py:119-123 stubs the token exchange and `/user` with login \"octocat\", so those steps succeed. The only remaining error path is integration.py:501-505, where \"octocat\" != \"attacker\". Without that check, line 507 `return pipeline.next_step()` runs and the test's `success\":false` assertion fails.",
+       "reason": "The test's setup passes the state, token and login steps and the integration exists, so only the sender mismatch check can produce the error, and removing it would make the test fail."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checkers quote repository code showing that the test's setup passes the state check (constant signature), the token exchange and the login lookup (stubbed as \"octocat\"). The only remaining failure branch is the sender-mismatch check at integration.py:501-505. If that check were removed, line 507 `return pipeline.next_step()` would run and the failure assertion would fail. This contradicts the comment's claim that the test would still pass."
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S2",
+      "S3",
+      "S5",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 1379,
+    "cacheRead": 0,
+    "output": 506,
+    "reasoning": 0,
+    "ms": 4763
+   }
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "grupos": [
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S6",
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S5",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "async-import-of-the-appstore-packages-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2",
+      "S3",
+      "S5",
+      "S6",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "packages/lib/slots.ts:107-110 `getTime = (time) => startOfInviteeDay.tz(inviteeTimeZone).add(minutes, \"minutes\")` converts slot minutes relative to the invitee's start of day. The +6:00 day starts 30 minutes earlier in UTC than the +5:30 day. Without the offset at slots.ts:212-214 (`offset = inviteeUtcOffset - organizerUtcOffset`), the same override minutes would give slots 30 minutes earlier, such as 08:00Z. The test's expected 08:30Z slots would then fail.",
+       "reason": "Slot minutes are added to the invitee's start of day, so ignoring the invitee timezone would shift the +6:00 result by 30 minutes, and the test does depend on the offset logic."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checker quotes slots.ts. `getTime` adds the slot minutes to the invitee's start of day, and the offset is computed from the invitee and organizer UTC offsets. This shows the code depends on the invitee timezone. The comment claims the old logic ignored it and gives the same slots, so the quoted code contradicts that claim."
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4",
+      "S8",
+      "S9",
+      "S11"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "packages/types/schedule.d.ts:12 says WorkingHours are \"serialized to UTC by using the organizer timeZone\". packages/lib/availability.ts:80-85 computes startTime/endTime as stored minutes minus utcOffset, which gives UTC. packages/core/getUserAvailability.ts:210 builds them with getWorkingHours({ timeZone }, availability). slots.ts:140-142 compares them to slotStartTime = time.utc(), so both sides are UTC.",
+       "reason": "The workingHours are already converted to UTC, so the claimed timezone mismatch and the fix of converting the slot to the host's timezone are wrong, even though `end` does duplicate `start`."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checkers quote repository code showing that workingHours are already converted to UTC. This includes availability.ts subtracting utcOffset and getUserAvailability building them with the timezone. slots.ts then compares them to UTC slot times. That directly falsifies the comment's claim that workingHours are in the host's timezone and are compared against UTC values."
+     }
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 2889,
+    "cacheRead": 0,
+    "output": 887,
+    "reasoning": 0,
+    "ms": 5158
+   }
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S1",
+      "S3",
+      "S7",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S10"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "grep of non-test code finds `add_unsubscribe_link: true` only at app/mailers/user_notifications.rb:294, and that call also passes `unsubscribe_url` at line 295. The digest does not use the shared string. app/views/user_notifications/digest.html.erb:76 passes its own `unsubscribe_link: link_to(...)`. rejection_mailer.rb:9 only lists `:add_unsubscribe_link` in DISALLOWED_TEMPLATE_ARGS, so that mailer cannot set it either.",
+       "reason": "No other email, including the digest, sets add_unsubscribe_link, so the shared unsubscribe_link string is only built with unsubscribe_url and the reported exception cannot occur."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "A repository-wide grep shows `add_unsubscribe_link: true` is set only at user_notifications.rb:294, and that call also passes `unsubscribe_url`. The digest passes its own `unsubscribe_link` and does not use the shared string. So the \"other callers\" the comment's problem depends on do not exist."
+     }
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 1416,
+    "cacheRead": 0,
+    "output": 359,
+    "reasoning": 0,
+    "ms": 3754
+   }
+  },
+  "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11",
+      "S1",
+      "S6",
+      "S8",
+      "S16",
+      "S20"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14",
+      "S2",
+      "S18",
+      "S22"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12",
+      "S4",
+      "S10",
+      "S17",
+      "S21"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13",
+      "S5",
+      "S7",
+      "S9",
+      "S15",
+      "S19"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S1",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "packages/trpc/server/routers/viewer/me/get.handler.ts:109-148 builds the response from an explicit list of fields (id, name, email, ... isTeamAdminOrOwner) and never includes selectedCalendars or googleChannelId. The comment cites this handler as its example of exposure, but it does not return the field. The query is findUnlockedUserForSession at packages/lib/server/repository/user.ts:862-922, and its only caller is sessionMiddleware.ts:29.",
+       "reason": "The `me` handler, which the comment names as the way the identifier reaches the client, returns only an explicit whitelist of fields that excludes selectedCalendars and googleChannelId."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checker cites repository code showing the `me` handler (get.handler.ts:109-148) builds its response from an explicit field list that omits selectedCalendars and googleChannelId. That contradicts the comment's example of how the identifier would reach the client. The checker also found that the only caller of the query is sessionMiddleware.ts:29."
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 1342,
+    "cacheRead": 0,
+    "output": 461,
+    "reasoning": 281,
+    "ms": 4450
+   }
+  },
+  "advanced-sql-analytics-framework-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "pkg/expr/reader.go:129-132: `enabled := enableSqlExpressions(h); if !enabled { return eq, fmt.Errorf(\"sqlExpressions is not implemented\") }`. When the flag is on, the code skips the error and goes on to parse the SQL expression at lines 133-138.",
+       "reason": "The error is returned only when enableSqlExpressions is false, so the comment's claim that it also fires when the flag is on is false."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checker quotes the code at reader.go:129-132. The error is returned only when enableSqlExpressions(h) is false. When the flag is on, execution skips it and goes on to parse the SQL expression. This contradicts the comment's claim that the error is returned for every SQL query, including when the flag is on."
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S1",
+      "S2",
+      "S3",
+      "S4",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 1235,
+    "cacheRead": 0,
+    "output": 169,
+    "reasoning": 0,
+    "ms": 2623
+   }
+  },
+  "advanced-query-processing-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S1",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "authzservice-improve-authz-caching-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S3",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "database-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S1",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S2",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "UsersResource.java:453 and 460: searchForUser returns toRepresentation(...), which runs `userModels.filter(usersEvaluator::canView)`. Line 459 calls `grantIfNoPermission(session.getAttribute(UserModel.GROUPS) != null)`. Without group grants the attribute is unset, so no blanket grant applies and canView filters every user.",
+       "reason": "The per-user canView filter still runs in toRepresentation, which searchForUser calls, so the search results are not unfiltered."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checker quotes code in UsersResource.java showing that searchForUser returns toRepresentation(...), which still applies userModels.filter(usersEvaluator::canView). That contradicts the comment's claim that the per-user canView filter was removed and that the results may be unfiltered."
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 1311,
+    "cacheRead": 0,
+    "output": 386,
+    "reasoning": 0,
+    "ms": 4141
+   }
+  },
+  "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "UpgradeLogicFactory.java:37-38: `if (strategy.isEmpty()) { return new RecreateOnImageChangeUpgradeLogic(...); }`. A grep of operator/src/main for \"compatibility|FEATURE_DISABLED|ROLLING_UPDATES\" finds nothing. The null-strategy path uses the legacy logic and never calls update-compatibility commands, so it doesn't need the feature. UpgradeTest.java:105-107 skips the feature on purpose.",
+       "reason": "With a null strategy the operator uses the legacy RecreateOnImageChangeUpgradeLogic, which doesn't depend on the rolling-updates feature or on any update-compatibility command, so the early return is intended."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The checker quotes UpgradeLogicFactory.java:37-38. It shows that an empty strategy returns RecreateOnImageChangeUpgradeLogic. A grep of operator/src/main for compatibility, FEATURE_DISABLED and ROLLING_UPDATES finds nothing. That is evidence about what the repository code does: the null-strategy path never calls update-compatibility commands, so it cannot hit FEATURE_DISABLED. This undercuts the comment's premise that those runs need the feature."
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 1451,
+    "cacheRead": 0,
+    "output": 574,
+    "reasoning": 330,
+    "ms": 6689
+   }
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+   "grupos": [
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S1",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S4",
+      "S5",
+      "S7",
+      "S11",
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14",
+      "S3",
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+   "grupos": [
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10",
+      "S1",
+      "S7",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  }
+ },
+ "sobre": "hvsnloop-h1t10",
+ "prompt": "c3"
+}

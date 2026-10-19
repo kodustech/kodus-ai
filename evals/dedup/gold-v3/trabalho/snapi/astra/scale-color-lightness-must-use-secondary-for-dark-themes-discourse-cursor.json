@@ -1,0 +1,95 @@
+{
+ "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Reports the mobile hint's light-theme lightness changing from 70% to 30%, the same inverted pair as issue #02."
+  },
+  {
+   "id": "S2",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Reports the desktop link's light-theme lightness changing from 30% to 70%, matching issue #01."
+  },
+  {
+   "id": "S3",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Reports the mobile h3 light-theme lightness changing from 20% to 50%, matching issue #05."
+  },
+  {
+   "id": "S4",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Reports the desktop .name light-theme lightness changing from 30% to 50%, matching issue #03."
+  },
+  {
+   "id": "S5",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Reports the mobile .name light-theme lightness changing from 30% to 50%, matching issue #04."
+  },
+  {
+   "id": "S6",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Reports the inverted mobile hint color pair and resulting desktop mismatch, the same problem as issue #02."
+  },
+  {
+   "id": "S7",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Reports the mobile h3 changing from 20% to 50% lightness and diverging from desktop, matching issue #05."
+  },
+  {
+   "id": "S8",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Reports the mobile hint's inverted 30%/70% pair instead of 70%/30%, matching issue #02."
+  },
+  {
+   "id": "S9",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Reports the desktop link's inverted 70%/30% pair instead of 30%/70%, matching issue #01."
+  },
+  {
+   "id": "S10",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Reports the mobile h3 using 50%/50% instead of preserving 20%/80%, matching issue #05."
+  },
+  {
+   "id": "S11",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Reports the desktop .name using 50%/50% instead of preserving 30%/70%, matching issue #03."
+  },
+  {
+   "id": "S12",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Reports the desktop link becoming paler because its light-theme value changed from 30% to 70%, matching issue #01."
+  },
+  {
+   "id": "S13",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Reports the mobile hint becoming darker because its light-theme value changed from 70% to 30%, matching issue #02."
+  },
+  {
+   "id": "S14",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Reports the mobile h3 becoming fainter because its light-theme value changed from 20% to 50%, matching issue #05."
+  },
+  {
+   "id": "S15",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Reports the desktop .name light-theme value changing from 30% to 50%, matching issue #03."
+  }
+ ]
+}

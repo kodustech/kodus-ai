@@ -1,0 +1,29 @@
+{
+ "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reports unchecked Optional access and missing usable code data during form rendering, distinct from the golden issue about LDAP lookup failures."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Reports plaintext recovery codes passed to external storage without enforced hashing. No golden issue describes this problem."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Describes the same plaintext recovery-code handling in the external-storage path as S2."
+  },
+  {
+   "id": "S4",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#06",
+   "newGroup": null,
+   "reason": "The broader comment includes removing federated recovery-code credentials through the local-only credential store, which is the cleanup problem described by issue #06."
+  }
+ ]
+}

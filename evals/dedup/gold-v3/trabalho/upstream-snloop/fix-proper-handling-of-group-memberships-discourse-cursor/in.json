@@ -1,0 +1,24 @@
+{
+ "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+ "prTitle": "FIX: proper handling of group memberships",
+ "upstream": "discourse/discourse",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/discourse",
+ "base": "4975fc28903a84418f546b2809370f19abf10e08",
+ "head": "060cda77729cb1c4a827560e09e89a7b22078ba9",
+ "prOriginalConhecido": {
+  "numero": null,
+  "url": "https://github.com/discourse/discourse/commit/060cda77729cb1c4a827560e09e89a7b22078ba9",
+  "mergedAt": "2015-01-05",
+  "nota": "No upstream PR: the benchmark head 060cda77 (Régis Hanol, 'FIX: proper handling of group memberships') was committed directly to master on 2015-01-05 and is an ancestor of main (compare = ahead); /commits/<sha>/pulls is empty. The merged code is the benchmark head itself."
+ },
+ "tps": [
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#snloop-01",
+   "severity": "medium",
+   "category": null,
+   "bug": "Admin remove_member calls group.users.delete with a raw integer id, which raises RecordNotFound (404/500) when the user is not or no longer a member, e.g. on concurrent removal.",
+   "evidenciaOpus": "groups_controller.rb remove_member calls `group.users.delete(user_id)`, which in Rails 4 does find(ids) and raises RecordNotFound when the user is not a member; Discourse maps that to a 404. Answering 404 when the member to remove is already gone is an acceptable outcome for a stale request, not a defect.",
+   "evidenciaAstra": "The new action converts user_id to an integer and passes it directly to group.users.delete at app/controllers/admin/groups_controller.rb:86–90; users is a scoped association (app/models/group.rb:8). [Rails 4.1.8 collection_association.rb:240](https://github.com/rails/rails/blob/v4.1.8/activerecord/lib/active_record/associations/collection_association.rb#L240) resolves integer arguments through association find, so an already-removed member raises RecordNotFound before the success response. The previous removal used a membership query that safely did nothing when absent (app/models/group.rb:276–277), making this a regression for stale lists or concurrent removals."
+  }
+ ]
+}

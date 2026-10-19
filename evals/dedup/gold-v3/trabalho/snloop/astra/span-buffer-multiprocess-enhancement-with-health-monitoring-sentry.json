@@ -1,0 +1,71 @@
+{
+ "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "The restart guard fails to recognize SpawnProcess workers, leaving hung workers alive when replacements start."
+  },
+  {
+   "id": "S2",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#05",
+   "newGroup": null,
+   "reason": "The docstring incorrectly promises one process per shard despite capped workers sharing shards."
+  },
+  {
+   "id": "S3",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#01",
+   "newGroup": null,
+   "reason": "The wait_produce metric uses 'shards' instead of the sibling metrics' 'shard' tag."
+  },
+  {
+   "id": "S4",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "newGroup": null,
+   "reason": "Breaking out when the join deadline expires skips termination of remaining workers."
+  },
+  {
+   "id": "S5",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#01",
+   "newGroup": null,
+   "reason": "The wait_produce metric's 'shards' tag disagrees with the 'shard' tag used by sibling metrics."
+  },
+  {
+   "id": "S6",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#02",
+   "newGroup": null,
+   "reason": "The test's monkeypatch makes the added time.sleep(0.1) a no-op, so it provides no synchronization."
+  },
+  {
+   "id": "S7",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#02",
+   "newGroup": null,
+   "reason": "The added delay cannot synchronize the flusher because time.sleep is monkeypatched to return immediately."
+  },
+  {
+   "id": "S8",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#12",
+   "newGroup": null,
+   "reason": "The comment includes the inadequate shard-total assertion and requests checking actual assignment without duplicates, covering the golden issue. It additionally requests balanced distribution and flushing coverage."
+  },
+  {
+   "id": "S9",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "The multiprocessing.Process type check excludes SpawnProcess workers, preventing hung workers from being killed before replacement."
+  },
+  {
+   "id": "S10",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "The restart guard excludes SpawnProcess instances, allowing the original worker and its replacement to handle the same shards."
+  },
+  {
+   "id": "S11",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "newGroup": null,
+   "reason": "The deadline-triggered break skips termination of remaining flusher processes during shutdown."
+  }
+ ]
+}

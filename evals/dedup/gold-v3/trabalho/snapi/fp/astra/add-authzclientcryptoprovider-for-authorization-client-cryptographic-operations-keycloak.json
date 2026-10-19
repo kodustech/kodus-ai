@@ -1,0 +1,11 @@
+{
+ "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-01",
+   "newGroup": null,
+   "reason": "It asserts the same unchecked NegativeArraySizeException caused by readInteger passing readLength's -1 to read(int) for indefinite-length encoding. The additional suggested guard in read(int) does not change the claim."
+  }
+ ]
+}

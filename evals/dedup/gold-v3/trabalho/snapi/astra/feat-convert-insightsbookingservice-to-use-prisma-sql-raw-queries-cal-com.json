@@ -1,0 +1,17 @@
+{
+ "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "S1 concerns the unparenthesized event-type OR returned by getFilterConditions. Fixing that fragment would not fix prod-02\u2019s unparenthesized authorization OR returned by getBaseConditions; getBaseConditions already wraps filters when combining them with authorization."
+  },
+  {
+   "id": "S2",
+   "match": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#01",
+   "newGroup": null,
+   "reason": "Both identify the unreachable filter-only and fallback branches in getBaseConditions because getAuthorizationConditions always returns a truthy Prisma.Sql object."
+  }
+ ]
+}

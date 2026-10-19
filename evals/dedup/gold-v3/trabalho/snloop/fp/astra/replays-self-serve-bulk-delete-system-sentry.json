@@ -1,0 +1,11 @@
+{
+ "caseId": "replays-self-serve-bulk-delete-system-sentry",
+ "items": [
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This comment identifies a mismatch between the age/timestamp validator docstrings and their acceptance of reports containing neither field. None of the rejected issues describes this validation or documentation problem."
+  }
+ ]
+}

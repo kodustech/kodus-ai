@@ -1,0 +1,47 @@
+{
+ "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+   "newGroup": null,
+   "reason": "The shared try/catch lets one failed SendGrid cancellation abort the remaining cancellations and skip all queued database deletions."
+  },
+  {
+   "id": "S2",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+   "newGroup": null,
+   "reason": "The cancellation handler discards reminder-helper promises, allowing it to return before cancellation and database writes finish."
+  },
+  {
+   "id": "S3",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#11",
+   "newGroup": null,
+   "reason": "The helper and flag names imply deletion although their behavior is cancellation or marking cancelled; the comment requests renaming them."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The immediate-cancellation branch leaves the reminder row neither deleted nor marked cancelled. This is a persistence bug distinct from #11's misleading naming."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "It reports the same missing database deletion after immediate SendGrid cancellation, leaving stale reminder rows after callers stopped deleting them."
+  },
+  {
+   "id": "S6",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+   "newGroup": null,
+   "reason": "One failed cancellation aborts the shared loop and leaves the failing row eligible to block subsequent runs."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "It reports the same immediate-cancellation branch leaving a stale reminder row, specifically through the rescheduling caller."
+  }
+ ]
+}

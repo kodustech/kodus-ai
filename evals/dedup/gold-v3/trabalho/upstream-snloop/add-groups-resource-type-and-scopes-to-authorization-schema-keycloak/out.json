@@ -1,0 +1,30 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "prOriginal": {
+  "numero": 37038,
+  "url": "https://github.com/keycloak/keycloak/pull/37038",
+  "mergedAt": "2025-02-12",
+  "nota": "Known from earlier check, reconfirmed: gh pr view 37038 = MERGED 2025-02-12, merge commit 679f44692d, single commit equal to benchmark head 7355f05e6a."
+ },
+ "tps": {
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#snloop-01": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2026-04-29",
+    "pr": 48320,
+    "commit": "e1329516d5aba7f12fb330f52ba895d41827ea36",
+    "url": "https://github.com/keycloak/keycloak/pull/48320"
+   },
+   "removidoEm": null,
+   "diasNoAr": 441,
+   "reason": "The evaluator still dereferences the Groups type resource without a null check (61cb0acbc4 on 2025-04-01 dropped the findByResource(null) call, and today FineGrainedAdminPermissionEvaluator.hasPermission calls resourceTypeResource.getScopes() unguarded). But the trigger, an existing admin-permissions client lacking the Groups type resource because AdminPermissionsSchema.init returned early, was fixed by PR #48320 (2026-04-29): init now runs ensureSchemaUpToDate, creating every missing type resource and scope, and MigrateTo26_7_0 runs it for every realm with FGAP. Issue #49732 (2026-06-05) shows the missing Groups resource happened in real upgrades; PR #49893 (2026-06-23) also calls init in MigrateTo26_6_2.",
+   "astra": [
+    {
+     "pergunta": "Confirmado (via #48320 backfill or #49893 migration fix) or pendente since the evaluator has no null check?",
+     "resposta": "Confirmado by PR #48320 (2026-04-29): the backfill run by the migration removes the condition that triggered the bug; #49893 complements it on the 26.6.2 migration path but is not the first fix.",
+     "veredito": "confirmado #48320"
+    }
+   ]
+  }
+ }
+}

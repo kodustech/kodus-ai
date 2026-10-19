@@ -1,0 +1,101 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#snapi-01": {
+  "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+  "issue": {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#snapi-01",
+   "comentarios": [
+    {
+     "gid": "sonnet-snapi:S4",
+     "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+     "lines": [
+      473,
+      482
+     ],
+     "texto": "WHAT: In the non-credentialId branch, the loop deletes with the same `uid` and `externalCalendarId` of the current reference against every user calendar credential. WHY: With multiple calendar references, each reference now triggers deletes across all credentials, which produces duplicate or wrong-target delete calls and errors."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "The legacy branch (handleCancelBooking.ts:473-482) keeps the pre-existing behaviour of trying each reference's own uid/externalCalendarId against every calendar credential; the PR only runs it per reference (find->filter at :419), so each reference's event is deleted, with distinct uids, not duplicates. Failed wrong-provider deletes are swallowed by Promise.allSettled (:656), as before."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "The PR changes reference selection to iterate every calendar reference (packages/features/bookings/lib/handleCancelBooking.ts:418\u2013424), while the fallback sends each reference\u2019s identifiers to every calendar credential without matching its provider or account (475\u2013480). Wrong-account deletions can reject, as Office365 propagates deletion errors (packages/app-store/office365calendar/lib/CalendarService.ts:111\u2013121); these rejections also skip cancellation emails (handleCancelBooking.ts:656\u2013665)."
+   },
+   {
+    "who": "opus",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "I correct one point: a rejected delete is not swallowed; it throws and skips sendCancelledEmails (handleCancelBooking.ts:657-664). But the trying of a reference's uid against every calendar credential is the pre-existing legacy branch, only re-indented into the loop (diff: old '} else { // For bookings made before the refactor ... for (const credential of calendarCredentials) { ... calendar?.deleteEvent(uid, evt, externalCalendarId)' is identical at :474-481). Before the PR, a user with two calendar credentials already sent the single reference to the wrong provider and could hit the same rejection/skip-email path. The only new logic is find->filter (:418 'bookingToDelete.references.filter(') which deletes each reference with its own distinct uid: no duplicates, and the wrong-target behaviour is unchanged per reference. Per the ruling, a defect in moved/re-indented code is pre-existing, so FP.",
+    "concede": false
+   },
+   {
+    "who": "astra",
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "I change my classification to FP. The base already sends each selected reference\u2019s uid and externalCalendarId to every calendar credential in the legacy fallback; this PR preserves that branch\u2019s logic. The new outer loop takes identifiers from each reference, so processing additional references does not itself establish duplicate deletions. Rejected deletes could already skip cancellation emails before this PR, making my earlier evidence insufficient under the pre-existing-code ruling."
+   }
+  ],
+  "fechado": "consenso"
+ },
+ "dual-storage-architecture-grafana-codex#snapi-01": {
+  "caseId": "dual-storage-architecture-grafana-codex",
+  "issue": {
+   "issueId": "dual-storage-architecture-grafana-codex#snapi-01",
+   "comentarios": [
+    {
+     "gid": "sonnet-snapi:S18",
+     "file": "dualwriter_mode3.go",
+     "lines": [
+      null,
+      null
+     ],
+     "texto": "Legacy-store errors are now dropped without being logged. This is an observability problem: failures from the legacy store become invisible. Log these errors, as the previous code did."
+    }
+   ],
+   "goldens": [],
+   "precisaSeveridade": true,
+   "sevMembros": []
+  },
+  "precisaSeveridade": true,
+  "hist": [
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "nit",
+    "severity": "medium",
+    "text": "In dualwriter_mode3.go the legacy writes moved into goroutines that only call recordLegacyDuration(err != nil, ...) (Create, Update, Delete, DeleteCollection); the previous log.Error calls for legacy failures were removed. Failures are still counted in metrics, so the effect is loss of error detail in logs, not a behaviour change."
+   },
+   {
+    "who": "astra",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "The PR removes legacy-error logging; the replacement goroutines only pass error booleans to metrics in pkg/apiserver/rest/dualwriter_mode3.go:55-56,112-113,139-140,165-166. Those helpers only observe histograms (pkg/apiserver/rest/metrics.go:54-61), so failure counts remain observable but the actual error details are lost, impairing diagnosis."
+   },
+   {
+    "who": "opus",
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "text": "Concede. The PR moves legacy writes into fire-and-forget goroutines whose only failure trace is a boolean to a histogram, e.g. dualwriter_mode3.go Create goroutine: '_, errObjectSt := d.Legacy.Create(ctx, obj, createValidation, options)' / 'd.recordLegacyDuration(errObjectSt != nil, ...)', replacing 'log.WithValues(\"object\", created).Error(err, \"unable to create object in legacy storage\")'. Same in Update/Delete/DeleteCollection. Since the legacy write is now async and its result never reaches the caller, removing the log leaves legacy-store divergence undiagnosable; that is more than a log-field detail, so TP (none).",
+    "concede": true
+   }
+  ],
+  "fechado": "consenso"
+ }
+}

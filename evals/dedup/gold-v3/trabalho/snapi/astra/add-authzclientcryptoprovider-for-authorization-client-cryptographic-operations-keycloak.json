@@ -1,0 +1,29 @@
+{
+ "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This concerns indefinite-length ASN.1 integers causing NegativeArraySizeException in ASN1Decoder, distinct from #07's missing JOSE signature-length validation in concatenatedRSToASN1DER."
+  },
+  {
+   "id": "S2",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-02",
+   "newGroup": null,
+   "reason": "It identifies the same contract mismatch: getBouncyCastleProvider returns the default JDK KeyStore provider rather than BouncyCastle, despite suggesting a documentation fix."
+  },
+  {
+   "id": "S3",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#10",
+   "newGroup": null,
+   "reason": "It identifies the same use of default P-256 keys for ES384 and ES512, leaving larger-curve signatures untested. The broader comment also includes #11's lack of independent signature verification."
+  },
+  {
+   "id": "S4",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "It identifies the same two discarded ASN1Encoder writes, which duplicate encoding performed in the return statement."
+  }
+ ]
+}

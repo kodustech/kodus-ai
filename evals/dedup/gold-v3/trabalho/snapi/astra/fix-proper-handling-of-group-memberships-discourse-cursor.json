@@ -1,0 +1,47 @@
+{
+ "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes the same off-by-one totalPages calculation that enables navigation to an empty page when the member count is an exact multiple of the limit."
+  },
+  {
+   "id": "S2",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02",
+   "newGroup": null,
+   "reason": "Describes the same unchecked client-supplied limit allowing oversized pages and negative-limit errors. The additional offset validation concern does not change the match."
+  },
+  {
+   "id": "S3",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes the same totalPages overcount for exact multiples of the page size, leaving Next enabled on the real last page."
+  },
+  {
+   "id": "S4",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes the same floor-plus-one pagination error that creates a phantom empty last page."
+  },
+  {
+   "id": "S5",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Describes the same public members page truncation caused by the new default limit of 50 without public pagination controls."
+  },
+  {
+   "id": "S6",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes the same extra page for an exact multiple of the limit, allowing Next to request offset equal to user_count."
+  },
+  {
+   "id": "S7",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02",
+   "newGroup": null,
+   "reason": "Describes the same missing limit validation that permits a negative limit and causes a 500. It also covers unchecked negative offsets."
+  }
+ ]
+}

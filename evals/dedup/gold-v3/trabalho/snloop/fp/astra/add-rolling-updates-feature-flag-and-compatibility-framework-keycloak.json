@@ -1,0 +1,11 @@
+{
+ "caseId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Both assert that UpgradeTest's null-strategy early return skips enabling rolling-updates, causing that case to run without the gated feature. The additional consequences and suggested fix describe the same cause at the same location."
+  }
+ ]
+}

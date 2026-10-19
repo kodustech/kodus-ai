@@ -1,0 +1,47 @@
+{
+ "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#03",
+   "newGroup": null,
+   "reason": "Both describe missing connectedCalendars query invalidation after cache deletion, leaving stale cache status visible."
+  },
+  {
+   "id": "S2",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#07",
+   "newGroup": null,
+   "reason": "Both identify the macOS-only sed invocation failing on Linux and leaving GOOGLE_WEBHOOK_URL unchanged."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This describes potential exposure of googleChannelId through a shared user query, which no golden-set issue covers."
+  },
+  {
+   "id": "S4",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#04",
+   "newGroup": null,
+   "reason": "Both identify the hard-coded en-US locale used to format the cache timestamp instead of the user's locale."
+  },
+  {
+   "id": "S5",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#05",
+   "newGroup": null,
+   "reason": "Both describe the stale migration warning that contradicts the SQL's DEFAULT NOW()."
+  },
+  {
+   "id": "S6",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#08",
+   "newGroup": null,
+   "reason": "Both describe a plain Error producing a 500 response for a missing or unowned credential instead of an appropriate TRPCError."
+  },
+  {
+   "id": "S7",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+   "newGroup": null,
+   "reason": "The broader comment includes the same empty-data update that fails to refresh SelectedCalendar.updatedAt, and suggests explicitly setting the timestamp."
+  }
+ ]
+}

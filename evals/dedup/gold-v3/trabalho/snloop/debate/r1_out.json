@@ -1,0 +1,30 @@
+{
+  "add-guest-management-functionality-to-existing-bookings-cal-com#snloop-01": {
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "concede": false,
+    "text": "The comment's decisive claim is that Prisma errors leak internal details into the toast. Your own evidence refutes it: packages/lib/redactError.ts:23-25 `if (shouldRedact(error) && IS_PRODUCTION) { ... return new Error(\"An error occured while querying the database.\") }` covers all four Prisma error classes (lines 11-14), and it runs in captureErrorsMiddleware. Every non-Prisma error the handler throws is a translation key: addGuests.handler.ts:44 `message: \"booking_not_found\"`, :55 `\"you_do_not_have_permission\"`, :81 `\"emails_must_be_unique_valid\"`. And the toast at AddGuestsDialog.tsx:43 `${err.data?.code}: ${t(err.message)}` only shows the same user the message already in their tRPC response, so there is no exposure. That `message || t(\"unable_to_add_guests\")` never falls back is dead code at most (a nit), not the security defect the comment reports."
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor#snloop-01": {
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "concede": true,
+    "text": "Concede. groups_controller.rb:90 `group.users.delete(user_id)` passes an integer, which in activerecord 4.1.8 (Gemfile.lock:30) goes through association find and raises RecordNotFound when the user is not a member. application_controller.rb:62-73 re-raises it, so the response is a 404 error. The removed code path called group.remove(user), which was a silent no-op, so a stale list or two admins removing the same member is a regression the PR introduces. It is a real but edge-case failure: medium."
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#snloop-01": {
+    "class": "FP",
+    "subclass": "none",
+    "severity": "low",
+    "concede": false,
+    "text": "Under the agreed ruling, code the PR only moves without changing it counts as pre-existing. The comment is moved word for word: the base has mark_failed.py:139-140 `# If we have any successful check-ins within the threshold of` / `# commits we have NOT reached an incident state`, and the head has the identical lines at incidents.py:50-51. The PR did not write or change this wording, so it is FP (no subclass). Even if it counted, it would be a nit."
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#snloop-01": {
+    "class": "TP",
+    "subclass": "none",
+    "severity": "high",
+    "concede": true,
+    "text": "Concede. AdminPermissionsSchema.java:250-251 `if (client != null) { return; }`, so init() never adds the new Groups 'all-resource' to an admin permissions client that existed before this PR, whose schema had only Users and Clients. In such a realm getResourceTypeResource returns null (:150 findByName), and GroupPermissionsV2.java:147 `policyStore.findByResource(server, resource)` dereferences it at StoreFactoryCacheSession.java:938 `resource.getId()`. That throws an NPE instead of denying the permission. The feature is EXPERIMENTAL (Profile.java:58), but the path is reachable in realms already set up for FGAP v2."
+  }
+}

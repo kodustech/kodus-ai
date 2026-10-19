@@ -1,0 +1,47 @@
+{
+ "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "The retry-count deletion branch lacks an SMS method filter and can delete non-SMS reminders."
+  },
+  {
+   "id": "S2",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
+   "newGroup": null,
+   "reason": "The unguarded database update inside catch can throw and abort processing of the remaining reminders."
+  },
+  {
+   "id": "S3",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#03",
+   "newGroup": null,
+   "reason": "The cleanup comment omits the new retry-count deletion branch and misrepresents the deletion scope. Updating that comment fixes the described documentation problem."
+  },
+  {
+   "id": "S4",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "The retry-count deletion branch lacks an SMS method filter and can delete non-SMS reminders."
+  },
+  {
+   "id": "S5",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "The retry-count deletion branch lacks an SMS method filter and can delete non-SMS reminders."
+  },
+  {
+   "id": "S6",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
+   "newGroup": null,
+   "reason": "The unguarded database update inside catch can throw and abort processing of the remaining reminders."
+  },
+  {
+   "id": "S7",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "The retry-count deletion branch lacks an SMS method filter and can delete non-SMS reminders."
+  }
+ ]
+}

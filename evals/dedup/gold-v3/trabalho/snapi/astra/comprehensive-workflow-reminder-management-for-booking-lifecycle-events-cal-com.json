@@ -1,0 +1,47 @@
+{
+ "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+   "newGroup": null,
+   "reason": "One failed SendGrid cancellation aborts the shared try block, skipping remaining cancellations and all queued database deletions."
+  },
+  {
+   "id": "S2",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+   "newGroup": null,
+   "reason": "The cancellation handler discards asynchronous reminder-helper promises, allowing it to return before reminder state is persisted."
+  },
+  {
+   "id": "S3",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#11",
+   "newGroup": null,
+   "reason": "The helper and immediateDelete flag imply deletion, but the scheduled-reminder paths only cancel or mark cancelled."
+  },
+  {
+   "id": "S4",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#11",
+   "newGroup": null,
+   "reason": "It identifies the same immediateDelete branch that cancels the provider batch without deleting the database row. It proposes making the behavior match the name instead of renaming it."
+  },
+  {
+   "id": "S5",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#11",
+   "newGroup": null,
+   "reason": "It identifies the same missing database deletion in the immediateDelete branch, adding the rescheduling consequence and proposing a behavioral fix."
+  },
+  {
+   "id": "S6",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+   "newGroup": null,
+   "reason": "A failing cancellation aborts the entire loop and prevents database deletions, leaving rows to block subsequent runs."
+  },
+  {
+   "id": "S7",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+   "newGroup": null,
+   "reason": "Reminder helpers now own persistence, but their promises are not awaited by the cancellation handler."
+  }
+ ]
+}

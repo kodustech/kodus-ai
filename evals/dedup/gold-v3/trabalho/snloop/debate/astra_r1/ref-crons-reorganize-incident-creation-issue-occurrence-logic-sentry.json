@@ -1,0 +1,12 @@
+{
+ "caseId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry",
+ "items": [
+  {
+   "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#snloop-01",
+   "class": "FP",
+   "subclass": "none",
+   "severity": "low",
+   "reply": "Changed to FP: the diff confirms that the comment and surrounding check-in logic were moved verbatim from mark_failed.py to incidents.py. The inaccurate word \u201ccommits\u201d is pre-existing, so the explicit ruling for relocated code applies."
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+{
+ "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#01",
+   "newGroup": null,
+   "reason": "Both describe unreachable branches in getBaseConditions because getAuthorizationConditions always returns a truthy Prisma.Sql object. Simplifying the conditional to combine auth with filters when present, otherwise returning auth, fixes the same problem."
+  }
+ ]
+}

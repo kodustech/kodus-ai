@@ -1,0 +1,65 @@
+{
+ "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Describes the missing TopicUser row causing an unguarded nil dereference and a 500."
+  },
+  {
+   "id": "S2",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#oph-01",
+   "newGroup": null,
+   "reason": "Describes repeated unsubscribe requests lowering the level again from regular to muted, making the endpoint non-idempotent."
+  },
+  {
+   "id": "S3",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Describes the unguarded nil returned by TopicUser.find_by causing the unsubscribe endpoint to fail."
+  },
+  {
+   "id": "S4",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Describes the missing assertion that the supplied per-topic unsubscribe URL appears in the email body."
+  },
+  {
+   "id": "S5",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Describes the same missing TopicUser row and consequent nil dereference, with additional examples of affected recipients."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims that callers without unsubscribe_url fail because the shared translation requires it. No golden issue describes this missing interpolation argument."
+  },
+  {
+   "id": "S7",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Describes the missing nil guard before accessing the TopicUser notification level."
+  },
+  {
+   "id": "S8",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Describes the same nil TopicUser dereference that makes the endpoint return a 500."
+  },
+  {
+   "id": "S9",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#oph-01",
+   "newGroup": null,
+   "reason": "Describes the non-idempotent level change that mutes the topic on a second visit."
+  },
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes the same missing unsubscribe_url interpolation argument as S6, suggesting a default or conditional translation to accommodate existing callers."
+  }
+ ]
+}

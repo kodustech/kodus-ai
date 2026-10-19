@@ -1,0 +1,35 @@
+{
+ "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "The retryCount deletion branch lacks an SMS method filter, allowing deletion of non-SMS reminders."
+  },
+  {
+   "id": "S2",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
+   "newGroup": null,
+   "reason": "The unguarded retry-count update inside catch can throw and abort the cron run, skipping remaining reminders."
+  },
+  {
+   "id": "S3",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#03",
+   "newGroup": null,
+   "reason": "The cleanup comment omits the retry-exhaustion deletion branch and needs to describe both deletion conditions."
+  },
+  {
+   "id": "S4",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "The retryCount deletion branch lacks an SMS method filter, allowing deletion of reminders of other methods."
+  },
+  {
+   "id": "S5",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "The retryCount deletion branch is not restricted to SMS rows and can delete non-SMS reminders."
+  }
+ ]
+}

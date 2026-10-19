@@ -1,0 +1,12 @@
+{
+ "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
+ "items": [
+  {
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#snapi-01",
+   "class": "TP",
+   "subclass": "nit",
+   "reason": "The PR adds the misleading Django negative-slicing claim at src/sentry/api/paginator.py:876, while lines 880\u2013882 pass the negative offset directly into queryset slicing. The permission assurance at line 879 is also unsupported by the paginator: build_queryset at lines 79\u2013128 only adjusts ordering and cursor filtering. The issue requests comment corrections, so it is a documentation nit rather than a behavioral defect.",
+   "severity": "low"
+  }
+ ]
+}

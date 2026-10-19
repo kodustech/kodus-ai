@@ -1,0 +1,47 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "newGroup": null,
+   "reason": "Reports the same global canManage() check incorrectly accepting VIEW instead of requiring MANAGE."
+  },
+  {
+   "id": "S2",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "newGroup": null,
+   "reason": "Reports the same use of authorization resource UUIDs instead of resource names for permission lookup and returned group IDs."
+  },
+  {
+   "id": "S3",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "newGroup": null,
+   "reason": "Reports the same privilege escalation caused by canManage() accepting the all-groups VIEW scope."
+  },
+  {
+   "id": "S4",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "newGroup": null,
+   "reason": "Reports the same resource-ID versus group-ID mismatch in both hasPermission() and the granted set."
+  },
+  {
+   "id": "S5",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+   "newGroup": null,
+   "reason": "Reports the same incorrect Javadoc reference to canManageMembership instead of canManageMembers."
+  },
+  {
+   "id": "S6",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#07",
+   "newGroup": null,
+   "reason": "Reports the same Javadoc return description saying Stream when the method returns Set."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The alleged removal of per-user authorization matches none of the golden issues and is false at the PR head: searchForUser delegates to toRepresentation(), which still applies userModels.filter(usersEvaluator::canView)."
+  }
+ ]
+}

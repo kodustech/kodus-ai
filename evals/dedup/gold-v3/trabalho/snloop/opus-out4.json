@@ -1,0 +1,550 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "id": "S1",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Google Meet fallback dereferences mainHostDestinationCalendar.integration without optional chaining."
+  },
+  {
+   "id": "S2",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#12",
+   "newGroup": null,
+   "reason": "updateLocation reads externalId/credentialId from updateEvent results that never return them."
+  },
+  {
+   "id": "S3",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#prod-01",
+   "newGroup": null,
+   "reason": "Hangout-link events.patch uses an undefined calendarId when no destination calendar matches the credentialId."
+  },
+  {
+   "id": "S4",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Fallback find by externalId equal to the absent externalCalendarId never matches."
+  },
+  {
+   "id": "S5",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "newGroup": null,
+   "reason": "Optional push drops other hosts destination calendars when evt.destinationCalendar is null."
+  },
+  {
+   "id": "S6",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05",
+   "newGroup": null,
+   "reason": "Office365/Lark createEvent ignore credentialId and always use the first destination calendar."
+  },
+  {
+   "id": "S7",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Same unguarded mainHostDestinationCalendar.integration dereference."
+  },
+  {
+   "id": "S8",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Same unguarded mainHostDestinationCalendar.integration dereference."
+  },
+  {
+   "id": "S9",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Same never-matching externalCalendarId fallback in update/deleteEvent."
+  },
+  {
+   "id": "S10",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Same unguarded mainHostDestinationCalendar.integration dereference."
+  },
+  {
+   "id": "S11",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Same never-matching externalCalendarId fallback."
+  },
+  {
+   "id": "S12",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#09",
+   "newGroup": null,
+   "reason": "Video references lose credentialId (set to undefined for non-calendar results)."
+  },
+  {
+   "id": "S13",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Undefined first destination calendar .integration access in EventManager."
+  },
+  {
+   "id": "S14",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#15",
+   "newGroup": null,
+   "reason": "Legacy no-credentialId branch calls createEvent without externalId."
+  },
+  {
+   "id": "S15",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Unused message variable in a catch block; no golden issue covers it."
+  }
+ ],
+ "notification-rule-processing-engine-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "notification-rule-processing-engine-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Delete menu item still gated on rulerRule, absent in list view."
+  },
+  {
+   "id": "S2",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "Silence drawer gated on ruler rule, so Silence does nothing in list view."
+  },
+  {
+   "id": "S3",
+   "match": "notification-rule-processing-engine-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Prom abilities with undefined rule still report Duplicate, ORed into AlertRuleMenu."
+  },
+  {
+   "id": "S4",
+   "match": "notification-rule-processing-engine-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Missing key prop on GrafanaRuleListItem in FilterView."
+  },
+  {
+   "id": "S5",
+   "match": "notification-rule-processing-engine-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Prom abilities gate Pause/Export/etc on alertingRule, dropping recording rules."
+  },
+  {
+   "id": "S6",
+   "match": "notification-rule-processing-engine-grafana-codex#09",
+   "newGroup": null,
+   "reason": "Stale GrafanaGroupLoader doc still mentions Ruler endpoint."
+  },
+  {
+   "id": "S7",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "Silence drawer not rendered for prom-only rules."
+  },
+  {
+   "id": "S8",
+   "match": "notification-rule-processing-engine-grafana-codex#08",
+   "newGroup": null,
+   "reason": "Test named for menu options only checks the More button."
+  },
+  {
+   "id": "S9",
+   "match": "notification-rule-processing-engine-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Undefined-rule prom abilities report Duplicate for non-Grafana rules."
+  },
+  {
+   "id": "S10",
+   "match": "notification-rule-processing-engine-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Undefined-rule prom abilities report Duplicate."
+  },
+  {
+   "id": "S11",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "Silence drawer not rendered for prom-only rules."
+  },
+  {
+   "id": "S12",
+   "match": "notification-rule-processing-engine-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Delete item gated on rulerRule."
+  },
+  {
+   "id": "S13",
+   "match": "notification-rule-processing-engine-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Undefined-rule prom abilities report Duplicate."
+  },
+  {
+   "id": "S14",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "Silence drawer not rendered for prom-only rules."
+  }
+ ],
+ "feature-automatically-downsize-large-images-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "downsize defined twice; ResizeEmoji 5-arg call raises ArgumentError."
+  },
+  {
+   "id": "S2",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "80% passed to gifsicle --resize-fit for animated GIFs fails."
+  },
+  {
+   "id": "S3",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Duplicate downsize definition breaks ResizeEmoji."
+  },
+  {
+   "id": "S4",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Duplicate downsize definition breaks ResizeEmoji."
+  },
+  {
+   "id": "S5",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Duplicate downsize definition breaks ResizeEmoji."
+  },
+  {
+   "id": "S6",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Percentage dimension with gifsicle --resize-fit fails for animated GIFs."
+  },
+  {
+   "id": "S7",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Hardcoded 10 MB limit instead of the configured per-type setting (broad comment covering the client check)."
+  },
+  {
+   "id": "S8",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Client size check at line 182 hardcodes 10 MB instead of max_<type>_size_kb."
+  },
+  {
+   "id": "S9",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#sncc-01",
+   "newGroup": null,
+   "reason": "413 handler message hardcodes 10 MB maximum."
+  },
+  {
+   "id": "S10",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Duplicate downsize definition breaks ResizeEmoji."
+  },
+  {
+   "id": "S11",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Client-side check hardcodes 10 MB ignoring per-type setting."
+  },
+  {
+   "id": "S12",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Duplicate downsize definition breaks ResizeEmoji."
+  }
+ ],
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
+  {
+   "id": "S1",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "isinstance multiprocessing.Process false for SpawnProcess, hung flusher never killed."
+  },
+  {
+   "id": "S2",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#05",
+   "newGroup": null,
+   "reason": "Docstring says one process per shard."
+  },
+  {
+   "id": "S3",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#01",
+   "newGroup": null,
+   "reason": "wait_produce tagged shards instead of shard."
+  },
+  {
+   "id": "S4",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "newGroup": null,
+   "reason": "join() break skips terminate for remaining processes."
+  },
+  {
+   "id": "S5",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#01",
+   "newGroup": null,
+   "reason": "wait_produce tag key inconsistency."
+  },
+  {
+   "id": "S6",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#02",
+   "newGroup": null,
+   "reason": "time.sleep(0.1) is a no-op because sleep is monkeypatched."
+  },
+  {
+   "id": "S7",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#02",
+   "newGroup": null,
+   "reason": "time.sleep(0.1) is a no-op because sleep is monkeypatched."
+  },
+  {
+   "id": "S8",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#12",
+   "newGroup": null,
+   "reason": "test_flusher_processes_limit only counts shards instead of checking assignment."
+  },
+  {
+   "id": "S9",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "SpawnProcess isinstance check prevents killing hung process."
+  },
+  {
+   "id": "S10",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "SpawnProcess isinstance check prevents killing hung process."
+  },
+  {
+   "id": "S11",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "newGroup": null,
+   "reason": "join() break skips terminate."
+  }
+ ],
+ "database-performance-optimizations-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Error-level debug logs with full ID list in cleanup."
+  },
+  {
+   "id": "S2",
+   "match": "database-performance-optimizations-grafana-codex#08",
+   "newGroup": null,
+   "reason": "Cleanup ticker changed from 10 to 1 minute."
+  },
+  {
+   "id": "S3",
+   "match": "database-performance-optimizations-grafana-codex#06",
+   "newGroup": null,
+   "reason": "One placeholder per ID on MySQL/Postgres exceeds 65535 bind limit."
+  },
+  {
+   "id": "S4",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Error-level debug logs with ID list."
+  },
+  {
+   "id": "S5",
+   "match": "database-performance-optimizations-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "Max count delete again case no longer runs cleanup twice."
+  },
+  {
+   "id": "S6",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Routine progress logged at Error level."
+  },
+  {
+   "id": "S7",
+   "match": "database-performance-optimizations-grafana-codex#08",
+   "newGroup": null,
+   "reason": "Cleanup interval changed to 1 minute."
+  },
+  {
+   "id": "S8",
+   "match": "database-performance-optimizations-grafana-codex#08",
+   "newGroup": null,
+   "reason": "Cleanup interval changed to 1 minute."
+  },
+  {
+   "id": "S9",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Error-level debug logs with ID list."
+  },
+  {
+   "id": "S10",
+   "match": "database-performance-optimizations-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Bind-parameter limit for large batch sizes on MySQL/Postgres."
+  }
+ ],
+ "unified-storage-performance-optimizations-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "unified-storage-performance-optimizations-grafana-codex#02",
+   "newGroup": null,
+   "reason": "TotalDocs iterates cache unlocked while event goroutine may BuildIndex."
+  },
+  {
+   "id": "S2",
+   "match": "unified-storage-performance-optimizations-grafana-codex#01",
+   "newGroup": null,
+   "reason": "BuildIndex lock narrowed so the same index is built concurrently."
+  },
+  {
+   "id": "S3",
+   "match": "unified-storage-performance-optimizations-grafana-codex#sncc-01",
+   "newGroup": null,
+   "reason": "Postgres module integration test skipped instead of fixed."
+  },
+  {
+   "id": "S4",
+   "match": "unified-storage-performance-optimizations-grafana-codex#02",
+   "newGroup": null,
+   "reason": "TotalDocs unlocked map iteration race."
+  },
+  {
+   "id": "S5",
+   "match": "unified-storage-performance-optimizations-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Despite the bleve.go location, it describes the TotalDocs unlocked cache iteration race."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Synchronous Init in NewResourceServer makes construction blocking/failing; issue 03 is only about the uncancelled context."
+  },
+  {
+   "id": "S7",
+   "match": "unified-storage-performance-optimizations-grafana-codex#02",
+   "newGroup": null,
+   "reason": "TotalDocs iterates cache without lock."
+  }
+ ],
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "ASN1Decoder.readInteger negative length causes NegativeArraySizeException; different code than issue 07 (concatenatedRSToASN1DER)."
+  },
+  {
+   "id": "S2",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Throwaway ASN1Encoder instances in concatenatedRSToASN1DER."
+  },
+  {
+   "id": "S3",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-02",
+   "newGroup": null,
+   "reason": "getBouncyCastleProvider returns JDK default provider."
+  },
+  {
+   "id": "S4",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#10",
+   "newGroup": null,
+   "reason": "ES384/ES512 tests use a P-256 key."
+  },
+  {
+   "id": "S5",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#11",
+   "newGroup": null,
+   "reason": "Test only round-trips converters, never verifies against original signature."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "integerToBytes truncates oversized r/s, signature malleability; not in golden set."
+  },
+  {
+   "id": "S7",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#05",
+   "newGroup": null,
+   "reason": "Equal order() ties resolved by classpath order, FIPS may silently pick non-FIPS."
+  }
+ ],
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "should_block? writes stats inside validation; lost/non-atomic increments (fix moves stats out and makes them atomic)."
+  },
+  {
+   "id": "S2",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Case-sensitive blocked email lookup."
+  },
+  {
+   "id": "S3",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Case-sensitive blocked email lookup."
+  },
+  {
+   "id": "S4",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Server-rejected email shown with generic invalid text."
+  },
+  {
+   "id": "S5",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Non-atomic match_count increment loses concurrent updates."
+  },
+  {
+   "id": "S6",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Validation side effect increments match_count twice per signup."
+  }
+ ],
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Cleanup registered for literal alias \"alias\"."
+  },
+  {
+   "id": "S2",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#snapi-01",
+   "newGroup": null,
+   "reason": "remove() always queries idpDelegate.getByAlias."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Invalidation uses login predicate excluding non-public org IDPs, so per-org cached results go stale; different from issue 08 org-disabled enabled-state comparison."
+  },
+  {
+   "id": "S4",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Cleanup registered for literal alias \"alias\"."
+  }
+ ],
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "UpgradeTest enables rolling-updates only after null-strategy early return; not in golden set."
+  },
+  {
+   "id": "S2",
+   "match": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#03",
+   "newGroup": null,
+   "reason": "testFeatureNotEnabled only covers metadata subcommand, check guard untested."
+  }
+ ]
+}

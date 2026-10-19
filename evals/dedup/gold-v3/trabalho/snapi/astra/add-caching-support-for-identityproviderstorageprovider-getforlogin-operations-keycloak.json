@@ -1,0 +1,23 @@
+{
+ "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reports an extra delegate/database lookup on every IDP removal despite an available cached model. None of the golden issues describes this removal-path performance problem."
+  },
+  {
+   "id": "S2",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Describes cleanup targeting the literal alias \"alias\" instead of the created IDP aliases, leaving the providers unremoved."
+  },
+  {
+   "id": "S3",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Describes the same incorrect literal cleanup alias, including the repeated occurrence at line 425, which leaks created providers."
+  }
+ ]
+}

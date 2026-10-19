@@ -1,0 +1,41 @@
+{
+ "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reports an unguarded end_timestamp_precise lookup that crashes processing when the field is missing. No golden issue describes this problem."
+  },
+  {
+   "id": "S2",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#03",
+   "newGroup": null,
+   "reason": "Reports the same default SUM aggregation doubling duplicate payload scores and corrupting oldest-first eviction."
+  },
+  {
+   "id": "S3",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+   "newGroup": null,
+   "reason": "Reports the same ignored max_segment_spans option and hardcoded Lua limit of 1000."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Reports stale documentation describing plain sets and omitting scoring and eviction. Updating that documentation would not fix any golden issue."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reports the same missing-field KeyError at the end_timestamp_precise lookup as S1. No golden issue covers this problem."
+  },
+  {
+   "id": "S6",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#04",
+   "newGroup": null,
+   "reason": "Reports the same incompatible reuse of existing SET keys as sorted sets, causing WRONGTYPE failures during rollout."
+  }
+ ]
+}

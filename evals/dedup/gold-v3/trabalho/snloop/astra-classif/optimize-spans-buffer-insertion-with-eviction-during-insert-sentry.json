@@ -1,0 +1,12 @@
+{
+ "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+ "items": [
+  {
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#snloop-01",
+   "class": "TP",
+   "subclass": "nit",
+   "reason": "src/sentry/spans/buffer.py:39 and :58 still describe payload sets without scores or eviction, while the PR changes insertion to ZADD scored by end_timestamp_precise at :197-199. src/sentry/scripts/spans/add-buffer.lua:62-63 removes the lowest-scored entries above 1000 spans, confirming the documentation is outdated; this is a documentation-only nit with no behavioral impact.",
+   "severity": "low"
+  }
+ ]
+}

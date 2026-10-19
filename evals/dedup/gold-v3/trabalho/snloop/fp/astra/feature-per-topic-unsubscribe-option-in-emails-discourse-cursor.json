@@ -1,0 +1,17 @@
+{
+ "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
+ "items": [
+  {
+   "id": "S6",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "It repeats the rejected claim that other mailers enable add_unsubscribe_link without supplying unsubscribe_url, causing a missing-interpolation error."
+  },
+  {
+   "id": "S10",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#oph-02",
+   "newGroup": null,
+   "reason": "It repeats the rejected claim that MessageBuilder callers using add_unsubscribe_link without unsubscribe_url fail because the translation requires that interpolation argument."
+  }
+ ]
+}

@@ -1,0 +1,384 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "id": "S15",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Unused message variable in EventManager catch block; no rejected claim is about dead code."
+  }
+ ],
+ "add-guest-management-functionality-to-existing-bookings-cal-com": [
+  {
+   "id": "S11",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Raw server error message shown in toast; no rejected claim concerns error display."
+  }
+ ],
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": [
+  {
+   "id": "S14",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Empty-string fallback for the credential encryption key; not among the rejected claims."
+  }
+ ],
+ "feat-2fa-backup-codes-cal-com": [
+  {
+   "id": "S3",
+   "match": "feat-2fa-backup-codes-cal-com#06",
+   "newGroup": null,
+   "reason": "Same claim: un-awaited isChecked() Promise asserted with toBeTruthy, test always passes while backup-codes dialog stays open."
+  }
+ ],
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "S4",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-02",
+   "newGroup": null,
+   "reason": "Same claim: `<%- end if %>` leaves a dangling if modifier so following output becomes the condition (or SyntaxError)."
+  },
+  {
+   "id": "S7",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Same claim: spec expects TopicRetriever in the controller but the controller only enqueues the job, so the spec fails."
+  },
+  {
+   "id": "S9",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#25",
+   "newGroup": null,
+   "reason": "Same claim: request.referer interpolated into an inline JS string with only HTML escaping."
+  }
+ ],
+ "fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "group.users.delete with raw id raising RecordNotFound for non-members; no rejected claim covers remove_member lookup."
+  }
+ ],
+ "anonymous-add-configurable-device-limit-grafana-codex": [
+  {
+   "id": "S2",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Same claim: new int64 parameter on ProvideAnonDBStore breaks wire since wire.go still registers it."
+  }
+ ],
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+  {
+   "id": "S3",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Same claim: refactor dropped traceID from the Plugin Request Completed log."
+  }
+ ],
+ "unified-storage-performance-optimizations-grafana-codex": [
+  {
+   "id": "S6",
+   "match": "unified-storage-performance-optimizations-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Same claim: NewResourceServer now calls Init synchronously, blocking on index build and failing construction on init error."
+  }
+ ],
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "No rejected claims for this PR; unguarded getSubGroupsStream overloads is a new claim."
+  }
+ ],
+ "add-html-sanitizer-for-translated-message-resources-keycloak": [
+  {
+   "id": "S12",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#11",
+   "newGroup": null,
+   "reason": "Same claim: no test covers allowed tags passing verification."
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+   "newGroup": null,
+   "reason": "Same claim: with V1 and V2 enabled, client removal calls ClientPermissionsV2.setPermissionsEnabled which throws."
+  },
+  {
+   "id": "S5",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-03",
+   "newGroup": null,
+   "reason": "Same claim: test grants extra scopes (CONFIGURE) together with the map-roles scopes, so it would pass even if the specific scope check were broken."
+  }
+ ],
+ "fixing-re-authentication-with-passkeys-keycloak": [
+  {
+   "id": "S1",
+   "match": "fixing-re-authentication-with-passkeys-keycloak#07",
+   "newGroup": null,
+   "reason": "Same claim: after typing a username the password page renders passkey data only for users with passkeys, disclosing account existence/credential type to unauthenticated visitors (UsernamePasswordForm path)."
+  }
+ ],
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "S3",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#12",
+   "newGroup": null,
+   "reason": "Same claim: per-org getForLogin results include non-public org IDPs, so the BROKER_PUBLIC-gated login predicate misses invalidations."
+  }
+ ],
+ "replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Docstrings of validate_timestamp/validate_age misdescribe the checks; no rejected claim about this."
+  }
+ ],
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
+  {
+   "id": "S6",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#08",
+   "newGroup": null,
+   "reason": "Same claim: test_to_dict asserts queued is not None, always true."
+  }
+ ],
+ "github-oauth-security-enhancement-sentry": [
+  {
+   "id": "S10",
+   "match": "github-oauth-security-enhancement-sentry#04",
+   "newGroup": null,
+   "reason": "Same claim: OAuth state compared to pipeline.signature with non-constant-time !=."
+  },
+  {
+   "id": "S12",
+   "match": "github-oauth-security-enhancement-sentry#11",
+   "newGroup": null,
+   "reason": "Same claim: test_github_user_mismatch asserts only the generic error message produced by every error path."
+  }
+ ],
+ "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Misleading comment saying commits instead of check-ins; not a rejected claim."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Unused logger definitions; not a rejected claim."
+  }
+ ],
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": [
+  {
+   "id": "S5",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#snapi-01",
+   "newGroup": null,
+   "reason": "Same claim: getSlots relies on optional override.timeZone, undefined gives wrong offset."
+  },
+  {
+   "id": "S6",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: new +6:00 override test expects same slots as old logic and would pass if the fix were reverted."
+  }
+ ],
+ "async-import-of-the-appstore-packages-cal-com": [
+  {
+   "id": "S8",
+   "match": "async-import-of-the-appstore-packages-cal-com#03",
+   "newGroup": null,
+   "reason": "Same claim: getCalendarCredentials returns an un-awaited Promise for calendar to consumers."
+  }
+ ],
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+  {
+   "id": "S4",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#12",
+   "newGroup": null,
+   "reason": "Same claim: immediateDelete branch cancels SendGrid but neither deletes nor marks the WorkflowReminder row."
+  },
+  {
+   "id": "S5",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: immediateDelete returns without deleting the row and callers no longer delete it, orphaning rows."
+  },
+  {
+   "id": "S7",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#oph-02",
+   "newGroup": null,
+   "reason": "Same claim: reschedule path cancels immediately and leaves a stale scheduled WorkflowReminder row."
+  }
+ ],
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "googleChannelId added to shared user select may be exposed to client; no rejected claim about it."
+  }
+ ],
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": [
+  {
+   "id": "S6",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Same claim: other mailers with add_unsubscribe_link but no unsubscribe_url raise MissingInterpolationArgument."
+  },
+  {
+   "id": "S10",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#oph-02",
+   "newGroup": null,
+   "reason": "Same claim: MessageBuilder callers without unsubscribe_url raise a missing-interpolation error."
+  }
+ ],
+ "advanced-query-processing-architecture-grafana-codex": [
+  {
+   "id": "S4",
+   "match": "advanced-query-processing-architecture-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Same claim: hardcoded applyTemplateVariables call count makes the test brittle."
+  }
+ ],
+ "advanced-sql-analytics-framework-grafana-codex": [
+  {
+   "id": "S5",
+   "match": "advanced-sql-analytics-framework-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Same claim: rejection message says not implemented though the guard is a feature-flag check."
+  },
+  {
+   "id": "S7",
+   "match": "advanced-sql-analytics-framework-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Same claim: stub DB always returns not implemented so TablesList/NewSQLCommand parsing always fails."
+  },
+  {
+   "id": "S9",
+   "match": "advanced-sql-analytics-framework-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Same claim: go-duck DB replaced by a stub that always errors, so SQL parsing and execution always fail."
+  },
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Existing tests in pkg/expr/sql_command_test.go break against the stub; the rejected oph-03 is about parser_test.go, a different place."
+  }
+ ],
+ "authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "authzservice-improve-authz-caching-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "Same claim: denial cache checked first and never invalidated, so new resources/grants stay denied for the TTL."
+  }
+ ],
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: readInteger passes -1 from readLength to read(), throwing NegativeArraySizeException instead of IOException."
+  },
+  {
+   "id": "S6",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-03",
+   "newGroup": null,
+   "reason": "Same claim: integerToBytes silently truncates oversized r/s, enabling signature malleability."
+  }
+ ],
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "hasPermission dereferences a possibly null type resource (NPE); no rejected claim about it."
+  },
+  {
+   "id": "S4",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#10",
+   "newGroup": null,
+   "reason": "Same claim: testManageGroupMembership cannot show the group-level manage-membership permission is what allows the call."
+  },
+  {
+   "id": "S8",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: removing the canView filter in searchForUser gives an unrestricted user list when no group grants exist."
+  },
+  {
+   "id": "S11",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Same null type resource NPE in hasPermission as S3."
+  }
+ ],
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Same claim: rolling-updates feature not enabled for the null update strategy in UpgradeTest."
+  }
+ ],
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "S1",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#07",
+   "newGroup": null,
+   "reason": "Same claim: Optional.get() on getCredential without isPresent throws NoSuchElementException."
+  },
+  {
+   "id": "S2",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: plaintext recovery codes sent to user storage via updateCredential while local path hashes them."
+  },
+  {
+   "id": "S3",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: raw recovery codes handed unhashed to the federated provider."
+  }
+ ],
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": [
+  {
+   "id": "S3",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#01",
+   "newGroup": null,
+   "reason": "Same claim: truthiness check drops a client_sample_rate of 0."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Inline comments say 1 event while assertions expect 10; not a rejected claim."
+  }
+ ],
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "id": "S1",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#07",
+   "newGroup": null,
+   "reason": "Same claim: missing end_timestamp_precise raises KeyError and aborts the batch."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Stale module docstring describing span-buf keys as plain sets; not a rejected claim."
+  },
+  {
+   "id": "S5",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#07",
+   "newGroup": null,
+   "reason": "Same claim: hard key lookup of end_timestamp_precise raises KeyError in process_batch."
+  }
+ ]
+}

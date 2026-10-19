@@ -1,0 +1,41 @@
+{
+ "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Describes the unguarded nil TopicUser lookup causing NoMethodError and a 500 in unsubscribe."
+  },
+  {
+   "id": "S2",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes the unsubscribe GET request changing notification preferences without CSRF protection."
+  },
+  {
+   "id": "S3",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Describes unsubscribe dereferencing a missing TopicUser row and returning a 500."
+  },
+  {
+   "id": "S4",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Describes the same missing TopicUser nil dereference in the unsubscribe action."
+  },
+  {
+   "id": "S5",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#11",
+   "newGroup": null,
+   "reason": "Identifies the same misspelled stopNotificiationsText property and requests its correction."
+  },
+  {
+   "id": "S6",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Describes the missing TopicUser row causing an unguarded notification_level call to raise NoMethodError."
+  }
+ ]
+}

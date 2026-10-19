@@ -1,0 +1,41 @@
+{
+ "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes client removal throwing UnsupportedOperationException when both V1 and V2 are enabled. Issue #01 concerns skipped cleanup when V1 is disabled; fixing that gate does not fix this exception."
+  },
+  {
+   "id": "S2",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#08",
+   "newGroup": null,
+   "reason": "Identifies the same incorrect boolean-return Javadoc on the two void requireView methods."
+  },
+  {
+   "id": "S3",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#09",
+   "newGroup": null,
+   "reason": "Identifies the same missing global MANAGE check in parameterless canView(), with additional consequences for callers."
+  },
+  {
+   "id": "S4",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#05",
+   "newGroup": null,
+   "reason": "Identifies the same unused private getEvaluationContext method; the additional unused members do not change the match."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Describes insufficient isolation of role-mapping scopes in testMapRolesAndCompositesOnlyOneClient. This differs from #11's default-scope removal assertion being satisfied by a preceding forbidden read."
+  },
+  {
+   "id": "S6",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-02",
+   "newGroup": null,
+   "reason": "The broader unsupported-method regression explicitly includes canExchangeTo throwing under V2. AbstractTokenExchangeProvider still calls that method, confirming the token-exchange failure described by #opa-02."
+  }
+ ]
+}

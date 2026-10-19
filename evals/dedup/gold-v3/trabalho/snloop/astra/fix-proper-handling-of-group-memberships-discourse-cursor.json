@@ -1,0 +1,59 @@
+{
+ "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes the same off-by-one totalPages calculation that enables navigation to an empty page when the member count is an exact multiple of the limit."
+  },
+  {
+   "id": "S2",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-01",
+   "newGroup": null,
+   "reason": "Describes the same failure to skip existing members when adding users, causing a unique-index violation and a 500 response."
+  },
+  {
+   "id": "S3",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02",
+   "newGroup": null,
+   "reason": "Describes the same unbounded, unvalidated limit parameter that permits oversized requests and invalid limits."
+  },
+  {
+   "id": "S4",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes the same totalPages overcount for exact multiples of the page size, exposing a nonexistent empty page."
+  },
+  {
+   "id": "S5",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes the same off-by-one page count that leaves Next enabled on the actual last page."
+  },
+  {
+   "id": "S6",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes the same floor-plus-one calculation that creates an extra empty page for exact multiples of the limit."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims removal fails when the requested membership is already absent. This differs from #10's stale primary_group_id after removal; handling absent memberships would not fix that cleanup problem."
+  },
+  {
+   "id": "S8",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#12",
+   "newGroup": null,
+   "reason": "Describes the same removal spec using PUT despite the production route requiring DELETE."
+  },
+  {
+   "id": "S9",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Describes the same public member-list truncation caused by the default 50-member limit and missing public pagination."
+  }
+ ]
+}

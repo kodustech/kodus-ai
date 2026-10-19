@@ -1,0 +1,65 @@
+{
+ "caseId": "advanced-sql-analytics-framework-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "Reports the always-false predicate that rejects SQL expressions even when the flag is enabled. It also mentions the inverted variable."
+  },
+  {
+   "id": "S2",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "Describes the same unconditional rejection caused by both branches returning false, with additional detail about the misleading variable."
+  },
+  {
+   "id": "S3",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "Identifies the always-false predicate and resulting rejection despite an enabled feature flag."
+  },
+  {
+   "id": "S4",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "Includes the known problem that the predicate always returns false and ignores the flag, alongside naming concerns."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Targets the reader's error-message wording. Changing that message would not fix the always-false predicate or the inverted variable."
+  },
+  {
+   "id": "S6",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "Reports precisely the always-false predicate that causes every SQL expression query to be rejected regardless of the flag."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Reports SQL consumers encountering the replacement stub's unconditional errors without explicit unavailable-engine handling. This is separate from the reader gate and the stale duckDB name."
+  },
+  {
+   "id": "S8",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "Describes ReadQuery rejecting SQL expressions because the predicate returns false on both paths, including when the flag is enabled."
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Broadly reports the unavailable stub engine breaking its consumers, including the same TablesList/NewSQLCommand failure described by S7."
+  },
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Claims existing tests fail and need updating, which is distinct from the golden issues. The claim is false at this head: TestNewCommand immediately calls t.Skip()."
+  }
+ ]
+}

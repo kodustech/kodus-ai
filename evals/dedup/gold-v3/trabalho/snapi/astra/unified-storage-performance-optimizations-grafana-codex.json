@@ -1,0 +1,23 @@
+{
+ "caseId": "unified-storage-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "unified-storage-performance-optimizations-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Describes the same loss of build serialization: concurrent builds for one key can collide on the index directory and overwrite the cached index."
+  },
+  {
+   "id": "S2",
+   "match": "unified-storage-performance-optimizations-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Describes the same concurrent same-key index builds caused by locking only the final cache write."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Concerns repeated Init calls and callers adapting to eager initialization. Fixing those concerns would not fix the missing context cancellation on initialization failure described by issue #03."
+  }
+ ]
+}

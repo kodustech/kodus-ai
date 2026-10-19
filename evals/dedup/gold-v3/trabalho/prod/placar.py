@@ -11,17 +11,19 @@ g = json.load(open(f'{V3}/golden.json'))['prs']
 st = {k: t['status'] for p in json.load(open(f'{V3}/verificacao-upstream.json'))['prs'].values() for k, t in p['tps'].items()}
 valido = {r['issueId'] for l in g.values() for r in l if r['class'] == 'TP' and not r['subclass'] and st[r['issueId']] not in FPST}
 mapa = json.load(open(f'{V3}/sugestoes.json'))['sugestoes']
+aluc = {r['issueId'] for l in json.load(open(f'{V3}/fps-conhecidos.json'))['prs'].values() for r in l if r['subclass'] == 'hallucination'}
 out = {}
 for k, ch in CH.items():
     IN = json.load(open(f'{AQUI}/{k}/juiz-in.json'))
-    vistos, tot = set(), 0
+    vistos, tot, al = set(), 0, 0
     for c, p in IN.items():
         for s in p['sugestoes']:
             tot += 1
             iss = mapa[f'{ch}|{c}|{s["id"]}']
             if iss in valido: vistos.add(iss)
+            al += iss in aluc
     tp = len(vistos); R = tp / len(valido); P = tp / tot if tot else 0
     f = lambda b: (1 + b * b) * P * R / (b * b * P + R) if P + R else 0
-    out[k] = {'comentarios': tot, 'tp': tp, 'fp': tot - tp, 'totalTp': len(valido), 'recall': round(100 * R, 1), 'precisao': round(100 * P, 1), 'f1': round(100 * f(1), 1), 'f2': round(100 * f(2), 1)}
+    out[k] = {'comentarios': tot, 'tp': tp, 'fp': tot - tp, 'fp_alucinacao': al, 'totalTp': len(valido), 'recall': round(100 * R, 1), 'precisao': round(100 * P, 1), 'f1': round(100 * f(1), 1), 'f2': round(100 * f(2), 1)}
     print(k, out[k])
 json.dump(out, open(sys.argv[1], 'w'), indent=1)

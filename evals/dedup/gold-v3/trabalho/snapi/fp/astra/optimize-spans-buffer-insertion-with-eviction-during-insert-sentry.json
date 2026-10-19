@@ -1,0 +1,11 @@
+{
+ "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-02",
+   "newGroup": null,
+   "reason": "Asserts the same direct lookup of end_timestamp_precise in process_batch raises KeyError when the field is missing and fails the entire consumer batch."
+  }
+ ]
+}

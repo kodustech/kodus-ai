@@ -1,0 +1,47 @@
+{
+ "caseId": "database-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Describes the same Error-level debug logs dumping full ID lists during normal cleanup batches."
+  },
+  {
+   "id": "S2",
+   "match": "database-performance-optimizations-grafana-codex#08",
+   "newGroup": null,
+   "reason": "Describes the same ticker change from 10 minutes to 1 minute, increasing cleanup frequency and database load."
+  },
+  {
+   "id": "S3",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Targets the same cleanup debug logs emitting full ID lists and SQL conditions at Error level; removing these logs fixes the golden issue."
+  },
+  {
+   "id": "S4",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Describes the same routine cleanup logging at Error level with full ID slices, flooding error logs despite successful execution."
+  },
+  {
+   "id": "S5",
+   "match": "database-performance-optimizations-grafana-codex#08",
+   "newGroup": null,
+   "reason": "Identifies the same change to a one-minute cleanup ticker and proposes restoring the ten-minute interval."
+  },
+  {
+   "id": "S6",
+   "match": "database-performance-optimizations-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Describes the same unbounded per-ID placeholders in deleteByIDs causing PostgreSQL and MySQL cleanup failures above 65535 parameters."
+  },
+  {
+   "id": "S7",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Targets the same normal-progress cleanup logs emitted at Error level, including the always-nil err field."
+  }
+ ]
+}

@@ -1,0 +1,77 @@
+{
+ "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "The migration dereferences an empty category query result, aborting before the fallback can run."
+  },
+  {
+   "id": "S2",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "It includes the same mixed-case hostname comparison bug as #03. The broader comment also describes the port mismatch in #14."
+  },
+  {
+   "id": "S3",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "The normalization callback calls sub! on a nil host, raising instead of returning a validation error."
+  },
+  {
+   "id": "S4",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Update and destroy dereference a nil lookup result for an unknown host ID, returning a 500."
+  },
+  {
+   "id": "S5",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "The lookup lowercases only the stored hostname, so mixed-case incoming hosts fail to match."
+  },
+  {
+   "id": "S6",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "The blank-host test passes because other prerequisites are false and therefore does not test its named condition."
+  },
+  {
+   "id": "S7",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Missing category settings produce empty query results that the migration dereferences without checking."
+  },
+  {
+   "id": "S8",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "The category and embeddable-host fabricator files contain each other's definitions."
+  },
+  {
+   "id": "S9",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "The blank-host test name describes a removed condition, while the assertion passes because there is no topic embed."
+  },
+  {
+   "id": "S10",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "The migration accesses the first category result without checking whether it exists, crashing before the fallback."
+  },
+  {
+   "id": "S11",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "The before-validation callback invokes sub! on a nil host without a guard."
+  },
+  {
+   "id": "S12",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Both controller actions use a nullable host lookup without handling a missing record, causing a 500."
+  }
+ ]
+}

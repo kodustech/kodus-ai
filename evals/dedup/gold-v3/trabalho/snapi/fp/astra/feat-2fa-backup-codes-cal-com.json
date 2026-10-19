@@ -1,0 +1,11 @@
+{
+ "caseId": "feat-2fa-backup-codes-cal-com",
+ "items": [
+  {
+   "id": "S6",
+   "match": "feat-2fa-backup-codes-cal-com#03",
+   "newGroup": null,
+   "reason": "It repeats the rejected claim that the security modal calls the changed disable API with only two arguments. That caller uses a different, unchanged API module."
+  }
+ ]
+}

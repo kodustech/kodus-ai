@@ -1,0 +1,11 @@
+{
+ "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+ "items": [
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This claims getSlots mishandles overrides with a missing optional timeZone. The rejected timezone claim concerns checkIfIsAvailable using the organizer\u2019s timezone instead of the override owner\u2019s timezone, a different cause and code location."
+  }
+ ]
+}

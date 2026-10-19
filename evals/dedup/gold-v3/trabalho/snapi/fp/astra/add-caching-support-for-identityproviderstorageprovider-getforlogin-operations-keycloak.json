@@ -1,0 +1,11 @@
+{
+ "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The comment concerns the newly unconditional delegate lookup in remove(), which adds a lookup even when the model is cached. This differs from #09\u2019s null-dereference claim and #06\u2019s per-ID lookups in getForLogin()."
+  }
+ ]
+}

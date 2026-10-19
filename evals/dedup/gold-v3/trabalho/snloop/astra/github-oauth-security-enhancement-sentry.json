@@ -1,0 +1,77 @@
+{
+ "caseId": "github-oauth-security-enhancement-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "github-oauth-security-enhancement-sentry#06",
+   "newGroup": null,
+   "reason": "Describes the same ownership-check bypass when a missing Integration row causes the pipeline to advance without verifying the installer."
+  },
+  {
+   "id": "S2",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "Describes the same unguarded sender metadata lookup causing KeyError and a 500 when sender is absent."
+  },
+  {
+   "id": "S3",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "Describes the same KeyError from directly indexing optional sender metadata in the ownership check."
+  },
+  {
+   "id": "S4",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "Describes the same missing-sender metadata crash and proposes handling the absence as a verification failure."
+  },
+  {
+   "id": "S5",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "Describes the same unhandled KeyError when the ownership check reads metadata without a sender entry."
+  },
+  {
+   "id": "S6",
+   "match": "github-oauth-security-enhancement-sentry#05",
+   "newGroup": null,
+   "reason": "Describes the same unhandled transport failures from the OAuth token request occurring outside the try block."
+  },
+  {
+   "id": "S7",
+   "match": "github-oauth-security-enhancement-sentry#01",
+   "newGroup": null,
+   "reason": "Describes the same loss of translation extraction caused by passing a variable to gettext instead of marking the short-message literals."
+  },
+  {
+   "id": "S8",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "Describes the same unconditional sender metadata lookup that crashes when sender is missing."
+  },
+  {
+   "id": "S9",
+   "match": "github-oauth-security-enhancement-sentry#03",
+   "newGroup": null,
+   "reason": "Describes the same predictable pipeline signature used as OAuth state instead of a random per-attempt nonce."
+  },
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Objects to the timing behavior of the state comparison, not the deterministic state value. Changing the comparison to constant-time would not fix issue #03."
+  },
+  {
+   "id": "S11",
+   "match": "github-oauth-security-enhancement-sentry#10",
+   "newGroup": null,
+   "reason": "Identifies the same incorrect OAuth state in test_installation_not_found, which makes the test fail before reaching its intended installation-not-found path."
+  },
+  {
+   "id": "S12",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Claims insufficient branch-specific assertions in test_github_user_mismatch, a different test that supplies the correct OAuth state. Fixing those assertions would not fix the incorrect state in test_installation_not_found."
+  }
+ ]
+}

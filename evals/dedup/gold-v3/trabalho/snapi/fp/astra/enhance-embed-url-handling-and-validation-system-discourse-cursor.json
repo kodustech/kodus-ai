@@ -1,0 +1,11 @@
+{
+ "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#25",
+   "newGroup": null,
+   "reason": "Both claim that interpolating request.referer into the embed layout\u2019s inline JavaScript string permits quote-based breakout and script execution. The suggested origin validation and escaping fix does not change the underlying claim."
+  }
+ ]
+}

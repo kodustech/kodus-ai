@@ -1,0 +1,23 @@
+{
+ "caseId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Both describe website_name exposing protected website data because it is absent from untrusted_attributes."
+  },
+  {
+   "id": "S2",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Both describe the sibling-domain comparison incorrectly matching unrelated sites under shared public suffixes and displaying their paths."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This requests test coverage for the sibling-subdomain branch without identifying a behavioral defect. Adding that spec would not fix any golden-set issue."
+  }
+ ]
+}

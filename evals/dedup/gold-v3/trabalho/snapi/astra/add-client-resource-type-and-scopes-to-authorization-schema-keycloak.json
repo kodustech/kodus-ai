@@ -1,0 +1,29 @@
+{
+ "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reports client deletion throwing UnsupportedOperationException when both V1 and V2 are enabled. Issue #01 concerns skipped cleanup and orphaned permissions when V1 is disabled, which is a different problem."
+  },
+  {
+   "id": "S2",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#08",
+   "newGroup": null,
+   "reason": "Reports the incorrect boolean-return Javadoc on void requireView(), exactly as described in issue #08."
+  },
+  {
+   "id": "S3",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#08",
+   "newGroup": null,
+   "reason": "Reports the incorrect boolean-return Javadoc on void requireViewClientScopes(), exactly as described in issue #08."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reports the same UnsupportedOperationException during client deletion with both features enabled as S1. This differs from issue #01's skipped cleanup when V1 is disabled."
+  }
+ ]
+}

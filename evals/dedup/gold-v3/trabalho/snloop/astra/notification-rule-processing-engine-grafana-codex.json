@@ -1,0 +1,89 @@
+{
+ "caseId": "notification-rule-processing-engine-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "notification-rule-processing-engine-grafana-codex#02",
+   "newGroup": null,
+   "reason": "The Delete item still requires rulerRule, so it disappears for prom-only list-view rules."
+  },
+  {
+   "id": "S2",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "The silence drawer requires a ruler alerting rule, so clicking Silence for prom-only list-view rules opens nothing."
+  },
+  {
+   "id": "S3",
+   "match": "notification-rule-processing-engine-grafana-codex#03",
+   "newGroup": null,
+   "reason": "An undefined Grafana prom rule still grants Duplicate support, allowing Grafana create permission to enable Duplicate for datasource rules."
+  },
+  {
+   "id": "S4",
+   "match": "notification-rule-processing-engine-grafana-codex#07",
+   "newGroup": null,
+   "reason": "The Grafana branch of the filtered list omits key on GrafanaRuleListItem, breaking stable React reconciliation."
+  },
+  {
+   "id": "S5",
+   "match": "notification-rule-processing-engine-grafana-codex#05",
+   "newGroup": null,
+   "reason": "The prom abilities incorrectly use the alerting-rule predicate for actions that should also support Grafana recording rules."
+  },
+  {
+   "id": "S6",
+   "match": "notification-rule-processing-engine-grafana-codex#09",
+   "newGroup": null,
+   "reason": "GrafanaGroupLoader documentation still references Ruler data after removal of the ruler query."
+  },
+  {
+   "id": "S7",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "The silence drawer remains gated on a ruler alerting rule, making Silence ineffective for prom-only list-view rules."
+  },
+  {
+   "id": "S8",
+   "match": "notification-rule-processing-engine-grafana-codex#08",
+   "newGroup": null,
+   "reason": "The test promises action-menu coverage but only checks the More button without opening or asserting menu options."
+  },
+  {
+   "id": "S9",
+   "match": "notification-rule-processing-engine-grafana-codex#03",
+   "newGroup": null,
+   "reason": "The undefined-rule path reports Duplicate as supported and leaks Grafana create permission into cloud-rule menu abilities."
+  },
+  {
+   "id": "S10",
+   "match": "notification-rule-processing-engine-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Duplicate remains supported for an undefined Grafana prom rule, enabling it for cloud rules through the OR with ruler abilities."
+  },
+  {
+   "id": "S11",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "Prom-only list-view rules expose Silence but cannot render its ruler-gated drawer."
+  },
+  {
+   "id": "S12",
+   "match": "notification-rule-processing-engine-grafana-codex#02",
+   "newGroup": null,
+   "reason": "The rulerRule rendering guard hides Delete for list-view rules despite an allowed prom-based delete ability."
+  },
+  {
+   "id": "S13",
+   "match": "notification-rule-processing-engine-grafana-codex#03",
+   "newGroup": null,
+   "reason": "An undefined rule yields supported Duplicate abilities, allowing Grafana permissions to enable Duplicate on non-Grafana rules."
+  },
+  {
+   "id": "S14",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "Silence is enabled from prom abilities, but its drawer requires a ruler rule and never opens in the prom-only list view."
+  }
+ ]
+}

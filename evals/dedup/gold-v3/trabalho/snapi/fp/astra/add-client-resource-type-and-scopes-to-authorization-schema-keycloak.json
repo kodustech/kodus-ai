@@ -1,0 +1,17 @@
+{
+ "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+   "newGroup": null,
+   "reason": "It asserts the same client-deletion failure: with V1 and V2 enabled, the ClientRemovedEvent listener calls ClientPermissionsV2.setPermissionsEnabled, which throws UnsupportedOperationException."
+  },
+  {
+   "id": "S4",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+   "newGroup": null,
+   "reason": "It asserts the same failure from the V1-gated deletion listener dispatching to the throwing V2 setPermissionsEnabled implementation when both features are enabled."
+  }
+ ]
+}

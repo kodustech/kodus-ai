@@ -1,0 +1,11 @@
+{
+ "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "S1 alleges account-dependent passkey rendering in UsernamePasswordForm.challenge after a failed password, because challenge runs before clearUser(). The rejected disclosure claims concern credential IDs exposed by PasswordForm in the username-first flow, a different location and cause."
+  }
+ ]
+}

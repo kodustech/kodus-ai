@@ -1,0 +1,19 @@
+{
+ "caseId": "replays-self-serve-bulk-delete-system-sentry",
+ "items": [
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#snapi-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "The hook does return undefined initially at static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx:59, but its only production consumer safely spreads both results into objects at static/app/views/explore/contexts/traceItemAttributeContext.tsx:65 and :74. Spreading undefined is valid, and downstream consumers receive populated objects, so the claimed crash is not supported.",
+   "severity": "high"
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#snapi-02",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "The default is explicitly 'off' at src/sentry/projectoptions/defaults.py:205 and src/sentry/constants.py:724, with updated expectations at tests/sentry/api/endpoints/test_project_details.py:2068 and :2076. Commit 668229d196e0 deliberately reverts the earlier default-enablement change; disabling automation for unset options is intended behavior, not an established defect.",
+   "severity": "high"
+  }
+ ]
+}

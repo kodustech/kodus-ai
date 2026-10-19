@@ -1,0 +1,19 @@
+{
+ "caseId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry",
+ "items": [
+  {
+   "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#snloop-01",
+   "class": "TP",
+   "subclass": "nit",
+   "reason": "src/sentry/monitors/logic/incidents.py:51 says \u201ccommits,\u201d but lines 40\u201352 query and inspect MonitorCheckIn records. The PR relocates this inaccurate comment into the new module; it is a wording defect with no behavioral effect.",
+   "severity": "low"
+  },
+  {
+   "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#snloop-02",
+   "class": "TP",
+   "subclass": "nit",
+   "reason": "The PR adds unused logger definitions at src/sentry/monitors/logic/incidents.py:11 and src/sentry/monitors/logic/incident_occurrence.py:25; neither module references its logger afterward. These are dead declarations with no user-visible effect.",
+   "severity": "low"
+  }
+ ]
+}

@@ -1,0 +1,2782 @@
+{
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "9fde0e906897cc0f4f71793f647dd629faba3317",
+  "base": "bc89fe00ea84d20bedcec782f0701b9711dc8201",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     97,
+     101
+    ],
+    "texto": "WHAT: `parseRefreshTokenResponse` returns a zod SafeParse result ({success, data}), but the Google service assigns it directly to `key` and writes it to the credential. WHY: the stored credential becomes `{success:true,data:{...}}` instead of the token fields, so every later `googleCredentialSchema.parse(credential.key)` fails and the Google calendar integration breaks after the first refresh. HOW: take `.data` from the parse result, and when sync is enabled read the token from `await res.json()` instead of `res.data`."
+   },
+   {
+    "id": "S2",
+    "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+    "lines": [
+     5,
+     11
+    ],
+    "texto": "WHAT: `[z.string().toString()]` and `[z.string().optional().toString()]` are computed object keys that evaluate to fixed literal strings such as \"ZodString\", not wildcard keys. WHY: when credential sync is enabled, the schema requires a numeric property literally named \"ZodString\", so every refreshed response fails with \"Invalid refreshed tokens were returned\". HOW: use `z.object({access_token: z.string()}).passthrough()`, and check expiry separately if it is needed."
+   },
+   {
+    "id": "S3",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     85,
+     94
+    ],
+    "texto": "WHAT: `refreshOAuthTokens` is passed `credentialId` as its third argument, which is the Cal.com userId. WHY: with sync enabled, the sync endpoint is asked for the wrong user's tokens, because the credential id is treated as a user id. HOW: pass `credential.userId`."
+   },
+   {
+    "id": "S4",
+    "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+    "lines": [
+     75,
+     99
+    ],
+    "texto": "WHAT: the Salesforce service now always calls the Salesforce token endpoint and updates the DB inside the connection setup, bypassing `refreshOAuthTokens`. WHY: this adds a network refresh plus a write on every connection, and it ignores credential sync. When sync is on, the stub `refresh_token` is used and the parse result may not match the stored shape. HOW: route the call through `refreshOAuthTokens` and only refresh when the token is expired."
+   },
+   {
+    "id": "S5",
+    "file": "apps/web/pages/api/webhook/app-credential.ts",
+    "lines": [
+     24,
+     29
+    ],
+    "texto": "The webhook secret is compared with `!==`, which is not constant-time and leaks timing information that can be used to recover the secret. Compare the header and secret using crypto.timingSafeEqual on equal-length buffers (for example, hash both with SHA-256 first), and reject non-string header values."
+   },
+   {
+    "id": "S6",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     97,
+     100
+    ],
+    "texto": "parseRefreshTokenResponse returns a zod safeParse result ({success, data}), but the old code stored the value from googleCredentialSchema.parse. Now `key` is the wrapper object, so the credential key saved to the DB becomes {success:true,data:{...}} and Google auth breaks on the next use. Use the `.data` of the result (after checking success) as the key."
+   },
+   {
+    "id": "S7",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     85,
+     94
+    ],
+    "texto": "refreshOAuthTokens's third parameter is the Cal.com userId, but this call passes `credentialId`. When credential sync is enabled, the sync endpoint is asked for the wrong user (a credential id), so tokens for the wrong user or none are returned. Pass the credential's userId instead."
+   },
+   {
+    "id": "S8",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     97,
+     100
+    ],
+    "texto": "parseRefreshTokenResponse returns a zod safeParse result ({success, data}), but it is stored directly as the credential key. The key then becomes {success:true,data:{...}} and loses refresh_token and access_token at the top level, so later Google auth breaks. Store the parsed `.data` and check `.success`."
+   },
+   {
+    "id": "S9",
+    "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+    "lines": [
+     5,
+     11
+    ],
+    "texto": "The computed keys `[z.string().toString()]` evaluate to a literal string such as \"[object Object]\", not a wildcard. The schema therefore requires a numeric property with that name, so every parse fails when credential sync is enabled and throws \"Invalid refreshed tokens were returned\". Use `.passthrough()` and an explicit expiry check instead."
+   },
+   {
+    "id": "S10",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     85,
+     94
+    ],
+    "texto": "credentialId is passed where refreshOAuthTokens expects a userId. With sync enabled, the credential id is sent to the sync endpoint as calcomUserId, so tokens are fetched for the wrong user or the call fails. Pass the credential's userId."
+   },
+   {
+    "id": "S11",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     97,
+     100
+    ],
+    "texto": "parseRefreshTokenResponse returns a zod SafeParse result ({success, data}), not the parsed key. Previously `googleCredentialSchema.parse(...)` returned the credential object. Now `{ key }` stores the wrapper object, which corrupts the stored Google credential. Use `.data` from the result."
+   },
+   {
+    "id": "S12",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     85,
+     94
+    ],
+    "texto": "The third parameter of refreshOAuthTokens is now `userId`, but a credentialId is passed. In sync mode the sync endpoint receives the credential id as calcomUserId, so it looks up the wrong user's credentials. Pass the credential's userId."
+   },
+   {
+    "id": "S13",
+    "file": "packages/app-store/zohocrm/lib/CalendarService.ts",
+    "lines": [
+     204,
+     217
+    ],
+    "texto": "refreshOAuthTokens returns a raw fetch Response when credential sync is enabled, but this consumer (like zoho-bigin and hubspot) expects an axios response and reads `.data.error`. With sync enabled, `.data` is undefined and this throws a TypeError. The sync path must return the shape the caller expects, or the caller must parse the Response."
+   },
+   {
+    "id": "S14",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     85,
+     94
+    ],
+    "texto": "refreshOAuthTokens takes a `userId` parameter, but this call passes `credentialId` (credential.id). With credential sharing enabled, the sync endpoint receives the credential id as calcomUserId, so the wrong user's credentials may be fetched. Pass the credential's userId instead."
+   },
+   {
+    "id": "S15",
+    "file": "packages/app-store/_utils/oauth/createOAuthAppCredential.ts",
+    "lines": [
+     12,
+     15
+    ],
+    "texto": "The JSDoc says `appData.type` is \"the app slug\", but it is used as the credential `type` (e.g. \"zoom_video\"), not the slug. The doc misleads callers."
+   },
+   {
+    "id": "S16",
+    "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "lines": [
+     85,
+     94
+    ],
+    "texto": "refreshOAuthTokens's third parameter is userId, but credentialId (credential.id) is passed. With credential sync enabled, the sync endpoint is asked for the wrong user's tokens, because a credential id is not a user id."
+   },
+   {
+    "id": "S17",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     97,
+     100
+    ],
+    "texto": "parseRefreshTokenResponse returns a zod safeParse result ({success, data}), not the parsed data. The result object is written to credential.key, which corrupts the stored credential. It also parses the old googleCredentials rather than the refreshed token."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01",
+    "descricao": "The new app-credential webhook checks its shared secret with a plain !== string comparison instead of a constant-time comparison, leaking timing information about the secret.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       23,
+       29
+      ],
+      "texto": "Direct !== comparison of webhook secret leaks via timing attack. Use constant-time comparison (e.g., crypto.timingSafeEqual on hashed/buffered values with length check) instead of `req.headers[...] !== process.env.CALCOM_WEBHOOK_SECRET`."
+     },
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       24,
+       27
+      ],
+      "texto": "The webhook authenticates a secret using direct string inequality, which is not constant-time and can leak information about the secret through comparison timing. Compare fixed-length representations using a constant-time primitive (such as crypto.timingSafeEqual), handling absent or malformed headers safely, instead of comparing the secret strings directly."
+     },
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       24,
+       29
+      ],
+      "texto": "The webhook secret is compared with the `!==` operator, which short-circuits on the first differing byte and leaks the secret via response timing (timing attack). An attacker can iteratively recover CALCOM_WEBHOOK_SECRET and then forge requests that create/update arbitrary user credential keys (decrypted with the AES key) via this endpoint. Use a constant-time comparison, e.g. crypto.timingSafeEqual on equal-length buffers, guarding for length mismatch first."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#02",
+    "descricao": "The webhook parses the body with zod .parse and decrypts/JSON-parses the keys without error handling, so invalid payloads produce 500 errors instead of 400 responses.",
+    "textoGolden": "The `appCredentialWebhookRequestBodySchema.parse` function can throw on invalid payloads, resulting in 500 Internal Server Errors instead of the expected 400 Bad Request responses. This can lead to confusion for clients and hinder proper error handling.",
+    "comentarios": [
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       31,
+       31
+      ],
+      "texto": "WHAT: zod parse, symmetricDecrypt and JSON.parse throw unhandled (no try/catch) with no method guard. WHY: Invalid body/keys or GET request crashes handler with 500 and leaks stack, instead of 400/405. HOW: Wrap parse/decrypt in try/catch returning 400 and restrict to POST."
+     },
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       31,
+       59
+      ],
+      "texto": "schema .parse plus symmetricDecrypt/JSON.parse throw unhandled (ZodError, decrypt error, SyntaxError) on invalid body or tampered keys, crashing webhook with 500. Use safeParse and try/catch with 400 responses."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#03",
+    "descricao": "The webhook's non-atomic findFirst-then-create lets concurrent deliveries for the same user and app insert duplicate credential rows.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/pages/api/webhook/app-credential.ts",
+      "lines": [
+       62,
+       70
+      ],
+      "texto": "The webhook performs a non-atomic findFirst followed by create when no credential exists. Concurrent deliveries for the same user and app can both observe no row and insert duplicates because Credential has no unique userId/appId constraint; subsequent findFirst updates only one duplicate, leaving competing credentials stale. Serialize the lookup/create operation for each user/app pair or introduce an appropriate uniqueness constraint and atomic upsert."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#07",
+    "descricao": "parseRefreshTokenResponse writes the hardcoded string 'refresh_token' when the refresh response omits a refresh token, so the stored credential gets an invalid refresh token and later refreshes fail.",
+    "textoGolden": "The parseRefreshTokenResponse function incorrectly sets refresh_token to the hardcoded string 'refresh_token' when it's missing from the OAuth refresh token response. This invalidates the token, breaking subsequent token refreshes and causing authentication failures.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       25,
+       26
+      ],
+      "texto": "The parser fabricates the literal refresh token \"refresh_token\" whenever a successful response omits refresh_token, including when synchronization is disabled. Office365's response schema explicitly permits that omission, and its caller merges parsed data over existing credentials, replacing the valid saved refresh token with this invalid value and breaking the next refresh. Leave the property absent so the existing token survives the merge."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       25,
+       26
+      ],
+      "texto": "When a refresh response omits refresh_token, this helper manufactures the hardcoded credential \"refresh_token\". Callers such as Office365 merge this into stored credentials, overwriting the valid existing refresh token and causing subsequent provider refreshes to use a predictable invalid token. Leave the field absent and preserve the existing credential when omission is allowed by the provider, or reject the response when a refresh token is required; do not substitute a literal authentication token."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       25,
+       27
+      ],
+      "texto": "WHAT: Missing refresh_token is replaced with literal string \"refresh_token\". WHY: Stores bogus refresh token in DB, breaking all future refreshes and masking provider errors. HOW: Preserve existing credential refresh_token or throw instead of injecting placeholder."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+    "descricao": "minimumTokenResponseSchema uses computed keys from z.string().toString(), which produce a literal key rather than a wildcard, so the sync-mode schema does not validate or keep expiry and other token fields as intended.",
+    "textoGolden": "The Zod schema in parseRefreshTokenResponse uses computed property keys [z.string().toString()] and [z.string().optional().toString()] in minimumTokenResponseSchema, which is invalid Zod syntax and will throw a runtime error.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       5,
+       11
+      ],
+      "texto": "`[z.string().toString()]` evaluates to a fixed string key such as \"ZodString\", so minimumTokenResponseSchema requires a literal numeric property with that name. Every synced token response fails validation and throws \"Invalid refreshed tokens were returned\". Use `z.object({access_token: z.string()}).passthrough()` instead."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       5,
+       11
+      ],
+      "texto": "The computed keys `[z.string().toString()]` evaluate to the literal string \"[object Object]\", not a wildcard. The schema therefore requires a numeric property named \"[object Object]\", so safeParse always fails in credential-sync mode and the function throws \"Invalid refreshed tokens were returned\". Use `.passthrough()` on an object with access_token and optional numeric expiry fields instead."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+      "lines": [
+       5,
+       11
+      ],
+      "texto": "The computed keys `[z.string().toString()]` evaluate to a literal string like \"ZodString\" and not to a wildcard. The schema therefore requires a numeric property with that nonsense name and never matches real token responses. In sync mode every refresh throws \"Invalid refreshed tokens were returned\". Use `.passthrough()` and a real expiry check instead."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+    "descricao": "In sync mode refreshOAuthTokens returns a raw fetch Response, but callers expect their provider-specific shapes (res.data, axios .data, HubspotToken), so token refresh breaks for Google, Zoho and HubSpot when credential sharing is on.",
+    "textoGolden": "When APP_CREDENTIAL_SHARING_ENABLED and CALCOM_CREDENTIAL_SYNC_ENDPOINT are set, the refreshFunction helper returns the fetch Response, but several callers (for example GoogleCalendarService.refreshAccessToken expecting res.data, and HubspotCalendarService.refreshAccessToken expecting a HubspotToken) assume it returns the integration-specific token object. That mismatch will cause runtime errors in the sync-enabled path unless the return type or those call sites are adjusted.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+      "lines": [
+       8,
+       15
+      ],
+      "texto": "WHAT: In the credential-sharing branch `refreshOAuthTokens` returns the raw `fetch` `Response` object instead of a parsed token payload, yet several callers treat the result as an already-parsed token object.\nWHY: Callers such as hubspot (`hubspotRefreshToken.expiresIn`), zoho-bigin (`tokenInfo.data.error`), zohocrm (`zohoCrmTokenInfo.data.error`) and googlecalendar (`res?.data`) read `.data`/token fields off the return value; a `Response` has neither, so the sync path yields `undefined`/`NaN` or throws a TypeError \u2014 the feature's primary code path is broken for those apps.\nHOW: Parse the response (e.g. `const data = await response.json(); return data;`) before returning, or make every caller await the appropriate response handler."
+     },
+     {
+      "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+      "lines": [
+       8,
+       15
+      ],
+      "texto": "In sharing mode refreshOAuthTokens returns the raw fetch Response (no `.data`), but the google caller reads `res?.data` and then `token.access_token`, throwing a TypeError swallowed by the catch, so the token is never refreshed."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       94,
+       95
+      ],
+      "texto": "`res?.data` assumes the value returned by refreshOAuthTokens has a `.data` field (true for the `fetchTokens.res` branch), but when APP_CREDENTIAL_SHARING_ENABLED the helper returns a raw `fetch()` Response, which has no `.data`. Then `token.access_token` throws. Either parse the shared-mode Response here or have refreshOAuthTokens return a normalized `{ data }` shape."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+    "descricao": "Google Calendar persists the safeParse result object instead of its data as the credential key, corrupting the stored credential so later reads fail.",
+    "textoGolden": "parseRefreshTokenResponse returns a Zod safeParse result ({ success, data, error }), not the credential key object. Persisting that as key stores the wrapper instead of the token payload; we should store the parsed data or use schema parse.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       83,
+       100
+      ],
+      "texto": "parseRefreshTokenResponse returns a SafeParse result {success,data}, not the parsed key. Storing it directly as `key` writes the wrapper to the credential. Unwrap like other callers: check .success and use .data."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       83,
+       100
+      ],
+      "texto": "parseRefreshTokenResponse returns SafeParse result {success,data}, but call site stores that wrapper as credential `key` (previously googleCredentialSchema.parse() returned the plain object). Store `key.data` / handle wrapper, otherwise persisted credential becomes {success,data} shape and subsequent credential reads fail."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       83,
+       100
+      ],
+      "texto": "parseRefreshTokenResponse returns SafeParse wrapper {success,data} but code stores the whole wrapper as credential.key. Office365calendar in same PR unwraps via .data. Persisted credential will be {success,data} instead of tokens, so next load fails validation. Unwrap to .data after success check."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#11",
+    "descricao": "After switching to parseRefreshTokenResponse, the tokenResponse.success check in Office365 refreshAccessToken is dead code and the previous error logging was dropped.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+      "lines": [
+       263,
+       264
+      ],
+      "texto": "parseRefreshTokenResponse now throws when parsing fails, so the `tokenResponse.success` check on the next line is dead code and the previous error logging was removed. A failed refresh now throws out of refreshAccessToken instead of keeping the old credentials. Catch the error or restore the previous handling."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#13",
+    "descricao": "Salesforce getClient now refreshes the OAuth token and writes the credential on every service construction, adding a network round trip and DB write even when the access token is valid.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+      "lines": [
+       75,
+       84
+      ],
+      "texto": "getClient now unconditionally exchanges the Salesforce refresh token on every service construction, even when the saved access token is valid. Each constructor invocation adds a blocking OAuth network round trip and credential database write before any Salesforce operation, replacing jsforce's existing on-demand refresh behavior. Keep refresh on demand or guard the exchange with a token-expiration check."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#14",
+    "descricao": "The new Salesforce token refresh uses prisma without importing it, so the code fails type checking and throws a ReferenceError at runtime.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+      "lines": [
+       96,
+       99
+      ],
+      "texto": "The new credential update references prisma without importing or declaring it; searching this file finds only the new usage. This fails TypeScript checking and raises ReferenceError after a successful token exchange at runtime. Import prisma from @calcom/prisma before using it."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+    "descricao": "Zoho Bigin passes the credential id instead of the user id to refreshOAuthTokens, so the sync endpoint receives the wrong calcomUserId.",
+    "textoGolden": "The `refreshOAuthTokens` function is passed `credentialId` instead of `userId`, which breaks the credential sync functionality by causing incorrect user lookups. This issue can lead to failures in syncing user credentials, impacting user experience.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+      "lines": [
+       85,
+       94
+      ],
+      "texto": "WHAT: The 3rd argument to `refreshOAuthTokens` is `credentialId` (= `credential.id`, line 53), but the function's parameter is `userId` (`refreshOAuthTokens(refreshFunction, appSlug, userId)`).\nWHY: When APP_CREDENTIAL_SHARING_ENABLED, the sync endpoint is sent `calcomUserId: <credential id>` instead of the user id, so Bigin credentials are synced against the wrong/non-existent user (all other apps correctly pass `credential.userId`).\nHOW: Pass `credential.userId` instead of `credentialId` as the third argument."
+     },
+     {
+      "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+      "lines": [
+       85,
+       94
+      ],
+      "texto": "refreshOAuthTokens' third parameter is the Cal.com userId (used as `calcomUserId` in the sync request and to decide whether sharing runs), but this call passes `credentialId`. Every other caller passes `credential.userId`, so the credential-sync endpoint receives a credential row id as the user id and shared credentials are fetched/updated for the wrong identity. Pass `credential.userId` here."
+     },
+     {
+      "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+      "lines": [
+       85,
+       94
+      ],
+      "texto": "refreshOAuthTokens' third parameter is `userId` (declared in refreshOAuthTokens.ts line 3 and used as `calcomUserId: userId.toString()`), but this call passes `credentialId` (the Credential row id, line 53) instead of the user id. When credential sharing is enabled the customer's sync endpoint receives a credential id labelled as calcomUserId and cannot resolve the correct Cal.com user. Pass `credential.userId` (the BiginToken/credential payload carries it) or plumb the user id through refreshAccessToken."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#16",
+    "descricao": "Salesforce checks response.statusText !== 'OK' instead of response.ok when refreshing the token, which can misclassify successful responses, and then ignores the refreshed token.",
+    "textoGolden": "The Salesforce integration checks `response.statusText` instead of `response.ok` when handling OAuth token refresh responses. This can lead to unreliable behavior, as a successful response may not be correctly identified, resulting in the use of stale credentials and potential authentication failures.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+      "lines": [
+       86,
+       107
+      ],
+      "texto": "WHAT: Checks response.statusText !== \"OK\" instead of response.ok and builds jsforce.Connection from stale credentialKey.access_token/instance_url ignoring accessTokenParsed.data. WHY: Refresh never takes effect (old token reused) and valid refreshes can throw on runtimes where statusText is empty. HOW: Check !response.ok and use parsed access_token/instance_url for connection and DB update."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#17",
+    "descricao": "After refreshing the Salesforce token, jsforce.Connection is created with the stale access_token and instance_url instead of the newly refreshed values.",
+    "textoGolden": "The `jsforce.Connection` is created using stale `credentialKey.access_token` and `credentialKey.instance_url` after a token refresh, which can lead to authentication failures and incorrect data access. Ensure that the connection is established using the refreshed token values instead.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+      "lines": [
+       96,
+       106
+      ],
+      "texto": "WHAT: The new block fetches and persists a fresh access token (`accessTokenParsed.data`) but then creates the `jsforce.Connection` with the stale `credentialKey.access_token` (line 106) instead of the just-refreshed token.\nWHY: The refreshed token is written to the DB but never used for the connection; if the old token was expired, jsforce must refresh again (extra round trip) or fail, and the DB/connection state diverge.\nHOW: Pass the new access token (`accessTokenParsed.data.access_token`) to the `jsforce.Connection`."
+     }
+    ]
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#opa-01",
+    "descricao": "The app-credential webhook looks up appStoreMetadata by app.slug, but the map is keyed by dirName, so apps whose slug differs from their directory (e.g. google-calendar) always get a 404 and their credentials cannot be synced.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "d1c69189f3c90ecf56013a8da904da9bff9a8e19",
+  "base": "913c3d6f636d02b3dd6c2c022ca1af2bec95d752",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "spec/fabricators/category_fabricator.rb",
+    "lines": [
+     1,
+     4
+    ],
+    "texto": "WHAT: category_fabricator.rb was overwritten with the :embeddable_host fabricator, and the :category, :diff_category, :happy_category and :private_category fabricators were moved into embeddable_host_fabricator.rb. WHY: `Fabricator(:embeddable_host)` is now defined twice, and the category fabricators sit in a misnamed file. Fabrication may raise DuplicateFabricatorError, which would break the whole spec suite. HOW: Restore the category fabricators in category_fabricator.rb, and keep only `Fabricator(:embeddable_host)` in embeddable_host_fabricator.rb."
+   },
+   {
+    "id": "S2",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     17,
+     17
+    ],
+    "texto": "WHAT: `where(\"lower(host) = ?\", host)` compares the lowercased column with the URI host without lowercasing the URI host. WHY: Ruby's URI preserves the case of the host, so a referer such as http://EvilTrout.com never matches a stored host, and embedding is wrongly denied. HOW: Use `host.downcase` in the query."
+   },
+   {
+    "id": "S3",
+    "file": "app/controllers/admin/embeddable_hosts_controller.rb",
+    "lines": [
+     9,
+     18
+    ],
+    "texto": "WHAT: `update` and `destroy` use `.first` on the lookup and then call methods on the result without a nil check. WHY: an unknown id raises NoMethodError, which returns a 500 instead of a 404. HOW: Use `EmbeddableHost.find(params[:id])`, or raise Discourse::NotFound when the record is nil."
+   },
+   {
+    "id": "S4",
+    "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "lines": [
+     9,
+     25
+    ],
+    "texto": "WHAT: The migration indexes `[0]['id']` and `[0]['value']` on query results without checking that rows exist. WHY: A site without an embed_category setting returns an empty result, so `nil['id']` raises NoMethodError and the migration fails. The raw interpolation of `h` into the INSERT also breaks on quotes or blank lines. HOW: Guard with `.first`/`cmd_tuples` checks, skip blank hosts, and escape values with `ActiveRecord::Base.connection.quote`."
+   },
+   {
+    "id": "S5",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     14,
+     17
+    ],
+    "texto": "The DB side is lowercased with lower(host), but the host parsed from the referer or URL is not downcased. Mixed-case hosts (for example http://EvilTrout.com) therefore fail to match an allowed host. Downcase the parsed host before querying so both sides are normalized."
+   },
+   {
+    "id": "S6",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     14,
+     17
+    ],
+    "texto": "The query lowercases the column (`lower(host)`) but compares it to `uri.host` without lowercasing it. Hosts with uppercase letters in the referer or embed URL will never match, so legitimately embeddable hosts are rejected. Downcase the parsed host before querying."
+   },
+   {
+    "id": "S7",
+    "file": "spec/fabricators/embeddable_host_fabricator.rb",
+    "lines": [
+     1,
+     27
+    ],
+    "texto": "The file named embeddable_host_fabricator.rb now holds the category fabricators (:category, :diff_category, etc.). The embeddable_host fabricator ended up in category_fabricator.rb. The contents of the two files are swapped, so each file name misdescribes what it defines. Restore the category fabricators to category_fabricator.rb and put the :embeddable_host fabricator here."
+   },
+   {
+    "id": "S8",
+    "file": "spec/models/topic_spec.rb",
+    "lines": [
+     1401,
+     1405
+    ],
+    "texto": "The spec title says \"is false if embeddable_host is blank\", but expandable_first_post? no longer checks embeddable hosts. The example now passes only because has_topic_embed? is false, so the title misdescribes what is tested. Rename it, or remove the example."
+   },
+   {
+    "id": "S9",
+    "file": "spec/models/topic_spec.rb",
+    "lines": [
+     1403,
+     1405
+    ],
+    "texto": "The test no longer stubs has_topic_embed? or sets embed_truncate, so expandable_first_post? returns false because the built topic has no embed, not because no embeddable host exists. It would pass whatever the host table contains. Remove it, or stub has_topic_embed? and embed_truncate so that the host state is the only variable."
+   },
+   {
+    "id": "S10",
+    "file": "app/models/embeddable_host.rb",
+    "lines": [
+     5,
+     8
+    ],
+    "texto": "The before_validation callback calls sub! on self.host without a nil guard. A request that omits the host param, or EmbeddableHost.new, raises NoMethodError and returns a 500 instead of a validation error. Guard with `return if host.blank?`, or use `self.host = host.to_s.sub(...)`."
+   },
+   {
+    "id": "S11",
+    "file": "app/controllers/admin/embeddable_hosts_controller.rb",
+    "lines": [
+     9,
+     18
+    ],
+    "texto": "update and destroy use `.first` and then call methods on the result. An unknown id gives nil and raises NoMethodError, a 500 instead of a 404. Use `EmbeddableHost.find(params[:id])`, which raises RecordNotFound, or add an explicit nil check."
+   },
+   {
+    "id": "S12",
+    "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "lines": [
+     9,
+     16
+    ],
+    "texto": "The migration indexes `[0]['id']` on the result of the embed_category lookup. When no row matches, `[0]` is nil and the migration raises NoMethodError, so it fails on installs where embed_category was never set. The same pattern applies to the uncategorized_category_id fallback. Check the result before indexing."
+   },
+   {
+    "id": "S13",
+    "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "lines": [
+     9,
+     16
+    ],
+    "texto": "The migration indexes `[0]` on query results that can be empty. When no `embed_category` row exists (the default), `execute(...)[0]` is nil and `['id']` raises NoMethodError, so the migration fails. Use `.first` with a nil guard (e.g. `row = execute(...).first; category_id = row ? row['id'].to_i : 0`), and do the same for the `uncategorized_category_id` lookup."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+    "descricao": "EmbeddableHost's before_validation calls self.host.sub! unconditionally, so saving a record with a nil host raises NoMethodError instead of returning a validation error.",
+    "textoGolden": "The EmbeddableHost model's before_validation callback calls self.host.sub! to strip http://, https://, and path segments, but if self.host is nil, this raises NoMethodError.",
+    "comentarios": [
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       5,
+       7
+      ],
+      "texto": "The before_validation callback calls `sub!` on host without guarding nil. Creating a host with a missing or null host field reaches this callback from save_host and raises NoMethodError instead of returning a validation error. Guard nil during normalization and let presence/format validation reject it."
+     },
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       5,
+       8
+      ],
+      "texto": "WHAT: `before_validation` calls `self.host.sub!(...)` unconditionally, so a record with a nil host raises NoMethodError (`nil.sub!`) instead of producing a normal format-invalid result. WHY: `Admin::EmbeddableHostsController#save_host` assigns `params[:embeddable_host][:host]` directly; any request that omits the host value makes the save raise a 500 instead of returning the `render_json_error(host)` validation response. HOW: guard the mutation, e.g. `return if host.blank?` at the top of the before_validation block (or use `self.host = self.host.to_s` before stripping)."
+     },
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       5,
+       8
+      ],
+      "texto": "before_validation calls self.host.sub!(...) on a possibly-nil host before validates_format_of runs. The controller assigns host.host = params[:embeddable_host][:host], so a request without a host key leaves it nil and nil.sub! raises NoMethodError at save time instead of the format validation producing a normal error response. Add a presence guard so validation reports the failure."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+    "descricao": "update and destroy in Admin::EmbeddableHostsController fetch the host with where(id:).first and never check for nil, so an unknown id raises NoMethodError and returns a 500 instead of not-found.",
+    "textoGolden": "The update and destroy methods in Admin::EmbeddableHostsController do not validate the existence of the EmbeddableHost record retrieved by ID. If EmbeddableHost.where(id: params[:id]).first returns nil (i.e., the host does not exist), attempting to call methods on the nil object (e.g., save_host or destroy) will result in a NoMethodError.",
+    "comentarios": [
+     {
+      "file": "",
+      "lines": [
+       15,
+       16
+      ],
+      "texto": "In the destroy action, the nil-host case (line 15-16) would raise NoMethodError. Consider adding a nil check to handle the case where the host is not found."
+     },
+     {
+      "file": "app/controllers/admin/embeddable_hosts_controller.rb",
+      "lines": [
+       9,
+       18
+      ],
+      "texto": "update and destroy fetch the record with EmbeddableHost.where(id: params[:id]).first but never check for nil, then immediately use it (save_host(host) does host.host = ... / host.save; destroy does host.destroy). A stale or already-deleted id, or an interleaving where a concurrent delete removes the row first, makes host nil and the first call on it raises NoMethodError -> unhandled 500. Guard with a nil/404 check before use."
+     },
+     {
+      "file": "app/controllers/admin/embeddable_hosts_controller.rb",
+      "lines": [
+       10,
+       11
+      ],
+      "texto": "Update passes the nullable result of where(...).first directly to save_host, which immediately assigns host.host. Updating a nonexistent or concurrently deleted record returns an internal error instead of a not-found response; destroy has the same lookup failure. Use find or explicitly raise a not-found error before dereferencing the lookup result."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+    "descricao": "record_for_host compares lower(host) against the un-lowercased URI host, so mixed-case referer hosts fail to match allowed hosts and embedding is rejected.",
+    "textoGolden": "record_for_host compares lower(host) = ? but does not normalize the parameter\u2019s case, so mixed\u2011case referer hosts may fail to match even though comparison intends to be case\u2011insensitive.",
+    "comentarios": [
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       14,
+       17
+      ],
+      "texto": "Normalize the parsed hostname before comparing it with lower(host). URI parsing preserves hostname case, so an allowed entry such as example.com does not match https://EXAMPLE.com/page even though DNS hostnames are case-insensitive. This makes valid embedding requests fail the host authorization check and makes category lookup inconsistent for equivalent domain identities. Compare against host.downcase (or normalize both operands equivalently), and add a mixed-case URL test."
+     },
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       17,
+       17
+      ],
+      "texto": "The query compares lower(host) to the un-downcased uri.host. A referer such as http://EvilTrout.com never matches the stored lowercase host, so embedding is wrongly denied. Fix: use where(\"lower(host) = ?\", host.downcase)."
+     },
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       14,
+       17
+      ],
+      "texto": "The query compares lower(host) in the database with uri.host, which is not lowercased, so the comparison normalizes only one side. A referer or URL with uppercase letters (e.g. http://EvilTrout.com) will not match the stored host. Compare against host.downcase, i.e. where('lower(host) = ?', host.downcase)."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04",
+    "descricao": "The migration copies the legacy embeddable_hosts values into the new table without stripping scheme and path, so hosts stored as http://example.com no longer match the bare-host lookup and previously allowed embeds are rejected after upgrade.",
+    "textoGolden": "Because this migration inserts embeddable_hosts rows with raw SQL, any existing embeddable_hosts values that include http:// or /https:// or path segments won\u2019t go through the EmbeddableHost model\u2019s normalization, so the new host lookup (which compares only the bare host) may fail for migrated data. Consider ensuring that migrated hosts are normalized to the same format as newly created EmbeddableHost records so existing embedding configurations keep working.",
+    "comentarios": [
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       24,
+       26
+      ],
+      "texto": "WHAT: migration inserts raw embeddable_hosts lines (e.g. http://example.com/123) without stripping scheme/path like the model does. WHY: migrated rows never match EmbeddableHost.record_for_host which compares bare uri.host, silently breaking previously allowed embeds."
+     },
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       22,
+       26
+      ],
+      "texto": "Migration INSERTs raw embeddable_hosts lines with scheme/path intact, but EmbeddableHost normalizes to bare domain (before_validation strips protocol/path, record_for_host looks up by URI.host). Strip protocol and path before INSERT or migrated hosts will never satisfy host_allowed?."
+     },
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       24,
+       25
+      ],
+      "texto": "Legacy hosts are inserted verbatim instead of applying the new model's scheme/path normalization. Existing values such as http://discourse.org or https://example.com/1234 remain in the table, while record_for_host compares only URI.host, so previously configured embedding hosts stop working after upgrade. Normalize migrated entries to the same representation used by the model before inserting them."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#05",
+    "descricao": "The contents of category_fabricator.rb and embeddable_host_fabricator.rb are swapped, so each file defines the other's fabricators.",
+    "textoGolden": "The contents of `category_fabricator.rb` and `embeddable_host_fabricator.rb` have been swapped, resulting in the loss of original category fabricators and potentially causing errors in fabricator usage.",
+    "comentarios": [
+     {
+      "file": "spec/fabricators/category_fabricator.rb",
+      "lines": [
+       1,
+       4
+      ],
+      "texto": "File named category_fabricator.rb now defines Fabricator(:embeddable_host) while Fabricator(:category) was moved to embeddable_host_fabricator.rb. Filenames disagree with contents \u2014 swap contents back so each file defines the fabricator its name states."
+     },
+     {
+      "file": "spec/fabricators/embeddable_host_fabricator.rb",
+      "lines": [
+       1,
+       27
+      ],
+      "texto": "The file names and contents are swapped. embeddable_host_fabricator.rb defines the category fabricators (:category, :diff_category, :happy_category, :private_category), and category_fabricator.rb defines :embeddable_host. Restore category_fabricator.rb to the original category fabricators and put the :embeddable_host fabricator in embeddable_host_fabricator.rb."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#06",
+    "descricao": "The migration builds its INSERT by interpolating each legacy host value into the SQL string instead of quoting or binding it, so a value with a quote breaks the statement.",
+    "textoGolden": "The SQL query in the `app/controllers/admin/embeddable_hosts_controller.rb` file uses string interpolation (`'#{h}'`) to insert values, which is vulnerable to SQL injection. It should use parameter binding or proper quoting to prevent this security vulnerability.",
+    "comentarios": [
+     {
+      "file": "",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The migration's INSERT statement uses string interpolation: VALUES ('#{h}', ...). This is a SQL-injection concern and should be fixed by using parameterized queries or proper escaping."
+     },
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       25,
+       25
+      ],
+      "texto": "WHAT: migration interpolates raw host string into SQL: VALUES ('#{h}', ...). WHY: a host value containing a single quote breaks the statement and allows SQL injection via site_settings value."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+    "descricao": "The migration reads execute(...)[0]['id'] for embed_category without checking for an empty result, so installs without that setting stored crash the migration instead of falling back to the uncategorized category.",
+    "textoGolden": "The migration accesses execute(...)[0]['id'] without checking if the query returned any rows, which causes a crash when no embed_category setting exists. This can lead to a broken feature when attempting to edit category/host relationships.",
+    "comentarios": [
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       9,
+       12
+      ],
+      "texto": "WHAT: migration does execute(...)[0]['id'] with no guard when embed_category setting/category is missing. WHY: nil[0] dereference crashes the migration and blocks deploy on instances without that setting."
+     },
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       9,
+       16
+      ],
+      "texto": "Migration does execute(...)[0]['id'] without checking empty result; missing site_settings row throws NoMethodError and fails migration. Check for nil row."
+     },
+     {
+      "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "lines": [
+       9,
+       11
+      ],
+      "texto": "The migration indexes the first category-query result before checking whether any row was returned. An installation without a persisted embed_category setting, or with no matching category name, aborts migration before reaching the uncategorized fallback. Check whether the result contains a row before accessing its id and handle missing fallback settings as well."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#09",
+    "descricao": "The spec 'is false if embeddable_host is blank' no longer sets up any host condition and passes only because embed_truncate defaults to false, so its name no longer matches what it tests.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "spec/models/topic_spec.rb",
+      "lines": [
+       1399,
+       1406
+      ],
+      "texto": "Test 'is false if embeddable_host is blank' does not establish the true-branch preconditions (embed_truncate true, has_topic_embed true) nor control host presence, so it passes regardless of host logic and would still pass if host checking were broken/removed. Set truncate true + stub embed true with no hosts for the false case."
+     },
+     {
+      "file": "spec/models/topic_spec.rb",
+      "lines": [
+       1401,
+       1404
+      ],
+      "texto": "The test named \"is false if embeddable_host is blank\" now uses an ordinary built topic without setting embed_truncate or making has_topic_embed? true. It therefore returns false for reasons unrelated to the missing host, and passes even with the new implementation that never checks host availability. If blank-host behavior remains the intended contract, arrange all the other prerequisites before asserting false; if the contract intentionally changed, replace this case with a test of the actual intended behavior rather than retaining a misleading passing test."
+     },
+     {
+      "file": "spec/models/topic_spec.rb",
+      "lines": [
+       1403,
+       1404
+      ],
+      "texto": "The description \"is false if embeddable_host is blank\" no longer matches the code. This PR changed Topic#expandable_first_post? (app/models/topic.rb:869) to `SiteSetting.embed_truncate? && has_topic_embed?`, removing the embeddable_hosts condition entirely, and removed the `SiteSetting.embeddable_hosts` setup from this test. The assertion now passes only because `has_topic_embed?` is unstubbed (false) and embed_truncate is unset, so the name states a cause the method no longer has \u2014 rename it (e.g. \"is false when there is no topic embed\") or set up the precondition it claims to test."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#10",
+    "descricao": "The 'find embedded' test requests fruit 2 but the pretender always returns fruit 1, so it asserts fruit 1's colors and would not notice a find that ignores the id.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "test/javascripts/models/store-test.js.es6",
+      "lines": [
+       109,
+       121
+      ],
+      "texto": "Test requests fruit id 2 but pretender returns fruits[0] unconditionally, so assertions on colors [1,2] never cover fruit 2's color_ids [3]. Make pretender honor :id or request id 1 / assert single-element case to actually verify plural _ids hydration."
+     },
+     {
+      "file": "test/javascripts/models/store-test.js.es6",
+      "lines": [
+       111,
+       117
+      ],
+      "texto": "This test now requests fruit 2 but expects fruit 1's two colors. The /fruits/:id Pretender handler always returns fruits[0], so the test passes while hydrating the wrong record and would not catch a find implementation that ignores the requested ID. Make the handler select the requested fruit and assert its ID and corresponding colors (fruit 2 has only color 3), or request fruit 1 if testing its two-color hydration is the goal."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#11",
+    "descricao": "After saving a host, the component overwrites its category with findById(categoryId); when no category was chosen this is null even though the server saved the uncategorized category, so the row shows no category until reload.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/admin/components/embeddable-host.js.es6",
+      "lines": [
+       38,
+       38
+      ],
+      "texto": "The save callback overwrites the category using categoryId even when the server substituted the uncategorized category for a blank selection. Adding a host without choosing a category therefore leaves its category badge empty, and editing it reads an undefined category id despite a valid category_id having been returned. Resolve the category from the saved response's category_id rather than the submitted selection."
+     },
+     {
+      "file": "app/assets/javascripts/admin/components/embeddable-host.js.es6",
+      "lines": [
+       37,
+       38
+      ],
+      "texto": "When categoryId is null (the default for a new row, or a cleared selection), the controller saves SiteSetting.uncategorized_category_id and returns that category_id. This callback instead overwrites host.category with findById(null), making the displayed category disagree with the saved category. Use the category from the save response or its returned category_id rather than the pre-save selection."
+     },
+     {
+      "file": "app/assets/javascripts/admin/components/embeddable-host.js.es6",
+      "lines": [
+       37,
+       38
+      ],
+      "texto": "Use the saved response's category rather than overwriting it from categoryId after saving. For a new host with no category selected, categoryId is null, while the new controller deliberately saves SiteSetting.uncategorized_category_id and returns that ID through the serializer. This callback replaces the hydrated category with findById(null), leaving the row without its actual category until reload (and reopening edit also initializes from that incorrect relationship)."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#14",
+    "descricao": "Hosts saved with a port (allowed by the validation regex) are stored as host:port, but lookup compares only URI.host, so those configured hosts never match and embedding fails for them.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       14,
+       17
+      ],
+      "texto": "Host lookup compares URI.host against a stored value that validation explicitly permits to include a port. Saving example.com:8080 succeeds, but a request from http://example.com:8080 produces URI.host equal to example.com and never matches that record, disabling embedding and retrieval for the configured host. Use a consistent port representation in both storage and lookup."
+     },
+     {
+      "file": "app/models/embeddable_host.rb",
+      "lines": [
+       14,
+       17
+      ],
+      "texto": "The validator accepts hosts such as `example.com:8080`, but record_for_host extracts only URI.host (`example.com`) and compares it to the stored port-qualified string. An accepted and saved host therefore never authorizes its corresponding URLs. Normalize the stored and queried authority consistently, including a deliberate port policy."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#prod-01",
+    "descricao": "EmbeddableHost's host format validation only accepts TLDs of 2-5 letters, so admins cannot add embeddable hosts on longer TLDs like example.technology.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "9966ec5a13e331659c3ea00981f9b11b0faf821f",
+  "base": "fd358e8a388939959369f08f616e29552cdaf96e",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     335,
+     342
+    ],
+    "texto": "WHAT: close()/terminate() shut down the FixedQueuePool, but the pool is owned by the factory and shared by every strategy that create_with_partitions builds. WHY: after a rebalance, arroyo closes the old strategy and creates a new one that reuses the same stopped pool, so its worker threads have exited. Submitted items are then never processed and offsets are never committed. HOW: do not shut the pool down in the strategy; leave that to ResultsStrategyFactory.shutdown(). Alternatively, create the pool per strategy."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     86,
+     93
+    ],
+    "texto": "WHAT: get_committable_offsets requires strictly contiguous offsets and breaks at the first offset that is not in all_offsets. WHY: Kafka partitions can have permanent offset gaps, so a gap stalls commits for that partition indefinitely. The consumer then falls further behind and re-processes everything on restart. HOW: commit up to the highest offset below the lowest outstanding offset, instead of requiring contiguity."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     185,
+     185
+    ],
+    "texto": "WHAT: submit() puts onto unbounded queue.Queue() instances and never blocks or applies backpressure, despite the docstring claiming it does. WHY: if a worker is slow, the consumer keeps reading Kafka and queues grow without limit, using unbounded memory, while offsets stay uncommitted. HOW: give the queues a maxsize so put() blocks, or have the strategy raise MessageRejected when the target queue is full."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     335,
+     345
+    ],
+    "texto": "The strategy's close() and terminate() shut down the FixedQueuePool, but the pool is owned by the factory and shared by every strategy created via create_with_partitions. After the first rebalance, the old strategy kills the workers. The new strategy then submits to queues nobody reads, so no results are processed and no offsets are committed. Only the factory's shutdown() should shut down the pool. The strategy should stop only its own commit thread."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     250,
+     255
+    ],
+    "texto": "The docstring says offsets are only committed after successful processing, but OrderedQueueWorker.run calls complete_offset in a `finally`, so offsets for failed items are committed too. Reword it to say offsets are committed once processing has finished, whether it succeeded or failed."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     252,
+     253
+    ],
+    "texto": "The docstring claims natural backpressure when queues fill up, but the queues are unbounded `queue.Queue()` and submit() never blocks. Remove the claim, or give the queues a maxsize."
+   },
+   {
+    "id": "S7",
+    "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+    "lines": [
+     1921,
+     1922
+    ],
+    "texto": "The docstring says processing errors don't block commits, and the worker marks offsets complete in `finally`, so offsets 100 and 101 are committable and a commit of 102 should happen. The assertion `test_partition not in committed_offsets` only passes if it runs before the commit thread's 1s tick, so it synchronises on time and checks the opposite of the behaviour named. Wait on a condition (a commit event) and assert the partition is committed at 102."
+   },
+   {
+    "id": "S8",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     144,
+     149
+    ],
+    "texto": "The worker marks an offset complete in `finally` even when result_processor raised. The strategy docstring says it only commits after successful processing, and test_thread_queue_parallel_error_handling asserts a failed offset is not committed. In reality the failed offset becomes committable and is committed about 1s later, so the test is timing-dependent. Make code, docstring and test agree: either only complete offsets on success, or document the at-most-once behavior and fix the test."
+   },
+   {
+    "id": "S9",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     335,
+     345
+    ],
+    "texto": "The strategy's close(), terminate() and join() shut down the FixedQueuePool, but the pool is created once by the factory and shared by every strategy. After a rebalance, Arroyo closes the old strategy and creates a new one with the same pool. The new strategy then has no live workers, so messages are never processed or committed. The strategy should stop only its own commit thread, and the factory's shutdown() should remain the only place that shuts down the pool."
+   },
+   {
+    "id": "S10",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     335,
+     342
+    ],
+    "texto": "The queue pool is created once in the factory and shared by every strategy that create_with_partitions builds. Arroyo closes the strategy on each rebalance, and close()/terminate() then shut the pool down, which stops its workers and queues. The next strategy reuses the dead pool, so queue.put raises ShutDown. submit() catches that and marks the offset complete, so messages are silently dropped and their offsets still get committed. The pool's lifetime should belong to the factory (shutdown only in factory.shutdown()), or the pool should be created per strategy."
+   },
+   {
+    "id": "S11",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     86,
+     93
+    ],
+    "texto": "After mark_committed prunes offsets <= last_committed, `start = max(last_committed + 1, min_offset)` jumps over any missing offset (e.g. 101 when only 102,103 remain), so a gap that blocked the first commit is skipped on the next pass and offsets past it get committed. Start the scan at last_committed + 1 when last_committed is known, so a missing offset still blocks the commit."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#01",
+    "descricao": "Claims OffsetTracker.get_committable_offsets requires every integer offset to exist, so Kafka offset gaps permanently block commits for the partition and per-partition state is never cleared on rebalance.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       100,
+       105
+      ],
+      "texto": "Offsets are only tracked for messages that were submitted, and there is no partition revoke handling. Contiguity is checked with `range(start, max_offset+1)`, so any offset gap (compacted topics, transactional markers, or offsets filtered out upstream) permanently blocks commits for that partition. The `last_committed`, `all_offsets` and `outstanding` state is never cleared on rebalance, so stale state survives partition reassignment. Treat gaps as committable once all lower tracked offsets are complete, and clear per-partition state when partitions are revoked."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       86,
+       93
+      ],
+      "texto": "The commit scan assumes consecutive Kafka offsets and breaks at the first offset that is not in all_offsets. A permanent offset gap (compacted or transactional records) then blocks commits for that partition forever. Track the submitted offsets in sorted order and commit up to the highest offset below the lowest outstanding one, rather than requiring every integer in between to be present."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       86,
+       93
+      ],
+      "texto": "Determine the commit boundary from received offsets rather than requiring every integer in this range to exist. Kafka offsets need not be consecutive: if 100, 102 and 103 are delivered and completed, this scan stops at the nonexistent 101 even though there is no unfinished record. Conversely, after committing 100 and removing it, the next scan starts at 102 and commits past the gap, contradicting the added gap tests. Iterate received offsets in sorted order and stop at the first outstanding record; add a test covering legitimate skipped Kafka offsets across multiple commit cycles."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03",
+    "descricao": "OrderedQueueWorker marks a work item's offset complete in a finally block even when processing raised, so failed messages are committed and dropped, contradicting the documented guarantee of committing only after successful processing.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       144,
+       149
+      ],
+      "texto": "The worker marks the offset complete in the `finally` block even when `result_processor(...)` raises, so a message whose handling failed is reported as committable and its offset is committed (it will never be retried). This contradicts the strategy's own guarantee 'Only commits offsets after successful processing' and the new test `test_thread_queue_parallel_error_handling`, which asserts the partition is not committed after a failure. Only call `complete_offset` on the success path (or track failed offsets separately) so failures are not silently skipped."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       142,
+       149
+      ],
+      "texto": "The worker marks the offset complete in `finally` even when `result_processor` raised an exception, so a failed item's offset is reported as committable and gets committed by the commit loop. This contradicts the strategy's documented guarantee 'Only commits offsets after successful processing' and the contract asserted in test_results_consumer.py (test_thread_queue_parallel_error_handling, which expects the failed partition NOT to be committed): the failed message is committed past and never retried. Track success separately and only call `complete_offset` when processing succeeded (or make the failure explicit so the offset is withheld/retried)."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       144,
+       149
+      ],
+      "texto": "The failed item's offset is completed unconditionally in the `finally` block, so `complete_offset` runs even when `result_processor` raised. This breaks the class's documented guarantee ('Only commits offsets after successful processing', line 254): the commit loop then advances past a message that was never successfully processed, silently dropping it (and, per the PR's own test_thread_queue_parallel_error_handling, a commit is produced where none is expected). Only call `offset_tracker.complete_offset(...)` on the success path (i.e. after `result_processor` returns normally), or explicitly decide and document the at-most-once semantics; do not complete on the exception path."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#04",
+    "descricao": "test_thread_queue_parallel_error_handling's docstring says errors must not block commits for other messages, but the test asserts that nothing was committed, so it does not verify the behaviour it describes.",
+    "textoGolden": "The test test_thread_queue_parallel_error_handling has a docstring that doesn't match the test implementation.",
+    "comentarios": [
+     {
+      "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+      "lines": [
+       1911,
+       1922
+      ],
+      "texto": "The commit assertion contradicts the test's own docstring and cannot fail for the reason it claims. The docstring says \"errors in processing don't block offset commits for other messages\", but the body asserts `len(committed_offsets) == 0 or test_partition not in committed_offsets` \u2014 i.e. it passes only when nothing is committed. In queue_consumer.py ordered worker's `finally` calls `complete_offset` even after result_processor raises (lines 148-149), so offset 100 should be committable and offset 101 should advance the commit; if the whole commit path were removed (commits blocked entirely) the test would still pass. Assert the positive behaviour instead: e.g. that the failing message's offset was still completed so commits progressed (expect `committed_offsets[test_partition] == 102`, matching the follow-on offset of the successfully processed message)."
+     },
+     {
+      "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+      "lines": [
+       1874,
+       1924
+      ],
+      "texto": "test_thread_queue_parallel_error_handling claims errors don't block commits but asserts len(committed)==0 / not in, and waits only for total==0+sleep(0.2) while commit loop is 1.0s. It passes if commits are correctly made (checked before loop fires) and if commits are never made. Wait for commit condition and assert contiguous commit includes both offsets despite the exception."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#05",
+    "descricao": "The error-handling test asserts no commit happened after only a 0.2s sleep while the commit loop runs every second, so it passes without ever observing whether a failed offset gets committed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+      "lines": [
+       1915,
+       1922
+      ],
+      "texto": "The error-handling test can pass even when failed messages are committed. It waits for two processor calls, sleeps only 0.2 seconds, and asserts that no commit has happened, whereas _commit_loop waits 1 second. OrderedQueueWorker currently completes the failed offset in finally, so the unsafe commit can occur after this assertion. Synchronize with an actual commit-loop iteration before asserting that it cannot advance past the failed offset."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+    "descricao": "FixedQueuePool uses unbounded queues and the strategy never applies backpressure, so when workers fall behind the consumer keeps polling and queued work items grow memory without limit, contrary to the documented backpressure guarantee.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       184,
+       185
+      ],
+      "texto": "Each worker queue is created unbounded (queue.Queue() with no maxsize) although the class docstring promises 'Natural backpressure when queues fill up' and the strategy claims to guarantee backpressure. With no bound and no MessageRejected raised from submit(), a slow group continues to accumulate items in its queue while the consumer keeps polling, so memory grows without limit under a sustained backlog \u2014 the opposite of the intended protection. Fix: give the queues a maxsize and raise/return MessageRejected (or otherwise propagate backpressure to the caller) when a queue is full."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       246,
+       255
+      ],
+      "texto": "The `SimpleQueueProcessingStrategy` docstring promises \"Natural backpressure when queues fill up\", but the queues this strategy drives are unbounded: `FixedQueuePool` creates each one as `queue.Queue()` with no maxsize (line 185), and `submit()` puts items unconditionally. Nothing ever blocks, so no backpressure exists. Either bound the queues (pass a `maxsize` and handle `queue.Full` / block in `submit`) or correct the docstring so it does not advertise a guarantee the code does not provide."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       184,
+       185
+      ],
+      "texto": "The pool creates unbounded queues, while strategy submit always accepts messages and poll never applies backpressure. When a queue's worker is slow or ingestion exceeds processing capacity, queued WorkItems retain both decoded results and original Kafka messages without any limit, causing growing memory consumption and eventual consumer OOM. Bound queued/in-flight work and raise Arroyo MessageRejected when capacity is reached, ensuring that rejection is not swallowed by the generic submit exception handler."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10",
+    "descricao": "Graceful shutdown sets each worker's shutdown flag before draining, so workers stop with items still queued, and close() stops the commit thread first, so finished work is not committed and gets replayed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       231,
+       243
+      ],
+      "texto": "WHAT: FixedQueuePool.shutdown sets worker.shutdown=True while OrderedQueueWorker.run loops on while not self.shutdown, so workers exit without draining queued WorkItems even though queues are shut down with immediate=False. WHY: Graceful shutdown silently drops queued items and leaves their offsets in outstanding forever, causing reprocessing/duplicates and failing the claimed graceful-shutdown guarantee. HOW: Remove the shutdown-flag short-circuit and let workers drain until queue.ShutDown, e.g. loop unconditionally and break only on ShutDown."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       335,
+       345
+      ],
+      "texto": "close() stops the commit thread and shuts down workers before draining accepted work, and join() only repeats close() instead of waiting for processing and making a final commit. Pool shutdown sets worker.shutdown before workers can drain their queues, so assignment revocation abandons queued results and completed in-flight work is not finally committed, causing replay and allowing unfinished old work to overlap a new owner. Make close() stop acceptance without blocking, then have join() drain accepted work within its timeout and commit completed offsets before releasing workers."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       233,
+       238
+      ],
+      "texto": "Do not set worker.shutdown before draining the queues during graceful shutdown. If a worker is processing A while B is queued, shutdown sets the flag; after A finishes, the worker exits at `while not self.shutdown` without ever retrieving B. Calling queue.shutdown(immediate=False) does not override that loop condition. Drain accepted work before stopping workers, and keep committing available until that drain completes; currently close stops the commit thread before the workers as well, so even work finished during shutdown is not finally committed."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+    "descricao": "The strategy's close() shuts down the factory-owned shared queue pool, so after a partition rebalance the next strategy reuses a dead pool; submissions fail and the error handler marks their offsets complete, committing messages that were never processed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       335,
+       338
+      ],
+      "texto": "SimpleQueueProcessingStrategy.close() shuts down the FixedQueuePool, but that pool is a singleton owned by the factory (created once in ResultsStrategyFactory.__init__ and never recreated). Arroyo calls strategy.close() then join() on every assignment revocation/rebalance, and the factory's create_with_partitions is called again for the next assignment; the new strategy then reuses the already-shut-down queue_pool. Because q.shutdown(immediate=False) makes subsequent put() raise queue.ShutDown, submit()'s except branch (lines 317-325) swallows it and marks the offset complete, so after any rebalance every message is committed as processed without ever being handled \u2014 silent data loss. Fix: either let the factory own the pool lifecycle (don't shut it down from the strategy's close) and create a fresh pool per create_with_partitions, or reset/recreate factory.queue_pool when the strategy is closed."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       335,
+       342
+      ],
+      "texto": "WHAT: SimpleQueueProcessingStrategy.close/terminate shuts down the factory-owned shared FixedQueuePool. WHY: ResultsStrategyFactory creates one queue_pool and hands it to every strategy from create_with_partitions, so Arroyo rebalance (close old strategy, create new one reusing factory.queue_pool) reuses a dead pool with joined workers and shut-down queues, stalling all further processing. HOW: Make pool lifecycle owned only by the factory: strategy close should only stop its commit thread, not call queue_pool.shutdown()."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       335,
+       345
+      ],
+      "texto": "SimpleQueueProcessingStrategy.close(), terminate() and join() shut down the FixedQueuePool, but that pool is created once by ResultsStrategyFactory and shared by every strategy it creates. After a rebalance, Arroyo closes the old strategy and then calls create_with_partitions again, which reuses the dead pool. Messages then fail to enqueue, and the submit() exception handler marks them complete, so their offsets get committed without the messages being processed. The strategy should only stop its own commit thread. The pool should be shut down only by factory.shutdown(), or the pool should be created per strategy."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#12",
+    "descricao": "The strategy invokes Arroyo's commit callback from a background thread rather than from submit/poll on the consumer thread, so commits can race with polling and partition revocation on a non-thread-safe consumer.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       273,
+       291
+      ],
+      "texto": "`commit_function` is called from the background commit thread, but arroyo's commit callback is expected to be called from the main consumer thread, and the Kafka consumer is not thread-safe. Committing from another thread risks races with polling and with rebalances."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#15",
+    "descricao": "The WorkItem docstring says the original message is kept for offset tracking, but offset tracking only uses partition and offset and the message field is never used.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       24,
+       31
+      ],
+      "texto": "The `WorkItem` docstring says it \"includes the original message for offset tracking\", but the `message` field is never used for offset tracking \u2014 `OffsetTracker` and the commit loop only ever read `partition`/`offset`, and `submit()` even re-derives the offset from `message.value` rather than from the stored `message`. Update the docstring to describe what the field is actually for (or remove the unused field) so it does not misdescribe the dataclass contract."
+     },
+     {
+      "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+      "lines": [
+       24,
+       31
+      ],
+      "texto": "`WorkItem.message` is declared with the comment 'includes the original message for offset tracking' and is populated in `SimpleQueueProcessingStrategy.submit`, but nothing ever reads it \u2014 offset tracking uses the separate `partition`/`offset` fields. The declared purpose does not match any actual use, so the field (and the extra reference to each Kafka message it keeps alive) is dead; either use it for offset tracking or remove it."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#16",
+    "descricao": "The tests named for concurrent processing across groups only check that all items were processed and all groups seen, so a fully serial implementation would pass and concurrency is never verified.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py",
+      "lines": [
+       137,
+       173
+      ],
+      "texto": "Test named/docstringed \"Test that different groups are processed concurrently\" never verifies concurrency. The body only asserts all 6 items ran and that three distinct group numbers were seen \u2014 a single worker draining one queue, or a fully serial FixedQueuePool, would satisfy both assertions. Either measure actual overlap (e.g. have result_processor block on a barrier/event until all three groups have entered, and fail on timeout) or drop the concurrency claim from the name/docstring."
+     },
+     {
+      "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+      "lines": [
+       1780,
+       1822
+      ],
+      "texto": "test_thread_queue_parallel_concurrent_subscriptions claims to verify that different subscriptions are processed concurrently, but the only assertion is `mock_processor_call.call_count == 2`, which a strictly serial implementation also satisfies. Add a real concurrency signal (e.g. a barrier in the mocked processor that requires both calls to be in flight simultaneously before either returns), otherwise this test cannot detect loss of parallelism."
+     },
+     {
+      "file": "tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py",
+      "lines": [
+       137,
+       173
+      ],
+      "texto": "test_concurrent_processing_across_groups claims concurrent processing but only asserts 6 items processed and 3 groups seen. A serial/single-queue implementation would still pass. Verify overlap (blocking processor + timing/thread IDs) or remove concurrency claim."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#17",
+    "descricao": "The strategy ordering test submits identical messages and only checks the count processed, so it cannot detect out-of-order processing within a group.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py",
+      "lines": [
+       302,
+       312
+      ],
+      "texto": "The strategy ordering test submits five identical decoded results for sub1 and only asserts their count. Processing them in reverse order would still pass. Give each message a distinguishable sequence value and assert the exact processed sequence, so this tests ordering through SimpleQueueProcessingStrategy rather than only delivery."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#18",
+    "descricao": "The graceful-shutdown test only asserts that the factory cleared its queue_pool reference, which shutdown always does, so it does not verify that pending work is drained or workers stop.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/uptime/consumers/test_results_consumer.py",
+      "lines": [
+       2004,
+       2005
+      ],
+      "texto": "This does not verify graceful shutdown: factory.shutdown unconditionally clears queue_pool after calling pool.shutdown, so the assertion passes even if pending messages are abandoned or worker threads remain alive. Retain the pool reference and assert that all submitted work completed and its workers stopped; the current worker shutdown flag can stop workers without draining their queues."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#20",
+    "descricao": "The polling bound max_wait = 50 is repeated as a magic number across the thread-queue-parallel tests instead of a named constant.",
+    "textoGolden": "The magic number 50 for max_wait is used repeatedly throughout the tests. Consider extracting this as a named constant to improve maintainability.",
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-01",
+    "descricao": "OffsetTracker.get_committable_offsets starts scanning at max(last_committed + 1, min_offset); after mark_committed prunes offsets, a gap is skipped on the next cycle, so offsets are committed past a missing offset, contrary to the 'highest contiguous offset' guarantee.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-02",
+    "descricao": "The test's wait loop stops at the first recorded commit but asserts the committed offset is exactly 105, so a commit fired mid-processing can record a lower offset and make the test flaky.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#oph-01",
+    "descricao": "The per-worker queue_depth gauge is tagged only with identifier, so all queues report into one series and the metric shows whichever queue reported last.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "8422030ef456e3a898415e96475b4d8ddfc7640f",
+  "base": "bdd229e3f22e307fe40b30ef99e92ff3f6723da4",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/incidents/grouptype.py",
+    "lines": [
+     11,
+     12
+    ],
+    "texto": "WHAT: MetricAlertDetectorHandler subclasses StatefulDetectorHandler with an empty body, leaving the abstract members counter_names, get_dedupe_value, get_group_key_values and build_occurrence_and_event_data unimplemented. WHY: Instantiating the handler raises TypeError, so Detector.detector_handler crashes for metric_alert detectors. Previously the class had a working evaluate() returning []. HOW: Implement the abstract members, or revert to a DetectorHandler subclass with a stub evaluate returning {}."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/incidents/grouptype.py",
+    "lines": [
+     11,
+     12
+    ],
+    "texto": "MetricAlertDetectorHandler subclasses StatefulDetectorHandler but is an empty `pass`. It does not implement the abstract methods that class declares, including the newly added build_occurrence_and_event_data, as well as get_dedupe_value and get_group_key_values. Instantiating it raises TypeError, so every metric alert detector's detector_handler breaks. Implement the abstract methods here."
+   },
+   {
+    "id": "S3",
+    "file": "tests/sentry/workflow_engine/processors/test_detector.py",
+    "lines": [
+     244,
+     266
+    ],
+    "texto": "build_mock_occurrence_and_event ignores its `value` argument, and tests pass mismatched values (e.g. 100 or 8 to evaluate but 6 to the builder). The tests therefore still pass if evaluate_group_key_value passes the wrong value to build_occurrence_and_event_data. Embed value in the occurrence (e.g. evidence_data={'value': value}) and pass the real values in the expected results."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/incidents/grouptype.py",
+    "lines": [
+     11,
+     12
+    ],
+    "texto": "MetricAlertDetectorHandler subclasses the abstract StatefulDetectorHandler but implements none of its abstract methods (get_dedupe_value, get_group_key_values, build_occurrence_and_event_data, counter_names). Instantiating it via Detector.detector_handler will raise TypeError, where the old stub returned []. Implement the abstract members, or keep the non-abstract stub handler until they exist."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/workflow_engine/processors/detector.py",
+    "lines": [
+     226,
+     231
+    ],
+    "texto": "The evaluate docstring still says it returns a list of `DetectorEvaluationResult`, but the method now returns a dict keyed by group key. Update the docstring to describe the dict return."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/incidents/grouptype.py",
+    "lines": [
+     10,
+     11
+    ],
+    "texto": "The TODO says this will become a stateful detector once the abstraction exists, but the class now subclasses StatefulDetectorHandler. The comment is stale and should be removed or reworded."
+   },
+   {
+    "id": "S7",
+    "file": "src/sentry/incidents/grouptype.py",
+    "lines": [
+     11,
+     12
+    ],
+    "texto": "MetricAlertDetectorHandler subclasses StatefulDetectorHandler but implements none of its abstract methods, including the new build_occurrence_and_event_data. It is registered as the detector_handler for the metric alert group type. Instantiating it raises TypeError, so any metric alert detector processed through Detector.detector_handler and process_detectors will crash. Implement the abstract methods (get_dedupe_value, get_group_key_values, counter_names, build_occurrence_and_event_data), or restore a non-abstract handler whose evaluate returns {}."
+   },
+   {
+    "id": "S8",
+    "file": "src/sentry/incidents/grouptype.py",
+    "lines": [
+     11,
+     12
+    ],
+    "texto": "StatefulDetectorHandler now has the abstract method build_occurrence_and_event_data, but MetricAlertDetectorHandler is just `pass`. It also leaves the other abstract members unimplemented, so instantiating it raises TypeError. Detector.detector_handler would then fail for metric alert detectors, where it previously returned an empty result list. Implement the abstract methods on the subclass, or keep a concrete DetectorHandler until they exist."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#01",
+    "descricao": "The TODO above MetricAlertDetectorHandler says it will become a stateful detector, but the class already subclasses StatefulDetectorHandler.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/incidents/grouptype.py",
+      "lines": [
+       10,
+       12
+      ],
+      "texto": "The comment 'TODO: This will be a stateful detector when we build that abstraction' is now stale. MetricAlertDetectorHandler already subclasses StatefulDetectorHandler. Remove or reword the TODO."
+     },
+     {
+      "file": "src/sentry/incidents/grouptype.py",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "Remove or revise the adjacent TODO saying this will become a stateful detector 'when we build that abstraction'. The class now inherits StatefulDetectorHandler, so the comment describes already-completed work as a future migration and misleads maintainers about which abstraction this handler uses."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+    "descricao": "MetricAlertDetectorHandler subclasses StatefulDetectorHandler without implementing its abstract methods, so instantiating it for metric alert detectors raises TypeError where it previously returned an empty-result handler.",
+    "textoGolden": "MetricAlertDetectorHandler inherits from StatefulDetectorHandler but only contains pass, failing to implement its required abstract methods: counter_names (property), get_dedupe_value(), get_group_key_values(), and build_occurrence_and_event_data(). This will cause a TypeError at runtime when the class is instantiated.",
+    "comentarios": [
+     {
+      "file": "src/sentry/incidents/grouptype.py",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "WHAT: MetricAlertDetectorHandler now subclasses StatefulDetectorHandler with an empty body, so it does not implement the abstract methods counter_names, get_dedupe_value, get_group_key_values, and build_occurrence_and_event_data declared on StatefulDetectorHandler. WHY: the class is now abstract, and Detector.detector_handler (src/sentry/workflow_engine/models/detector.py:86) instantiates it via group_type.detector_handler(self), so any detector whose type resolves to this grouptype will raise TypeError: Can't instantiate abstract class MetricAlertDetectorHandler \u2014 the previous version implemented evaluate and was instantiable. HOW: implement the required abstract methods (or keep a concrete evaluate override) so the handler can be constructed."
+     },
+     {
+      "file": "src/sentry/incidents/grouptype.py",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "MetricAlertDetectorHandler now subclasses StatefulDetectorHandler but with `pass`, so it implements none of the abstract methods it inherits (counter_names, get_dedupe_value, get_group_key_values, and the newly added build_occurrence_and_event_data). The class is therefore still abstract and instantiating it (it is registered as `detector_handler` on MetricAlertFire and is constructed by Detector.detector_handler) raises `TypeError: Can't instantiate abstract class MetricAlertDetectorHandler with abstract methods ...`. Before this change it subclassed DetectorHandler and implemented the single abstract `evaluate`, so it was instantiable; the PR makes the metric-alert handler path throw. Either implement the required abstract methods or keep the class free of unimplemented abstracts."
+     },
+     {
+      "file": "src/sentry/incidents/grouptype.py",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "MetricAlertDetectorHandler now subclasses StatefulDetectorHandler (an abc.ABC) with only `pass`. StatefulDetectorHandler declares four abstract methods \u2014 counter_names, get_dedupe_value, get_group_key_values, and the newly added build_occurrence_and_event_data (detector.py:142-170) \u2014 none of which are implemented here. The class therefore remains abstract and cannot be instantiated; Detector.detector_handler's `group_type.detector_handler(self)` will raise `TypeError: Can't instantiate abstract class MetricAlertDetectorHandler` for the metric_alert_fire group type. Previously this class was a concrete DetectorHandler with an implemented evaluate, so this PR newly makes it uninstantiable. Implement the required abstract methods (or revert to a concrete handler) to satisfy the base-class contract."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#03",
+    "descricao": "The evaluate() docstring says it returns a list of DetectorEvaluationResult, but it now returns a dict keyed by group key.",
+    "textoGolden": "Docstring says this returns a list of DetectorEvaluationResult, but the method now returns a dict keyed by DetectorGroupKey. Consider updating the docstring to match the new return type.",
+    "comentarios": [
+     {
+      "file": "src/sentry/workflow_engine/processors/detector.py",
+      "lines": [
+       226,
+       228
+      ],
+      "texto": "Update evaluate's adjacent docstring to describe a dictionary keyed by DetectorGroupKey rather than a list of DetectorEvaluationResult. This change returns a dictionary and callers now consume .values(), but the documented return contract still tells readers to expect a list; iterating the documented result as a list would instead yield group keys."
+     },
+     {
+      "file": "src/sentry/workflow_engine/processors/detector.py",
+      "lines": [
+       226,
+       231
+      ],
+      "texto": "Docstring says 'returns a list of DetectorEvaluationResult' but signature/body now return dict[DetectorGroupKey, DetectorEvaluationResult]. Update docstring to describe dict keyed by group_key."
+     },
+     {
+      "file": "src/sentry/workflow_engine/processors/detector.py",
+      "lines": [
+       226,
+       233
+      ],
+      "texto": "The evaluate() docstring still says it returns a list of `DetectorEvaluationResult`. The method now returns a dict mapping group key to `DetectorEvaluationResult`. Update the docstring to describe the dict return shape."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#04",
+    "descricao": "The mock occurrence builder ignores its value argument, so tests (e.g. group_2 expected with 6 while the packet carries 10) pass regardless of which value is passed to build_occurrence_and_event_data.",
+    "textoGolden": "Wrong value `6` passed for `group_2` occurrence \u2014 the data packet specifies `\"group_2\": 10`. Should be `10` to accurately reflect the test scenario, which will ensure the test produces the correct occurrence data.",
+    "comentarios": [
+     {
+      "file": "tests/sentry/workflow_engine/processors/test_detector.py",
+      "lines": [
+       244,
+       265
+      ],
+      "texto": "The new occurrence builder accepts `value` but never incorporates or asserts it, so the occurrence tests cannot detect incorrect forwarding of the measured value to `build_occurrence_and_event_data`. For example, `test_state_results_multi_group` supplies 10 for group_2 but builds its expected occurrence with 6 and still passes. A regression that passes a constant or another group's measurement at the new production hook would therefore go unnoticed. Include the value in the mock occurrence's evidence and use the actual expected measurement, or assert the hook's arguments directly."
+     },
+     {
+      "file": "tests/sentry/workflow_engine/processors/test_detector.py",
+      "lines": [
+       244,
+       275
+      ],
+      "texto": "`build_mock_occurrence_and_event` accepts `value: int` but never uses it (the occurrence is built only from `group_key`/`new_status`), and this same helper is also the implementation of `MockDetectorStateHandler.build_occurrence_and_event_data`. Because neither the expected occurrence nor the handler output depends on the value, tests like `test_state_results_multi_group` (which incorrectly builds the group_2 occurrence with `value=6` while the packet carries `10`) and `TestEvaluate.test_dedupe` (expected built with 6 vs packet 8) pass regardless of the value actually passed into `build_occurrence_and_event_data`. If evaluation passed a wrong value, these tests would still pass, so they do not verify the value/threshold path they appear to cover. Include `value` in a field of the occurrence (or assert on it in the handler) and fix the wrong expected values so the argument is actually checked."
+     },
+     {
+      "file": "tests/sentry/workflow_engine/processors/test_detector.py",
+      "lines": [
+       244,
+       275
+      ],
+      "texto": "`build_mock_occurrence_and_event` accepts a `value: int` parameter but never uses it \u2014 the returned IssueOccurrence is derived only from `group_key` and `new_status`. Because `value` is dead, callers can pass a mismatched value with no failure: in `test_state_results_multi_group` the packet contains `group_2: 10`, but the expected occurrence for `group_2` is built with `6`. Either use `value` when constructing the occurrence so the test validates the group value, or drop the unused parameter and pass the correct value; otherwise the test silently accepts wrong group values."
+     }
+    ]
+   }
+  ]
+ },
+ "database-performance-optimizations-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "04cfa3bfd469c035ff8b35f9a66867c4e8d5dcf4",
+  "base": "a886bd3c79a417a70b51509384d1f1ec3e87e96b",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "lines": [
+     534,
+     537
+    ],
+    "texto": "WHAT: Debug logging at Error level dumps the full ID list and condition for every batch, in all three cleanup paths. WHY: With large batch sizes (up to tens of thousands of IDs) this writes huge log lines and falsely signals errors on every cleanup cycle. HOW: Remove these log calls, or reduce them to a Debug-level count only."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/services/cleanup/cleanup.go",
+    "lines": [
+     77,
+     77
+    ],
+    "texto": "WHAT: The cleanup ticker interval was changed from 10 minutes to 1 minute. WHY: This runs every cleanup job, including the annotation cleanup, 10x more often, adding DB load and lock contention that the PR is trying to reduce. HOW: Restore the 10 minute interval."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "lines": [
+     534,
+     537
+    ],
+    "texto": "The cleanup loop logs every fetched annotation ID and the raw SQL condition at Error level on every batch, even on success. This dumps internal record identifiers and query text into the logs, with up to batch-size IDs per line. Remove these debug logs, or log only counts at debug level. The same pattern repeats in the count-based and tag cleanup paths."
+   },
+   {
+    "id": "S4",
+    "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "lines": [
+     534,
+     537
+    ],
+    "texto": "Routine batch progress is logged with r.log.Error, and it includes the full ID slices. This floods error logs on every cleanup run and reports a non-error as an error. The logged `err` is always nil at that point. Remove these debug logs or lower them to Debug without the ID lists. The same pattern appears in the count and tag cleanup paths."
+   },
+   {
+    "id": "S5",
+    "file": "pkg/services/cleanup/cleanup.go",
+    "lines": [
+     77,
+     77
+    ],
+    "texto": "The cleanup ticker interval was changed from 10 minutes to 1 minute. This looks like a leftover debugging change that runs all cleanup jobs 10x more often than intended. Restore the 10 minute interval."
+   },
+   {
+    "id": "S6",
+    "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "lines": [
+     605,
+     618
+    ],
+    "texto": "deleteByIDs binds one placeholder per ID on every database except SQLite with a batch size above 999. Postgres and MySQL cap bind parameters at 65535, so a configured AnnotationCleanupJobBatchSize above that makes every cleanup batch fail. The old single-statement query had no such limit. Split the ID slice into chunks under the limit before building the IN clause."
+   },
+   {
+    "id": "S7",
+    "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "lines": [
+     534,
+     537
+    ],
+    "texto": "The log lines 'Annotations to clean by time' and 'cleaned annotations by time' describe normal progress but are emitted with r.log.Error, so every cleanup batch looks like a failure in the logs. The first also logs err, which is always nil there. The same pattern appears in the count-based and tag cleanup paths. Use Debug (or remove them) and drop the nil err field."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#04",
+    "descricao": "Leftover debug logs in the annotation cleanup emit Error-level entries with the full ID list on every batch, flooding error logs during normal operation.",
+    "textoGolden": "The code uses Error log level for what appears to be debugging information. This will pollute error logs in production. Consider using Debug or Info level instead.",
+    "comentarios": [
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       528,
+       538
+      ],
+      "texto": "WHAT: Leftover debug logging calls r.log.Error on every cleanup batch (also duplicated at lines 554-557 and 576-579) dumping full ids slice, cond, and nil err at Error level. WHY: Fires Error-level log per batch and serializes up to AnnotationCleanupJobBatchSize IDs (32767 in new test), spamming error logs/monitoring on every normal cleanup run. HOW: Downgrade to Debug or remove; do not log full ids at Error."
+     },
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       534,
+       537
+      ],
+      "texto": "WHAT: Leftover debug logging calls `r.log.Error(\"Annotations to clean by time\", \"count\", len(ids), \"ids\", ids, ...)` (and the identical Error-level logs for 'by count' and 'Tags to clean', lines 554/557/576/579) run on every batch in production. WHY: These log the full ID slice (up to AnnotationCleanupJobBatchSize, e.g. 32767 elements) at Error severity on every cleanup iteration, flooding logs with false error noise and large payloads for a normal successful operation, and can trigger error-based alerting. HOW: Remove these log lines, or downgrade to Debug and drop the full `ids` slice (log only the count)."
+     },
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       534,
+       579
+      ],
+      "texto": "Avoid using Error-level logging on the normal cleanup path. The new r.log.Error calls emit count, ids, cond, and err at lines 534/537, 554/557, and 576/579 during non-error execution, creating log noise; consider downgrading or removing these logs on the normal path."
+     }
+    ]
+   },
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#05",
+    "descricao": "The comment states SQLite's parameter limit is 999, which is only true for SQLite versions before 3.32.0.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       605,
+       607
+      ],
+      "texto": "The comment states that SQLite has a parameter limit of 999, but SQLite >= 3.32.0 defaults to 32766 (as the added integration test also recognizes). This branch is choosing a conservative compatibility threshold, not expressing the limit of every SQLite database. Document 999 as the older-version/compatibility threshold so maintainers do not mistake this constant for the actual limit on modern SQLite."
+     }
+    ]
+   },
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#06",
+    "descricao": "On MySQL and Postgres, deleteByIDs binds one placeholder per ID without limit, so a cleanup batch size above 65535 makes every DELETE fail.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       605,
+       618
+      ],
+      "texto": "The bind-parameter workaround only handles SQLite's limit; the placeholder branch is used for every other engine with len(ids) placeholders and no bound. The previous implementation had no bind parameters, so this path is new. Postgres (extended protocol) and MySQL both cap bind parameters at 65535, so a configured AnnotationCleanupJobBatchSize larger than that makes this DELETE fail at Exec with a parameter-limit error instead of cleaning anything. Clamp the number of ids per DELETE (e.g. chunk into <=1000/<=65535 id sub-batches) for all dialects, not just SQLite."
+     },
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       614,
+       618
+      ],
+      "texto": "On Postgres and MySQL, deleteByIDs binds one placeholder per ID with no cap. A configured AnnotationCleanupJobBatchSize above the driver's bind-parameter limit (65535) makes every cleanup batch fail, and the cleanup job then never finishes. Split the IDs into chunks below the limit, or inline the integer IDs as the SQLite branch does."
+     }
+    ]
+   },
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#07",
+    "descricao": "The SQLite inline ID list is built with repeated fmt.Sprintf concatenation, which is quadratic in batch size.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       608,
+       613
+      ],
+      "texto": "WHAT: SQLite large-batch IN-list built with repeated fmt.Sprintf(\"%s, %d\", values, v) in a loop over ids. WHY: Quadratic string copying on large batches (e.g. 32767 IDs in added test) during cleanup, a background job path. HOW: Build with strings.Builder or strings.Join."
+     },
+     {
+      "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+      "lines": [
+       609,
+       612
+      ],
+      "texto": "The SQLite literal-ID path rebuilds the entire accumulated string for every ID, making SQL construction quadratic in batch size. Large batches explicitly supported by this PR, including the 32,767 setting in the integration test, generate substantial repeated copying and allocation before each delete, consuming cleanup time and memory. Build the list with strings.Builder and append each formatted ID once."
+     }
+    ]
+   },
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#08",
+    "descricao": "The cleanup service ticker was changed from 10 minutes to 1 minute, running every cleanup job ten times as often and increasing database load.",
+    "textoGolden": "The cleanup job ticker was changed from 10 minutes to 1 minute, which can lead to increased database load and contention due to more frequent execution of cleanup tasks. This change should be reviewed to ensure it aligns with performance expectations.",
+    "comentarios": [
+     {
+      "file": "pkg/services/cleanup/cleanup.go",
+      "lines": [
+       74,
+       78
+      ],
+      "texto": "WHAT: Cleanup ticker changed from 10 minutes to 1 minute with no justification. WHY: Runs all 8 cleanup jobs including the new multi-query (SELECT+DELETE per batch) annotation cleanup 10x more often, multiplying DB load. HOW: Revert to 10 minutes or justify the frequency change separately."
+     },
+     {
+      "file": "pkg/services/cleanup/cleanup.go",
+      "lines": [
+       77,
+       77
+      ],
+      "texto": "WHAT: The cleanup job ticker interval was changed from `time.Minute * 10` to `time.Minute * 1`. WHY: This runs all cleanup jobs (annotations, expired snapshots/versions/images, short URLs, query history) 10\u00d7 more frequently, multiplying background DB load and lock contention \u2014 the opposite of the deadlock mitigation this PR targets \u2014 and appears to be a debug leftover unrelated to the described change. HOW: Restore the ticker to `time.Minute * 10`."
+     },
+     {
+      "file": "pkg/services/cleanup/cleanup.go",
+      "lines": [
+       76,
+       77
+      ],
+      "texto": "The cleanup ticker was changed from `time.Minute * 10` to `time.Minute * 1`, a 10x increase in how often the entire cleanup job runs. This job also drives the annotation/tag cleanup path changed in this PR, which now fetches ID batches into memory and emits Error-level logs per batch, so running it every minute substantially increases DB load and log volume with no functional benefit. Unless a 1-minute cadence is explicitly intended, this should stay at 10 minutes (it reads like a leftover from testing)."
+     }
+    ]
+   },
+   {
+    "issueId": "database-performance-optimizations-grafana-codex#oph-01",
+    "descricao": "The 'running the max count delete again' test case no longer runs cleanup a second time after the PR's per-subtest seeding and cleanup, so it does not verify that a repeated max-count cleanup deletes nothing.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "notification-rule-processing-engine-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "8df850371034b73dc4dd9908cc30fa09f12a1f97",
+  "base": "47e5bd23163e6037fc0741068ac78930bba2769f",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+    "lines": [
+     308,
+     313
+    ],
+    "texto": "WHAT: useAllGrafanaPromRuleAbilities grants Duplicate, based only on Grafana create permission, even when the rule is undefined (skipToken). WHY: AlertRuleMenu ORs this with the ruler ability, so cloud/Mimir rules show a Duplicate action for users with Grafana create permission, even when the ruler is unsupported. HOW: Make the supported flag false when rule is undefined, e.g. `const MaybeSupported = loading || !rule ? NotSupported : AlwaysSupported`."
+   },
+   {
+    "id": "S2",
+    "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+    "lines": [
+     242,
+     245
+    ],
+    "texto": "WHAT: useAllAlertRuleAbilities now delegates to useAllRulerRuleAbilities, which hardcodes isFederated=false, so the previous isFederatedRuleGroup(rule.group) check is lost. WHY: Federated Mimir rule groups are no longer treated as immutable, so Edit/Delete/Pause become available for them. HOW: Keep the federated check in the CombinedRule wrapper, or pass an isFederated flag into the shared hook."
+   },
+   {
+    "id": "S3",
+    "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+    "lines": [
+     308,
+     318
+    ],
+    "texto": "When the rule is undefined (skipToken), useAllGrafanaPromRuleAbilities still reports Duplicate as supported and allowed under the Grafana create permission. AlertRuleMenu ORs this with the ruler ability, so a cloud (Mimir) rule gets a Duplicate action based on the wrong datasource's permissions. Make every ability NotSupported when `rule` is undefined."
+   },
+   {
+    "id": "S4",
+    "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+    "lines": [
+     301,
+     302
+    ],
+    "texto": "The comment says every GrafanaPromRuleDTO is Grafana-managed, but `isAlertingRule` calls prometheusRuleType.grafana.alertingRule, which is false for recording rules. The old check `rulerRuleType.grafana.rule` covered both rule types. Recording rules therefore lose Pause, Export, Restore and DeletePermanently. Use the grafana rule check (any Grafana-managed rule) for the Grafana-managed gates, or fix the comment if the narrowing is intended."
+   },
+   {
+    "id": "S5",
+    "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+    "lines": [
+     301,
+     326
+    ],
+    "texto": "The comment says all GrafanaPromRuleDTO rules are Grafana-managed, but the variable is computed with prometheusRuleType.grafana.alertingRule(rule), which is false for recording rules. Pause, Restore, DeletePermanently and ModifyExport are therefore disabled for Grafana recording rules, where the old ruler-based check (isGrafanaManagedAlertRule) enabled them. Use prometheusRuleType.grafana.rule(rule) for the Grafana-managed gating, and keep alertingRule() only for Silence."
+   },
+   {
+    "id": "S6",
+    "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+    "lines": [
+     242,
+     245
+    ],
+    "texto": "The federated-rule-group check (isFederatedRuleGroup(rule.group)) was replaced with a hardcoded `false`. useAllAlertRuleAbilities used to pass the real value, so federated Mimir rules are no longer treated as immutable and can now be edited or deleted. Derive isFederated from the group, for example from the CombinedRule group passed by the deprecated wrapper."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#01",
+    "descricao": "The pause menu item is still gated on a Grafana ruler rule, but the list view now passes only the Prometheus rule, so Pause/Resume disappears for list-view rules even when the user may pause them.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx",
+      "lines": [
+       83,
+       83
+      ],
+      "texto": "The new Prometheus-based pause ability cannot display Pause or Resume for list-view rules because the menu still requires rulerRuleType.grafana.rule(rulerRule) before rendering MenuItemPauseRule. GrafanaRuleListItem now supplies only promRule, so these actions disappear even for editable rules. Adapt the pause menu item to accept the Grafana identifier and Prometheus pause state, or load the ruler rule on demand."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#02",
+    "descricao": "The Delete menu item still requires a ruler rule, which list-view Grafana rules no longer provide, so users with delete permission lose the Delete action.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx",
+      "lines": [
+       85,
+       87
+      ],
+      "texto": "The new Prometheus-based delete ability is still gated by `canDelete && rulerRule` when rendering the Delete item. Both Grafana list-view paths now omit rulerRule, so users with delete permission lose the Delete action entirely. Render deletion using the available identifier and group identifier instead of requiring the ruler DTO, adapting the callback contract accordingly."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#03",
+    "descricao": "When the Grafana prom-rule branch is skipped (datasource rules), useAllGrafanaPromRuleAbilities(undefined) still reports Duplicate as supported and allowed by Grafana create permission, and AlertRuleMenu ORs it with the ruler ability, so Duplicate appears on cloud rules even when the ruler check denies it.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx",
+      "lines": [
+       89,
+       92
+      ],
+      "texto": "WHAT: canDuplicate ORs ruler ability with grafana ability where grafana path is skipToken=>undefined for cloud rules, and useAllGrafanaPromRuleAbilities(undefined) returns Duplicate=[true,true] whenever the user has global Grafana create permission. WHY: Any user with Grafana rule-create gets Duplicate menu item on cloud/Mimir rules even when ruler abilities deny it \u2014 incorrect authorization gating. HOW: Return NotSupported for all abilities when rule is skipToken/undefined, or gate grafana branch on prometheusRuleType.grafana.rule(promRule) before ORing."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       307,
+       314
+      ],
+      "texto": "useAllGrafanaPromRuleAbilities returns AlwaysSupported for Duplicate when rule is undefined (skipToken): loading is false from the !rule early-return, so MaybeSupported=true and duplicateSupported=true. ORed in AlertRuleMenu/RuleActionsButtons this leaks Grafana create permission into non-Grafana rules. Gate MaybeSupported/duplicateSupported on rule existence (e.g. NotSupported when !rule)."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       287,
+       318
+      ],
+      "texto": "useAllGrafanaPromRuleAbilities must return NotSupported for all actions when rule is undefined (skipToken). Currently MaybeSupported falls back to AlwaysSupported when !loading, so Duplicate=[true, global-create] is true for a cloud rule passed as skipToken, and AlertRuleMenu/RuleActionsButtons OR-logic then incorrectly enables Duplicate (and Explore). Guard with if (!rule) return all-NotSupported abilities or make MaybeSupported require rule."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#04",
+    "descricao": "The refactor of useAllAlertRuleAbilities into useAllRulerRuleAbilities drops the isFederatedRuleGroup check (isFederated is hardcoded false), so federated Mimir rules are reported as editable and deletable.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       223,
+       228
+      ],
+      "texto": "useAllAlertRuleAbilities now delegates to useAllRulerRuleAbilities, which hardcodes isFederated = false. The previous isFederatedRuleGroup(rule.group) check is gone, so federated Mimir rules are no longer treated as immutable and can show edit and delete abilities. Keep the federation check in this wrapper, or pass the federation state into the shared hook."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       227,
+       228
+      ],
+      "texto": "Delegating useAllAlertRuleAbilities to useAllRulerRuleAbilities discards the group's federation status and replaces the previous isFederatedRuleGroup(rule.group) check with a constant false. Legacy RuleActionsButtons consequently enables editing rules in groups with source_tenants, although these groups were explicitly immutable before this change. Preserve the CombinedRule federation check in the wrapper or pass federation status into the delegated ability calculation."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       227,
+       228
+      ],
+      "texto": "Preserve the federated-group immutability check when delegating this CombinedRule hook. Previously useAllAlertRuleAbilities inspected rule.group with isFederatedRuleGroup and disabled modification/removal for federated rules. The replacement delegates to a hook that hardcodes isFederated=false and receives no group information. Existing useAlertRuleAbility/useAlertRuleAbilities consumers therefore now receive supported update/delete abilities for federated rules when datasource permissions allow them, exposing operations that the previous contract explicitly prohibited. Pass the federation state through or retain that restriction in this wrapper."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#05",
+    "descricao": "The Grafana prom-rule abilities gate Pause, Restore, Export and DeletePermanently on alertingRule(rule) while the comment claims it checks Grafana-managed rules, so Grafana recording rules lose these actions in the list view.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       301,
+       302
+      ],
+      "texto": "The comment says all GrafanaPromRuleDTO rules are Grafana-managed, but the variable it describes is `isAlertingRule`. That variable is true only for alerting rules and false for Grafana recording rules. Fix the comment, or rename the variable, so it says the check is for alerting rules. As written, readers will expect Pause, Export and Silence to be enabled for recording rules."
+     },
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       301,
+       328
+      ],
+      "texto": "The comment says all GrafanaPromRuleDTO rules are Grafana-managed, but the check used is alertingRule(rule), which is false for recording rules. Pause, Restore, ModifyExport and DeletePermanently are therefore wrongly disabled for Grafana recording rules, where the old isGrafanaManagedAlertRule check allowed them. Use prometheusRuleType.grafana.rule(rule) for these abilities, and keep alertingRule only for Silence."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#06",
+    "descricao": "The comment claims GrafanaPromRuleDTO abilities have no loading state, but the next line makes support depend on the folder loading flag.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+      "lines": [
+       308,
+       309
+      ],
+      "texto": "The comment says there is no loading state, but the next line is `loading ? NotSupported : AlwaysSupported`. `loading` comes from the folder fetch. Update the comment to say that support depends on the folder loading state."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#07",
+    "descricao": "The Grafana branch of the filtered rule list renders GrafanaRuleListItem without a key prop, so React reconciles the streaming list by index and warns about missing keys.",
+    "textoGolden": "The rendered GrafanaRuleListItem is missing the required key prop for React list items. This can cause rendering issues when the list order changes.",
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/rule-list/FilterView.tsx",
+      "lines": [
+       157,
+       162
+      ],
+      "texto": "WHAT: The grafana branch of the filtered list renders <GrafanaRuleListItem .../> without a `key` prop, dropping the `key={key}` that the replaced <GrafanaRuleLoader key={key} .../> had. WHY: `rules.map` renders a dynamic list keyed by getRuleKey/hashRule; without a key React logs duplicate-key warnings and reconciles rows by index, so as the async rule stream updates/reorders the wrong rule row can be reused/mutated (stale state, swapped actions). HOW: add `key={key}` (the value is already destructured on line 152) to the <GrafanaRuleListItem> element."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/FilterView.tsx",
+      "lines": [
+       157,
+       162
+      ],
+      "texto": "WHAT: Grafana branch of FilterViewResults renders GrafanaRuleListItem without key={key} while datasource and unknown branches pass key. WHY: Breaks React list reconciliation \u2014 wrong item reuse, stale actions/state and console key warnings for every Grafana hit. HOW: Add key={key} to the GrafanaRuleListItem element."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#08",
+    "descricao": "The test named 'should render More button with action menu options' only checks the More button exists, never the menu options.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx",
+      "lines": [
+       85,
+       101
+      ],
+      "texto": "The test 'should render More button with action menu options' only checks that the More button exists. It finds the button by name 'More', so the aria-label and text assertions are tautological. It would pass even if the menu had no actions or the abilities were broken. Click the button and assert the expected menu items, or rename the test to match what it checks."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx",
+      "lines": [
+       85,
+       102
+      ],
+      "texto": "Test named 'should render More button with action menu options' never verifies any action menu option: the body only asserts the More button exists and has aria-label/text 'More'. It would still pass if the dropdown were rendered empty (Silence/Duplicate/Copy link/Export all missing), i.e. the behaviour the name promises is not covered. Either open the menu and assert the menu items, or rename the test to reflect that it only checks the trigger button's rendering/accessibility."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx",
+      "lines": [
+       85,
+       102
+      ],
+      "texto": "Test named 'should render More button with action menu options' never opens the menu nor asserts menu items \u2014 it only checks More button presence/aria/text. Click More and assert expected menuitems (or rename to 'should render More button') so it fails if menu actions break."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#09",
+    "descricao": "GrafanaGroupLoader's JSDoc still says it loads from Prometheus and Ruler endpoints after the ruler query was removed.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx",
+      "lines": [
+       24,
+       28
+      ],
+      "texto": "The JSDoc for GrafanaGroupLoader still says \"Loads an evaluation group from Prometheus and Ruler endpoints.\" but this PR removed the ruler API query entirely \u2014 the component now only calls useGetGrafanaGroupsQuery (Prometheus). The documentation describes a data source the function no longer consumes; update it to state only the Prometheus endpoint is loaded (and the same stale \"Ruler response\" reference in the expectedRulesCount prop doc at lines 18\u201319 should be corrected)."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#11",
+    "descricao": "For list-view Grafana rules RuleActionsButtons gets only promRule, so the Silence menu item is shown but the silence drawer, still gated on a ruler alerting rule, never renders and clicking Silence does nothing.",
+    "textoGolden": "RuleActionsButtons is invoked with only promRule, but SilenceGrafanaRuleDrawer inside RuleActionsButtons still depends on a Grafana Ruler rule being present, so for Grafana rules coming from list views the 'Silence notifications' menu entry (now driven by Grafana Prom abilities) will toggle showSilenceDrawer without ever rendering the drawer. This means clicking 'Silence notifications' for these rules has no visible effect, even when abilities indicate silencing is allowed.",
+    "comentarios": [
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx",
+      "lines": [
+       47,
+       47
+      ],
+      "texto": "Passing only promRule enables the Silence notifications menu item but leaves RuleActionsButtons.V2 unable to render its silence drawer, which is guarded by rulerRuleType.grafana.alertingRule(rule). Clicking Silence only updates showSilenceDrawer and displays nothing because rule is undefined. Update the drawer to accept a rule UID\u2014the inspected SilenceGrafanaRuleDrawer only needs grafana_alert.uid\u2014and allow the Prometheus alerting-rule path to render it."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx",
+      "lines": [
+       47,
+       47
+      ],
+      "texto": "The new list item passes only promRule to RuleActionsButtons, but that component renders SilenceGrafanaRuleDrawer only under `rulerRuleType.grafana.alertingRule(rule) && showSilenceDrawer`. With rule undefined, clicking the newly enabled 'Silence notifications' action only sets state and never opens a drawer. Adapt the silence rendering path to load/use the rule by its Prometheus identifier before switching this caller to promRule-only."
+     },
+     {
+      "file": "public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx",
+      "lines": [
+       130,
+       144
+      ],
+      "texto": "WHAT: getEditableIdentifier now enables a prom-only path (Grafana uid identifier with rulerRule undefined) but the silence drawer still renders only when rulerRuleType.grafana.alertingRule(rule) is true. WHY: In the list view Silence menu item can be shown via grafana abilities, clicking it sets showSilenceDrawer but the drawer never mounts, so Silence silently does nothing. HOW: Gate the drawer on promRule as well or provide a prom-based silence drawer."
+     }
+    ]
+   },
+   {
+    "issueId": "notification-rule-processing-engine-grafana-codex#opa-01",
+    "descricao": "RulesTable RBAC tests only mock useGrafanaPromRuleAbilities and leave useRulerRuleAbilities denied, so the ruler-based Delete permission branch of AlertRuleMenu is never tested.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "eb9623b4e787303a3bd15e10bbbdb78d59875ac6",
+  "base": "28e3db2520d4ea28c57b08da57b83917ba7b2e15",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/spans/consumers/process/factory.py",
+    "lines": [
+     141,
+     141
+    ],
+    "texto": "WHAT: `val[\"end_timestamp_precise\"]` is a hard key lookup on incoming span JSON. WHY: any span without this field raises KeyError inside process_batch, which fails the whole batch and can stall the consumer on a poison message. HOW: use `.get()` with a fallback, for example to `start_timestamp_precise` or the current time, or skip the span."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/scripts/spans/add-buffer.lua",
+    "lines": [
+     30,
+     30
+    ],
+    "texto": "WHAT: The redirect-following loop limit was reduced from 10000 to 1000, and the comment explaining it was removed. WHY: segment trees deeper than 1000 are no longer joined correctly, which splits segments. This is a behaviour change unrelated to span eviction. HOW: restore the 10000 limit."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/scripts/spans/add-buffer.lua",
+    "lines": [
+     46,
+     53
+    ],
+    "texto": "The script switches segment keys from sets to sorted sets without changing the key names. In-flight keys written as sets before deploy make zcard/zunionstore (and zadd/zscan in buffer.py) fail with WRONGTYPE. This aborts the script and breaks processing and flushing of those segments. Use a new key prefix for the sorted-set format, or drain the old keys before rollout."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/spans/buffer.py",
+    "lines": [
+     446,
+     449
+    ],
+    "texto": "The PR removed the flush-time span-count check, so the `max_segment_spans` constructor parameter (default 1001) is never read. Segment size is now capped by a hardcoded 1000 in add-buffer.lua. Changing the setting has no effect, and the Python and Lua limits can silently disagree. Pass the limit into the Lua script as an argument, or remove the unused parameter."
+   },
+   {
+    "id": "S5",
+    "file": "tests/sentry/spans/test_buffer.py",
+    "lines": [
+     126,
+     151
+    ],
+    "texto": "Every span in test_buffer.py gets the same end_timestamp_precise (1700000000.0), and no test exceeds the 1000-span cap. The tests would still pass if the zadd score were wrong or if zpopmin evicted the wrong spans. Add a test with more than 1000 spans that have distinct timestamps, and assert that only the 1000 newest remain after flush."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/spans/buffer.py",
+    "lines": [
+     449,
+     449
+    ],
+    "texto": "The flush-time check against `max_segment_spans` was removed. Oversized segments used to be skipped with a metric and an error log. They are now silently truncated to a hardcoded 1000 spans in add-buffer.lua. The configurable `max_segment_spans` option no longer has any effect, and consumers lose the signal that spans were dropped. Either keep the check, or pass `max_segment_spans` into the Lua script and emit a metric when spans are trimmed."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#03",
+    "descricao": "ZUNIONSTORE merges sorted sets with the default SUM aggregate, so a span payload present in both keys gets a doubled end-timestamp score and is wrongly kept by the oldest-first eviction.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       46,
+       53
+      ],
+      "texto": "ZUNIONSTORE uses AGGREGATE SUM by default, so when the same span payload is present in both `set_key` and the merged `span_key`/`parent_key` (duplicate delivery is anticipated by this buffer's own comments), its score is added instead of being kept equal to `end_timestamp_precise`. Because eviction at line 63 (`zpopmin` by score) compares scores across all members of `set_key`, a summed score makes the duplicated span appear far newer than its real end timestamp and biases eviction away from legitimately-old spans, breaking the stated 'evict oldest end timestamps' contract. Use ZUNIONSTORE ... AGGREGATE MIN (or MAX) so a duplicate keeps a single end timestamp score rather than doubling it."
+     },
+     {
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       53,
+       53
+      ],
+      "texto": "ZUNIONSTORE uses its default SUM aggregation, so replayed payloads present in both the temporary parent_key and the resolved set_key receive the sum of their end timestamps. Replaying a child whose parent already redirects to an ancestor therefore makes that old span score roughly twice its actual timestamp, protecting it from eviction over genuinely newer spans. Use AGGREGATE MAX (or MIN for identical timestamp scores) on both union operations to preserve timestamp scores when members overlap."
+     },
+     {
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       47,
+       47
+      ],
+      "texto": "ZUNIONSTORE defaults to AGGREGATE SUM, so a payload present in both the destination and source has its timestamp doubled rather than preserved. This can happen when a previously merged span is replayed into its original subtree key. The duplicated span then sorts after genuinely newer spans and survives ZPOPMIN eviction incorrectly. Specify AGGREGATE MAX (or MIN, since identical payloads should have identical timestamps) on both union calls so merging remains idempotent and scores remain end timestamps."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#04",
+    "descricao": "Segment keys change from Redis sets to sorted sets under the same key names, so keys left by the previous release make ZADD, ZCARD and ZSCAN fail with WRONGTYPE during rollout, crashing span processing and flushing.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       46,
+       54
+      ],
+      "texto": "WHAT: Changed SET ops (scard/sunionstore) to ZSET ops (zcard/zunionstore/zpopmin) with no migration breaks in-flight segments. WHY: Old keys of type SET still live up to TTL; ZCARD/ZUNIONSTORE/ZSCAN/ZADD on the opposite type raises WRONGTYPE and fails inserts/flushes during rollout."
+     },
+     {
+      "file": "src/sentry/spans/buffer.py",
+      "lines": [
+       197,
+       199
+      ],
+      "texto": "The segment keys were migrated from Redis SETs to SORTED SETs (ZADD/ZSCAN/ZCARD/ZUNIONSTORE/ZPOPMIN), but nothing handles the keys written by the currently deployed release. During a rolling deploy, an existing `span-buf:s:{...}:{id}` key is still a SET, so this `p.zadd(...)` (and the flusher's `p.zscan(...)`, and the Lua `zcard`/`zunionstore`) raises WRONGTYPE 'Operation against a key holding the wrong kind of value'. That exception is unhandled: it aborts the whole pipeline/Lua invocation and crashes the consumer batch. Add a key-schema version to the key name (or a migration/fallback) so old SET-typed keys cannot be touched as sorted sets."
+     },
+     {
+      "file": "src/sentry/spans/buffer.py",
+      "lines": [
+       197,
+       199
+      ],
+      "texto": "The new ZADD writes sorted sets into the same span-buf:s namespace previously populated by SADD, without migrating existing set keys. During deployment, inserting into an existing buffered segment fails with WRONGTYPE, and the new ZSCAN reader likewise fails on pending old-format segments instead of flushing them. Introduce a coordinated migration/drain or a versioned namespace with compatible handling of pending old-format buffers."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#05",
+    "descricao": "Claims zpopmin eviction can drop the root span while the has-root flag stays set, flushing a segment without its root.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       62,
+       64
+      ],
+      "texto": "WHAT: zpopmin eviction by lowest end_timestamp has no protection for the segment/root span. WHY: Root with smallest or tied timestamp (tests use identical timestamps, ties break lexicographically) is evicted while hrs flag stays 1, flushing a root-marked segment missing its root."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+    "descricao": "max_segment_spans is still a constructor parameter but is no longer enforced; the segment cap is now hardcoded to 1000 in the Lua script, so the configured value is ignored.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/buffer.py",
+      "lines": [
+       439,
+       449
+      ],
+      "texto": "This hunk removes the only load-time span-count cap (`self.max_segment_spans`): previously a segment exceeding 1001 spans was logged, deleted from `payloads`/`cursors`, and skipped, but now every scanned span is unconditionally appended via `payloads[key].extend(...)`. The new bound relies entirely on insert-time eviction in the Lua script; if that eviction fails to bound a key (e.g. duplicated/scored members or the concurrent-writer case the code itself warns about at lines 457-461), this method will now materialize an unbounded number of spans into memory and emit them, whereas before it was safely skipped. Re-introduce a span-count guard (or verify the invite-time eviction strictly caps cardinality) to keep memory bounded."
+     },
+     {
+      "file": "src/sentry/spans/buffer.py",
+      "lines": [
+       446,
+       449
+      ],
+      "texto": "buffer.py declares the segment span limit as the configurable `max_segment_spans` (default 1001, line 150) and this hunk removed the `len(payloads[key]) > self.max_segment_spans` size guard from the flush path, while the other changed file (add-buffer.lua line 62) now enforces a hardcoded cap of 1000 spans. The two changed files disagree on what the segment span limit is: the Lua cap (1000) is not the declared `max_segment_spans`, and the buffer no longer applies the declared limit at all. If `max_segment_spans` is configured below 1000 (or below the Lua cap), oversized segments that this code used to skip will now be flushed. Reconcile the constant: either keep/restore the buffer-side guard against `self.max_segment_spans`, or make the Lua cap derive from the same limit instead of hardcoding 1000."
+     },
+     {
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       62,
+       63
+      ],
+      "texto": "The segment size cap is hardcoded as 1000 here, but SpansBuffer still declares max_segment_spans = 1001 in src/sentry/spans/buffer.py, and this PR deleted the flush-time guard that used that constant. The declared limit and the actually-enforced limit now disagree (and the Python constant is no longer honored anywhere). Make the Lua cap and the Python constant agree \u2014 either pass max_segment_spans in as an ARGV instead of the literal 1000, or update the declared constant to 1000 \u2014 so the buffer's enforced bound matches the value it declares."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#08",
+    "descricao": "Tests give every span the same end timestamp and never exceed 1000 spans, so the new score ordering and oldest-first eviction are not tested.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/spans/test_buffer.py",
+      "lines": [
+       120,
+       152
+      ],
+      "texto": "All spans in the fixture use identical end_timestamp_precise=1700000000.0, so the ZSET score-dependent behavior (ordering by end time, zunionstore score merge, and Lua zpopmin keeping newest 1000) is neutralised \u2014 tests pass even if scores are wrong or eviction keeps the wrong end. Use distinct timestamps and add a >1000-span trimming test asserting oldest evicted."
+     },
+     {
+      "file": "tests/sentry/spans/test_buffer.py",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The missing test for the new trim path (zset ordering/trim by end_timestamp_precise, the >1000-span zpopmin path) is a coverage gap. Add a test that verifies the new trim behavior."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01",
+    "descricao": "The span redirect-walk limit was cut from 10000 to 1000 iterations, so trees deeper than 1000 may not resolve to the correct segment root.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "authzservice-improve-authz-caching-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "7562f37880367411a62304bcdcdc178bced23906",
+  "base": "5634ca44f799a82161f0401dadc286452f3bdbf8",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/services/authz/rbac/service.go",
+    "lines": [
+     153,
+     155
+    ],
+    "texto": "WHAT: A denial is cached for shortCacheTTL and the early return at the top of Check skips the permission re-query, so a denied (user, action, name, folder) stays denied until the entry expires. WHY: if a user is granted access, or the resource is created and permissions are assigned right after an earlier check, Check keeps returning Allowed:false for the whole TTL. This is the stale-permission case the PR is meant to fix. HOW: keep the TTL very short or drop it, or invalidate denial entries when permissions change, or on a denial hit re-query at most once per short interval."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/services/authz/rbac/cache.go",
+    "lines": [
+     30,
+     32
+    ],
+    "texto": "WHAT: userPermDenialCacheKey joins action, name and parent with '_' and does not escape them, so different (name, parent) pairs can produce the same key. For example, name 'a' with parent 'b_c' and name 'a_b' with parent 'c' both give 'a_b_c'. WHY: a denial cached for one resource can wrongly deny access to a different resource. HOW: use a separator that cannot appear in UIDs, or length-prefix or encode each component."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/services/authz/rbac/service_test.go",
+    "lines": [
+     981,
+     982
+    ],
+    "texto": "The comment says access is allowed to prove the permCache is not consulted, but the map value is `false`, which denies. If the denial cache were ignored, the test would still return denied, so it proves nothing. Set the value to `true` so the test matches the comment."
+   },
+   {
+    "id": "S4",
+    "file": "pkg/services/authz/rbac/cache.go",
+    "lines": [
+     30,
+     32
+    ],
+    "texto": "The denial cache key joins name and parent with '_' without escaping, so different (name, parent) pairs can map to the same key (e.g. name 'a_b'+parent 'c' vs name 'a'+parent 'b_c'). A cached denial for one resource then wrongly denies another that is allowed, until the TTL expires. Use a delimiter that cannot appear in UIDs or length-prefix the components."
+   },
+   {
+    "id": "S5",
+    "file": "pkg/services/authz/rbac/service_test.go",
+    "lines": [
+     981,
+     982
+    ],
+    "texto": "The deny-entry test seeds permCache with dash1 set to false, although its comment says it grants access to prove the permission cache is not checked. Without the denial-cache short-circuit the request would still be denied, so the test passes with the feature removed. Seed permCache with true so that only the denial entry can produce the deny."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#01",
+    "descricao": "The denial cache key joins name and parent folder with underscores, so different name/parent pairs can collide and a cached denial for one resource denies another until TTL expiry.",
+    "textoGolden": "The cache key construction in `userPermDenialCacheKey` uses simple string concatenation with underscores, which can lead to ambiguous keys and collision risks when any component contains underscores or is empty. This could result in incorrect denial cache hits, affecting user permissions.",
+    "comentarios": [
+     {
+      "file": "pkg/services/authz/rbac/cache.go",
+      "lines": [
+       30,
+       31
+      ],
+      "texto": "The denial cache key does not distinguish underscores inside resource and parent UIDs from its field separators. For the same namespace, user and action, (name=\"a_b\", parent=\"c\") and (name=\"a\", parent=\"b_c\") generate the same key, so denying the first request makes Check return false for the second even if its permissions explicitly allow it. Encode the components unambiguously, for example as a JSON tuple or length-prefixed fields."
+     },
+     {
+      "file": "pkg/services/authz/rbac/cache.go",
+      "lines": [
+       30,
+       31
+      ],
+      "texto": "The denial cache key is not injective: for the same namespace, user and action, `(name=\"a_b\", parent=\"c\")` and `(name=\"a\", parent=\"b_c\")` produce the same key. After the first request stores a denial, Check's new early cache return denies the second request without checking its permissions, even if it is allowed. Encode the components unambiguously (for example a JSON tuple or length-prefixed components) and add a test verifying that these two requests do not share a denial entry."
+     },
+     {
+      "file": "pkg/services/authz/rbac/cache.go",
+      "lines": [
+       30,
+       31
+      ],
+      "texto": "Make the denial-cache key encode component boundaries unambiguously (for example, length-prefix or serialize the components). For the same namespace, user and action, name `a_b` with parent `c` and name `a` with parent `b_c` both produce the suffix `_a_b_c`. Underscores can occur in resource UIDs, so denying the first request caches a key that causes Check to immediately deny the second request without evaluating its permissions, even if that resource is allowed."
+     }
+    ]
+   },
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#04",
+    "descricao": "The explicit denial-cache test seeds the cached permission as false instead of true, so it would pass without the denial-cache short-circuit and does not verify it.",
+    "textoGolden": "The test comment says the cached permissions 'allow access', but the map stores false for dashboards:uid:dash1, so checkPermission will still treat this scope as not allowed.",
+    "comentarios": [
+     {
+      "file": "pkg/services/authz/rbac/service_test.go",
+      "lines": [
+       973,
+       995
+      ],
+      "texto": "This test claims to prove the permDenialCache short-circuit (service.go:116-121) denies access, but it seeds the cached permission as map[string]bool{\"dashboards:uid:dash1\": false} (a deny), contradicting its comment \"Allow access to the dashboard to prove this is not checked\". Because the cached set is already a deny, checkPermission returns allowed=false, the code falls through to the DB path, and the fake store also returns no permissions, so Allowed stays false. The assertion passes even if the entire permDenialCache early-return were deleted. Seed the cached permission as true (map[string]bool{\"dashboards:uid:dash1\": true}) so that only the denial-cache entry can force Allowed=false; otherwise the test does not verify the feature."
+     },
+     {
+      "file": "pkg/services/authz/rbac/service_test.go",
+      "lines": [
+       981,
+       982
+      ],
+      "texto": "The comment says \"Allow access to the dashboard to prove this is not checked\", but the code sets the permCache entry to `false`, which is a deny. The test therefore does not show that the permission cache is skipped. Set the value to `true`, or change the comment to match."
+     },
+     {
+      "file": "pkg/services/authz/rbac/service_test.go",
+      "lines": [
+       973,
+       995
+      ],
+      "texto": "The 'Should deny on explicit cache deny entry' test would still pass if the permDenialCache check were removed. permCache is seeded with dash1:false, not true as the comment claims, so the normal path also denies. Seed permCache with {\"dashboards:uid:dash1\": true} and a store that grants the permission, so Allowed=false can only come from the denial entry."
+     }
+    ]
+   },
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#05",
+    "descricao": "A cached permission set that denies a resource always triggers a full DB permission reload, so checks over many inaccessible dashboards issue one query per resource instead of being served from cache.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/authz/rbac/service.go",
+      "lines": [
+       123,
+       139
+      ],
+      "texto": "Every distinct resource denied by the cached permission map triggers a reload of the entire user's action permission set, because the denial cache is resource-specific and a cached false result always falls through to getIdentityPermissions. Sequential checks of N inaccessible dashboards therefore execute N full permission queries and cache rewrites even with a current action-wide cache; getUserPermissions' singleflight only merges overlapping requests. Bound refreshes per user/action with a short refresh cooldown or generation marker so different resource misses can share a recent refresh."
+     }
+    ]
+   },
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#08",
+    "descricao": "The Service struct comment listing its caches was not updated for the new permDenialCache field.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/authz/rbac/service.go",
+      "lines": [
+       55,
+       58
+      ],
+      "texto": "The struct doc comment still reads \"// Cache for user permissions, user team memberships and user basic roles\", but this PR added the new `permDenialCache` field (line 58). The comment no longer enumerates what the struct actually holds and misleads a reader about the new denial-cache field; update it to mention the permission-denial cache so the prose matches the fields."
+     }
+    ]
+   }
+  ]
+ },
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "e944e2acf1e64421860a8e827f93ad06c169621b",
+  "base": "272cfc68dcc88615396ae62ed1571918e9c58ad3",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+    "lines": [
+     100,
+     100
+    ],
+    "texto": "WHAT: remove() now calls idpDelegate.getByAlias(alias) on every call. Previously it only did so when the alias cache key was invalid. WHY: every IDP removal now costs an extra database query even when the cached entry already has the model. HOW: resolve storedIdp from the cached entry when it exists, and fall back to the delegate lookup only on a cache miss or when the key is invalid."
+   },
+   {
+    "id": "S2",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+    "lines": [
+     381,
+     381
+    ],
+    "texto": "The cleanup registers removal of the literal alias \"alias\" instead of the IDP just created (\"idp-alias-\" + i). The created IDPs are never cleaned up, and the cleanup targets a nonexistent IDP. This leaks state into later tests."
+   },
+   {
+    "id": "S3",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+    "lines": [
+     381,
+     381
+    ],
+    "texto": "The cleanup registered for each created IDP targets the literal alias \"alias\", which never exists, so the created IDPs are never removed. This leaks state into other tests, and the cleanup call itself may fail with a 404. Use the loop's alias, e.g. `final String alias = \"idp-alias-\" + i;` and register `testRealm().identityProviders().get(alias)::remove`. The same fix applies at line 425."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+    "descricao": "The test registers cleanup for the literal alias \"alias\" instead of the created IDP aliases, so the created identity providers are never cleaned up.",
+    "textoGolden": "Cleanup reference uses incorrect alias - should be 'idp-alias-' + i instead of 'alias'.",
+    "comentarios": [
+     {
+      "file": "testCacheIDPForLogin",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The cleanup registers `identityProviders().get(\"alias\")::remove` inside the loop, and also for idp-alias-20. \"alias\" is a literal string rather than the actual IDP alias, so none of the created IDPs is ever cleaned up. Use the real alias (e.g. the loop's alias variable / \"idp-alias-20\") when registering the cleanup. As written, the 21 leaked providers can skew later tests that count IDPs or login caches."
+     },
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+      "lines": [
+       381,
+       381
+      ],
+      "texto": "The cleanup is registered for the literal alias \"alias\" rather than the IDP just created (\"idp-alias-\" + i). The 20 created IDPs are never removed, and the same applies to the cleanup at line 425 for \"idp-alias-20\". Use the actual alias, e.g. get(\"idp-alias-\" + i)::remove, so the IDPs don't leak into other tests."
+     },
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+      "lines": [
+       381,
+       381
+      ],
+      "texto": "The cleanup registered here uses the literal alias \"alias\", but the provider just created has alias \"idp-alias-\" + i. The same mismatch is repeated at line 425 for \"idp-alias-20\". The cleanup can never find/remove the created providers (null dereference/404 on remove, or at best a silent no-op), so none of the 21 IDPs this test creates are cleaned up and the realm is left polluted for later tests. Use the actual alias, e.g. `testRealm().identityProviders().get(\"idp-alias-\" + i)::remove` and `get(\"idp-alias-20\")::remove`."
+     }
+    ]
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#05",
+    "descricao": "On a partial cache miss getForLogin merges the previously read login query into a newly revisioned entry, so a concurrent invalidation can be lost and stale IDP IDs for other organizations persist.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+      "lines": [
+       236,
+       240
+      ],
+      "texto": "Do not merge the previously read query into a newly revisioned entry without verifying its revision. A reader can obtain a query containing organization A's IDs, then another transaction disables a provider or changes its organization and invalidates this key. When the reader requests an uncached organization B, this branch obtains a fresh revision but copies the old A results into the new query and publishes it using the current counter. Subsequent A requests receive stale membership indefinitely (a disabled or moved provider still exists, so the null-ID fallback does not repair it). Rebuild rather than copy after invalidation, or ensure the old query's revision is still valid atomically before publishing the merged entry."
+     }
+    ]
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#08",
+    "descricao": "Login-cache invalidation on update compares the organization-aware enabled state, so changing a broker to private while its organization is disabled skips invalidation and leaves the now-private IDP in the cached login list.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+      "lines": [
+       405,
+       406
+      ],
+      "texto": "The early return compares the original IDP's organization-aware enabled state rather than the persisted enabled state used to populate the login cache. If a cached public IDP's organization is disabled and an admin changes BROKER_PUBLIC to false, the original predicate is false because the organization is disabled and the updated predicate is false because the broker is private, so the stale ID remains cached; re-enabling the organization displays the now-private broker because the login bean only rechecks isEnabled. Compare raw persisted models for login-cache invalidation, for example by loading the original through idpDelegate.getById before applying this predicate."
+     }
+    ]
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#11",
+    "descricao": "The LoginFilter javadoc still claims its constants are all criteria for login availability although getLoginPredicate now also checks organization link and BROKER_PUBLIC.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "server-spi/src/main/java/org/keycloak/models/IdentityProviderStorageProvider.java",
+      "lines": [
+       252,
+       256
+      ],
+      "texto": "getLoginPredicate now also filters on organization link plus the BROKER_PUBLIC config (line 254), but the enum's javadoc directly above (lines 215-217) still states that the enum \"contains all fields that are considered when deciding if a provider should be available for login or not\", presenting ENABLED/LINK_ONLY/HIDE_ON_LOGIN as the exhaustive criteria. Any reader \u2014 or a future LoginFilter constant added against that documented assumption \u2014 will believe organization link and BROKER_PUBLIC play no role. Update the javadoc to include the organization-link/public-broker condition, or move the condition into a documented LoginFilter constant."
+     }
+    ]
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#13",
+    "descricao": "The login-cache test creates only public org-linked IDPs, so the new BROKER_PUBLIC check in getLoginPredicate is not covered.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+      "lines": [
+       369,
+       388
+      ],
+      "texto": "Test fixture never covers the new BROKER_PUBLIC branch: all org-linked IDPs are created public, so reverting the getLoginPredicate public-check leaves all counts unchanged and the test still passes. Add at least one org-linked non-public (BROKER_PUBLIC false/missing) enabled IDP and assert it is excluded from getForLogin counts."
+     }
+    ]
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#14",
+    "descricao": "The test never consumes or asserts getForLogin's returned providers and never repeats a query, so the cache-hit path that builds the result is untested and could return wrong IDPs without failing.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+      "lines": [
+       401,
+       414
+      ],
+      "texto": "Consume and assert the results of getForLogin, including a repeat query for the same mode/organization to exercise a cache hit. All calls in this test discard the returned stream and assert only IdentityProviderListQuery contents. The implementation populates that query before reconstructing the returned models, so returning an empty stream (or the wrong providers) at line 254 would still pass the entire test. Assert the expected provider identities on both the initial query and the cached query, rather than only the internal cached count."
+     }
+    ]
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#opa-01",
+    "descricao": "Adding the organization/BROKER_PUBLIC check to the shared LoginFilter.getLoginPredicate also changes IdentityProviderBean.federatedProviderPredicate, so with organizations disabled a user's linked IdP that has an organizationId but is not public is no longer shown on the login page.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "303cdc2caf256aa5df660611120c2e3f7392365d",
+  "base": "58ba11ecbd60863e2bfc6e32f0399ed4feb3927a",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+    "lines": [
+     101,
+     109
+    ],
+    "texto": "The shouldInstrumentRequestSize=false cases never assert that the request size metric is absent. If CheckHealth or CollectMetrics started recording request size, the test would still pass. Add an else branch asserting CollectAndCount(promRegistry, metricRequestSize) == 0."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/services/pluginsintegration/clientmiddleware/logger_middleware.go",
+    "lines": [
+     49,
+     58
+    ],
+    "texto": "The traceID log param was removed and the code now relies on FromContext to supply it. A grep found no traceID handling in pkg/infra/log, so the Plugin Request Completed log may lose its traceID. Verify that FromContext adds the trace ID, or keep adding it from tracing.TraceIDFromContext."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#03",
+    "descricao": "TestLogger.FromContext returns a fresh TestLogger instead of the receiver, so logs written via the contextual logger are lost to assertions on the original fake.",
+    "textoGolden": "The `TestLogger.FromContext` method returns a new `TestLogger` instance via `NewTestLogger()` instead of returning the receiver (f). This causes logs to be recorded on an un-referenced instance, leading to broken test assertions that expect logs to be recorded on the original logger.",
+    "comentarios": [
+     {
+      "file": "pkg/plugins/log/fake.go",
+      "lines": [
+       46,
+       48
+      ],
+      "texto": "WHAT: TestLogger.FromContext returns a fresh NewTestLogger instead of the receiver. WHY: LoggerMiddleware calls m.logger.FromContext(ctx).Info so the write goes to a throwaway instance and assertions on the original TestLogger Calls/Message never observe it, diverging from real wrapper that preserves logger context. HOW: Return f (or a child sharing f) instead of NewTestLogger."
+     }
+    ]
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#06",
+    "descricao": "The test function is still named TestInstrumentationMiddleware after the middleware was renamed to MetricsMiddleware.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+      "lines": [
+       21,
+       21
+      ],
+      "texto": "TestInstrumentationMiddleware still carries the old name even though this PR renamed the middleware under test to MetricsMiddleware (newMetricsMiddleware/NewMetricsMiddleware) and the file to metrics_middleware_test.go. The identifier advertises the superseded \"InstrumentationMiddleware\" name; rename it (e.g. TestMetricsMiddleware) so the test name matches the code it exercises."
+     },
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+      "lines": [
+       21,
+       21
+      ],
+      "texto": "Test function still named TestInstrumentationMiddleware but it constructs and asserts MetricsMiddleware (newMetricsMiddleware). Rename to TestMetricsMiddleware to match the renamed middleware."
+     }
+    ]
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#sncc-02",
+    "descricao": "The FromContext doc comment is copied from New() and misdescribes the method, which attaches attributes stored in the context.Context.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "fixing-re-authentication-with-passkeys-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "25bf964a844ea0bc64dc838bff038345048cb1fa",
+  "base": "744e031019af8dbaacf407e792fbb3756364e2b4",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernamePasswordFormTest.java",
+    "lines": [
+     279,
+     308
+    ],
+    "texto": "reauthenticationOfUserWithoutPasskey sets passkeys enabled to FALSE for the realm, so the absence of the webauth form is guaranteed by isPasskeysEnabled() and not by the new per-user isConfiguredFor check. The test would still pass if that check were removed. Enable passkeys for the realm (as the sibling test in PasskeysUsernameFormTest does) so that the user-without-passkey case is actually exercised."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#03",
+    "descricao": "PasswordForm now accepts passkey-only users, but only the keycloak.v2 login-password.ftl renders the passkeys conditional UI; the base template (used by the legacy keycloak theme) does not, so a passkey-only user is shown a password-only form they cannot complete.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/PasswordForm.java",
+      "lines": [
+       63,
+       63
+      ],
+      "texto": "PasswordForm.configuredFor now accepts passkey-only users even when the active login theme renders the unchanged base login-password.ftl, which contains no passkeys UI. The legacy keycloak theme inherits that template, so a user without a password reaches a password-only challenge with no way to authenticate instead of being able to use the newly accepted passkey credential. Add the passkeys import and conditionalUIData invocation to the base login-password.ftl as well as the keycloak.v2 override."
+     }
+    ]
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#04",
+    "descricao": "The comment 'setup webauthn data when passkeys enabled' does not mention that the condition also requires a selected user to own a passkey credential.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernamePasswordForm.java",
+      "lines": [
+       114,
+       117
+      ],
+      "texto": "The new comment says webauthn data is set up \"when passkeys enabled\", but the guard `isConditionalPasskeysEnabled(context.getUser())` also requires that a known/already-selected user actually has a passkey credential. With realm passkeys enabled and a selected user without a passkey, `fillContextForm` is skipped (the test `passwordLogin_reauthenticationOfUserWithoutPasskey` relies on exactly this), so the comment misdescribes the condition it documents. Rephrase it to match the code, e.g. \"setup webauthn data when conditional passkeys can be used (user unknown or user has a passkey)\"."
+     }
+    ]
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#06",
+    "descricao": "The test comment says it sets the passwordless policy for discoverable keys, but the updater only disables passkeys for the realm.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernamePasswordFormTest.java",
+      "lines": [
+       281,
+       283
+      ],
+      "texto": "The comment 'set passwordless policy for discoverable keys' is stale. The updater now only calls setWebAuthnPolicyPasskeysEnabled(Boolean.FALSE), so it disables passkeys for the realm. Change the comment to say that passkeys are disabled for the realm."
+     }
+    ]
+   }
+  ]
+ },
+ "advanced-query-processing-architecture-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "1cab4143d443c33079566f6ca36931eb8468159f",
+  "base": "d9a8253640464014aa3662c91131278990cfb828",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "public/app/plugins/datasource/loki/querySplitting.ts",
+    "lines": [
+     296,
+     299
+    ],
+    "texto": "WHAT: runSplitQuery interpolates targets, including ad hoc filters, via applyTemplateVariables, but each split sub-request goes through datasource.runQuery and DataSourceWithBackend.query, which calls applyTemplateVariables again with the same request.filters. WHY: ad hoc filters can be injected twice into the expr, and variable values that contain `$` can be re-interpolated, which produces wrong queries. HOW: pass an empty filters argument in the first pass, or skip interpolation in the second pass, so each target is interpolated and filtered exactly once."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "advanced-query-processing-architecture-grafana-codex#01",
+    "descricao": "Loki split/shard queries are now interpolated with applyTemplateVariables before splitting and again on execution, so ad hoc filters are applied twice and already-substituted values are re-interpolated.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/plugins/datasource/loki/shardQuerySplitting.ts",
+      "lines": [
+       52,
+       52
+      ],
+      "texto": "WHAT: runShardSplitQuery now interpolates every target via datasource.applyTemplateVariables (line 52), but it then delegates each sub-request to runSplitQuery (line 163), which this PR also changed to call datasource.applyTemplateVariables again (querySplitting.ts:299), so each target is interpolated (and ad hoc filters applied) twice. WHY: double interpolation re-runs addAdHocFilters on an already-filtered expression; the stream-selector path masks the duplicate via labelExists() dedup in addFilterToStreamSelector (modifyQuery.ts:494), but parsed/structured-metadata labels use addFilterAsLabelFilter which does not dedup, producing duplicated label filters, and any interpolated value containing '$' can be re-interpolated. This is confirmed by the updated test expecting applyTemplateVariables toHaveBeenCalledTimes(5) for a single target (1 call here + 4 sub-requests through runSplitQuery) instead of 1. HOW: interpolate only once \u2014 either remove the interpolation added to runShardSplitQuery and let runSplitQuery do it, or have splitQueriesByStreamShard pass the already-interpolated targets without re-interpolating in runSplitQuery."
+     },
+     {
+      "file": "public/app/plugins/datasource/loki/querySplitting.ts",
+      "lines": [
+       299,
+       299
+      ],
+      "texto": "The newly interpolated targets are interpolated again by DataSourceWithBackend.query when runQuery executes each split request. TemplateSrv.replace scans the resulting string again, so a variable whose literal value contains another defined variable token (for example, a log-search value containing `$other`) is expanded a second time and produces a different query from the non-splitting path; shard splitting also passes through this additional interpolation. Preserve the early interpolation needed for partitioning while ensuring already-interpolated targets are not interpolated again on execution, and test through the real backend query preparation rather than mocking runQuery."
+     },
+     {
+      "file": "public/app/plugins/datasource/loki/querySplitting.ts",
+      "lines": [
+       299,
+       299
+      ],
+      "texto": "Targets are interpolated here with `applyTemplateVariables`, including ad hoc filters, and then sent to `datasource.runQuery`, which interpolates them again through the backend path (datasource.ts:324/377). The ad hoc filters may be injected twice, and already-substituted values are re-interpolated, which can produce wrong or invalid LogQL. Interpolate only once. Either clear `scopedVars` and `filters` on the sub-requests after the first pass, or skip interpolation in `runQuery` for already-interpolated requests. The same issue applies to shardQuerySplitting.ts:52."
+     }
+    ]
+   },
+   {
+    "issueId": "advanced-query-processing-architecture-grafana-codex#05",
+    "descricao": "runShardSplitQuery now filters empty/hidden targets before interpolation, so an expr that interpolates to an empty string is no longer dropped.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "public/app/plugins/datasource/loki/shardQuerySplitting.ts",
+      "lines": [
+       49,
+       52
+      ],
+      "texto": "The order of operations was inverted relative to the previous contract: interpolation used to run before the `expr`/`hide` filters (interpolateVariablesInQueries(targets).filter(...)), and now the filters run on the *raw* targets before `applyTemplateVariables` is applied. Filtering on the un-interpolated `query.expr` means the previous fallback that dropped a target once variable substitution had emptied its expression no longer exists: a target like `{ expr: '$myVar' }` whose variable resolves to '' is truthy at filter time, survives, is then interpolated to `''`, and is passed into the shard splitting/execution loop as a blank query. To preserve the old contract the filters should run on the interpolated result (or the interpolated expr should be re-checked for emptiness)."
+     }
+    ]
+   }
+  ]
+ },
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "5b229316ee4c661836ed1161139692a3e8527444",
+  "base": "98fa098e6fade3097a11fe7f99a98a4e6ffb4728",
+  "sugestoes": [],
+  "issues": [
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#01",
+    "descricao": "The flex-item styles target the inner .extra-info-wrapper instead of the component's root div, so in the flexbox header a long topic title keeps its full width and pushes the navigation panel out instead of being truncated.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/base/topic.scss",
+      "lines": [
+       29,
+       30
+      ],
+      "texto": "The flex-item styling targets the inner .extra-info-wrapper rather than the outer div generated by header-extra-info's Ember.Component. With .contents now using flexbox, that outer div retains its automatic minimum width, so a long nowrap topic title cannot shrink to the available space and pushes the navigation panel outside the header instead of being ellipsized by the existing desktop truncation rules. Move the extra-info-wrapper class onto the component's root element and set min-width: 0 on that flex item so ordering and truncation apply to the actual header child."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#02",
+    "descricao": "The align-items mixin emits no -moz-box-align, so on old Firefox versions using the display:-moz-box fallback the advertised vertical centering is not applied.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/foundation/mixins.scss",
+      "lines": [
+       117,
+       122
+      ],
+      "texto": "The alignment mixin does not match the Mozilla fallback emitted by flexbox(): when display: -moz-box is selected, neither align-items nor the WebKit/MS declarations control its cross-axis alignment. Consequently @include align-items(center) in the header and small-action leaves those children at the legacy default instead of vertically centering them. Emit -moz-box-align: $alignment alongside -webkit-box-align so the advertised fallback produces the same alignment."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#03",
+    "descricao": "The align-items mixin emits -ms-align-items, which never existed in IE/Edge; the legacy property is -ms-flex-align, so the declaration is dead.",
+    "textoGolden": "-ms-align-items never existed in any version of IE/Edge; the correct legacy property is -ms-flex-align.",
+    "comentarios": [
+     {
+      "file": "app/assets/stylesheets/common/foundation/mixins.scss",
+      "lines": [
+       117,
+       123
+      ],
+      "texto": "WHAT: align-items() mixin emits -ms-align-items: $alignment which is not a valid IE10/11 property (only -ms-flex-align exists). WHY: dead declaration shows wrong contract and leaves IE alignment dependent solely on -ms-flex-align, which also breaks for flex-start/flex-end values. HOW: remove the -ms-align-items line and map flex-start/flex-end to start/end for -ms-flex-align/-webkit-box-align."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#05",
+    "descricao": "Removing the float-based right alignment of .d-header .panel leaves the server-rendered (no-JS) header's login panel, which sits inside .row and is not a flex item, no longer right-aligned next to the title.",
+    "textoGolden": "Mixing float: left with flexbox causes layout issues. Further this PR removes the float-based right alignment for .d-header .panel, which may cause the login panel in the non-Ember/noscript header (where .panel is nested inside .row and not a flex item) to stack under the title instead of remaining right-aligned.",
+    "comentarios": []
+   }
+  ]
+ }
+}

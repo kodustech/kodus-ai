@@ -1,0 +1,11 @@
+{
+ "caseId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor",
+ "items": [
+  {
+   "id": "S3",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Both identify missing test coverage for the www.example.com versus forum.example.com branch of website_name. The comment\u2019s clarification that this is a coverage gap does not change the claim."
+  }
+ ]
+}

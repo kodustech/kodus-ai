@@ -1,0 +1,24 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "prTitle": "Add Groups resource type and scopes to authorization schema",
+ "upstream": "keycloak/keycloak",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/keycloak",
+ "base": "7ea067aae9be56cb2622bce6563864817c3dfeaf",
+ "head": "7355f05e6aafe2a7acc6434fb40c686665416606",
+ "prOriginalConhecido": {
+  "numero": 37038,
+  "url": "https://github.com/keycloak/keycloak/pull/37038",
+  "mergedAt": "2025-02-12",
+  "nota": "Found with gh search prs by title. The PR has a single commit equal to the benchmark head (7355f05e6a); it was merged into main as 679f44692d with the same commit message, so the merged code matches the benchmark head."
+ },
+ "tps": [
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#snloop-01",
+   "severity": "high",
+   "category": null,
+   "bug": "GroupPermissionsV2.hasPermission passes getResourceTypeResource's result to policyStore.findByResource without a null check, causing an NPE and 500 on group listing and user search when the Groups type resource is missing.",
+   "evidenciaOpus": "GroupPermissionsV2.java:144-147 uses getResourceTypeResource without a null check, but hasPermission already requires the admin realm resource server, and AdminPermissionsSchema.java:270-275 creates a type resource for every schema type (including the new Groups) when the admin permissions client is set up, so null is not reachable in normal flows; UserPermissionsV2.java:109-111 uses the same pattern.",
+   "evidenciaAstra": "Existing FGAP V2 realms can lack the newly added Groups resource: the base schema contains only Users and Clients, and server-spi-private/src/main/java/org/keycloak/authorization/AdminPermissionsSchema.java:250 returns without updating an existing permissions client. The lookup at AdminPermissionsSchema.java:150 can therefore return null. The new services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java:147 passes that null to findByResource, which dereferences it at model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/authorization/StoreFactoryCacheSession.java:938, causing an exception instead of permission denial."
+  }
+ ]
+}

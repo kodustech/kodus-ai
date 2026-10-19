@@ -422,6 +422,27 @@
      "diasNoAr": 33,
      "reason": "PR #38015 changed JpaUserProvider.groupsWithPermissionsSubquery to match the resource name to the bare groupId when admin permissions V2 are enabled for the realm, keeping the 'group.resource.'+groupId pattern only for V1. Members of V2-authorized groups are no longer excluded from the user search filter.",
      "astra": []
+    },
+    "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#snloop-01": {
+     "bug": "GroupPermissionsV2.hasPermission passes getResourceTypeResource's result to policyStore.findByResource without a null check, causing an NPE and 500 on group listing and user search when the Groups type resource is missing.",
+     "severity": "high",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2026-04-29",
+      "pr": 48320,
+      "commit": "e1329516d5aba7f12fb330f52ba895d41827ea36",
+      "url": "https://github.com/keycloak/keycloak/pull/48320"
+     },
+     "removidoEm": null,
+     "diasNoAr": 441,
+     "reason": "The evaluator still dereferences the Groups type resource without a null check (61cb0acbc4 on 2025-04-01 dropped the findByResource(null) call, and today FineGrainedAdminPermissionEvaluator.hasPermission calls resourceTypeResource.getScopes() unguarded). But the trigger, an existing admin-permissions client lacking the Groups type resource because AdminPermissionsSchema.init returned early, was fixed by PR #48320 (2026-04-29): init now runs ensureSchemaUpToDate, creating every missing type resource and scope, and MigrateTo26_7_0 runs it for every realm with FGAP. Issue #49732 (2026-06-05) shows the missing Groups resource happened in real upgrades; PR #49893 (2026-06-23) also calls init in MigrateTo26_6_2.",
+     "astra": [
+      {
+       "pergunta": "Confirmado (via #48320 backfill or #49893 migration fix) or pendente since the evaluator has no null check?",
+       "resposta": "Confirmado by PR #48320 (2026-04-29): the backfill run by the migration removes the condition that triggered the bug; #49893 complements it on the 26.6.2 migration path but is not the first fix.",
+       "veredito": "confirmado #48320"
+      }
+     ]
     }
    }
   },
@@ -1533,6 +1554,21 @@
      "removidoEm": null,
      "diasNoAr": 148,
      "reason": "#98147 rewrote Delete to delete from legacy first, tolerating apierrors.IsNotFound from legacy, and only then from unified storage. An object present only in legacy is now deleted there before the unified NotFound is returned, so the early return that skipped the legacy delete is gone.",
+     "astra": []
+    },
+    "dual-storage-architecture-grafana-codex#snapi-01": {
+     "bug": "Mode 3 legacy-storage write errors (create/update/delete/delete-collection) are no longer logged after moving to async goroutines; only a duration metric with an error flag is recorded.",
+     "severity": "medium",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2024-10-23",
+      "pr": 93852,
+      "commit": "a03652494c",
+      "url": "https://github.com/grafana/grafana/pull/93852"
+     },
+     "removidoEm": null,
+     "diasNoAr": 91,
+     "reason": "Up to 66e0121dd5 (2024-08-29) the mode-3 goroutines for Legacy.Create/Delete/Update/DeleteCollection still only called recordLegacyDuration(err != nil, ...) with no log. PR #93852 'Dual Writer simplification' (2024-10-23) moved them into createOnLegacyStorage/deleteFromLegacyStorage/updateOnLegacyStorage/deleteCollectionFromLegacyStorage, each with log.Error(err, \"unable to ... in legacy storage\"), restoring legacy error logging. Later #98147 made legacy writes blocking and #101393 (2025-03-01) folded the file into legacysql/dualwrite, after the fix.",
      "astra": []
     }
    }
@@ -3289,6 +3325,32 @@
      "diasNoAr": 1624,
      "reason": "GroupsController#members got a negative check in 982df3c1 'FIX: return status 400 for invalid member params' (2018-06-29: limit < 0 raises InvalidParameters) and an upper bound in 704c5795 'FIX: do not allow unbound membership lookups' (2019-06-17: limit > 1000 raises InvalidParameters). Main today uses fetch_limit_from_params(default:, max: MEMBERS_MAX_PAGE_SIZE). The fix date is when both halves were in place.",
      "astra": []
+    },
+    "fix-proper-handling-of-group-memberships-discourse-cursor#snloop-01": {
+     "bug": "Admin remove_member calls group.users.delete with a raw integer id, which raises RecordNotFound (404/500) when the user is not or no longer a member, e.g. on concurrent removal.",
+     "severity": "medium",
+     "status": "descontinuado",
+     "corrigidoEm": null,
+     "removidoEm": {
+      "data": "2016-12-12",
+      "pr": 4592,
+      "commit": "05f55dbc1001227261c24d055e8b37a685fa9625",
+      "url": "https://github.com/discourse/discourse/pull/4592"
+     },
+     "diasNoAr": 707,
+     "reason": "The raw-id association delete survived 1c545d4c1e (2015-02-25, became group.users.delete(user.id)) and the move of remove_member from Admin::GroupsController to GroupsController in 6dd4bc7d57 (2015-11-10). PR #4592 'FEATURE: Group logs' (merged 2016-12-12) replaced group.users.delete(user.id) with group.remove(user), which destroys group_users where(user:) and is a no-op for a non-member, so the RecordNotFound path is gone. The change was made to add logging, not aimed at the bug; today remove_member delegates to GroupMemberRemover and the admin action no longer exists.",
+     "astra": [
+      {
+       "pergunta": "Status for the raw-id delete replaced incidentally by group.remove(user) in the Group logs PR?",
+       "resposta": "Confirmado via 05f55dbc10 (PR #4592, 2016-12-12): incidental fix counts.",
+       "veredito": "confirmado"
+      },
+      {
+       "pergunta": "The descontinuado definition covers rewrites that remove the behaviour without targeting the bug; does that apply?",
+       "resposta": "Yes, by the more specific definition the swap was a logic change not aimed at the bug; milestone 05f55dbc10, PR #4592, 2016-12-12.",
+       "veredito": "descontinuado"
+      }
+     ]
     }
    }
   },
@@ -3310,6 +3372,16 @@
      "removidoEm": null,
      "diasNoAr": 452,
      "reason": "On main today PasswordForm.configuredFor still returns true via isConditionalPasskeysEnabled(user) and authenticate still fills webauthn data, but base/login/login-password.ftl renders only the password form with no passkeys import or conditionalUIData macro. The legacy keycloak login theme (parent=base) still has no login-password.ftl override, and neither the base template nor PasswordForm.java has a functional change since the merge (only an import-order commit a2c1055 on PasswordForm).",
+     "astra": []
+    },
+    "fixing-re-authentication-with-passkeys-keycloak#snapi-01": {
+     "bug": "reauthenticationOfUserWithoutPasskey disables passkeys for the realm, so the hidden webauthn form is guaranteed by isPasskeysEnabled() and the new per-user isConfiguredFor check for users without a passkey is never exercised in UsernamePasswordForm.",
+     "severity": "medium",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 452,
+     "reason": "The test moved to tests/webauthn/.../passwordless/PasskeysUsernamePasswordFormTest.java (new testsuite) but reauthenticationOfUserWithoutPasskey on main still sets passkeysEnabled(false) before asserting the webauth form is absent, so it short-circuits on isPasskeysEnabled(). UsernamePasswordForm.isConditionalPasskeysEnabled on main is unchanged (isPasskeysEnabled() && (user == null || isConfiguredFor(...))). The 2026-10-06 commit bf57c22456 added an assertion for a user whose passkey was removed, but that path renders via WebAuthnConditionalUIAuthenticator.createErrorResponse/fillContextForm, not the per-user guard, and the named test was not changed.",
      "astra": []
     }
    }

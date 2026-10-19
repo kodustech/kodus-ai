@@ -288,6 +288,12 @@
      ],
      "sonnet-5.5@prod": [
       "S2"
+     ],
+     "sonnet-5.5@sdkapi": [
+      "S1"
+     ],
+     "sonnet-5.5@loop": [
+      "S1"
      ]
     },
     "reason_opus": "ASN1Decoder.readLength returns -1 for 0x80 (ASN1Decoder.java:133-135) and readInteger passes it straight to read(length) (ASN1Decoder.java:71-72), which does new byte[length] (line 170). A DER signature with indefinite length therefore throws NegativeArraySizeException instead of IOException.",
@@ -336,6 +342,9 @@
     "foundBy": {
      "sonnet-5.5@cc": [
       "S7"
+     ],
+     "sonnet-5.5@loop": [
+      "S6"
      ]
     },
     "reason_opus": "integerToBytes truncation (AuthzClientCryptoProvider.java:151-163) mirrors BC's X9IntegerConverter used by BCECDSACryptoProvider.java:62-63. asn1derToConcatenatedRS is only used on the signing side (core/.../ECDSASignatureSignerContext.java:33) to convert a locally produced signature, so no signature is 'accepted' and malleability is not reachable.",
@@ -660,6 +669,9 @@
      "deepseek-v4.1-flash": [
       "S6",
       "S7"
+     ],
+     "sonnet-5.5@loop": [
+      "S3"
      ]
     },
     "reason_opus": "getForLogin's default implementation (IdentityProviderStorageProvider.java:165-182) always adds BROKER_PUBLIC=true for ORG_ONLY/ALL, including with a specific organizationId, so non-public org IDPs are never in the login caches and skipping their invalidation is correct.",
@@ -773,6 +785,13 @@
       "S1",
       "S6",
       "S7"
+     ],
+     "sonnet-5.5@sdkapi": [
+      "S1",
+      "S4"
+     ],
+     "sonnet-5.5@loop": [
+      "S1"
      ]
     },
     "reason_opus": "ADMIN_FINE_GRAINED_AUTHZ (v1) and ADMIN_FINE_GRAINED_AUTHZ_V2 share the unversioned key and Profile rejects enabling multiple versions (Profile.java:56-58, 285). With V2 enabled the V1 guard at AdminPermissions.java:77 is false, so the listener never reaches ClientPermissionsV2.setPermissionsEnabled.",
@@ -1017,6 +1036,9 @@
     "foundBy": {
      "opus-5.5@api": [
       "S8"
+     ],
+     "sonnet-5.5@loop": [
+      "S5"
      ]
     },
     "reason_opus": "RoleContainerResource.java:353 requires CONFIGURE (canManage -> clients().canConfigure), but RoleResource.java:122 then calls requireMapComposite(composite), which goes through RolePermissions.canMapComposite:398 -> clients().canMapCompositeRoles; canManageDefault only checks MANAGE_CLIENTS. CONFIGURE therefore cannot make addComposites succeed on its own, so a broken canMapCompositeRoles would make the positive step at PermissionClientTest.java:364 fail.",
@@ -1199,6 +1221,9 @@
      ],
      "deepseek-v4.1-flash": [
       "S5"
+     ],
+     "sonnet-5.5@sdkapi": [
+      "S7"
      ]
     },
     "reason_opus": "searchForUser no longer filters inline, but toRepresentation (UsersResource.java:459) still applies .filter(usersEvaluator::canView) to every returned user.",
@@ -1297,6 +1322,9 @@
      ],
      "gpt-6.1-sol@e2b": [
       "S7"
+     ],
+     "sonnet-5.5@loop": [
+      "S4"
      ]
     },
     "reason_opus": "UserResource.joinGroup (UserResource.java:1058-1062) calls both auth.users().requireManageGroupMembership(user) and auth.groups().requireManageMembership(group), so the group-level MANAGE_MEMBERSHIP grant does gate the join in GroupResourceTypeEvaluationTest.java:306.",
@@ -1319,6 +1347,9 @@
       "S8",
       "S9",
       "S10"
+     ],
+     "sonnet-5.5@loop": [
+      "S8"
      ]
     },
     "reason_opus": "The canView filter was not removed: searchForUser now delegates to toRepresentation, which applies userModels.filter(usersEvaluator::canView) (UsersResource.java:453, 459-460), and grantIfNoPermission is only set when the GROUPS attribute is present. A caller with no view permission and no group grants still has every user filtered out.",
@@ -1628,6 +1659,61 @@
     "status": "agreed_after_debate",
     "severity": "medium",
     "category": null
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#snloop-01",
+    "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+    "comment": "The AddGuests dialog error toast shows the raw server error message and code, which could display internal backend details such as Prisma errors to the user.",
+    "commentOpus": "The AddGuests dialog error toast shows the raw server error message and code, which could display internal backend details such as Prisma errors to the user.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@loop": [
+      "S11"
+     ]
+    },
+    "reason_opus": "AddGuestsDialog.tsx:43-44 does toast `${err.data?.code}: ${t(err.message)}`, but the tRPC handler (createNextApiHandler.ts has no errorFormatter) already returns the same message in the response to the same authenticated user; the handler's own errors are translation keys (addGuests.handler.ts:44,55,81). Displaying it adds no exposure.",
+    "reason_astra": "apps/web/components/dialog/AddGuestsDialog.tsx:43-44 passes arbitrary server messages through translation and constructs an always-nonempty string, so unknown messages appear in the toast and the generic fallback never runs. packages/trpc/server/middlewares/captureErrorsMiddleware.ts:15 applies redactError, but packages/lib/redactError.ts:23-27 sanitizes only selected Prisma errors in production and returns other errors unchanged. Thus production Prisma errors are protected, but the broader raw-error display problem remains.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null,
+    "rodada": "snloop",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "AddGuestsDialog.tsx:43-44 does toast `${err.data?.code}: ${t(err.message)}`, but the tRPC handler (createNextApiHandler.ts has no errorFormatter) already returns the same message in the response to the same authenticated user; the handler's own errors are translation keys (addGuests.handler.ts:44,55,81). Displaying it adds no exposure."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "apps/web/components/dialog/AddGuestsDialog.tsx:43-44 passes arbitrary server messages through translation and constructs an always-nonempty string, so unknown messages appear in the toast and the generic fallback never runs. packages/trpc/server/middlewares/captureErrorsMiddleware.ts:15 applies redactError, but packages/lib/redactError.ts:23-27 sanitizes only selected Prisma errors in production and returns other errors unchanged. Thus production Prisma errors are protected, but the broader raw-error display problem remains."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "The comment's decisive claim is that Prisma errors leak internal details into the toast. Your own evidence refutes it: packages/lib/redactError.ts:23-25 `if (shouldRedact(error) && IS_PRODUCTION) { ... return new Error(\"An error occured while querying the database.\") }` covers all four Prisma error classes (lines 11-14), and it runs in captureErrorsMiddleware. Every non-Prisma error the handler throws is a translation key: addGuests.handler.ts:44 `message: \"booking_not_found\"`, :55 `\"you_do_not_have_permission\"`, :81 `\"emails_must_be_unique_valid\"`. And the toast at AddGuestsDialog.tsx:43 `${err.data?.code}: ${t(err.message)}` only shows the same user the message already in their tRPC response, so there is no exposure. That `message || t(\"unable_to_add_guests\")` never falls back is dead code at most (a nit), not the security defect the comment reports."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "I change my classification to FP. The addGuests procedure uses captureErrorsMiddleware, and redactError replaces the four listed Prisma error classes with a generic message in production. The handler’s explicit errors use translation keys, and displaying a response message to its existing recipient does not establish additional information exposure. The unreachable fallback is real, but it does not substantiate the reported security defect."
+     }
+    ],
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed_after_debate",
+    "severity": "medium",
+    "category": null
    }
   ],
   "add-html-sanitizer-for-translated-message-resources-keycloak": [
@@ -1756,6 +1842,9 @@
     "foundBy": {
      "deepseek-v4.1-flash": [
       "S13"
+     ],
+     "sonnet-5.5@loop": [
+      "S12"
      ]
     },
     "reason_opus": "VerifyMessagePropertiesTest.java:36-40 does verify what it is named for (an illegal <div> tag is reported); the missing positive case for POLICY_SOME_HTML's allow-list is a coverage suggestion, not a defect.",
@@ -1837,6 +1926,9 @@
     "foundBy": {
      "deepseek-v4.1-flash": [
       "S2"
+     ],
+     "sonnet-5.5@loop": [
+      "S1"
      ]
     },
     "reason_opus": "UpgradeTest.createInitialDeployment returns early for a null strategy, leaving no UpdateSpec; UpdateStrategy only has RECREATE, and the compatibility command (the only thing gated by rolling-updates) is used only with an explicit strategy. Also the test image is built with --features=rolling-updates (Dockerfile-custom-image). The null case does not need the feature.",
@@ -1974,6 +2066,9 @@
     "foundBy": {
      "sonnet-5.5@cc": [
       "S9"
+     ],
+     "sonnet-5.5@loop": [
+      "S6"
      ]
     },
     "reason_opus": "The organizer schedule already has a non-UTC timezone (IstWorkHoursWithDateOverride, timeZone +5:30, getSchedule.test.ts:107-128) and the new case uses invitee +6:00 (lines 788-797). The old slots.ts used the override's raw UTC minutes with no invitee/organizer offset, so with a 30-minute offset it yields shifted slots and the assertion would fail without the fix.",
@@ -2008,6 +2103,34 @@
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": null,
     "rodada": "oph",
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": null
+   },
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#snapi-01",
+    "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+    "comment": "Claims getSlots uses the optional override.timeZone, so an override without it passes undefined to dayjs.tz and computes a wrong offset using the server timezone.",
+    "commentOpus": "Claims getSlots uses the optional override.timeZone, so an override without it passes undefined to dayjs.tz and computes a wrong offset using the server timezone.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@sdkapi": [
+      "S8"
+     ],
+     "sonnet-5.5@loop": [
+      "S5"
+     ]
+    },
+    "reason_opus": "slots.ts:212 reads override.timeZone, optional in schedule.d.ts:5, but the only caller passing dateOverrides (trpc viewer/slots.ts:410-415) always sets timeZone from getUserAvailability, which is always defined (getUserAvailability.ts:201 falls back to user.timeZone). The other getSlots callers (TeamAvailabilityTimes) pass no dateOverrides, so the undefined case is unreachable.",
+    "reason_astra": "Although TimeRange.timeZone is optional, the caller supplying overrides explicitly attaches availability.timeZone to every override before passing them to getSlots (packages/trpc/server/routers/viewer/slots.ts:410–415,453). That timezone resolves through schedule/event settings to the required user.timeZone (packages/core/getUserAvailability.ts:201; packages/prisma/schema.prisma:161). Other callers supply no overrides, so the claimed undefined-timezone state is unreachable in the current code.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "snapi",
     "class": "FP",
     "subclass": null,
     "status": "agreed",
@@ -2127,6 +2250,9 @@
     "foundBy": {
      "sonnet-5.5": [
       "S2"
+     ],
+     "sonnet-5.5@loop": [
+      "S4"
      ]
     },
     "reason_opus": "shardQuerySplitting.test.ts:112 asserts applyTemplateVariables toHaveBeenCalledTimes(5), coupling the test to the number of split requests; test tidying only.",
@@ -2352,6 +2478,13 @@
      "gpt-6.1-sol@e2b": [
       "S2",
       "S3"
+     ],
+     "sonnet-5.5@sdkapi": [
+      "S5"
+     ],
+     "sonnet-5.5@loop": [
+      "S7",
+      "S9"
      ]
     },
     "reason_opus": "pkg/expr/sql/db.go:12-22 TablesList, RunCommands and QueryFramesInto all return 'not implemented'; parser.go:23-26 and sql_command.go:96-100 now call this stub instead of go-duck, so SQL expressions can never run.",
@@ -2399,6 +2532,9 @@
     "foundBy": {
      "deepseek-v4.1-flash": [
       "S6"
+     ],
+     "sonnet-5.5@loop": [
+      "S5"
      ]
     },
     "reason_opus": "reader.go:131 says 'sqlExpressions is not implemented'; given that the DB backing is now a stub (sql/db.go), that wording is accurate and has no behavioural effect.",
@@ -2558,6 +2694,31 @@
     "status": "agreed",
     "severity": "critical",
     "category": null
+   },
+   {
+    "issueId": "advanced-sql-analytics-framework-grafana-codex#snloop-01",
+    "caseId": "advanced-sql-analytics-framework-grafana-codex",
+    "comment": "Existing SQL tests in sql_command_test.go calling NewSQLCommand would now fail because the stubbed DB's TablesList returns 'not implemented', and they were not updated.",
+    "commentOpus": "Existing SQL tests in sql_command_test.go calling NewSQLCommand would now fail because the stubbed DB's TablesList returns 'not implemented', and they were not updated.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@loop": [
+      "S10"
+     ]
+    },
+    "reason_opus": "The only test calling NewSQLCommand, TestNewCommand in pkg/expr/sql_command_test.go, starts with t.Skip(), so it cannot fail against the stubbed DB; the claim that existing SQL tests would now fail is false.",
+    "reason_astra": "The only test in pkg/expr/sql_command_test.go unconditionally calls t.Skip() at line 9, before NewSQLCommand at line 10, so it cannot fail against the stub. This skip also exists in the base commit; although the new stub returns errors, the claimed test failure is impossible.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "hallucination",
+    "rodada": "snloop",
+    "class": "FP",
+    "subclass": "hallucination",
+    "status": "agreed",
+    "severity": "medium",
+    "category": null
    }
   ],
   "anonymous-add-configurable-device-limit-grafana-codex": [
@@ -2580,6 +2741,9 @@
      ],
      "opus-5.5@prod": [
       "S3"
+     ],
+     "sonnet-5.5@loop": [
+      "S2"
      ]
     },
     "reason_opus": "pkg/server/wire.go:374-375 keep ProvideAnonDBStore inside a wire.NewSet, but after the PR nothing in the graph requests anonstore.AnonStore (ProvideAnonymousDeviceService now takes db.DB and builds the store itself); wire only resolves needed providers, so the missing int64 provider is never required and injection does not break.",
@@ -3011,6 +3175,9 @@
       "S5",
       "S7",
       "S8"
+     ],
+     "sonnet-5.5@loop": [
+      "S8"
      ]
     },
     "reason_opus": "getCalendarCredentials (CalendarManager.ts:28) does store a Promise, but its only consumers (apps/web/pages/api/availability/calendar.ts:83, viewer.tsx:340, :415) pass it straight to getConnectedCalendars, which now does await item.calendar (CalendarManager.ts:48); no consumer uses .calendar directly.",
@@ -3199,6 +3366,9 @@
      ],
      "muse-spark-1.3": [
       "S2"
+     ],
+     "sonnet-5.5@sdkapi": [
+      "S1"
      ]
     },
     "reason_opus": "The denial is written only after an authoritative DB deny (service.go:153-155) and lives for shortCacheTTL, the same TTL that bounded stale permCache entries before this PR; a deny served for up to 30s after a later grant is the deliberate cache trade-off, not a regression.",
@@ -3302,6 +3472,9 @@
      ],
      "sonnet-5.5@prod": [
       "S2"
+     ],
+     "sonnet-5.5@loop": [
+      "S1"
      ]
     },
     "reason_opus": "service.go:116-121 does short-circuit on permDenialCache and line 153-155 sets it on deny with shortCacheTTL (30s, service.go:32), never invalidated. This is the PR's deliberate denial cache bounded by the same 30s TTL the permission cache already had before the PR, when a stale cached permission map also denied for up to 30s; it is an intended trade-off, not a regression.",
@@ -3671,6 +3844,13 @@
      ],
      "deepseek-v4.1-flash@prod": [
       "S3"
+     ],
+     "sonnet-5.5@sdkapi": [
+      "S4",
+      "S5"
+     ],
+     "sonnet-5.5@loop": [
+      "S4"
      ]
     },
     "reason_opus": "emailReminderManager.ts:213-222: when immediateDelete is true the function posts the SendGrid cancel and returns without deleting the WorkflowReminder or setting cancelled; the previous DELETE scheduled_sends call was also removed. Callers like handleNewBooking.ts:968 and workflows.tsx:214 leave scheduled:true rows behind.",
@@ -3821,6 +4001,9 @@
       "S4",
       "S5",
       "S7"
+     ],
+     "sonnet-5.5@loop": [
+      "S5"
      ]
     },
     "reason_opus": "In the immediateDelete branch, deleteScheduledEmailReminder only POSTs the SendGrid cancel and returns (emailReminderManager.ts:213-223), without deleting the row or setting cancelled. The new reschedule path (handleNewBooking.ts:965-969) uses it, so the original booking's WorkflowReminder rows stay scheduled=true with cancelled=null, and the cron only cleans cancelled=true rows (scheduleEmailReminders.ts:43-51). The workflow and step deletes are covered by the onDelete Cascade on workflowStep (schema.prisma:643).",
@@ -3893,6 +4076,9 @@
     "martianRef": [],
     "foundBy": {
      "opus-5.5@api": [
+      "S7"
+     ],
+     "sonnet-5.5@loop": [
       "S7"
      ]
     },
@@ -4194,6 +4380,9 @@
      ],
      "gpt-6.1-sol@e2b": [
       "S6"
+     ],
+     "sonnet-5.5@loop": [
+      "S7"
      ]
     },
     "reason_opus": "The spec mocks TopicRetriever.new/retrieve and the controller calls Jobs.enqueue(:retrieve_topic) (embed_controller.rb:15), but in the test env queue_jobs defaults to false (site_settings.yml developer.queue_jobs test:false) so Jobs.enqueue runs the job inline (app/jobs/base.rb:168-172), which calls TopicRetriever.new(...).retrieve (retrieve_topic.rb:17). The expectation is met.",
@@ -4588,6 +4777,12 @@
     "foundBy": {
      "sonnet-5.5": [
       "S1"
+     ],
+     "sonnet-5.5@sdkapi": [
+      "S1"
+     ],
+     "sonnet-5.5@loop": [
+      "S9"
      ]
     },
     "reason_opus": "layouts/embed.html.erb:11 writes '<%= request.referer %>' inside a JavaScript string; Rails 3.2.12 (Gemfile.lock) html_escape does not escape single quotes, so a referer on the allowed host whose path contains a quote can break out of the string literal and inject script.",
@@ -4806,6 +5001,9 @@
     "foundBy": {
      "opus-5.5@api": [
       "S8"
+     ],
+     "sonnet-5.5@loop": [
+      "S4"
      ]
     },
     "reason_opus": "best.html.erb:6 `<%- end if %>` is followed by a blank line and indentation, so in Rails' Erubis the next compiled statement is the whitespace text append, not the logo output at :8. That append is truthy and harmless; the logo is still emitted after the if/else, so the header order does not change.",
@@ -4966,6 +5164,9 @@
     "foundBy": {
      "deepseek-v4.1-flash": [
       "S4"
+     ],
+     "sonnet-5.5@sdkapi": [
+      "S6"
      ]
     },
     "reason_opus": "apps/web/components/security/DisableTwoFactorModal.tsx:10 imports its own ./TwoFactorAuthAPI (components/security/TwoFactorAuthAPI.ts:22, two-argument disable), not the settings TwoFactorAuthAPI the PR changed. The only caller of the changed settings API (settings/DisableTwoFactorModal.tsx:58) passes all three arguments.",
@@ -5016,6 +5217,9 @@
      ],
      "muse-spark-1.3": [
       "S6"
+     ],
+     "sonnet-5.5@loop": [
+      "S3"
      ]
     },
     "reason_opus": "login.2fa.e2e.ts:53 does `expect(locator.isChecked()).toBeTruthy()` on an un-awaited Promise, which is always truthy; the PR adds a FIXME acknowledging it, and with the new DisplayBackupCodes step this first test never closes the dialog yet still passes.",
@@ -5260,6 +5464,31 @@
     "status": "agreed",
     "severity": "low",
     "category": null
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#snloop-01",
+    "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+    "comment": "The session user query now selects the internal googleChannelId of selected calendars, which could be exposed to the client if the result is returned (e.g. by the me handler).",
+    "commentOpus": "The session user query now selects the internal googleChannelId of selected calendars, which could be exposed to the client if the result is returned (e.g. by the me handler).",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@loop": [
+      "S3"
+     ]
+    },
+    "reason_opus": "user.ts:899-900 adds googleChannelId to findUnlockedUserForSession's selectedCalendars select, but the `me` handler (viewer/me/get.handler.ts:109-148) returns an explicit field list without selectedCalendars, so the identifier is not exposed; it only stays on the server-side session user.",
+    "reason_astra": "The select adds googleChannelId at packages/lib/server/repository/user.ts:900, but the suggested exposure is conditional and unsubstantiated: packages/trpc/server/routers/viewer/me/get.handler.ts:109-148 explicitly constructs its response without selected calendars. The calendar response also uses selected calendars only for an isSelected check (packages/lib/CalendarManager.ts:81), so selecting this field does not establish a client-facing leak.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "snloop",
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": null
    }
   ],
   "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": [
@@ -5362,6 +5591,31 @@
     "subclass_opus_inicial": "hallucination",
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": "hallucination"
+   },
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#snapi-01",
+    "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+    "comment": "Claims the eventTypeId filter `a OR b` is returned unparenthesized from getFilterConditions, so a caller ANDing it without parentheses would widen results past the filter and authorization conditions.",
+    "commentOpus": "Claims the eventTypeId filter `a OR b` is returned unparenthesized from getFilterConditions, so a caller ANDing it without parentheses would widen results past the filter and authorization conditions.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@sdkapi": [
+      "S1"
+     ]
+    },
+    "reason_opus": "The single eventTypeId condition at insightsBooking.ts:106 is unparenthesized, but every combiner wraps operands: getBaseConditions builds `(${auth}) AND (${filter})` (:73) and buildFilterConditions wraps `(${acc}) AND (${condition})` (:121). No production caller combines getFilterConditions() unwrapped; only tests read it, so the precedence problem is hypothetical.",
+    "reason_astra": "The standalone OR expression exists at packages/lib/server/service/insightsBooking.ts:106, but its only non-test caller, getBaseConditions, wraps it before combining with authorization using AND at lines 70–73. Multiple filters are also parenthesized at lines 119–121; no existing caller performs the hypothetical unsafe composition.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "snapi",
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "high",
+    "category": null
    }
   ],
   "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
@@ -5390,6 +5644,9 @@
       "S7"
      ],
      "muse-spark-1.3": [
+      "S2"
+     ],
+     "sonnet-5.5@sdkapi": [
       "S2"
      ]
     },
@@ -5533,6 +5790,12 @@
     "foundBy": {
      "sonnet-5.5": [
       "S4"
+     ],
+     "sonnet-5.5@sdkapi": [
+      "S5"
+     ],
+     "sonnet-5.5@loop": [
+      "S6"
      ]
     },
     "reason_opus": "test_assignment_source.py:36 asserts result.get(\"queued\") is not None, but queued always has a default (assignment_source.py:18), so the assertion cannot fail; minor test tidying.",
@@ -5639,6 +5902,9 @@
     "foundBy": {
      "muse-spark-1.3": [
       "S5"
+     ],
+     "sonnet-5.5@loop": [
+      "S3"
      ]
     },
     "reason_opus": "src/sentry/testutils/factories.py:353 skips falsy client_sample_rate, but 0.0 is not a valid sample rate: production _derive_client_error_sampling_rate (src/sentry/event_manager.py:786) only accepts 0 < rate <= 1, so dropping 0 matches production behaviour.",
@@ -5829,6 +6095,9 @@
     "foundBy": {
      "sonnet-5.5@cc": [
       "S2"
+     ],
+     "sonnet-5.5@sdkapi": [
+      "S1"
      ]
     },
     "reason_opus": "The errors dataset builders (ErrorsQueryBuilder and ErrorsTimeseriesQueryBuilder in builder/errors.py:119,155) subclass the Discover builders and run on Dataset.Events (snuba/errors.py:68,121). DiscoverQueryBuilder.load_config returns DiscoverDatasetConfig for Dataset.Events (builder/discover.py:64-71), so upsampled_count resolves; this is a 'confirm' request with no defect.",
@@ -5842,6 +6111,31 @@
     "subclass": null,
     "status": "agreed",
     "severity": "high",
+    "category": null
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#snloop-01",
+    "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
+    "comment": "Inline test comments say each bucket has 1 event while the assertions expect count == 10, contradicting the upsampled value.",
+    "commentOpus": "Inline test comments say each bucket has 1 event while the assertions expect count == 10, contradicting the upsampled value.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@loop": [
+      "S6"
+     ]
+    },
+    "reason_opus": "test_organization_events_stats.py:3626-3627 comments say 'bucket has 1 event' next to count == 10; each bucket does store one event (client_sample_rate 0.1 upsampled to 10), so the comment is accurate, at most terse.",
+    "reason_astra": "The fixtures store one event in each hourly bucket, each with client_sample_rate 0.1 (tests/snuba/api/endpoints/test_organization_events_stats.py:3576–3592). The comments at lines 3626–3627 accurately describe those stored events, while the assertions check the upsampled count of 10; these statements do not contradict each other.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "snloop",
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "low",
     "category": null
    }
   ],
@@ -6532,6 +6826,9 @@
      ],
      "muse-spark-1.3": [
       "S5"
+     ],
+     "sonnet-5.5@loop": [
+      "S6"
      ]
     },
     "reason_opus": "The only sender with add_unsubscribe_link: true is UserNotifications#send_notification_email (user_notifications.rb:294-295), which now always passes unsubscribe_url; RejectionMailer forbids that key and digest does not use it, so no caller renders unsubscribe_link without unsubscribe_url.",
@@ -6664,6 +6961,9 @@
     "foundBy": {
      "opus-5.5@api": [
       "S6"
+     ],
+     "sonnet-5.5@loop": [
+      "S10"
      ]
     },
     "reason_opus": "server.en.yml:1852-1855 does interpolate %{unsubscribe_url}, and message_builder.rb:67/90 call I18n.t('unsubscribe_link', template_args). However, the only caller that sets add_unsubscribe_link (user_notifications.rb:294-295) also passes unsubscribe_url, and RejectionMailer forbids the key. No code path in the repository builds the string without unsubscribe_url.",
@@ -6801,6 +7101,61 @@
     "subclass": "hallucination",
     "status": "agreed_after_debate",
     "severity": "high",
+    "category": null
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#snapi-01",
+    "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+    "comment": "Claims that for references without a credentialId, looping over every calendar reference and deleting each against all user calendar credentials produces duplicate or wrong-target delete calls and errors.",
+    "commentOpus": "Claims that for references without a credentialId, looping over every calendar reference and deleting each against all user calendar credentials produces duplicate or wrong-target delete calls and errors.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@sdkapi": [
+      "S4"
+     ]
+    },
+    "reason_opus": "The legacy branch (handleCancelBooking.ts:473-482) keeps the pre-existing behaviour of trying each reference's own uid/externalCalendarId against every calendar credential; the PR only runs it per reference (find->filter at :419), so each reference's event is deleted, with distinct uids, not duplicates. Failed wrong-provider deletes are swallowed by Promise.allSettled (:656), as before.",
+    "reason_astra": "The PR changes reference selection to iterate every calendar reference (packages/features/bookings/lib/handleCancelBooking.ts:418–424), while the fallback sends each reference’s identifiers to every calendar credential without matching its provider or account (475–480). Wrong-account deletions can reject, as Office365 propagates deletion errors (packages/app-store/office365calendar/lib/CalendarService.ts:111–121); these rejections also skip cancellation emails (handleCancelBooking.ts:656–665).",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": null,
+    "rodada": "snapi",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "The legacy branch (handleCancelBooking.ts:473-482) keeps the pre-existing behaviour of trying each reference's own uid/externalCalendarId against every calendar credential; the PR only runs it per reference (find->filter at :419), so each reference's event is deleted, with distinct uids, not duplicates. Failed wrong-provider deletes are swallowed by Promise.allSettled (:656), as before."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "The PR changes reference selection to iterate every calendar reference (packages/features/bookings/lib/handleCancelBooking.ts:418–424), while the fallback sends each reference’s identifiers to every calendar credential without matching its provider or account (475–480). Wrong-account deletions can reject, as Office365 propagates deletion errors (packages/app-store/office365calendar/lib/CalendarService.ts:111–121); these rejections also skip cancellation emails (handleCancelBooking.ts:656–665)."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "I correct one point: a rejected delete is not swallowed; it throws and skips sendCancelledEmails (handleCancelBooking.ts:657-664). But the trying of a reference's uid against every calendar credential is the pre-existing legacy branch, only re-indented into the loop (diff: old '} else { // For bookings made before the refactor ... for (const credential of calendarCredentials) { ... calendar?.deleteEvent(uid, evt, externalCalendarId)' is identical at :474-481). Before the PR, a user with two calendar credentials already sent the single reference to the wrong provider and could hit the same rejection/skip-email path. The only new logic is find->filter (:418 'bookingToDelete.references.filter(') which deletes each reference with its own distinct uid: no duplicates, and the wrong-target behaviour is unchanged per reference. Per the ruling, a defect in moved/re-indented code is pre-existing, so FP."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": null,
+      "severity": "medium",
+      "texto": "I change my classification to FP. The base already sends each selected reference’s uid and externalCalendarId to every calendar credential in the legacy fallback; this PR preserves that branch’s logic. The new outer loop takes identifiers from each reference, so processing additional references does not itself establish duplicate deletions. Rejected deletes could already skip cancellation emails before this PR, making my earlier evidence insufficient under the pre-existing-code ruling."
+     }
+    ],
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed_after_debate",
+    "severity": "medium",
     "category": null
    }
   ],
@@ -7092,6 +7447,9 @@
     "foundBy": {
      "sonnet-5.5": [
       "S2"
+     ],
+     "sonnet-5.5@loop": [
+      "S1"
      ]
     },
     "reason_opus": "passkeys.ftl:11-17 renders authn_use_chk inputs from 'authenticators', set by WebAuthnAuthenticator.fillContextForm only when a user is identified (WebAuthnAuthenticator.java:100-108), the same allowCredentials pattern Keycloak already uses for WebAuthn after a username step. Credential IDs are public WebAuthn identifiers; behaviour is intended.",
@@ -7739,6 +8097,9 @@
     "foundBy": {
      "sonnet-5.5": [
       "S2"
+     ],
+     "sonnet-5.5@sdkapi": [
+      "S2"
      ]
     },
     "reason_opus": "entryPointAssetsCache = result (webassets.go:69) is unchanged from the base version. In production it runs only when the cache is nil, and in Dev the cache is never used; overwriting a valid cache with nil needs a failure right after a successful read of the same file.",
@@ -7894,6 +8255,12 @@
      ],
      "sonnet-5.5": [
       "S4"
+     ],
+     "sonnet-5.5@sdkapi": [
+      "S3"
+     ],
+     "sonnet-5.5@loop": [
+      "S10"
      ]
     },
     "reason_opus": "integration.py:412 does compare with !=, but pipeline.signature is a static, public md5 of view class names (pipeline/base.py:133), not a secret nonce, so a timing side channel reveals nothing an attacker does not already know.",
@@ -8006,6 +8373,9 @@
     "foundBy": {
      "sonnet-5.5": [
       "S7"
+     ],
+     "sonnet-5.5@loop": [
+      "S12"
      ]
     },
     "reason_opus": "test_github_user_mismatch (test_integration.py:442-454) uses the correct state and _stub_github stubs token and /user (login octocat), so the mismatch path is reached; it only asserts the generic message shared by all error() paths, which weakens but does not void the test.",
@@ -8390,6 +8760,9 @@
      ],
      "deepseek-v4.1-flash@prod": [
       "S1"
+     ],
+     "sonnet-5.5@loop": [
+      "S1"
      ]
     },
     "reason_opus": "RecoveryAuthnCodeInputLoginBean (lines 16-21) keeps the same unchecked Optional.get() the code had before (findFirst().get()); the bean is only built when the recovery-codes authenticator is configured for the user, so a credential exists. Pre-existing pattern guarded by the flow.",
@@ -8409,6 +8782,10 @@
     "foundBy": {
      "sonnet-5.5@cc": [
       "S1",
+      "S3"
+     ],
+     "sonnet-5.5@loop": [
+      "S2",
       "S3"
      ]
     },
@@ -8648,6 +9025,9 @@
      ],
      "deepseek-v4.1-flash": [
       "S15"
+     ],
+     "sonnet-5.5@sdkapi": [
+      "S15"
      ]
     },
     "reason_opus": "The JSDoc at createOAuthAppCredential.ts:12-14 is indeed duplicated, but the PR only moved the file and changed its two import lines; the doc text predates the PR.",
@@ -8751,6 +9131,31 @@
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": null,
     "rodada": "opa",
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "high",
+    "category": null
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#snloop-01",
+    "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com",
+    "comment": "The app-credential webhook decrypts keys with CALCOM_APP_CREDENTIAL_ENCRYPTION_KEY falling back to an empty string when the env var is unset, instead of failing fast.",
+    "commentOpus": "The app-credential webhook decrypts keys with CALCOM_APP_CREDENTIAL_ENCRYPTION_KEY falling back to an empty string when the env var is unset, instead of failing fast.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@loop": [
+      "S14"
+     ]
+    },
+    "reason_opus": "app-credential.ts:19 returns 403 unless APP_CREDENTIAL_SHARING_ENABLED, which (packages/lib/constants.ts:103-104) requires CALCOM_APP_CREDENTIAL_ENCRYPTION_KEY to be set, so the `|| \"\"` fallback at line 58 is unreachable; an empty key would also fail in createDecipheriv rather than decrypt.",
+    "reason_astra": "packages/lib/constants.ts:103-104 makes credential sharing conditional on a nonempty encryption key, and apps/web/pages/api/webhook/app-credential.ts:19-20 returns HTTP 403 when that condition fails. Although the empty-string fallback exists at line 58, an unset key prevents execution from reaching it, so the requested missing-key guard is already present.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "snloop",
     "class": "FP",
     "subclass": null,
     "status": "agreed",
@@ -8970,6 +9375,13 @@
      ],
      "opus-5.5@prod": [
       "S2"
+     ],
+     "sonnet-5.5@sdkapi": [
+      "S1"
+     ],
+     "sonnet-5.5@loop": [
+      "S1",
+      "S5"
      ]
     },
     "reason_opus": "factory.py:141 indexes val['end_timestamp_precise'] directly, but the payload is the ingest-spans SpanEvent schema where the field is required, and the downstream segment consumer already indexes it directly (process_segments/message.py:121,227, enrichment.py:162). A message without it is outside the contract.",
@@ -9229,6 +9641,12 @@
      ],
      "sonnet-5.5": [
       "S2"
+     ],
+     "sonnet-5.5@sdkapi": [
+      "S2"
+     ],
+     "sonnet-5.5@loop": [
+      "S3"
      ]
     },
     "reason_opus": "logger_middleware.go:58 logs via m.logger.FromContext(ctx); ConcreteLogger.FromContext (pkg/infra/log/log.go:203-215) appends the ctxLogProviders, and tracing.go:91-96 registers one that adds traceID, so traceID is still logged.",
@@ -9316,6 +9734,9 @@
      ],
      "muse-spark-1.3": [
       "S9"
+     ],
+     "sonnet-5.5@sdkapi": [
+      "S1"
      ]
     },
     "reason_opus": "The gated request-size assertion at metrics_middleware_test.go:101-109 predates the PR; the only test change is the constructor rename at line 78.",
@@ -9605,6 +10026,61 @@
     "subclass_opus_inicial": "hallucination",
     "class_astra_inicial": "FP",
     "subclass_astra_inicial": "hallucination"
+   },
+   {
+    "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#snloop-01",
+    "caseId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry",
+    "comment": "A comment in incidents.py says 'within the threshold of commits' although the code inspects check-ins, not commits.",
+    "commentOpus": "A comment in incidents.py says 'within the threshold of commits' although the code inspects check-ins, not commits.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@loop": [
+      "S3"
+     ]
+    },
+    "reason_opus": "The 'within the threshold of commits' comment at incidents.py:50-51 is moved verbatim from the base mark_failed.py:139-140; the PR only relocates it, so the wording is pre-existing.",
+    "reason_astra": "src/sentry/monitors/logic/incidents.py:51 says “commits,” but lines 40–52 query and inspect MonitorCheckIn records. The PR relocates this inaccurate comment into the new module; it is a wording defect with no behavioral effect.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": "nit",
+    "rodada": "snloop",
+    "debate": [
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": "low",
+      "texto": "The 'within the threshold of commits' comment at incidents.py:50-51 is moved verbatim from the base mark_failed.py:139-140; the PR only relocates it, so the wording is pre-existing."
+     },
+     {
+      "quem": "astra",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "low",
+      "texto": "src/sentry/monitors/logic/incidents.py:51 says “commits,” but lines 40–52 query and inspect MonitorCheckIn records. The PR relocates this inaccurate comment into the new module; it is a wording defect with no behavioral effect."
+     },
+     {
+      "quem": "opus",
+      "class": "FP",
+      "subclass": null,
+      "severity": "low",
+      "texto": "Under the agreed ruling, code the PR only moves without changing it counts as pre-existing. The comment is moved word for word: the base has mark_failed.py:139-140 `# If we have any successful check-ins within the threshold of` / `# commits we have NOT reached an incident state`, and the head has the identical lines at incidents.py:50-51. The PR did not write or change this wording, so it is FP (no subclass). Even if it counted, it would be a nit."
+     },
+     {
+      "quem": "astra",
+      "class": "FP",
+      "subclass": null,
+      "severity": "low",
+      "texto": "Changed to FP: the diff confirms that the comment and surrounding check-in logic were moved verbatim from mark_failed.py to incidents.py. The inaccurate word “commits” is pre-existing, so the explicit ruling for relocated code applies."
+     }
+    ],
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed_after_debate",
+    "severity": "low",
+    "category": null
    }
   ],
   "replays-self-serve-bulk-delete-system-sentry": [
@@ -9985,6 +10461,9 @@
      ],
      "gpt-6.1-sol": [
       "S7"
+     ],
+     "sonnet-5.5@sdkapi": [
+      "S11"
      ]
     },
     "reason_opus": "The query.query === 'search-query' matcher at useGetTraceItemAttributeValues.spec.tsx:120 is unchanged from the base file (the PR only renamed the hook and dropped attributeKey); moreover an unmatched request would make MockApiClient error and the hook throw, so the test would still fail if the guard were removed.",
@@ -10136,6 +10615,56 @@
     "subclass": "hallucination",
     "status": "agreed",
     "severity": "high",
+    "category": null
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#snapi-01",
+    "caseId": "replays-self-serve-bulk-delete-system-sentry",
+    "comment": "Claims the hook now returns undefined attributes before the first fetch instead of {}, which can crash consumers that access keys on the TagCollection.",
+    "commentOpus": "Claims the hook now returns undefined attributes before the first fetch instead of {}, which can crash consumers that access keys on the TagCollection.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@sdkapi": [
+      "S3"
+     ]
+    },
+    "reason_opus": "useTraceItemAttributeKeys.tsx:59 can return undefined attributes while the first fetch runs, but the only consumer (traceItemAttributeContext.tsx:43-75) spreads it into an object (`{...numberAttributes, ...}`), which is safe with undefined, and the TS type forces handling. No key access on undefined exists.",
+    "reason_astra": "The hook does return undefined initially at static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx:59, but its only production consumer safely spreads both results into objects at static/app/views/explore/contexts/traceItemAttributeContext.tsx:65 and :74. Spreading undefined is valid, and downstream consumers receive populated objects, so the claimed crash is not supported.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "snapi",
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": null
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#snapi-02",
+    "caseId": "replays-self-serve-bulk-delete-system-sentry",
+    "comment": "Claims the default of sentry:autofix_automation_tuning changed from low to off, silently disabling automatic autofix for projects that never set it, unrelated to the replays bulk delete feature.",
+    "commentOpus": "Claims the default of sentry:autofix_automation_tuning changed from low to off, silently disabling automatic autofix for projects that never set it, unrelated to the replays bulk delete feature.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@sdkapi": [
+      "S5"
+     ]
+    },
+    "reason_opus": "The default did change from \"low\" to \"off\" in projectoptions/defaults.py:205 and constants.py:724, but it is a deliberate product default change carried in the branch, not a defect; the comment only objects that it is unrelated to the PR's feature.",
+    "reason_astra": "The default is explicitly 'off' at src/sentry/projectoptions/defaults.py:205 and src/sentry/constants.py:724, with updated expectations at tests/sentry/api/endpoints/test_project_details.py:2068 and :2076. Commit 668229d196e0 deliberately reverts the earlier default-enablement change; disabling automation for unset options is intended behavior, not an established defect.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "snapi",
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
     "category": null
    }
   ],
@@ -10457,6 +10986,12 @@
     "foundBy": {
      "deepseek-v4.1-flash": [
       "S5"
+     ],
+     "sonnet-5.5@sdkapi": [
+      "S3"
+     ],
+     "sonnet-5.5@loop": [
+      "S6"
      ]
     },
     "reason_opus": "server.go:258-262 now calls s.Init(ctx) in NewResourceServer and the per-request Init calls were removed; eager initialisation that fails construction is the intended design of this PR, not an accidental contract break.",
@@ -10662,6 +11197,9 @@
     "foundBy": {
      "deepseek-v4.1-flash": [
       "S7"
+     ],
+     "sonnet-5.5@sdkapi": [
+      "S3"
      ]
     },
     "reason_opus": "spec/serializers/user_serializer_spec.rb:76-89 covers only the different-domain, same-host and parent-domain cases; the same-label-count branch at user_serializer.rb:144-146 has no test.",
@@ -10795,6 +11333,33 @@
     "severity": "medium",
     "category": null
    }
+  ],
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": [
+   {
+    "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#snloop-01",
+    "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+    "comment": "GroupAdapter's NPE guard is applied only to getSubGroupsCount; the getSubGroupsStream overloads still dereference modelSupplier.get(), which is null when the group is deleted concurrently.",
+    "commentOpus": "GroupAdapter's NPE guard is applied only to getSubGroupsCount; the getSubGroupsStream overloads still dereference modelSupplier.get(), which is null when the group is deleted concurrently.",
+    "source": "kodus",
+    "martianRef": [],
+    "foundBy": {
+     "sonnet-5.5@loop": [
+      "S1"
+     ]
+    },
+    "reason_opus": "The PR only changes getSubGroupsCount (GroupAdapter.java:273-275); the getSubGroupsStream overloads at lines 254-268 that call modelSupplier.get() unguarded are untouched by this PR, so their NPE risk is pre-existing.",
+    "reason_astra": "GroupAdapter.java:256,262,268 dereference modelSupplier.get() without null checks, but all three statements are identical in the base commit. This PR changes only getSubGroupsCount() in that file (lines 274–275), so the reported stream-method defect is pre-existing and untouched.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": null,
+    "rodada": "snloop",
+    "class": "FP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": null
+   }
   ]
  },
  "modelos": [
@@ -10809,7 +11374,9 @@
   "deepseek-v4.1-flash@prod",
   "gpt-6.1-sol@prod",
   "opus-5.5@prod",
-  "sonnet-5.5@prod"
+  "sonnet-5.5@prod",
+  "sonnet-5.5@sdkapi",
+  "sonnet-5.5@loop"
  ],
  "classificadores": [
   "claude-opus-5.5",

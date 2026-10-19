@@ -1,0 +1,41 @@
+{
+ "caseId": "advanced-sql-analytics-framework-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "Describes enableSqlExpressions always returning false and rejecting SQL expressions even when the feature flag is enabled."
+  },
+  {
+   "id": "S2",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "Describes the unconditional false result that prevents the feature flag from enabling SQL expressions."
+  },
+  {
+   "id": "S3",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "Describes every SQL expression being rejected because enableSqlExpressions always returns false."
+  },
+  {
+   "id": "S4",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "Describes the same unconditional false result and resulting ReadQuery rejection even with the flag enabled."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes consumers calling a stub database implementation that returns \"not implemented\". This is separate from the feature-gate logic and the stale duckDB variable name."
+  },
+  {
+   "id": "S6",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "Although it also discusses misleading naming and the negated flag, it explicitly includes the unconditional false result when the flag is enabled, matching the feature-gate problem."
+  }
+ ]
+}

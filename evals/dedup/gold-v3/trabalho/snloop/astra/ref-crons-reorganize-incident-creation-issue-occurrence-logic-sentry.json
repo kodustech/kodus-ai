@@ -1,0 +1,35 @@
+{
+ "caseId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02",
+   "newGroup": null,
+   "reason": "Describes the same discarded config conversion: the function returns the original monitor.config instead of the modified copy."
+  },
+  {
+   "id": "S2",
+   "match": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#01",
+   "newGroup": null,
+   "reason": "Describes the same mismatch between get_failure_reason's docstring examples and its actual return strings."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reports a separate prose error referring to commits instead of check-ins in incidents.py; neither golden issue covers it."
+  },
+  {
+   "id": "S4",
+   "match": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02",
+   "newGroup": null,
+   "reason": "Describes the same return of the original config that discards the schedule_type display conversion. The additional claims about provenance and secrets do not change the matching problem."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Reports unused logger objects, a separate cleanup concern unrelated to either golden issue."
+  }
+ ]
+}

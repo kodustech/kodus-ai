@@ -1,0 +1,12 @@
+{
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "items": [
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#snloop-01",
+   "class": "FP",
+   "subclass": "none",
+   "severity": "medium",
+   "reply": "I change my classification to FP. The addGuests procedure uses captureErrorsMiddleware, and redactError replaces the four listed Prisma error classes with a generic message in production. The handler\u2019s explicit errors use translation keys, and displaying a response message to its existing recipient does not establish additional information exposure. The unreachable fallback is real, but it does not substantiate the reported security defect."
+  }
+ ]
+}

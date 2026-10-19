@@ -1,0 +1,89 @@
+{
+ "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Describes the optimized paginator passing negative offsets into Django queryset slicing, causing an error."
+  },
+  {
+   "id": "S2",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "Describes BasePaginator leaving negative prev-cursor offsets unclamped, causing queryset slicing to fail."
+  },
+  {
+   "id": "S3",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Describes unsupported negative slicing in the optimized paginator and the incorrect claim that Django handles it."
+  },
+  {
+   "id": "S4",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "Describes the shared paginator passing negative prev-cursor offsets into queryset slicing without clamping."
+  },
+  {
+   "id": "S5",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Describes the advanced branch using a negative slice start, which Django rejects."
+  },
+  {
+   "id": "S6",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "Describes BasePaginator's unclamped negative prev-cursor offsets causing slicing errors."
+  },
+  {
+   "id": "S7",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Describes negative cursor offsets reaching the optimized paginator's queryset slice and causing a 500."
+  },
+  {
+   "id": "S8",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "Describes the missing clamp for negative prev-cursor offsets in BasePaginator."
+  },
+  {
+   "id": "S9",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Includes the same unsupported negative slicing in the optimized paginator. The additional window-access claim does not change the shared defect."
+  },
+  {
+   "id": "S10",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "Describes client-controlled negative prev-cursor offsets reaching BasePaginator's queryset slice and causing errors."
+  },
+  {
+   "id": "S11",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Challenges the same false claim that Django supports the optimized branch's negative slicing, already covered by this issue's reporting comments."
+  },
+  {
+   "id": "S12",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#02",
+   "newGroup": null,
+   "reason": "Describes the misleading BasePaginator comment: non-prev offsets are clamped, while negative prev offsets are not safely handled."
+  },
+  {
+   "id": "S13",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Describes the optimized negative-offset branch causing a Django slicing error instead of returning a page."
+  },
+  {
+   "id": "S14",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Describes the optimized paginator slicing with an accepted negative cursor offset, which Django rejects."
+  }
+ ]
+}

@@ -1,0 +1,53 @@
+{
+ "caseId": "github-oauth-security-enhancement-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "github-oauth-security-enhancement-sentry#06",
+   "newGroup": null,
+   "reason": "Describes the same ownership-check bypass when a missing Integration row causes the pipeline to advance without verifying the installer."
+  },
+  {
+   "id": "S2",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "Describes the same unguarded sender metadata lookup that raises KeyError when sender is absent."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Concerns timing leakage from the state comparison. Making the comparison constant-time would not fix #03's use of a static, predictable state instead of a per-attempt nonce."
+  },
+  {
+   "id": "S4",
+   "match": "github-oauth-security-enhancement-sentry#01",
+   "newGroup": null,
+   "reason": "Describes the same loss of translation extraction caused by calling gettext on error_short while passing unmarked literals."
+  },
+  {
+   "id": "S5",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "Describes the same KeyError and installation-flow 500 caused by directly indexing missing sender metadata."
+  },
+  {
+   "id": "S6",
+   "match": "github-oauth-security-enhancement-sentry#10",
+   "newGroup": null,
+   "reason": "Describes the same incorrect OAuth state that makes the installation-not-found test stop before reaching the installation lookup."
+  },
+  {
+   "id": "S7",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "Describes the same unguarded sender metadata lookup and resulting KeyError for integrations without sender metadata."
+  },
+  {
+   "id": "S8",
+   "match": "github-oauth-security-enhancement-sentry#05",
+   "newGroup": null,
+   "reason": "Describes the same unhandled failures in the OAuth token exchange and user-info fetch that produce server errors instead of the installation error page."
+  }
+ ]
+}

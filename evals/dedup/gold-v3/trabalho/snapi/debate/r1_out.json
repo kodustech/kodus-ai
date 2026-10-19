@@ -1,0 +1,16 @@
+{
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#snapi-01": {
+    "class": "FP",
+    "subclass": "none",
+    "severity": "medium",
+    "concede": false,
+    "text": "I correct one point: a rejected delete is not swallowed; it throws and skips sendCancelledEmails (handleCancelBooking.ts:657-664). But the trying of a reference's uid against every calendar credential is the pre-existing legacy branch, only re-indented into the loop (diff: old '} else { // For bookings made before the refactor ... for (const credential of calendarCredentials) { ... calendar?.deleteEvent(uid, evt, externalCalendarId)' is identical at :474-481). Before the PR, a user with two calendar credentials already sent the single reference to the wrong provider and could hit the same rejection/skip-email path. The only new logic is find->filter (:418 'bookingToDelete.references.filter(') which deletes each reference with its own distinct uid: no duplicates, and the wrong-target behaviour is unchanged per reference. Per the ruling, a defect in moved/re-indented code is pre-existing, so FP."
+  },
+  "dual-storage-architecture-grafana-codex#snapi-01": {
+    "class": "TP",
+    "subclass": "none",
+    "severity": "medium",
+    "concede": true,
+    "text": "Concede. The PR moves legacy writes into fire-and-forget goroutines whose only failure trace is a boolean to a histogram, e.g. dualwriter_mode3.go Create goroutine: '_, errObjectSt := d.Legacy.Create(ctx, obj, createValidation, options)' / 'd.recordLegacyDuration(errObjectSt != nil, ...)', replacing 'log.WithValues(\"object\", created).Error(err, \"unable to create object in legacy storage\")'. Same in Update/Delete/DeleteCollection. Since the legacy write is now async and its result never reaches the caller, removing the log leaves legacy-store divergence undiagnosable; that is more than a log-field detail, so TP (none)."
+  }
+}

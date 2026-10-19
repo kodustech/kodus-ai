@@ -1,0 +1,17 @@
+{
+ "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+ "items": [
+  {
+   "id": "S5",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#snapi-01",
+   "newGroup": null,
+   "reason": "Both claim that an omitted optional override.timeZone reaches dayjs.tz as undefined, producing the wrong offset and shifting override slots."
+  },
+  {
+   "id": "S6",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "Both claim that the new different-timezone test expects the same UTC slots as the existing case and would pass even if the slots.ts offset fix were reverted."
+  }
+ ]
+}

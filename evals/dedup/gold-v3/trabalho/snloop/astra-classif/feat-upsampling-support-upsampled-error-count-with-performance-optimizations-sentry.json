@@ -1,0 +1,12 @@
+{
+ "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
+ "items": [
+  {
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#snloop-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "The fixtures store one event in each hourly bucket, each with client_sample_rate 0.1 (tests/snuba/api/endpoints/test_organization_events_stats.py:3576\u20133592). The comments at lines 3626\u20133627 accurately describe those stored events, while the assertions check the upsampled count of 10; these statements do not contradict each other.",
+   "severity": "low"
+  }
+ ]
+}

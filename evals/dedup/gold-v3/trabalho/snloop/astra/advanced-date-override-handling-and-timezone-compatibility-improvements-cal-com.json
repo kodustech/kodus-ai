@@ -1,0 +1,77 @@
+{
+ "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "Explicitly identifies end being computed from slotStartTime, leaving the actual slot end unchecked. The broader comment also covers split working-hours intervals."
+  },
+  {
+   "id": "S2",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "newGroup": null,
+   "reason": "Identifies reference equality between separately constructed dayjs objects, making the zero-length override branch unreachable."
+  },
+  {
+   "id": "S3",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#05",
+   "newGroup": null,
+   "reason": "Identifies slots extending beyond the override end being accepted because the upper bound checks slot start. It also includes the lower-bound problem."
+  },
+  {
+   "id": "S4",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "Identifies end being computed from slotStartTime instead of slotEndTime in the working-hours check."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Concerns missing optional override.timeZone values and the absence of a fallback. This differs from the golden issue about discarding date rollover during timezone conversion."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Concerns a regression test that allegedly passes without the new timezone logic. No golden issue describes this test coverage problem."
+  },
+  {
+   "id": "S7",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "newGroup": null,
+   "reason": "Identifies the always-false dayjs reference comparison that prevents detecting day-off overrides."
+  },
+  {
+   "id": "S8",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "Identifies the duplicated slotStartTime expression that allows slots to overrun working hours."
+  },
+  {
+   "id": "S9",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "Identifies the working-hours end calculation using slotStartTime instead of slotEndTime."
+  },
+  {
+   "id": "S10",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#05",
+   "newGroup": null,
+   "reason": "Explicitly identifies comparing slot start against override end, allowing overrunning slots. The comment also includes the dayjs reference-equality problem."
+  },
+  {
+   "id": "S11",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#04",
+   "newGroup": null,
+   "reason": "Identifies rejection when any working-hours interval excludes the slot, breaking split schedules. It also includes the incorrect slot-end calculation."
+  },
+  {
+   "id": "S12",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "newGroup": null,
+   "reason": "Identifies dayjs reference equality making the zero-length override branch unreachable."
+  }
+ ]
+}

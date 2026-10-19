@@ -1,0 +1,11 @@
+{
+ "caseId": "advanced-query-processing-architecture-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "advanced-query-processing-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Describes the same double interpolation in runSplitQuery and the backend execution path, duplicating ad hoc filters and re-interpolating substituted values containing variable tokens."
+  }
+ ]
+}

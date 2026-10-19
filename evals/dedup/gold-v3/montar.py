@@ -227,7 +227,54 @@ if os.path.exists(f'{W}/prod/pool/debate/estado.json'):
             (golden if cls == 'TP' else fps).setdefault(cid, []).append(reg)
             cont[(f'prod:{status}', cls, sc)] += 1
 
-meta = {'versao': 'v3', 'prs': len(A), 'modelos': list(ABR.values()) + list(RODADAS.values()) + list(RODADAS_JUIZ.values()) + list(RODADAS_PROD.values()), 'classificadores': ['claude-opus-5.5', 'gpt-6-astra'],
+# Rodadas novas de um modelo so, no processo do baseline de producao: juiz Opus conferido pelo
+# Astra (o Opus decide), segunda passada contra os FPs conhecidos (<pasta>/fp), e o que seguiu
+# novo classificado por Opus e Astra as cegas, com debate (<pasta>/debate).
+RODADAS_FP = {'snapi': 'sonnet-5.5@sdkapi', 'snloop': 'sonnet-5.5@loop'}
+for pasta, chave in RODADAS_FP.items():
+    R = f'{W}/{pasta}'
+    if not os.path.exists(f'{R}/debate/estado.json'):
+        continue
+    import glob
+    porId = {r['issueId']: r for d in (golden, fps, revisao) for l in d.values() for r in l}
+    casados = dict(json.load(open(f'{R}/casamento-tp.json'))['tp'])
+    for cid, L in json.load(open(f'{R}/fp/opus-out0.json')).items():
+        for x in L:
+            if x['match'] != 'new': casados.setdefault(cid, {})[x['id']] = x['match']
+    for cid, m in casados.items():
+        for sid, iss in m.items():
+            sugestoes[f'{chave}|{cid}|{sid}'] = iss
+            porId[iss].setdefault('foundBy', {}).setdefault(chave, []).append(sid)
+    oc = {}
+    for f in glob.glob(f'{R}/opus-classif*.json'): oc.update(json.load(open(f)))
+    ac = {x['issueId']: x for f in glob.glob(f'{R}/astra-classif/*.json') for x in json.load(open(f))['items']}
+    D2 = json.load(open(f'{R}/debate/estado.json'))
+    for cid, p in json.load(open(f'{R}/classif-in.json')).items():
+        for it in p['issues']:
+            k = it['issueId']; o = oc[k]; a = ac[k]
+            reg = {'issueId': k, 'caseId': cid, 'comment': o['comment'], 'commentOpus': o['comment'], 'source': 'kodus', 'martianRef': [],
+                   'foundBy': {chave: [c['gid'].split(':')[1] for c in it['comentarios']]},
+                   'reason_opus': o['reason'], 'reason_astra': a['reason'],
+                   'class_opus_inicial': o['class'], 'subclass_opus_inicial': o['subclass'],
+                   'class_astra_inicial': a['class'], 'subclass_astra_inicial': sub(a['subclass']), 'rodada': pasta}
+            if k in D2:
+                d = D2[k]
+                assert d.get('fechado'), f'{k}: debate em aberto'
+                fo = next(h for h in reversed(d['hist']) if h['who'] == 'opus')
+                cls, sc, sev = fo['class'], sub(fo['subclass']), fo['severity']
+                status = 'human_decision' if d['fechado'] == 'humano' else 'agreed_after_debate'
+                if d.get('decisaoHumana'): reg['decisaoHumana'] = d['decisaoHumana']
+                reg['debate'] = [{'quem': h['who'], 'class': h['class'], 'subclass': sub(h['subclass']), 'severity': sub(h['severity']), 'texto': h['text']} for h in d['hist']]
+            else:
+                assert (o['class'], o['subclass']) == (a['class'], sub(a['subclass'])), f'{k}: classe sem consenso'
+                cls, sc, sev, status = o['class'], o['subclass'], o['severity'], 'agreed'
+            reg.update({'class': cls, 'subclass': sc, 'status': status, 'severity': sev, 'category': (o['category'] or 'bug') if cls == 'TP' else None})
+            for c in it['comentarios']:
+                sugestoes[f'{chave}|{cid}|{c["gid"].split(":")[1]}'] = k
+            (golden if cls == 'TP' else fps).setdefault(cid, []).append(reg)
+            cont[(f'{pasta}:{status}', cls, sc)] += 1
+
+meta = {'versao': 'v3', 'prs': len(A), 'modelos': list(ABR.values()) + list(RODADAS.values()) + list(RODADAS_JUIZ.values()) + list(RODADAS_PROD.values()) + list(RODADAS_FP.values()), 'classificadores': ['claude-opus-5.5', 'gpt-6-astra'],
         'regua': 'TP = o problema existe no codigo do head e o PR o introduz ou mexe no codigo envolvido; FP = nao ha problema a reportar no PR'}
 for nome, dados in [('golden', golden), ('fps-conhecidos', fps), ('revisao-humana', revisao)]:
     json.dump({**meta, 'prs': dados}, open(f'{AQUI}/{nome}.json', 'w'), indent=1, ensure_ascii=False)

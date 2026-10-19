@@ -1,0 +1,12 @@
+{
+ "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+ "items": [
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#snapi-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "Although TimeRange.timeZone is optional, the caller supplying overrides explicitly attaches availability.timeZone to every override before passing them to getSlots (packages/trpc/server/routers/viewer/slots.ts:410\u2013415,453). That timezone resolves through schedule/event settings to the required user.timeZone (packages/core/getUserAvailability.ts:201; packages/prisma/schema.prisma:161). Other callers supply no overrides, so the claimed undefined-timezone state is unreachable in the current code.",
+   "severity": "medium"
+  }
+ ]
+}

@@ -1,0 +1,83 @@
+{
+ "caseId": "implement-access-token-context-encoding-framework-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Identifies the same incorrect grant substring offsets and inverted comparison in isAccessTokenId, despite overstating the effect on correct IDs."
+  },
+  {
+   "id": "S2",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Identifies the duplicated grantType null check that leaves rawTokenId unvalidated."
+  },
+  {
+   "id": "S3",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Describes the same misaligned grant substring and inverted equality check in the event matcher."
+  },
+  {
+   "id": "S4",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Identifies both defects in the grant shortcut check and proposes the corresponding fix."
+  },
+  {
+   "id": "S5",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Describes the same null check targeting grantType instead of rawTokenId."
+  },
+  {
+   "id": "S6",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Identifies the incorrect substring offsets that prevent the matcher from checking the actual grant shortcut; the additional short-prefix concern does not change this overlap."
+  },
+  {
+   "id": "S7",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Identifies the inverted comparison in the same grant shortcut matcher, one of the defects covered by this issue."
+  },
+  {
+   "id": "S8",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Describes the same incorrect offsets and inverted comparison, despite the inconsistent suggestion to drop the negation."
+  },
+  {
+   "id": "S9",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Identifies the duplicated grantType check and missing rawTokenId validation, despite misnumbering the check."
+  },
+  {
+   "id": "S10",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Describes the same misaligned and inverted grant comparison that allows incorrect grant metadata to pass."
+  },
+  {
+   "id": "S11",
+   "match": "implement-access-token-context-encoding-framework-keycloak#04",
+   "newGroup": null,
+   "reason": "Identifies the same false-positive test: catching RuntimeException accepts an NPE from the unset sessionFactory instead of verifying the intended IllegalArgumentException."
+  },
+  {
+   "id": "S12",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Identifies the same incorrect grant substring offsets and inverted equality condition."
+  },
+  {
+   "id": "S13",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Describes the same offset and comparison defects in isAccessTokenId, with the same corrective changes."
+  }
+ ]
+}

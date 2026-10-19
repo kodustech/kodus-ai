@@ -1,0 +1,71 @@
+{
+ "caseId": "replays-self-serve-bulk-delete-system-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "Describes the same positional pairing of error IDs with nodestore values, which misattributes payloads when ordering differs or nodes are missing."
+  },
+  {
+   "id": "S2",
+   "match": "replays-self-serve-bulk-delete-system-sentry#01",
+   "newGroup": null,
+   "reason": "Includes the same truthiness-based age/timestamp exclusivity bug. Its broader object-level validation fix would also resolve the golden issue."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes an undefined attributes return value during initial loading, distinct from the golden issue about missing organization identity in the cache key."
+  },
+  {
+   "id": "S4",
+   "match": "replays-self-serve-bulk-delete-system-sentry#12",
+   "newGroup": null,
+   "reason": "Describes the same feature-flagged table visualization receiving hardcoded empty columns and data instead of query results."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Raises the change to the automatic autofix default, which is not covered by any golden issue."
+  },
+  {
+   "id": "S6",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "Describes the same incorrect positional mapping between error IDs and nodestore payloads when nodes are missing or reordered."
+  },
+  {
+   "id": "S7",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "Describes the same assumption that nodestore values preserve error ID order and contain every requested node."
+  },
+  {
+   "id": "S8",
+   "match": "replays-self-serve-bulk-delete-system-sentry#01",
+   "newGroup": null,
+   "reason": "Describes the same truthiness checks treating zero-valued age or timestamp fields as absent during mutual-exclusion validation."
+  },
+  {
+   "id": "S9",
+   "match": "replays-self-serve-bulk-delete-system-sentry#02",
+   "newGroup": null,
+   "reason": "Describes the same validation warning logging the complete attacker-controlled browser report, potentially exposing sensitive data."
+  },
+  {
+   "id": "S10",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "Describes the same positional zip assigning nodestore event data to incorrect error IDs when keys are omitted or reordered."
+  },
+  {
+   "id": "S11",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Describes an attribute-values test whose mock matches the wrong query parameter, making its negative assertion ineffective. The golden test-coverage issue concerns a different test and guard in replay bulk deletion."
+  }
+ ]
+}

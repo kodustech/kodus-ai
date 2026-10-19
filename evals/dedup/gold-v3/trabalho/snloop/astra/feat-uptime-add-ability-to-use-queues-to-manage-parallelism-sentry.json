@@ -1,0 +1,77 @@
+{
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "Closing a strategy shuts down the factory-shared pool, so subsequent strategies reuse dead queues and commit unprocessed messages."
+  },
+  {
+   "id": "S2",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "newGroup": null,
+   "reason": "Unbounded queues and missing backpressure allow the backlog to grow without limit when workers fall behind."
+  },
+  {
+   "id": "S3",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#01",
+   "newGroup": null,
+   "reason": "The offset scan requires consecutive integers, causing legitimate Kafka offset gaps to block commit progress."
+  },
+  {
+   "id": "S4",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#05",
+   "newGroup": null,
+   "reason": "The test checks for absent commits before the one-second commit loop fires, so it fails to detect failed offsets being committed. It also notes the related docstring contradiction."
+  },
+  {
+   "id": "S5",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "newGroup": null,
+   "reason": "The documented backpressure guarantee is absent because the queues are unbounded and submissions do not apply backpressure."
+  },
+  {
+   "id": "S6",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03",
+   "newGroup": null,
+   "reason": "The worker completes offsets in finally even when processing fails, contradicting the successful-processing commit guarantee."
+  },
+  {
+   "id": "S7",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "Strategy shutdown destroys the shared factory pool, causing post-rebalance submissions to fail and unprocessed offsets to be committed."
+  },
+  {
+   "id": "S8",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#01",
+   "newGroup": null,
+   "reason": "The comment identifies the consecutive-integer offset scan and stale tracking state across rebalances as causes of stalled commits."
+  },
+  {
+   "id": "S9",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "The next strategy reuses a pool shut down by the previous strategy, and enqueue failures are converted into completed offsets."
+  },
+  {
+   "id": "S10",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "Shutting down the factory-shared pool from the strategy causes post-rebalance messages to be committed without processing."
+  },
+  {
+   "id": "S11",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#04",
+   "newGroup": null,
+   "reason": "The test promises continued commits after errors but asserts no commits occurred; it should wait for and assert the positive commit behavior."
+  },
+  {
+   "id": "S12",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#17",
+   "newGroup": null,
+   "reason": "The ordering test checks only the processed count, so out-of-order processing would still pass."
+  }
+ ]
+}

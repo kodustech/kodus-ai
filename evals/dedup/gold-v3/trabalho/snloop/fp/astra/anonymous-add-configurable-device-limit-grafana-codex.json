@@ -1,0 +1,11 @@
+{
+ "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+ "items": [
+  {
+   "id": "S2",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#03",
+   "newGroup": null,
+   "reason": "It makes the same claim that ProvideAnonDBStore's new int64 parameter cannot be supplied by Wire while the provider remains registered in wire.go. The suggested removal and regeneration do not change the underlying claim."
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+{
+ "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+ "items": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This comment claims the shared user query could expose googleChannelId to clients. It is distinct from both rejected claims about cache timestamps and deletion actions for delegation credentials."
+  }
+ ]
+}

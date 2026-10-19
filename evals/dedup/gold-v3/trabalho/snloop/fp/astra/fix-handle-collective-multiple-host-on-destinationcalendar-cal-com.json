@@ -1,0 +1,11 @@
+{
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "items": [
+  {
+   "id": "S15",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The comment reports an unused catch-block variable in EventManager.ts. None of the rejected issues describes this dead-code problem."
+  }
+ ]
+}

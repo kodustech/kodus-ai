@@ -1,0 +1,506 @@
+{
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": [
+  {
+   "id": "S1",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Negative cursor offset sliced into Django queryset in OptimizedCursorPaginator raises error."
+  },
+  {
+   "id": "S2",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "BasePaginator no longer clamps negative offsets for prev cursors; queryset slice errors."
+  },
+  {
+   "id": "S3",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "OptimizedCursorPaginator negative slice unsupported by Django."
+  },
+  {
+   "id": "S4",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "Prev cursor negative offset not clamped in BasePaginator; fix is always clamp."
+  },
+  {
+   "id": "S5",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Negative start slice in optimized paginator raises AssertionError."
+  },
+  {
+   "id": "S6",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "Prev cursor raw negative offset reaches slice in BasePaginator."
+  },
+  {
+   "id": "S7",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Negative start slice in optimized paginator causes 500."
+  },
+  {
+   "id": "S8",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "BasePaginator prev cursor negative offset reaches slice."
+  },
+  {
+   "id": "S9",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Negative offsets passed to queryset slice in optimized path error out; fix clamp."
+  },
+  {
+   "id": "S10",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "BasePaginator prev cursor offset unclamped."
+  },
+  {
+   "id": "S11",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Asks only to correct the misleading comments inside OptimizedCursorPaginator.get_result (ORM negative slicing, permission check); no golden issue covers these comments (#02 is BasePaginator, #08 the endpoint)."
+  },
+  {
+   "id": "S12",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#02",
+   "newGroup": null,
+   "reason": "BasePaginator comment about negative offsets misdescribes the clamping behaviour."
+  },
+  {
+   "id": "S13",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Negative slice in optimized paginator gives 500."
+  },
+  {
+   "id": "S14",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Negative slice in optimized paginator gives 500."
+  }
+ ],
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "id": "S1",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "mainHostDestinationCalendar.integration without optional chaining throws for Meet bookings."
+  },
+  {
+   "id": "S2",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Fallback find matches externalId against falsy externalCalendarId, never matches."
+  },
+  {
+   "id": "S3",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "newGroup": null,
+   "reason": "Null destinationCalendar makes optional push drop other hosts calendars."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Legacy non-credentialId branch deletes each reference against all credentials; different code from the recurring-branch duplication in sncc-01."
+  },
+  {
+   "id": "S5",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Dead fallback lookup in updateEvent/deleteEvent."
+  },
+  {
+   "id": "S6",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Missing optional chaining on mainHostDestinationCalendar.integration."
+  },
+  {
+   "id": "S7",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Missing optional chaining on mainHostDestinationCalendar.integration."
+  },
+  {
+   "id": "S8",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Dead fallback lookup in updateEvent/deleteEvent."
+  },
+  {
+   "id": "S9",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Missing optional chaining on mainHostDestinationCalendar.integration."
+  },
+  {
+   "id": "S10",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Missing optional chaining on mainHostDestinationCalendar.integration."
+  },
+  {
+   "id": "S11",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Dead fallback lookup in updateEvent/deleteEvent."
+  },
+  {
+   "id": "S12",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Missing optional chaining on mainHostDestinationCalendar.integration."
+  },
+  {
+   "id": "S13",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Dead fallback lookup in updateEvent/deleteEvent."
+  }
+ ],
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Unescaped request.referer in inline JS of embed layout; no golden issue covers it."
+  },
+  {
+   "id": "S2",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#16",
+   "newGroup": null,
+   "reason": "contents << mutates the caller string in place."
+  },
+  {
+   "id": "S3",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+   "newGroup": null,
+   "reason": "Protocol-relative URLs rewritten to wrong host by absolutize_urls."
+  },
+  {
+   "id": "S4",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "indexOf substring origin check in embed.js postMessage handler."
+  },
+  {
+   "id": "S5",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "Unescaped url interpolated into footer href enables markup injection."
+  },
+  {
+   "id": "S6",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#33",
+   "newGroup": null,
+   "reason": "feed_polling_url/embed_by_username specs leave feed_polling_enabled false."
+  },
+  {
+   "id": "S7",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+   "newGroup": null,
+   "reason": "Protocol-relative URLs rewritten to wrong host."
+  },
+  {
+   "id": "S8",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "i.content.scrub on items without content raises NoMethodError."
+  },
+  {
+   "id": "S9",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#17",
+   "newGroup": null,
+   "reason": "Non-atomic check-then-create races on unique embed_url index."
+  },
+  {
+   "id": "S10",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#29",
+   "newGroup": null,
+   "reason": "Disqus import via import_remote: dead link aborts the import."
+  },
+  {
+   "id": "S11",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-03",
+   "newGroup": null,
+   "reason": "embed css/js not in assets precompile list."
+  }
+ ],
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
+  {
+   "id": "S1",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "isinstance multiprocessing.Process false for SpawnProcess, hung flusher never killed."
+  },
+  {
+   "id": "S2",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "newGroup": null,
+   "reason": "join breaks on deadline, skipping termination of remaining processes."
+  },
+  {
+   "id": "S3",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#02",
+   "newGroup": null,
+   "reason": "Added time.sleep is no-op due to monkeypatch."
+  },
+  {
+   "id": "S4",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#05",
+   "newGroup": null,
+   "reason": "Docstring says one process per shard."
+  },
+  {
+   "id": "S5",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#01",
+   "newGroup": null,
+   "reason": "wait_produce tagged shards vs shard."
+  },
+  {
+   "id": "S6",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "SpawnProcess isinstance check, hung process not killed."
+  },
+  {
+   "id": "S7",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "SpawnProcess isinstance check, hung process not killed."
+  },
+  {
+   "id": "S8",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#01",
+   "newGroup": null,
+   "reason": "wait_produce tag name inconsistent."
+  }
+ ],
+ "fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "totalPages floor+1 overcounts on exact multiple."
+  },
+  {
+   "id": "S2",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02",
+   "newGroup": null,
+   "reason": "Unbounded/negative client limit on public members endpoint."
+  },
+  {
+   "id": "S3",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "totalPages overcount."
+  },
+  {
+   "id": "S4",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "totalPages overcount."
+  },
+  {
+   "id": "S5",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Public members page has no pagination but endpoint caps at 50."
+  },
+  {
+   "id": "S6",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "totalPages overcount."
+  },
+  {
+   "id": "S7",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02",
+   "newGroup": null,
+   "reason": "Unchecked limit/offset params, negative values give 500."
+  }
+ ],
+ "feat-2fa-backup-codes-cal-com": [
+  {
+   "id": "S1",
+   "match": "feat-2fa-backup-codes-cal-com#07",
+   "newGroup": null,
+   "reason": "Non-atomic backup code consumption allows reuse."
+  },
+  {
+   "id": "S2",
+   "match": "feat-2fa-backup-codes-cal-com#07",
+   "newGroup": null,
+   "reason": "Non-atomic backup code consumption allows reuse."
+  },
+  {
+   "id": "S3",
+   "match": "feat-2fa-backup-codes-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "indexOf comparison not constant-time."
+  },
+  {
+   "id": "S4",
+   "match": "feat-2fa-backup-codes-cal-com#04",
+   "newGroup": null,
+   "reason": "BackupCode default export named TwoFactor."
+  },
+  {
+   "id": "S5",
+   "match": "feat-2fa-backup-codes-cal-com#14",
+   "newGroup": null,
+   "reason": "Disable endpoint log says backup code login."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims security/DisableTwoFactorModal calls the changed settings API; it uses its own security/TwoFactorAuthAPI, so false claim."
+  }
+ ],
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "TopicUser.find_by nil dereference gives 500."
+  },
+  {
+   "id": "S2",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "State change on GET without CSRF."
+  },
+  {
+   "id": "S3",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "TopicUser.find_by nil dereference."
+  },
+  {
+   "id": "S4",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "TopicUser.find_by nil dereference."
+  },
+  {
+   "id": "S5",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#11",
+   "newGroup": null,
+   "reason": "stopNotificiationsText misspelled."
+  },
+  {
+   "id": "S6",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "TopicUser.find_by nil dereference."
+  }
+ ],
+ "anonymous-add-configurable-device-limit-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Cache key set before CreateOrUpdateDevice, rejected device bypasses limit."
+  },
+  {
+   "id": "S2",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Count then insert non-atomic, limit exceeded concurrently."
+  },
+  {
+   "id": "S3",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#09",
+   "newGroup": null,
+   "reason": "TagDevice now synchronous in Authenticate, DB on request path."
+  },
+  {
+   "id": "S4",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#09",
+   "newGroup": null,
+   "reason": "Tagging moved from fire-and-forget to synchronous request path."
+  },
+  {
+   "id": "S5",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Count then insert non-atomic."
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "With V1 and V2 both on, removal listener calls V2 setPermissionsEnabled which throws, failing client deletion; #01 is about orphaned permissions when V1 is off, a different problem."
+  },
+  {
+   "id": "S2",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#08",
+   "newGroup": null,
+   "reason": "requireView Javadoc says returns true."
+  },
+  {
+   "id": "S3",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#08",
+   "newGroup": null,
+   "reason": "requireViewClientScopes Javadoc says returns true."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Same as S1: listener calls throwing V2 setPermissionsEnabled when both features are on."
+  }
+ ],
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "website_name not in untrusted_attributes, exposes TL0 website."
+  },
+  {
+   "id": "S2",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Strip-first-label check matches unrelated hosts under shared suffixes."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Spec coverage gap for sibling branch, not a defect; no golden issue."
+  }
+ ],
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+  {
+   "id": "S1",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+   "newGroup": null,
+   "reason": "Empty data object does not bump @updatedAt."
+  },
+  {
+   "id": "S2",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#04",
+   "newGroup": null,
+   "reason": "Hard-coded en-US locale for timestamp."
+  }
+ ],
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "S1",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#05",
+   "newGroup": null,
+   "reason": "Storing codes in user storage leaves old local recovery-codes credential in place."
+  }
+ ]
+}

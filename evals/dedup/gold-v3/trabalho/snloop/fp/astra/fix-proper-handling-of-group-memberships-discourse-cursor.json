@@ -1,0 +1,11 @@
+{
+ "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+ "items": [
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This claims removal raises when a user is already absent from the group because delete receives a raw ID. The rejected removal claim concerns a route parameter mismatch, which is a different cause."
+  }
+ ]
+}

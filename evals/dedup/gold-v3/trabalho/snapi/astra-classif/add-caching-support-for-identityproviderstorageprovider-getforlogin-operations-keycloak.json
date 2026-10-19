@@ -1,0 +1,12 @@
+{
+ "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+ "items": [
+  {
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#snapi-01",
+   "class": "TP",
+   "subclass": "nit",
+   "reason": "InfinispanIdentityProviderStorageProvider.java:100 introduces an unconditional delegate lookup, although lines 105\u2013107 retrieve a cached model when available; the base performed this lookup only for an invalid cache key. JpaIdentityProviderStorageProvider.java:213 and :490\u2013500 confirm that the lookup executes a database query. This is a minor avoidable query on administrative IDP removal, without evidence of a meaningful performance regression.",
+   "severity": "low"
+  }
+ ]
+}

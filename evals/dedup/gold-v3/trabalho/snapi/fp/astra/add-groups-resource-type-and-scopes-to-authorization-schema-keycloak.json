@@ -1,0 +1,11 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "id": "S7",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#05",
+   "newGroup": null,
+   "reason": "It asserts the same defect: removing searchForUser\u2019s per-user canView filter exposes users the admin cannot view. The V2 per-user grant and empty group-permission set describe a specific scenario for that same claim."
+  }
+ ]
+}

@@ -1,0 +1,12 @@
+{
+ "caseId": "advanced-sql-analytics-framework-grafana-codex",
+ "items": [
+  {
+   "issueId": "advanced-sql-analytics-framework-grafana-codex#snloop-01",
+   "class": "FP",
+   "subclass": "hallucination",
+   "reason": "The only test in pkg/expr/sql_command_test.go unconditionally calls t.Skip() at line 9, before NewSQLCommand at line 10, so it cannot fail against the stub. This skip also exists in the base commit; although the new stub returns errors, the claimed test failure is impossible.",
+   "severity": "medium"
+  }
+ ]
+}

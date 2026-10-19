@@ -1,0 +1,12 @@
+{
+ "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+ "items": [
+  {
+   "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#snloop-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "GroupAdapter.java:256,262,268 dereference modelSupplier.get() without null checks, but all three statements are identical in the base commit. This PR changes only getSubGroupsCount() in that file (lines 274\u2013275), so the reported stream-method defect is pre-existing and untouched.",
+   "severity": "medium"
+  }
+ ]
+}

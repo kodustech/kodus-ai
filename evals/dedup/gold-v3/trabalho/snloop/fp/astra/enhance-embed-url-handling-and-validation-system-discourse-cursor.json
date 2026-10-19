@@ -1,0 +1,23 @@
+{
+ "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+ "items": [
+  {
+   "id": "S4",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-02",
+   "newGroup": null,
+   "reason": "It identifies the same dangling `if` modifier consuming subsequent template output as its condition and disrupting header rendering. The possible SyntaxError is an additional consequence."
+  },
+  {
+   "id": "S7",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "It repeats the claim that the controller enqueues a job while the spec expects direct TopicRetriever construction and retrieval, causing the example to fail."
+  },
+  {
+   "id": "S9",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#25",
+   "newGroup": null,
+   "reason": "It identifies the same use of HTML escaping instead of JavaScript escaping for request.referer in the inline string. The character examples elaborate on the same escaping defect."
+  }
+ ]
+}

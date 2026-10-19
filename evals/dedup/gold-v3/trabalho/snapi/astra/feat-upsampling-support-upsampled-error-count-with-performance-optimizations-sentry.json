@@ -1,0 +1,11 @@
+{
+ "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The alleged missing function registration is distinct from every golden-set issue. It is also unsupported: the errors query builders inherit Discover builders, whose configuration includes the upsampled_count registry."
+  }
+ ]
+}

@@ -1,0 +1,53 @@
+{
+ "caseId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "Identifies the unimplemented abstract members that make MetricAlertDetectorHandler instantiation raise TypeError."
+  },
+  {
+   "id": "S2",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "Describes the same empty subclass failing to implement abstract methods and consequently failing at instantiation."
+  },
+  {
+   "id": "S3",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#04",
+   "newGroup": null,
+   "reason": "Identifies the mock builder's unused value argument, which lets mismatched measurements and incorrect value forwarding pass the tests."
+  },
+  {
+   "id": "S4",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "Identifies the missing abstract implementations that cause TypeError through Detector.detector_handler."
+  },
+  {
+   "id": "S5",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#03",
+   "newGroup": null,
+   "reason": "Identifies the stale evaluate docstring describing a list instead of the dictionary now returned."
+  },
+  {
+   "id": "S6",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#01",
+   "newGroup": null,
+   "reason": "Identifies the stale TODO describing a future migration to StatefulDetectorHandler despite the class already inheriting it."
+  },
+  {
+   "id": "S7",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "Describes the same missing abstract implementations and resulting metric alert handler instantiation failure."
+  },
+  {
+   "id": "S8",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "Identifies the empty MetricAlertDetectorHandler subclass remaining abstract and raising TypeError when instantiated."
+  }
+ ]
+}

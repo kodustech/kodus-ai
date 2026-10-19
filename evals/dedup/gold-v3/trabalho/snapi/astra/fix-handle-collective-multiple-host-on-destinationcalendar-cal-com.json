@@ -1,0 +1,83 @@
+{
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Describes the same unguarded integration access that crashes Google Meet bookings with a null or empty destination calendar."
+  },
+  {
+   "id": "S2",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Describes the same fallback lookup against a falsy externalCalendarId in Google updateEvent and deleteEvent."
+  },
+  {
+   "id": "S3",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "newGroup": null,
+   "reason": "Describes the same optional push that discards other collective hosts' calendars when the organizer's destinationCalendar is null."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes deletion across every calendar credential in the branch for references without credentialId. The golden cancellation issues concern the separate recurring-series branch; fixing that branch would not fix this one."
+  },
+  {
+   "id": "S5",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Describes the same ineffective destination-calendar fallback that searches using the absent externalCalendarId."
+  },
+  {
+   "id": "S6",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Describes the same undefined mainHostDestinationCalendar dereference during the Google Meet fallback."
+  },
+  {
+   "id": "S7",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Describes the same missing optional chaining on mainHostDestinationCalendar.integration."
+  },
+  {
+   "id": "S8",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Describes the same dead lookup using a falsy externalCalendarId in both Google calendar lifecycle methods."
+  },
+  {
+   "id": "S9",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Describes the same Google Meet booking crash caused by reading integration from an undefined first destination calendar."
+  },
+  {
+   "id": "S10",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Describes the same unguarded integration read when destinationCalendar is null or empty."
+  },
+  {
+   "id": "S11",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Describes the same lost destination-calendar fallback caused by comparing externalId with the absent externalCalendarId."
+  },
+  {
+   "id": "S12",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Describes the same missing null guard that prevents the Google Meet location from falling back to Cal Video."
+  },
+  {
+   "id": "S13",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Describes the same fallback predicate that cannot select the configured destination when externalCalendarId is falsy."
+  }
+ ]
+}

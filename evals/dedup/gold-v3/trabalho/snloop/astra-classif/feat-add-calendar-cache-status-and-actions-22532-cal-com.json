@@ -1,0 +1,12 @@
+{
+ "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+ "items": [
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#snloop-01",
+   "class": "FP",
+   "subclass": "none",
+   "reason": "The select adds googleChannelId at packages/lib/server/repository/user.ts:900, but the suggested exposure is conditional and unsubstantiated: packages/trpc/server/routers/viewer/me/get.handler.ts:109-148 explicitly constructs its response without selected calendars. The calendar response also uses selected calendars only for an isSelected check (packages/lib/CalendarManager.ts:81), so selecting this field does not establish a client-facing leak.",
+   "severity": "high"
+  }
+ ]
+}

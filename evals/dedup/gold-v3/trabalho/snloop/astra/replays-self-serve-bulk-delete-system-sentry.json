@@ -1,0 +1,59 @@
+{
+ "caseId": "replays-self-serve-bulk-delete-system-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "Describes positional pairing of error IDs with nodestore values, which misattributes event data when ordering or missing nodes changes alignment."
+  },
+  {
+   "id": "S2",
+   "match": "replays-self-serve-bulk-delete-system-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "Describes comparing error timestamps in seconds with replay timestamps in milliseconds, producing incorrect chronology."
+  },
+  {
+   "id": "S3",
+   "match": "replays-self-serve-bulk-delete-system-sentry#01",
+   "newGroup": null,
+   "reason": "Describes truthiness-based age/timestamp checks treating zero as absent and bypassing mutual exclusion."
+  },
+  {
+   "id": "S4",
+   "match": "replays-self-serve-bulk-delete-system-sentry#12",
+   "newGroup": null,
+   "reason": "Describes the feature-flagged table receiving hardcoded empty columns and data instead of query results."
+  },
+  {
+   "id": "S5",
+   "match": "replays-self-serve-bulk-delete-system-sentry#opa-03",
+   "newGroup": null,
+   "reason": "Describes the mocked deletion function preventing the test from exercising the null-segment guard."
+  },
+  {
+   "id": "S6",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "Describes error IDs being paired with the wrong nodestore payloads through positional zip."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes docstrings implying required presence while both fields can be omitted. Correcting those docstrings or rejecting missing fields would not fix the zero-value mutual-exclusion bug in #01."
+  },
+  {
+   "id": "S8",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "Describes positional pairing of error IDs with unordered or incomplete nodestore results, misaligning IDs and event data."
+  },
+  {
+   "id": "S9",
+   "match": "replays-self-serve-bulk-delete-system-sentry#01",
+   "newGroup": null,
+   "reason": "Describes zero-valued age/timestamp fields bypassing mutual exclusion because the validators check truthiness instead of presence."
+  }
+ ]
+}

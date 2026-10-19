@@ -36,7 +36,7 @@ const GOLD = arg('model'), VERSAO = arg('versao', 'v1'), PAR = Number(arg('par',
 const TETO = 3;
 const MODELO = process.env.RECALL_MODEL;
 if (!GOLD || !MODELO) { console.error('RECALL_MODEL=<id> --model=<gold model>'); process.exit(2); }
-const semToolChoiceNomeado = /muse|kimi|glm/i.test(MODELO);
+const semToolChoiceNomeado = /muse|kimi|glm|claude-sonnet-5/i.test(MODELO);
 const OUT = path.join(__dirname, 'resultados', arg('saida', `nit-${VERSAO}`), `${GOLD}.json`);
 // --so1: julga so os grupos de um membro que o verify --sobre manteve.
 const SO1 = arg('so1') === '1';

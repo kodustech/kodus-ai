@@ -1,0 +1,35 @@
+{
+ "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Describes the same case-sensitive blocked-email lookup that allows capitalization changes to bypass the block list."
+  },
+  {
+   "id": "S2",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Describes the same non-atomic match_count update that loses increments during concurrent signup attempts."
+  },
+  {
+   "id": "S3",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Describes the same case-sensitive blocked-email lookup and missing normalization that permit a block-list bypass."
+  },
+  {
+   "id": "S4",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Describes the same read-modify-write race in match_count that causes concurrent attempts to overwrite increments."
+  },
+  {
+   "id": "S5",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Describes the same exact, case-sensitive email lookup that lets a blocked address bypass the restriction by changing case."
+  }
+ ]
+}

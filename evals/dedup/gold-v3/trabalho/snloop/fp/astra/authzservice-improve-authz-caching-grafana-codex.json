@@ -1,0 +1,11 @@
+{
+ "caseId": "authzservice-improve-authz-caching-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "authzservice-improve-authz-caching-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "It asserts the same denial-cache behavior: checked before permission lookup and not invalidated, a cached denial blocks newly created resources or added grants until the TTL expires."
+  }
+ ]
+}

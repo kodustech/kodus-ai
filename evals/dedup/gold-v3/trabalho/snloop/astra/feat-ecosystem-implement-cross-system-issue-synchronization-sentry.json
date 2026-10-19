@@ -1,0 +1,41 @@
+{
+ "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "Reports the import-time evaluation of the queued default, causing instances to share a stale timestamp."
+  },
+  {
+   "id": "S2",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "Reports the same import-time queued default; the serialization detail describes a consequence of that problem."
+  },
+  {
+   "id": "S3",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "Reports the same stale queued timestamp caused by evaluating timezone.now() at class definition."
+  },
+  {
+   "id": "S4",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "Reports the same shared import-time timestamp for instances that omit queued."
+  },
+  {
+   "id": "S5",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#03",
+   "newGroup": null,
+   "reason": "Reports the same mismatch between the empty_array test name and its empty-dict input."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Challenges the strength of the test_to_dict assertion. Changing that assertion would not fix the import-time timestamp default or either test-name issue."
+  }
+ ]
+}

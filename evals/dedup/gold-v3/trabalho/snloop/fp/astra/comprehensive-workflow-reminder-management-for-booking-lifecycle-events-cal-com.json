@@ -1,0 +1,23 @@
+{
+ "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+ "items": [
+  {
+   "id": "S4",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#12",
+   "newGroup": null,
+   "reason": "Same claim: immediate email cancellation cancels the SendGrid batch without deleting or marking the WorkflowReminder row, leaving stale scheduled rows."
+  },
+  {
+   "id": "S5",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: the immediate cancellation branch leaves the database row behind, and callers no longer delete it, producing orphaned reminders."
+  },
+  {
+   "id": "S7",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#oph-02",
+   "newGroup": null,
+   "reason": "Same claim: immediate email cancellation during rescheduling neither deletes nor marks the old WorkflowReminder row, leaving it scheduled in the database."
+  }
+ ]
+}

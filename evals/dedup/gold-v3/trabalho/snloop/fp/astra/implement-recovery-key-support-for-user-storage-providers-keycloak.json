@@ -1,0 +1,23 @@
+{
+ "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#07",
+   "newGroup": null,
+   "reason": "It asserts the same unchecked Optional.get() on RecoveryAuthnCodesUtils.getCredential(user), causing NoSuchElementException when the credential is absent."
+  },
+  {
+   "id": "S2",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#sncc-01",
+   "newGroup": null,
+   "reason": "It asserts the same plaintext serialization and transfer through updateCredential to user storage providers, contrasted with hashed storage in the local path."
+  },
+  {
+   "id": "S3",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#sncc-01",
+   "newGroup": null,
+   "reason": "It describes the same raw-code JSON passed through updateCredential to external storage instead of the hashed representation used locally. The added exploitation scenario and suggested fixes do not change the claim."
+  }
+ ]
+}

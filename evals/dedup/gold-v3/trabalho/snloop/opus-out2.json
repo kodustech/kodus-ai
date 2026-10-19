@@ -1,0 +1,550 @@
+{
+ "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Light-theme value for .topic-meta-data h5 a changed 30%->70%."
+  },
+  {
+   "id": "S2",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Desktop user.scss .name light value changed 30%->50%."
+  },
+  {
+   "id": "S3",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Mobile user.scss .name light value changed 30%->50%."
+  },
+  {
+   "id": "S4",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Mobile topic-post h3 light value changed 20%->50%."
+  },
+  {
+   "id": "S5",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Mobile .custom-message-length light value changed 70%->30%."
+  },
+  {
+   "id": "S6",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Changed lightness values at desktop topic-post.scss:291, the h5 a 30%->70% inversion."
+  },
+  {
+   "id": "S7",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Changed lightness values at mobile modal.scss:102, the 70%->30% inversion."
+  },
+  {
+   "id": "S8",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Light value 30%->70% at desktop topic-post h5 a."
+  },
+  {
+   "id": "S9",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Mobile modal light value 70%->30%."
+  },
+  {
+   "id": "S10",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Mobile h3 light value 20%->50%."
+  },
+  {
+   "id": "S11",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Topic-meta-data link light value 30%->70%."
+  },
+  {
+   "id": "S12",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Mobile h3 20% now 50%/50%."
+  },
+  {
+   "id": "S13",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Mobile modal light value 70%->30%."
+  },
+  {
+   "id": "S14",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Desktop .name 30% now 50%."
+  },
+  {
+   "id": "S15",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Mobile modal light value 70%->30%."
+  },
+  {
+   "id": "S16",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Desktop topic-post link light value 30%->70%."
+  },
+  {
+   "id": "S17",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Mobile h3 light value 20%->50%."
+  },
+  {
+   "id": "S18",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Desktop .name light value 30%->50%."
+  },
+  {
+   "id": "S19",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Mobile modal values swapped, light 70%->30%."
+  },
+  {
+   "id": "S20",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Desktop topic-post link light value 30%->70%."
+  },
+  {
+   "id": "S21",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Mobile h3 light value 20%->50%."
+  },
+  {
+   "id": "S22",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Desktop user.scss .name light value 30%->50%."
+  }
+ ],
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "raw_html cook returns unsanitized imported HTML rendered raw: stored XSS."
+  },
+  {
+   "id": "S2",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "i.content nil for description-only items crashes PollFeed."
+  },
+  {
+   "id": "S3",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#30",
+   "newGroup": null,
+   "reason": "Every uncached retrieval synchronously polls the whole feed; per-URL throttle doesn't bound it."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "end if in ERB template; no golden issue covers it."
+  },
+  {
+   "id": "S5",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+   "newGroup": null,
+   "reason": "Protocol-relative URLs rewritten onto article host in absolutize_urls."
+  },
+  {
+   "id": "S6",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+   "newGroup": null,
+   "reason": "Protocol-relative URLs rewritten onto article host in absolutize_urls."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Controller enqueues job while spec expects TopicRetriever call; no golden issue."
+  },
+  {
+   "id": "S8",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "Unescaped URL interpolated into footer anchor in raw HTML."
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Referer emitted into JS string with HTML escaping; not in golden."
+  },
+  {
+   "id": "S10",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#33",
+   "newGroup": null,
+   "reason": "url/username spec tests leave feed_polling_enabled false, never reach guard."
+  },
+  {
+   "id": "S11",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#32",
+   "newGroup": null,
+   "reason": "404 without embed_url spec rejected by ensure_embeddable first."
+  },
+  {
+   "id": "S12",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "i.content nil crashes the feed poll."
+  },
+  {
+   "id": "S13",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#17",
+   "newGroup": null,
+   "reason": "Check-then-insert race on unique embed_url raises RecordNotUnique."
+  }
+ ],
+ "github-oauth-security-enhancement-sentry": [
+  {
+   "id": "S1",
+   "match": "github-oauth-security-enhancement-sentry#06",
+   "newGroup": null,
+   "reason": "Missing Integration branch advances without installer check."
+  },
+  {
+   "id": "S2",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "metadata[\"sender\"][\"login\"] KeyError when sender missing."
+  },
+  {
+   "id": "S3",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "Unguarded sender lookup KeyError."
+  },
+  {
+   "id": "S4",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "Unguarded sender lookup KeyError."
+  },
+  {
+   "id": "S5",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "Unguarded sender lookup KeyError."
+  },
+  {
+   "id": "S6",
+   "match": "github-oauth-security-enhancement-sentry#05",
+   "newGroup": null,
+   "reason": "Token exchange outside try: network failure gives 500."
+  },
+  {
+   "id": "S7",
+   "match": "github-oauth-security-enhancement-sentry#01",
+   "newGroup": null,
+   "reason": "_(error_short) on variable breaks translation extraction."
+  },
+  {
+   "id": "S8",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "Unguarded sender lookup KeyError."
+  },
+  {
+   "id": "S9",
+   "match": "github-oauth-security-enhancement-sentry#03",
+   "newGroup": null,
+   "reason": "OAuth state is static pipeline.signature, not a random nonce."
+  },
+  {
+   "id": "S10",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Non-constant-time comparison of state; fixing it would not fix the static state of #03."
+  },
+  {
+   "id": "S11",
+   "match": "github-oauth-security-enhancement-sentry#10",
+   "newGroup": null,
+   "reason": "test_installation_not_found uses wrong state and never reaches the not-found path."
+  },
+  {
+   "id": "S12",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Mismatch test asserts only a generic message; not in golden."
+  }
+ ],
+ "feat-2fa-backup-codes-cal-com": [
+  {
+   "id": "S1",
+   "match": "feat-2fa-backup-codes-cal-com#02",
+   "newGroup": null,
+   "reason": "onEnable only called from Close; Escape/overlay dismissal leaves 2FA shown disabled."
+  },
+  {
+   "id": "S2",
+   "match": "feat-2fa-backup-codes-cal-com#01",
+   "newGroup": null,
+   "reason": "Password check skipped with dummy totpCode plus backup code."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Un-awaited isChecked() assertion always passes; not in golden."
+  },
+  {
+   "id": "S4",
+   "match": "feat-2fa-backup-codes-cal-com#13",
+   "newGroup": null,
+   "reason": "Download test checks only filename (comment also covers the copy test #05); broader comment includes #13."
+  },
+  {
+   "id": "S5",
+   "match": "feat-2fa-backup-codes-cal-com#07",
+   "newGroup": null,
+   "reason": "Non-atomic backup-code consumption allows reuse under concurrency."
+  },
+  {
+   "id": "S6",
+   "match": "feat-2fa-backup-codes-cal-com#15",
+   "newGroup": null,
+   "reason": "resetState does not clear backup codes or revoke blob URL."
+  },
+  {
+   "id": "S7",
+   "match": "feat-2fa-backup-codes-cal-com#14",
+   "newGroup": null,
+   "reason": "Disable endpoint log says backup code login."
+  },
+  {
+   "id": "S8",
+   "match": "feat-2fa-backup-codes-cal-com#04",
+   "newGroup": null,
+   "reason": "BackupCode.tsx export named TwoFactor."
+  },
+  {
+   "id": "S9",
+   "match": "feat-2fa-backup-codes-cal-com#01",
+   "newGroup": null,
+   "reason": "Backup code plus junk totpCode skips password."
+  },
+  {
+   "id": "S10",
+   "match": "feat-2fa-backup-codes-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "indexOf comparison of backup codes is not constant-time."
+  }
+ ],
+ "replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "S1",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "zip(error_ids, events.values()) misaligns ids with get_multi results."
+  },
+  {
+   "id": "S2",
+   "match": "replays-self-serve-bulk-delete-system-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "Error timestamps in seconds vs replay events in milliseconds."
+  },
+  {
+   "id": "S3",
+   "match": "replays-self-serve-bulk-delete-system-sentry#01",
+   "newGroup": null,
+   "reason": "Truthiness check treats age=0 as absent in mutual exclusion."
+  },
+  {
+   "id": "S4",
+   "match": "replays-self-serve-bulk-delete-system-sentry#12",
+   "newGroup": null,
+   "reason": "TableWidgetVisualization rendered with hardcoded empty data."
+  },
+  {
+   "id": "S5",
+   "match": "replays-self-serve-bulk-delete-system-sentry#opa-03",
+   "newGroup": null,
+   "reason": "Mocked delete_matched_rows means the max_segment_id None guard is never exercised."
+  },
+  {
+   "id": "S6",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "zip with events.values() misaligns ids."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Docstrings vs code: neither field present passes; different from the zero-truthiness issue #01."
+  },
+  {
+   "id": "S8",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "zip with events.values() misaligns ids."
+  },
+  {
+   "id": "S9",
+   "match": "replays-self-serve-bulk-delete-system-sentry#01",
+   "newGroup": null,
+   "reason": "Truthiness check treats 0 as absent."
+  }
+ ],
+ "authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Denial cache not invalidated when permission granted within TTL; not in golden."
+  },
+  {
+   "id": "S2",
+   "match": "authzservice-improve-authz-caching-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Test seeds cached permission false so it does not prove the denial short-circuit."
+  },
+  {
+   "id": "S3",
+   "match": "authzservice-improve-authz-caching-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Underscore-joined denial key collides across name/parent pairs."
+  },
+  {
+   "id": "S4",
+   "match": "authzservice-improve-authz-caching-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Underscore-joined denial key collides."
+  },
+  {
+   "id": "S5",
+   "match": "authzservice-improve-authz-caching-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Test seeds false instead of true, passes without denial short-circuit."
+  },
+  {
+   "id": "S6",
+   "match": "authzservice-improve-authz-caching-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Underscore-joined denial key collides."
+  },
+  {
+   "id": "S7",
+   "match": "authzservice-improve-authz-caching-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Denial cache key built with _ join collides."
+  }
+ ],
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
+  {
+   "id": "S1",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "queued default timezone.now() evaluated at import time."
+  },
+  {
+   "id": "S2",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "queued default evaluated once at import."
+  },
+  {
+   "id": "S3",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "queued default evaluated once at import."
+  },
+  {
+   "id": "S4",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "queued default evaluated once at import."
+  },
+  {
+   "id": "S5",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#03",
+   "newGroup": null,
+   "reason": "test_from_dict_empty_array passes an empty dict."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Weak queued is not None assertion; not in golden."
+  }
+ ],
+ "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": [
+  {
+   "id": "S1",
+   "match": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02",
+   "newGroup": null,
+   "reason": "Returns monitor.config instead of the converted copy."
+  },
+  {
+   "id": "S2",
+   "match": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#01",
+   "newGroup": null,
+   "reason": "get_failure_reason docstring examples do not match outputs."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Comment says commits instead of check-ins; not in golden."
+  },
+  {
+   "id": "S4",
+   "match": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02",
+   "newGroup": null,
+   "reason": "Returns original config, discarding converted copy."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Unused logger objects; not in golden."
+  }
+ ],
+ "feature-localization-fallbacks-server-side-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Fallback locales loaded only in controller filter; translate outside requests cannot fall back."
+  },
+  {
+   "id": "S2",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Fallback locales loaded only in set_locale."
+  },
+  {
+   "id": "S3",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Fallback locales loaded only in controller; fix is ensure_loaded in translate (adds caching consequence)."
+  }
+ ],
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": [
+  {
+   "id": "S1",
+   "match": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#01",
+   "newGroup": null,
+   "reason": "Unreachable branches since getAuthorizationConditions always returns Sql."
+  }
+ ]
+}

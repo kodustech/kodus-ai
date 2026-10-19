@@ -1,0 +1,12 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#snloop-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "Existing FGAP V2 realms can lack the newly added Groups resource: the base schema contains only Users and Clients, and server-spi-private/src/main/java/org/keycloak/authorization/AdminPermissionsSchema.java:250 returns without updating an existing permissions client. The lookup at AdminPermissionsSchema.java:150 can therefore return null. The new services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java:147 passes that null to findByResource, which dereferences it at model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/authorization/StoreFactoryCacheSession.java:938, causing an exception instead of permission denial.",
+   "severity": "high"
+  }
+ ]
+}

@@ -1,0 +1,23 @@
+{
+ "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Both describe TestLogger.FromContext returning a fresh logger, causing contextual logs to bypass assertions on the original fake."
+  },
+  {
+   "id": "S2",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Both describe the stale TestInstrumentationMiddleware name and require renaming it to match MetricsMiddleware."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes missing traceID enrichment in the contextual logger middleware. This is distinct from the fake logger behavior, stale test name, and incorrect FromContext documentation."
+  }
+ ]
+}

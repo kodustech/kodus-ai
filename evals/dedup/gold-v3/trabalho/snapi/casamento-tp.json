@@ -1,0 +1,406 @@
+{
+ "tp": {
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "S1": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "S2": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "S3": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "S5": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "S6": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "S7": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "S8": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "S9": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "S10": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "S11": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "S12": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "S13": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03"
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "S1": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "S2": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "S3": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "S4": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "S5": "add-guest-management-functionality-to-existing-bookings-cal-com#05",
+   "S6": "add-guest-management-functionality-to-existing-bookings-cal-com#13",
+   "S7": "add-guest-management-functionality-to-existing-bookings-cal-com#09",
+   "S8": "add-guest-management-functionality-to-existing-bookings-cal-com#04",
+   "S9": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "S10": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "S11": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "S12": "add-guest-management-functionality-to-existing-bookings-cal-com#12",
+   "S13": "add-guest-management-functionality-to-existing-bookings-cal-com#13"
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "S1": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "S2": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+   "S3": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "S4": "oauth-credential-sync-and-app-integration-enhancements-cal-com#13",
+   "S5": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01",
+   "S6": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "S7": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "S8": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "S9": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+   "S10": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "S11": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "S12": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "S13": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "S14": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "S16": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "S17": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10"
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "S1": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "S2": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
+   "S3": "sms-workflow-reminder-retry-count-tracking-cal-com#03",
+   "S4": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "S5": "sms-workflow-reminder-retry-count-tracking-cal-com#02"
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "S1": "feat-2fa-backup-codes-cal-com#07",
+   "S2": "feat-2fa-backup-codes-cal-com#07",
+   "S3": "feat-2fa-backup-codes-cal-com#sncc-01",
+   "S4": "feat-2fa-backup-codes-cal-com#04",
+   "S5": "feat-2fa-backup-codes-cal-com#14"
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "S2": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#01"
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "S2": "enhance-embed-url-handling-and-validation-system-discourse-cursor#16",
+   "S3": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+   "S4": "enhance-embed-url-handling-and-validation-system-discourse-cursor#01",
+   "S5": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
+   "S6": "enhance-embed-url-handling-and-validation-system-discourse-cursor#33",
+   "S7": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+   "S8": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "S9": "enhance-embed-url-handling-and-validation-system-discourse-cursor#17",
+   "S10": "enhance-embed-url-handling-and-validation-system-discourse-cursor#29",
+   "S11": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-03"
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "S1": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#05",
+   "S2": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "S3": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "S4": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "S5": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "S6": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "S7": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#05",
+   "S8": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#09",
+   "S9": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#09",
+   "S10": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+   "S11": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "S12": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "S13": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07"
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "S1": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "S2": "feature-automatically-downsize-large-images-discourse-cursor#02",
+   "S3": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "S4": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "S5": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "S6": "feature-automatically-downsize-large-images-discourse-cursor#01"
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "S1": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "S2": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02",
+   "S3": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "S4": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "S5": "fix-proper-handling-of-group-memberships-discourse-cursor#06",
+   "S6": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "S7": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02"
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "S1": "feature-localization-fallbacks-server-side-discourse-cursor#01"
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "S1": "anonymous-add-configurable-device-limit-grafana-codex#07",
+   "S2": "anonymous-add-configurable-device-limit-grafana-codex#01",
+   "S3": "anonymous-add-configurable-device-limit-grafana-codex#09",
+   "S4": "anonymous-add-configurable-device-limit-grafana-codex#09",
+   "S5": "anonymous-add-configurable-device-limit-grafana-codex#01"
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "S1": "frontend-asset-optimization-grafana-codex#01"
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "S1": "dual-storage-architecture-grafana-codex#05",
+   "S2": "dual-storage-architecture-grafana-codex#02",
+   "S3": "dual-storage-architecture-grafana-codex#04",
+   "S4": "dual-storage-architecture-grafana-codex#03",
+   "S5": "dual-storage-architecture-grafana-codex#01",
+   "S6": "dual-storage-architecture-grafana-codex#05",
+   "S7": "dual-storage-architecture-grafana-codex#02",
+   "S8": "dual-storage-architecture-grafana-codex#04",
+   "S9": "dual-storage-architecture-grafana-codex#04",
+   "S10": "dual-storage-architecture-grafana-codex#03",
+   "S11": "dual-storage-architecture-grafana-codex#05",
+   "S12": "dual-storage-architecture-grafana-codex#06",
+   "S13": "dual-storage-architecture-grafana-codex#sncc-01",
+   "S14": "dual-storage-architecture-grafana-codex#04",
+   "S15": "dual-storage-architecture-grafana-codex#04",
+   "S16": "dual-storage-architecture-grafana-codex#02",
+   "S17": "dual-storage-architecture-grafana-codex#03",
+   "S19": "dual-storage-architecture-grafana-codex#01",
+   "S20": "dual-storage-architecture-grafana-codex#07"
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "S1": "unified-storage-performance-optimizations-grafana-codex#01",
+   "S2": "unified-storage-performance-optimizations-grafana-codex#01"
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "S1": "notification-rule-processing-engine-grafana-codex#03",
+   "S2": "notification-rule-processing-engine-grafana-codex#04",
+   "S3": "notification-rule-processing-engine-grafana-codex#03",
+   "S4": "notification-rule-processing-engine-grafana-codex#05",
+   "S5": "notification-rule-processing-engine-grafana-codex#05",
+   "S6": "notification-rule-processing-engine-grafana-codex#04"
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "S1": "implement-access-token-context-encoding-framework-keycloak#02",
+   "S2": "implement-access-token-context-encoding-framework-keycloak#01",
+   "S3": "implement-access-token-context-encoding-framework-keycloak#02",
+   "S4": "implement-access-token-context-encoding-framework-keycloak#02",
+   "S5": "implement-access-token-context-encoding-framework-keycloak#01",
+   "S6": "implement-access-token-context-encoding-framework-keycloak#02",
+   "S7": "implement-access-token-context-encoding-framework-keycloak#02",
+   "S8": "implement-access-token-context-encoding-framework-keycloak#02",
+   "S9": "implement-access-token-context-encoding-framework-keycloak#01",
+   "S10": "implement-access-token-context-encoding-framework-keycloak#02",
+   "S11": "implement-access-token-context-encoding-framework-keycloak#04",
+   "S12": "implement-access-token-context-encoding-framework-keycloak#02",
+   "S13": "implement-access-token-context-encoding-framework-keycloak#02"
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "S1": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "S2": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02"
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "S1": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "S2": "add-html-sanitizer-for-translated-message-resources-keycloak#opa-01",
+   "S3": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "S4": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "S5": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+   "S6": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "S7": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+   "S8": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+   "S9": "add-html-sanitizer-for-translated-message-resources-keycloak#06"
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "S2": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#08",
+   "S3": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#08"
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "S2": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "S3": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02"
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "S1": "replays-self-serve-bulk-delete-system-sentry#06",
+   "S2": "replays-self-serve-bulk-delete-system-sentry#01",
+   "S4": "replays-self-serve-bulk-delete-system-sentry#12",
+   "S6": "replays-self-serve-bulk-delete-system-sentry#06",
+   "S7": "replays-self-serve-bulk-delete-system-sentry#06",
+   "S8": "replays-self-serve-bulk-delete-system-sentry#01",
+   "S9": "replays-self-serve-bulk-delete-system-sentry#02",
+   "S10": "replays-self-serve-bulk-delete-system-sentry#06"
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "S1": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "S2": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "S3": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#02",
+   "S4": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#05",
+   "S5": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#01",
+   "S6": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "S7": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "S8": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#01"
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "S1": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "S3": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "S4": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "S6": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#03"
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "S1": "github-oauth-security-enhancement-sentry#06",
+   "S2": "github-oauth-security-enhancement-sentry#09",
+   "S4": "github-oauth-security-enhancement-sentry#01",
+   "S5": "github-oauth-security-enhancement-sentry#09",
+   "S6": "github-oauth-security-enhancement-sentry#10",
+   "S7": "github-oauth-security-enhancement-sentry#09",
+   "S8": "github-oauth-security-enhancement-sentry#05"
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "S1": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "S2": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "S3": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#04",
+   "S4": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "S5": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#03",
+   "S6": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#01",
+   "S7": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "S8": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02"
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "S1": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02"
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+   "S1": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "S2": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "S3": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "S4": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "S5": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "S6": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "S7": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#04"
+  },
+  "async-import-of-the-appstore-packages-cal-com": {
+   "S1": "async-import-of-the-appstore-packages-cal-com#02",
+   "S2": "async-import-of-the-appstore-packages-cal-com#02",
+   "S3": "async-import-of-the-appstore-packages-cal-com#sncc-01",
+   "S4": "async-import-of-the-appstore-packages-cal-com#02",
+   "S5": "async-import-of-the-appstore-packages-cal-com#02"
+  },
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+   "S1": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+   "S2": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+   "S3": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#11",
+   "S6": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+   "S7": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01"
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+   "S1": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+   "S2": "feat-add-calendar-cache-status-and-actions-22532-cal-com#04"
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+   "S1": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "S2": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "S3": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "S4": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "S5": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04"
+  },
+  "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+   "S1": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "S2": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
+   "S3": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "S4": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "S5": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#11",
+   "S6": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02"
+  },
+  "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+   "S1": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "S2": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "S3": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "S4": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "S5": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+   "S6": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "S7": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "S8": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "S9": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "S10": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "S11": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "S12": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "S13": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "S14": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "S15": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03"
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+   "S1": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+   "S2": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#04"
+  },
+  "advanced-query-processing-architecture-grafana-codex": {
+   "S1": "advanced-query-processing-architecture-grafana-codex#01"
+  },
+  "advanced-sql-analytics-framework-grafana-codex": {
+   "S1": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "S2": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "S3": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "S4": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "S6": "advanced-sql-analytics-framework-grafana-codex#oph-01"
+  },
+  "authzservice-improve-authz-caching-grafana-codex": {
+   "S2": "authzservice-improve-authz-caching-grafana-codex#01",
+   "S3": "authzservice-improve-authz-caching-grafana-codex#04",
+   "S4": "authzservice-improve-authz-caching-grafana-codex#01",
+   "S5": "authzservice-improve-authz-caching-grafana-codex#04"
+  },
+  "database-performance-optimizations-grafana-codex": {
+   "S1": "database-performance-optimizations-grafana-codex#04",
+   "S2": "database-performance-optimizations-grafana-codex#08",
+   "S3": "database-performance-optimizations-grafana-codex#04",
+   "S4": "database-performance-optimizations-grafana-codex#04",
+   "S5": "database-performance-optimizations-grafana-codex#08",
+   "S6": "database-performance-optimizations-grafana-codex#06",
+   "S7": "database-performance-optimizations-grafana-codex#04"
+  },
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+   "S2": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-02",
+   "S3": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#10",
+   "S4": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#02"
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "S1": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "S2": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "S3": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "S4": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "S5": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+   "S6": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#07"
+  },
+  "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+   "S1": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#oph-01"
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+   "S1": "implement-recovery-key-support-for-user-storage-providers-keycloak#05"
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+   "S1": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "S2": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01",
+   "S3": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "S4": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01",
+   "S5": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "S6": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01",
+   "S7": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "S8": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01",
+   "S9": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "S10": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01",
+   "S12": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#02",
+   "S13": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "S14": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01"
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+   "S1": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "S2": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#01",
+   "S3": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "S4": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "S5": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03",
+   "S6": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "S7": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#04",
+   "S8": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03",
+   "S9": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "S10": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "S11": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-01"
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+   "S2": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01",
+   "S3": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#04",
+   "S4": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+   "S5": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#08",
+   "S6": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06"
+  }
+ },
+ "divergencias": [
+  [
+   "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+   "S4",
+   "new",
+   "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#11"
+  ],
+  [
+   "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+   "S5",
+   "new",
+   "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#11"
+  ],
+  [
+   "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
+   "S11",
+   "new",
+   "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01"
+  ]
+ ]
+}

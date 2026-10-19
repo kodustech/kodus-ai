@@ -1,0 +1,41 @@
+{
+ "caseId": "notification-rule-processing-engine-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "notification-rule-processing-engine-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Describes the same undefined-rule ability leak that enables Duplicate on cloud rules using Grafana create permission."
+  },
+  {
+   "id": "S2",
+   "match": "notification-rule-processing-engine-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Describes the lost federated-group check and hardcoded isFederated=false, which enables modification of federated Mimir rules."
+  },
+  {
+   "id": "S3",
+   "match": "notification-rule-processing-engine-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Describes the same Duplicate permission leak when the Grafana ability hook receives undefined and its result is ORed with ruler abilities."
+  },
+  {
+   "id": "S4",
+   "match": "notification-rule-processing-engine-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Describes the alerting-only check incorrectly disabling Grafana-managed actions for recording rules."
+  },
+  {
+   "id": "S5",
+   "match": "notification-rule-processing-engine-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Describes the same recording-rule exclusion from Pause, Restore, DeletePermanently and ModifyExport caused by using alertingRule for their gates."
+  },
+  {
+   "id": "S6",
+   "match": "notification-rule-processing-engine-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Describes the same replacement of the federated-group check with false, allowing federated Mimir rules to be edited or deleted."
+  }
+ ]
+}

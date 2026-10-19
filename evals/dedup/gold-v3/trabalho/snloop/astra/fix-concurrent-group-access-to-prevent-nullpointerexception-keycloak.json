@@ -1,0 +1,35 @@
+{
+ "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes unchecked null delegates in the getSubGroupsStream overloads, a separate problem from getSubGroupsCount returning null. Fixing the stream methods would not fix issue #01."
+  },
+  {
+   "id": "S2",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "The reader is not joined before the assertion, allowing an in-flight failure to be recorded after the test passes."
+  },
+  {
+   "id": "S3",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#01",
+   "newGroup": null,
+   "reason": "Describes getSubGroupsCount returning null after concurrent deletion, violating its non-null contract and risking unboxing NPEs."
+  },
+  {
+   "id": "S4",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "Describes missing reader synchronization, including the missing join before asserting, which lets the regression test pass without observing a concurrent failure."
+  },
+  {
+   "id": "S5",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "Describes the missing reader-thread join that allows assertions to run before all reader exceptions have been collected."
+  }
+ ]
+}

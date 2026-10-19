@@ -1,0 +1,11 @@
+{
+ "caseId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#oph-01",
+   "newGroup": null,
+   "reason": "Both describe testMissingOptionOnSave passing even when the feature-disabled guard blocks the command, because it only asserts that the missing-argument message is absent."
+  }
+ ]
+}

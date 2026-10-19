@@ -1,0 +1,17 @@
+{
+ "caseId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Describes feature enablement being skipped by an early return in UpgradeTest, a separate problem from the golden-set CLI test coverage gaps."
+  },
+  {
+   "id": "S2",
+   "match": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#03",
+   "newGroup": null,
+   "reason": "Describes the missing disabled-feature test for the check subcommand, leaving its feature guard untested."
+  }
+ ]
+}

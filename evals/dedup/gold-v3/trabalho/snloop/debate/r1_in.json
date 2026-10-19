@@ -1,0 +1,163 @@
+{
+ "add-guest-management-functionality-to-existing-bookings-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "b004587262e8221083bafbe9a0c515e7becaa7b3",
+  "head": "92f44dcea7ff19e9123a30c63c167a2938df5a55",
+  "issues": {
+   "add-guest-management-functionality-to-existing-bookings-cal-com#snloop-01": {
+    "comentarios": [
+     {
+      "gid": "sonnet-snloop:S11",
+      "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+      "lines": [
+       42,
+       45
+      ],
+      "texto": "The error toast renders the raw server `err.message` (and error code) directly. Unexpected backend failures such as Prisma errors from the handler can carry internal details that end up displayed to the user. Only show the message when it is a known translation key, otherwise fall back to the generic `unable_to_add_guests` text."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "AddGuestsDialog.tsx:43-44 does toast `${err.data?.code}: ${t(err.message)}`, but the tRPC handler (createNextApiHandler.ts has no errorFormatter) already returns the same message in the response to the same authenticated user; the handler's own errors are translation keys (addGuests.handler.ts:44,55,81). Displaying it adds no exposure."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "apps/web/components/dialog/AddGuestsDialog.tsx:43-44 passes arbitrary server messages through translation and constructs an always-nonempty string, so unknown messages appear in the toast and the generic fallback never runs. packages/trpc/server/middlewares/captureErrorsMiddleware.ts:15 applies redactError, but packages/lib/redactError.ts:23-27 sanitizes only selected Prisma errors in production and returns other errors unchanged. Thus production Prisma errors are protected, but the broader raw-error display problem remains."
+     }
+    ]
+   }
+  }
+ },
+ "fix-proper-handling-of-group-memberships-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "base": "4975fc28903a84418f546b2809370f19abf10e08",
+  "head": "060cda77729cb1c4a827560e09e89a7b22078ba9",
+  "issues": {
+   "fix-proper-handling-of-group-memberships-discourse-cursor#snloop-01": {
+    "comentarios": [
+     {
+      "gid": "sonnet-snloop:S7",
+      "file": "app/controllers/admin/groups_controller.rb",
+      "lines": [
+       90,
+       90
+      ],
+      "texto": "`group.users.delete(user_id)` with a raw integer id looks the record up through the association and raises ActiveRecord::RecordNotFound if the user is not (or is no longer) a member. This happens when two admins remove the same member, or on a stale member list, and it returns a 500/404 instead of succeeding silently. Look the user up first and delete it only if it is present in the group."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "groups_controller.rb remove_member calls `group.users.delete(user_id)`, which in Rails 4 does find(ids) and raises RecordNotFound when the user is not a member; Discourse maps that to a 404. Answering 404 when the member to remove is already gone is an acceptable outcome for a stale request, not a defect."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "medium",
+      "text": "The new action converts user_id to an integer and passes it directly to group.users.delete at app/controllers/admin/groups_controller.rb:86\u201390; users is a scoped association (app/models/group.rb:8). [Rails 4.1.8 collection_association.rb:240](https://github.com/rails/rails/blob/v4.1.8/activerecord/lib/active_record/associations/collection_association.rb#L240) resolves integer arguments through association find, so an already-removed member raises RecordNotFound before the success response. The previous removal used a membership query that safely did nothing when absent (app/models/group.rb:276\u2013277), making this a regression for stale lists or concurrent removals."
+     }
+    ]
+   }
+  }
+ },
+ "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "0cfc28e76ddc986d2d89dd9b9f63ee916a18a5f9",
+  "head": "dcdcadb771128e79259cc9eff9c70c38fc597976",
+  "issues": {
+   "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#snloop-01": {
+    "comentarios": [
+     {
+      "gid": "sonnet-snloop:S3",
+      "file": "src/sentry/monitors/logic/incidents.py",
+      "lines": [
+       50,
+       51
+      ],
+      "texto": "The comment says \"within the threshold of commits\", but the code inspects check-ins, not commits. It is misleading prose in this newly added file. Replace \"commits\" with \"check-ins\"."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "low",
+      "text": "The 'within the threshold of commits' comment at incidents.py:50-51 is moved verbatim from the base mark_failed.py:139-140; the PR only relocates it, so the wording is pre-existing."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "nit",
+      "severity": "low",
+      "text": "src/sentry/monitors/logic/incidents.py:51 says \u201ccommits,\u201d but lines 40\u201352 query and inspect MonitorCheckIn records. The PR relocates this inaccurate comment into the new module; it is a wording defect with no behavioral effect."
+     }
+    ]
+   }
+  }
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "7ea067aae9be56cb2622bce6563864817c3dfeaf",
+  "head": "7355f05e6aafe2a7acc6434fb40c686665416606",
+  "issues": {
+   "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#snloop-01": {
+    "comentarios": [
+     {
+      "gid": "sonnet-snloop:S3",
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       143,
+       150
+      ],
+      "texto": "WHAT: hasPermission() passes the result of getResourceTypeResource(...) to policyStore.findByResource() without a null check. WHY: the method returns null when the 'Groups' type resource doesn't exist, which causes an NPE instead of a denied permission and a 500 on group listing and user search. HOW: return false if the type resource is null."
+     },
+     {
+      "gid": "sonnet-snloop:S11",
+      "file": "GroupPermissionsV2.java",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "hasPermission() uses the result of getResourceTypeResource() without a null check. The reviewer did not confirm that the type resource is always created, so this finding is less certain."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "hist": [
+     {
+      "who": "opus",
+      "class": "FP",
+      "subclass": "none",
+      "severity": "high",
+      "text": "GroupPermissionsV2.java:144-147 uses getResourceTypeResource without a null check, but hasPermission already requires the admin realm resource server, and AdminPermissionsSchema.java:270-275 creates a type resource for every schema type (including the new Groups) when the admin permissions client is set up, so null is not reachable in normal flows; UserPermissionsV2.java:109-111 uses the same pattern."
+     },
+     {
+      "who": "astra",
+      "class": "TP",
+      "subclass": "none",
+      "severity": "high",
+      "text": "Existing FGAP V2 realms can lack the newly added Groups resource: the base schema contains only Users and Clients, and server-spi-private/src/main/java/org/keycloak/authorization/AdminPermissionsSchema.java:250 returns without updating an existing permissions client. The lookup at AdminPermissionsSchema.java:150 can therefore return null. The new services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java:147 passes that null to findByResource, which dereferences it at model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/authorization/StoreFactoryCacheSession.java:938, causing an exception instead of permission denial."
+     }
+    ]
+   }
+  }
+ }
+}

@@ -1,0 +1,11 @@
+{
+ "caseId": "github-oauth-security-enhancement-sentry",
+ "items": [
+  {
+   "id": "S3",
+   "match": "github-oauth-security-enhancement-sentry#04",
+   "newGroup": null,
+   "reason": "It asserts the same timing leak from comparing the GitHub OAuth callback state to pipeline.signature with != instead of a constant-time comparison."
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+{
+ "caseId": "feat-2fa-backup-codes-cal-com",
+ "items": [
+  {
+   "id": "S3",
+   "match": "feat-2fa-backup-codes-cal-com#06",
+   "newGroup": null,
+   "reason": "It reports the same unawaited isChecked() Promise assertion in the enable-2FA test, which passes regardless of switch state while the backup-codes dialog remains open."
+  }
+ ]
+}

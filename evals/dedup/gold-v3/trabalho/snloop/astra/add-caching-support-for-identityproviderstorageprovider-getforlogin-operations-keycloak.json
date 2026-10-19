@@ -1,0 +1,29 @@
+{
+ "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Reports the same literal \"alias\" cleanup target that leaves the created identity providers undeleted."
+  },
+  {
+   "id": "S2",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#snapi-01",
+   "newGroup": null,
+   "reason": "Reports the same unconditional delegate lookup in remove(), adding a database query even when the model is cached."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Its premise is false: getForLogin applies BROKER_PUBLIC=true even for a specific organization. This differs from #08, where organization-aware enabled state causes invalidation to be skipped when a public broker becomes private."
+  },
+  {
+   "id": "S4",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Reports the same incorrect literal \"alias\" cleanup registration for both the loop-created providers and idp-alias-20."
+  }
+ ]
+}

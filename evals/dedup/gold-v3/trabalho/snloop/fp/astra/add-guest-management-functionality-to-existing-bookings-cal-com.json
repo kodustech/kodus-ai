@@ -1,0 +1,11 @@
+{
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "items": [
+  {
+   "id": "S11",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This claims the error toast exposes internal backend details through raw server error messages. None of the rejected issues concerns error handling or disclosure in the dialog."
+  }
+ ]
+}

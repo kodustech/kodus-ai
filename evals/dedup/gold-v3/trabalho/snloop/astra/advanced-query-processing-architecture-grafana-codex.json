@@ -1,0 +1,29 @@
+{
+ "caseId": "advanced-query-processing-architecture-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "advanced-query-processing-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Describes the same repeated interpolation of split targets through runQuery, retaining filters and potentially applying them twice."
+  },
+  {
+   "id": "S2",
+   "match": "advanced-query-processing-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Identifies the same double interpolation and repeated ad hoc filter application in split and shard queries."
+  },
+  {
+   "id": "S3",
+   "match": "advanced-query-processing-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Describes the same early interpolation followed by another pass in runQuery with the same filters."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Criticizes a brittle test call-count assertion. Changing the assertion would not fix the repeated interpolation or the empty-expression filtering problem."
+  }
+ ]
+}

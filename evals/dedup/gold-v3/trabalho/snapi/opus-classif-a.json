@@ -1,0 +1,74 @@
+{
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#snapi-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "The legacy branch (handleCancelBooking.ts:473-482) keeps the pre-existing behaviour of trying each reference's own uid/externalCalendarId against every calendar credential; the PR only runs it per reference (find->filter at :419), so each reference's event is deleted, with distinct uids, not duplicates. Failed wrong-provider deletes are swallowed by Promise.allSettled (:656), as before.",
+    "category": null,
+    "comment": "Claims that for references without a credentialId, looping over every calendar reference and deleting each against all user calendar credentials produces duplicate or wrong-target delete calls and errors.",
+    "severity": "medium"
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#snapi-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "The single eventTypeId condition at insightsBooking.ts:106 is unparenthesized, but every combiner wraps operands: getBaseConditions builds `(${auth}) AND (${filter})` (:73) and buildFilterConditions wraps `(${acc}) AND (${condition})` (:121). No production caller combines getFilterConditions() unwrapped; only tests read it, so the precedence problem is hypothetical.",
+    "category": null,
+    "comment": "Claims the eventTypeId filter `a OR b` is returned unparenthesized from getFilterConditions, so a caller ANDing it without parentheses would widen results past the filter and authorization conditions.",
+    "severity": "high"
+  },
+  "dual-storage-architecture-grafana-codex#snapi-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "In dualwriter_mode3.go the legacy writes moved into goroutines that only call recordLegacyDuration(err != nil, ...) (Create, Update, Delete, DeleteCollection); the previous log.Error calls for legacy failures were removed. Failures are still counted in metrics, so the effect is loss of error detail in logs, not a behaviour change.",
+    "category": "style",
+    "comment": "Mode 3 legacy-storage write errors (create/update/delete/delete-collection) are no longer logged after moving to async goroutines; only a duration metric with an error flag is recorded.",
+    "severity": "medium"
+  },
+  "fixing-re-authentication-with-passkeys-keycloak#snapi-01": {
+    "class": "TP",
+    "subclass": null,
+    "reason": "reauthenticationOfUserWithoutPasskey (PasskeysUsernamePasswordFormTest.java:279-283) sets setWebAuthnPolicyPasskeysEnabled(FALSE), so UsernamePasswordForm.isConditionalPasskeysEnabled short-circuits on webauthnAuth.isPasskeysEnabled() and never reaches the new per-user isConfiguredFor check. The test's own assertion comment says the form is hidden because 'this user does not have passkey', but it would pass with that check removed; the sibling PasskeysUsernameFormTest variant enables passkeys.",
+    "category": "test_gap",
+    "comment": "reauthenticationOfUserWithoutPasskey disables passkeys for the realm, so the hidden webauthn form is guaranteed by isPasskeysEnabled() and the new per-user isConfiguredFor check for users without a passkey is never exercised in UsernamePasswordForm.",
+    "severity": "medium"
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#snapi-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "InfinispanIdentityProviderStorageProvider.java:100 now calls idpDelegate.getByAlias(alias) unconditionally (needed for registerIDPLoginInvalidation at :111), even when the cached entry at :105-107 already has the model. This is one extra lookup on an admin-only removal path, a micro-optimisation with no user-visible effect.",
+    "category": "perf",
+    "comment": "remove() always queries idpDelegate.getByAlias(alias), adding a database lookup on every IDP removal even when the cached entry already holds the model.",
+    "severity": "low"
+  },
+  "replays-self-serve-bulk-delete-system-sentry#snapi-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "useTraceItemAttributeKeys.tsx:59 can return undefined attributes while the first fetch runs, but the only consumer (traceItemAttributeContext.tsx:43-75) spreads it into an object (`{...numberAttributes, ...}`), which is safe with undefined, and the TS type forces handling. No key access on undefined exists.",
+    "category": null,
+    "comment": "Claims the hook now returns undefined attributes before the first fetch instead of {}, which can crash consumers that access keys on the TagCollection.",
+    "severity": "medium"
+  },
+  "replays-self-serve-bulk-delete-system-sentry#snapi-02": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "The default did change from \"low\" to \"off\" in projectoptions/defaults.py:205 and constants.py:724, but it is a deliberate product default change carried in the branch, not a defect; the comment only objects that it is unrelated to the PR's feature.",
+    "category": null,
+    "comment": "Claims the default of sentry:autofix_automation_tuning changed from low to off, silently disabling automatic autofix for projects that never set it, unrelated to the replays bulk delete feature.",
+    "severity": "medium"
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#snapi-01": {
+    "class": "FP",
+    "subclass": null,
+    "reason": "slots.ts:212 reads override.timeZone, optional in schedule.d.ts:5, but the only caller passing dateOverrides (trpc viewer/slots.ts:410-415) always sets timeZone from getUserAvailability, which is always defined (getUserAvailability.ts:201 falls back to user.timeZone). The other getSlots callers (TeamAvailabilityTimes) pass no dateOverrides, so the undefined case is unreachable.",
+    "category": null,
+    "comment": "Claims getSlots uses the optional override.timeZone, so an override without it passes undefined to dayjs.tz and computes a wrong offset using the server timezone.",
+    "severity": "medium"
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#snapi-01": {
+    "class": "TP",
+    "subclass": "nit",
+    "reason": "paginator.py:876 says 'The underlying Django ORM properly handles negative slicing automatically' and :879 'This is safe because permissions are checked at the queryset level'; Django QuerySets reject negative slice indexes and OptimizedCursorPaginator does no permission check. The issue as stated is the misleading comments only.",
+    "category": "doc_defect",
+    "comment": "Comments in OptimizedCursorPaginator.get_result claim Django handles negative slicing and that permissions are checked at the queryset level; both are false.",
+    "severity": "low"
+  }
+}

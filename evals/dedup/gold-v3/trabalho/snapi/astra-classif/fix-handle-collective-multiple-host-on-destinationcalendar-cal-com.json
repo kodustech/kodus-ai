@@ -1,0 +1,12 @@
+{
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "items": [
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#snapi-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The PR changes reference selection to iterate every calendar reference (packages/features/bookings/lib/handleCancelBooking.ts:418\u2013424), while the fallback sends each reference\u2019s identifiers to every calendar credential without matching its provider or account (475\u2013480). Wrong-account deletions can reject, as Office365 propagates deletion errors (packages/app-store/office365calendar/lib/CalendarService.ts:111\u2013121); these rejections also skip cancellation emails (handleCancelBooking.ts:656\u2013665).",
+   "severity": "medium"
+  }
+ ]
+}

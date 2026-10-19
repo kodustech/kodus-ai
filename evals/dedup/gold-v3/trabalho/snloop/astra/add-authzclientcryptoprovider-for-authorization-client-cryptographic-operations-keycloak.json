@@ -1,0 +1,47 @@
+{
+ "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This concerns indefinite ASN.1 lengths causing NegativeArraySizeException in ASN1Decoder, distinct from the wrong-length JOSE input handled by issue #07."
+  },
+  {
+   "id": "S2",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Both identify the discarded ASN1Encoder writes that redundantly encode r and s before the return statement encodes them again."
+  },
+  {
+   "id": "S3",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-02",
+   "newGroup": null,
+   "reason": "Both identify getBouncyCastleProvider returning the default KeyStore provider instead of BouncyCastle."
+  },
+  {
+   "id": "S4",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#10",
+   "newGroup": null,
+   "reason": "Both identify default P-256 keys being used for ES384 and ES512 tests, leaving actual P-384 and P-521 signatures untested."
+  },
+  {
+   "id": "S5",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#11",
+   "newGroup": null,
+   "reason": "Both identify a self-consistency-only round-trip assertion that lacks independent signature verification or comparison with the original DER."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "This concerns integerToBytes truncating oversized DER integer values. No golden issue describes this conversion defect; issue #07 concerns the length of incoming JOSE signatures."
+  },
+  {
+   "id": "S7",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#05",
+   "newGroup": null,
+   "reason": "Both identify silent selection among equal-priority crypto providers by discovery order, potentially choosing a non-FIPS provider when FIPS is intended."
+  }
+ ]
+}

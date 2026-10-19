@@ -1,0 +1,11 @@
+{
+ "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+ "items": [
+  {
+   "id": "S6",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#08",
+   "newGroup": null,
+   "reason": "Both identify the same weak assertion in test_to_dict: queued is not None always passes because queued has a default value."
+  }
+ ]
+}

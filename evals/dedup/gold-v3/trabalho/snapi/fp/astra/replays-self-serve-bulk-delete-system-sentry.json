@@ -1,0 +1,23 @@
+{
+ "caseId": "replays-self-serve-bulk-delete-system-sentry",
+ "items": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims useTraceItemAttributeKeys returns undefined instead of an empty TagCollection during initial loading. No rejected issue describes this defect in this hook."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Claims changing the autofix automation default from \"low\" to \"off\" disables automation for projects without an explicit setting. No rejected issue covers this default change."
+  },
+  {
+   "id": "S11",
+   "match": "replays-self-serve-bulk-delete-system-sentry#17",
+   "newGroup": null,
+   "reason": "Describes the same number-type test mock mismatch between query.query and substringMatch, which makes the not-called assertion ineffective. Issue #sncc-02 also describes this same claim."
+  }
+ ]
+}

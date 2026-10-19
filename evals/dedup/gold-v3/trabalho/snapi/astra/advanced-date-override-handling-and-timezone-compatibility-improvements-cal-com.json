@@ -1,0 +1,53 @@
+{
+ "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "Describes computing the working-hours end bound from slotStartTime instead of slotEndTime, allowing events to overrun working hours."
+  },
+  {
+   "id": "S2",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "newGroup": null,
+   "reason": "Includes the reference-equality comparison between separate Dayjs objects that prevents detecting zero-length overrides. The additional timezone claim does not change that match."
+  },
+  {
+   "id": "S3",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "Identifies the duplicated slotStartTime calculation that leaves the actual slot end unchecked against working hours."
+  },
+  {
+   "id": "S4",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "Identifies computing end from slotStartTime, allowing slots that finish after working hours."
+  },
+  {
+   "id": "S5",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "Describes the same incorrect end calculation and consequent acceptance of slots overrunning working hours."
+  },
+  {
+   "id": "S6",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "newGroup": null,
+   "reason": "Describes using reference equality for separate Dayjs instances, making the unavailable-all-day override check fail."
+  },
+  {
+   "id": "S7",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#04",
+   "newGroup": null,
+   "reason": "Describes rejecting a slot whenever any working-hours interval excludes it, which eliminates valid slots in split schedules. Requiring containment in at least one interval fixes the golden issue."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Raises missing override.timeZone handling and an undefined-timezone fallback. This differs from the golden timezone issues involving midnight rollover or local-versus-UTC day comparison."
+  }
+ ]
+}

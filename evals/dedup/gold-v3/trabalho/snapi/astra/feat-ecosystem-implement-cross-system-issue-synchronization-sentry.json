@@ -1,0 +1,41 @@
+{
+ "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "Reports the same import-time evaluation of timezone.now(), which gives instances a stale queued timestamp."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reports a potential datetime serialization failure in Celery task kwargs, not the timestamp default evaluation problem."
+  },
+  {
+   "id": "S3",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "Reports the same queued default being evaluated once at import rather than per instance."
+  },
+  {
+   "id": "S4",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "Reports the same import-time queued default; the serialized stale timestamp is an additional consequence of that problem."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Reports a weak assertion in test_to_dict. Strengthening the test using an explicit queued value would not fix the import-time default in AssignmentSource."
+  },
+  {
+   "id": "S6",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#03",
+   "newGroup": null,
+   "reason": "Reports the same mismatch between the empty_array test name and its empty-dict input."
+  }
+ ]
+}

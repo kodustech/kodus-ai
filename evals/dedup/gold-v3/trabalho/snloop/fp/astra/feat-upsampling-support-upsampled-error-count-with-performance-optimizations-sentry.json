@@ -1,0 +1,17 @@
+{
+ "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
+ "items": [
+  {
+   "id": "S3",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#01",
+   "newGroup": null,
+   "reason": "It asserts the same factory truthiness-check problem: client_sample_rate of 0 or 0.0 is not copied to sample_rate."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "It reports misleading inline comments about stored versus upsampled event counts. It does not claim that the sample_rate/sample_weight mismatch produces an incorrect count, as issue #17 does."
+  }
+ ]
+}

@@ -1,0 +1,2405 @@
+{
+ "add-guest-management-functionality-to-existing-bookings-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "92f44dcea7ff19e9123a30c63c167a2938df5a55",
+  "base": "b004587262e8221083bafbe9a0c515e7becaa7b3",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     168,
+     168
+    ],
+    "texto": "WHAT: sendAddGuestsEmails receives the raw `guests` input rather than `uniqueGuests`. WHY: an existing attendee who appears in the input is treated as a new guest and gets the 'scheduled' email instead of the 'guests added' notification. HOW: pass `uniqueGuests`."
+   },
+   {
+    "id": "S2",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     158,
+     165
+    ],
+    "texto": "WHAT: EventManager is built from ctx.user and getUsersCredentials(ctx.user), not from the booking organizer. WHY: when an attendee or team admin adds guests, the organizer's calendar event is not updated with the new attendees, and the organizer credentials already loaded in booking.user.credentials are unused. HOW: build the EventManager from the booking owner (booking.user) and its credentials."
+   },
+   {
+    "id": "S3",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     52,
+     81
+    ],
+    "texto": "WHAT: any attendee, matched by email only, may add an unbounded `guests` array to a booking in any status, with no cap on count. WHY: this lets an attendee use the endpoint as an email relay, because each added guest and every existing attendee and organizer is emailed. HOW: cap the number of guests in the schema (e.g. `.max(10)`), reject cancelled/rejected/past bookings, and consider restricting the permission to the organizer and team admins."
+   },
+   {
+    "id": "S4",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     46,
+     48
+    ],
+    "texto": "WHAT: the team permission check uses `isTeamAdmin && isTeamOwner`. WHY: a team admin who is not an owner is denied if isTeamOwner returns false for them. HOW: combine the two checks with `||`."
+   },
+   {
+    "id": "S5",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     74,
+     78
+    ],
+    "texto": "WHAT: the guest email is compared as-is against the lowercased blacklist and the stored attendee emails. WHY: a mixed-case guest such as `Bad@X.com` bypasses the blacklist and the duplicate-attendee check. HOW: lowercase the guest before comparing, and compare attendee emails lowercased too."
+   },
+   {
+    "id": "S6",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     70,
+     78
+    ],
+    "texto": "The blacklist entries are lowercased but the guest email is compared as-is, so a blacklisted address in different case (e.g. Bad@x.com) bypasses BLACKLISTED_GUEST_EMAILS. Lowercase (and trim) the guest before checking it against the blacklist."
+   },
+   {
+    "id": "S7",
+    "file": "packages/ui/form/MultiEmail.tsx",
+    "lines": [
+     46,
+     46
+    ],
+    "texto": "The remove-email tooltip is the hard-coded English string \"Remove email\", while the rest of this component (e.g. \"add_another\") goes through t(). Non-English users will see an untranslated tooltip. Use a translation key (add it to the locale file) instead of the literal."
+   },
+   {
+    "id": "S8",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     46,
+     48
+    ],
+    "texto": "`isTeamAdminOrOwner` joins `isTeamAdmin` and `isTeamOwner` with `&&`, so it is true only when the user is both admin and owner. Team admins who are not owners are wrongly denied with FORBIDDEN. The condition should use `||`."
+   },
+   {
+    "id": "S9",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     70,
+     78
+    ],
+    "texto": "The blacklist entries are lowercased, but the guest email is compared as submitted. A blacklisted address entered with uppercase characters (e.g. `Foo@Bar.com`) bypasses the blacklist. Lowercase the guest before the `includes` check."
+   },
+   {
+    "id": "S10",
+    "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+    "lines": [
+     42,
+     45
+    ],
+    "texto": "`message` is a non-empty template string, so `message || t(\"unable_to_add_guests\")` never falls back. The `unable_to_add_guests` string is never shown, and a missing `err.data` yields the literal text \"undefined: ...\". Build the message conditionally instead."
+   },
+   {
+    "id": "S11",
+    "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+    "lines": [
+     42,
+     45
+    ],
+    "texto": "The error toast renders the raw server `err.message` (and error code) directly. Unexpected backend failures such as Prisma errors from the handler can carry internal details that end up displayed to the user. Only show the message when it is a known translation key, otherwise fall back to the generic `unable_to_add_guests` text."
+   },
+   {
+    "id": "S12",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     70,
+     78
+    ],
+    "texto": "The blacklist is lowercased but each guest email is compared as typed, so a guest like \"Bad@x.com\" bypasses a blacklisted \"bad@x.com\". The duplicate check against existing attendees is also case-sensitive. Normalize guest emails to lowercase before both comparisons."
+   },
+   {
+    "id": "S13",
+    "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+    "lines": [
+     42,
+     45
+    ],
+    "texto": "`message` is a template string that is always truthy, so the `|| t(\"unable_to_add_guests\")` fallback is dead code. When `err.data?.code` is missing, the toast shows \"undefined: ...\". Build the message conditionally on the code/message being present."
+   },
+   {
+    "id": "S14",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     165,
+     165
+    ],
+    "texto": "The attendees are already persisted when `updateCalendarAttendees` runs, and its failure is not handled. A calendar error leaves the DB and calendar out of sync and skips the emails. The user sees an error, and retrying fails because the guests now count as duplicates. Wrap the call in try/catch and log the error so the persisted change still completes (emails still go out), or run the calendar update before the DB write."
+   },
+   {
+    "id": "S15",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     74,
+     106
+    ],
+    "texto": "The uniqueness check uses a stale read of `booking.attendees` and the write is a plain `createMany`. Two concurrent addGuests calls with the same email both pass the check and insert duplicate attendee rows. Re-check inside a transaction, or rely on a unique constraint, so the same email is not added twice."
+   },
+   {
+    "id": "S16",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     74,
+     78
+    ],
+    "texto": "The dedup and blacklist comparisons are case-sensitive on the guest side. The blacklist is lowercased but `guest` is not, so `Foo@x.com` bypasses a blacklisted `foo@x.com` and duplicates an existing `foo@x.com` attendee. Normalize each guest to lowercase and compare against lowercased attendee emails."
+   },
+   {
+    "id": "S17",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     168,
+     168
+    ],
+    "texto": "The handler passes the raw `guests` input to `sendAddGuestsEmails` instead of the filtered `uniqueGuests`. Existing attendees who were re-submitted are then treated as new guests and get the \"scheduled\" email instead of the \"guests added\" one. Pass `uniqueGuests`."
+   },
+   {
+    "id": "S18",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     168,
+     168
+    ],
+    "texto": "The handler passes the raw `guests` input to `sendAddGuestsEmails`, which uses it as the list of newly added attendees. Entries that were filtered out as already-attending are still included. An existing attendee whose address was re-submitted therefore receives the new-booking `AttendeeScheduledEmail` instead of the guests-added notice. Pass `uniqueGuests`, the list actually inserted."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+    "descricao": "isTeamAdminOrOwner combines isTeamAdmin and isTeamOwner with &&, so only team owners pass; team admins who are not organizer or attendee are wrongly rejected with FORBIDDEN.",
+    "textoGolden": "The logic for checking team admin/owner permissions is incorrect. This condition uses AND (&&) which requires both isTeamAdmin AND isTeamOwner to be true, but it should use OR (||) since a user needs to be either an admin OR an owner to have permission.",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       46,
+       48
+      ],
+      "texto": "WHAT: isTeamAdminOrOwner is computed with && instead of ||. WHY: isTeamAdmin returns truthy for role ADMIN or OWNER while isTeamOwner returns true only for OWNER, so the && expression is only true for OWNERs; team ADMINs are treated as unauthorized and get FORBIDDEN when adding guests, contradicting the variable's intent. HOW: use `(await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) || (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0))`."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       46,
+       48
+      ],
+      "texto": "The flag is named `isTeamAdminOrOwner` but is computed with `&&` (both admin AND owner). A team admin who is not the owner, or the owner who is not flagged admin, will fail this check, so the guard at line 54 wrongly throws FORBIDDEN for legitimate admins/owners. Use `||` between isTeamAdmin and isTeamOwner."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       46,
+       48
+      ],
+      "texto": "The variable `isTeamAdminOrOwner` names an OR condition, but the code combines `isTeamAdmin(...)` and `isTeamOwner(...)` with `&&`, so it is true only when the user is both admin AND owner. Either the name is wrong or the operator is; as written the permission check at line 54 denies a plain team admin, contradicting what the identifier promises. Use `||` to match the name (or rename if AND is intended)."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+    "descricao": "The guest blacklist is lowercased but incoming guest emails are compared without normalization, so a blacklisted address submitted with different casing bypasses BLACKLISTED_GUEST_EMAILS and is added and emailed.",
+    "textoGolden": "The addGuests.handler.ts blacklist check uses blacklistedGuestEmails.includes(guest) after lowercasing the blacklist but not the input guest emails, allowing attackers to bypass BLACKLISTED_GUEST_EMAILS restrictions by submitting emails with uppercase characters.",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       70,
+       78
+      ],
+      "texto": "WHAT: The blacklist is compared case-sensitively against guest input while blacklistedGuestEmails are lowercased. WHY: blacklistedGuestEmails entries are lowercased but the filter compares `guest` verbatim (`!blacklistedGuestEmails.includes(guest)`); an authenticated user can add a blacklisted address simply by changing its case (e.g. `Foo@bar.com` vs `foo@bar.com`), bypassing the configured BLACKLISTED_GUEST_EMAILS restriction. HOW: normalize the guest before comparison, e.g. `!blacklistedGuestEmails.includes(guest.toLowerCase())`."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       70,
+       78
+      ],
+      "texto": "Case-sensitivity bypass of the guest blacklist. `blacklistedGuestEmails` is lowercased on the list side (line 71) but the input side is compared raw: `blacklistedGuestEmails.includes(guest)` (line 77). A guest email submitted with any different casing (e.g. `Foo@Bar.com` when the blacklist holds `foo@bar.com`) passes the filter and is persisted, defeating BLACKLISTED_GUEST_EMAILS. Normalize the input before comparison, e.g. filter on `!blacklistedGuestEmails.includes(guest.toLowerCase())` (and likewise lowercase `guest` for the attendee dedup check)."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       70,
+       78
+      ],
+      "texto": "WHAT: BLACKLISTED_GUEST_EMAILS entries are lowercased but the incoming guest string is compared without lowercasing/normalizing. WHY: an attacker bypasses the blocklist with case variation (e.g. Spam@Example.com) and gets added/emailed."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#03",
+    "descricao": "The server never deduplicates the guests array, so a request with the same email twice inserts duplicate attendee rows for the booking.",
+    "textoGolden": "uniqueGuests filters out existing attendees and blacklisted emails but does not deduplicate duplicates within the input; createMany can insert duplicate attendee rows if the client submits repeated emails.",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       74,
+       78
+      ],
+      "texto": "WHAT: uniqueGuests filter only dedupes against existing booking.attendees with case-sensitive === and never dedupes duplicates within the input guests array itself (server schema has no uniqueness refine unlike the client). WHY: a request with the same new email twice creates duplicate attendee rows via createMany."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       74,
+       106
+      ],
+      "texto": "uniqueGuests filters only against existing attendees/blacklist but never dedupes guests[] itself and schema has no uniqueness check. A request like guests=[a@x.com,a@x.com] passes the filter twice and createMany inserts duplicate attendee rows or throws an unhandled DB unique-constraint exception. Dedupe/normalize input (and reject intra-request duplicates) before createMany."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       74,
+       78
+      ],
+      "texto": "uniqueGuests filters against existing attendees but does not deduplicate addresses within the incoming guests array. A direct mutation with the same new address twice inserts two Attendee records and sends duplicate invitations because the server schema permits duplicates and the Attendee model has no unique booking/email constraint. Deduplicate normalized input before filtering and inserting."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#04",
+    "descricao": "Check-then-insert without a transaction or unique constraint lets two concurrent addGuests calls for the same email both pass the existing-attendee check and create duplicate attendees.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       26,
+       106
+      ],
+      "texto": "Race condition: findFirst check for existing attendees then booking.update+createMany is not atomic. Two concurrent addGuests calls with the same new email both see it as absent and both insert, creating duplicates. Guard with a unique constraint and handle conflict or run in a transaction/serializable check."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       92,
+       106
+      ],
+      "texto": "Check-then-insert race: the handler reads `booking.attendees` at the start, filters against it, then inserts in a separate `prisma.booking.update ... createMany` with no transaction or unique guard. Two concurrent addGuests calls for the same guest both see it as absent and both insert, producing duplicate attendees. Wrap the read+filter+insert in a transaction (or rely on a unique constraint on (bookingId, email) and handle the conflict) so concurrent requests cannot both succeed."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#05",
+    "descricao": "Attendee authorization and existing-attendee dedup compare emails case-sensitively, so an attendee with differently-cased stored email is FORBIDDEN and a case-variant of an existing attendee is added again.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       52,
+       76
+      ],
+      "texto": "Inconsistent email normalization for identity checks. Both the authorization check `attendee.email === user.email` (line 52) and the existing-attendee dedup `guest === attendee.email` (line 76) use strict case-sensitive equality, while emails are treated as case-insensitive everywhere else in this handler (the blacklist block directly below lowercases). Consequence: a legitimate attendee whose stored casing differs from their session email is wrongly FORBIDDEN, and a guest differing from an existing attendee only by case is duplicated rather than filtered. Compare on a normalized form (both sides `.toLowerCase()`), consistent with the blacklist normalization."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+    "descricao": "The handler passes the unfiltered guests list to sendAddGuestsEmails, which uses it to pick who gets AttendeeScheduledEmail, so existing attendees included in the request receive a new-booking confirmation instead of the add-guests email.",
+    "textoGolden": "The sendAddGuestsEmails function in email-manager.ts passes the full calendarEvent.attendees array when determining which attendees receive AttendeeScheduledEmail vs AttendeeAddGuestsEmail, but checks if newGuests.includes(attendee.email) where newGuests is the input guests array.",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       167,
+       168
+      ],
+      "texto": "WHAT: sendAddGuestsEmails(evt, guests) passes the raw input guests instead of the filtered uniqueGuests. WHY: already-existing attendees included in the request are misclassified as newGuests in email-manager and receive AttendeeScheduledEmail instead of AttendeeAddGuestsEmail (wrong notification)."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       167,
+       168
+      ],
+      "texto": "Dead-transform / wrong input: `uniqueGuests` is computed (dedup vs existing attendees + blacklist) and written to DB, but `sendAddGuestsEmails(evt, guests)` passes the original `guests`. Existing attendees re-submitted are then `includes()`-matched as new and get AttendeeScheduledEmail instead of AttendeeAddGuestsEmail. Pass `uniqueGuests`."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       167,
+       169
+      ],
+      "texto": "Pass `uniqueGuests` (the filtered set written to DB) to sendAddGuestsEmails instead of raw `guests`; the email layer assumes newGuests exactly equals newly created attendees for its Scheduled vs AddGuests branch."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#08",
+    "descricao": "EventManager is created with the requesting user's credentials, so when a non-organizer adds guests the organizer's calendar event is not updated (or the wrong account is used) for references without a credentialId.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       158,
+       162
+      ],
+      "texto": "EventManager is initialized with the requesting user's credentials rather than the booking organizer's credentials. When an attendee or team owner adds guests to a booking whose calendar reference lacks credentialId, updateAllCalendarEvents selects credentials by type from the caller's calendars, so the organizer's event is not updated or the update targets the wrong account. Load credentials for booking.userId and initialize the manager with the booking owner."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#09",
+    "descricao": "Claims a failing calendar update at addGuests.handler.ts:165 aborts the mutation after guests are persisted; the calendar update path already swallows provider errors.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       165,
+       171
+      ],
+      "texto": "The attendees are written to the database at line 92, but `eventManager.updateCalendarAttendees` at line 165 runs outside the try/catch. If it throws, the mutation returns an error even though the guests are already persisted, so the DB and the calendar are out of sync. No emails are sent, and a retry then fails with 'emails_must_be_unique_valid'. Catch and handle the calendar update failure after the DB write."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       165,
+       165
+      ],
+      "texto": "The attendees are already committed to the DB when `eventManager.updateCalendarAttendees` is awaited without a try/catch. If the calendar sync throws, the mutation returns an error and skips the emails, although the guests were added. The caller sees a failure for a partly applied change and may retry. Handle calendar sync failure as best-effort, as the email send is, or run it before the DB write."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#10",
+    "descricao": "Claims any attendee can add guests and trigger invites; this is the deliberate permission model of the new feature.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       52,
+       56
+      ],
+      "texto": "Any attendee, matched only by email, is allowed to add arbitrary guests to a booking, and the handler then sends emails and calendar invites on the organizer's behalf. Any attendee can use this to send invites to arbitrary addresses. Restrict the action to the organizer and team admins, or verify that the attendee's email is confirmed."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#11",
+    "descricao": "The guests array has no server-side size limit, so any authorized caller, including an attendee, can add thousands of guests and trigger an unbounded batch of inserts and emails.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts",
+      "lines": [
+       3,
+       6
+      ],
+      "texto": "WHAT: guests is an unbounded z.array(z.string().email()) with no max length. WHY: any authorized caller (including a mere attendee) can submit thousands of emails causing unbounded createMany inserts plus unbounded Promise.all email fanout in sendAddGuestsEmails."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts",
+      "lines": [
+       5,
+       5
+      ],
+      "texto": "The mutation accepts an unbounded guest array that is persisted and immediately expanded into concurrent emails to every attendee. For non-seated bookings each email's ICS serializes the full attendee list, so adding N guests creates O(N) concurrent sends and O(N\u00b2) aggregate attachment work; repeated additions also resend to all existing attendees. Enforce a server-side guest-count and total-attendee limit before insertion and bound notification concurrency."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#12",
+    "descricao": "The Remove email tooltip in MultiEmail is a hard-coded English string instead of a translation key.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/ui/form/MultiEmail.tsx",
+      "lines": [
+       44,
+       51
+      ],
+      "texto": "Tooltip content=\"Remove email\" is hard-coded English user-facing text bypassing i18n while surrounding strings in the same file/PR use t(). Wrap it in t() e.g. content={t(\"remove_email\")} and add the key to locales."
+     },
+     {
+      "file": "packages/ui/form/MultiEmail.tsx",
+      "lines": [
+       46,
+       46
+      ],
+      "texto": "`Tooltip content=\"Remove email\"` is a hard-coded English user-facing string, while the surrounding code in this same component routes user text through `t()` (e.g. `t(\"add_another\")` on line 69). This string bypasses the translation mechanism and will never be localised; it should use a translation key."
+     },
+     {
+      "file": "packages/ui/form/MultiEmail.tsx",
+      "lines": [
+       46,
+       46
+      ],
+      "texto": "The new removal tooltip hard-codes `Remove email`, so users in non-English locales see English text even though the neighbouring controls use `t(...)` and this component already obtains `t` from useLocale. Route this tooltip through a translation key (and supply its English translation) rather than using the literal."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#13",
+    "descricao": "The onError fallback to unable_to_add_guests is unreachable because the template-string message is always truthy.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+      "lines": [
+       42,
+       44
+      ],
+      "texto": "Unreachable fallback: `message` is a template string `${code}: ${...}` which is always truthy, so `message || t(\"unable_to_add_guests\")` never takes the fallback. Build message conditionally or test the underlying parts for emptiness."
+     },
+     {
+      "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+      "lines": [
+       42,
+       45
+      ],
+      "texto": "In `onError`, `message` is always a non-empty template string (`\"${err.data?.code}: ${t(err.message)}\"`), so the fallback `|| t(\"unable_to_add_guests\")` is unreachable and the newly added `unable_to_add_guests` translation is never shown. The user is instead shown a raw error code prefix like `BAD_REQUEST: ...` rather than the translated message; the fallback and code prefix handling should be corrected so the intended translated text reaches the user."
+     },
+     {
+      "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+      "lines": [
+       43,
+       44
+      ],
+      "texto": "The error message is built as a template string, so it is always truthy. The `|| t(\"unable_to_add_guests\")` fallback is therefore dead code, and the user can see \"undefined: ...\" or an untranslated raw message. Use `err.message ? t(err.message) : t(\"unable_to_add_guests\")`."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#14",
+    "descricao": "After a validation failure followed by a successful add, isInvalidEmail stays true, so the stale emails_must_be_unique_valid error shows the next time the dialog is opened.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+      "lines": [
+       35,
+       41
+      ],
+      "texto": "WHAT: addGuestsMutation onSuccess resets multiEmailValue and closes the dialog but never resets isInvalidEmail. WHY: after one failed validation the red emails_must_be_unique_valid error persists on the next open/successful add."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#16",
+    "descricao": "sendAddGuestsEmails ignores the event type's disableStandardEmails settings, so hosts and attendees receive add-guests emails even when standard emails are disabled.",
+    "textoGolden": "The `sendAddGuestsEmails` function does not check the `disableStandardEmails` flags in the `EventType` metadata, which may result in sending emails to hosts/attendees even when standard emails are disabled for the event type.",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#e2b-01",
+    "descricao": "The add-guests handler omits booking.iCalUID from the CalendarEvent, so the add-guests emails' .ics attachments use booking.uid as UID and recipients' calendars treat them as a new event rather than an update of the original booking invite.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#sncc-01",
+    "descricao": "The addGuests FORBIDDEN error uses the translation key you_do_not_have_permission, which is missing from the locale files, so the dialog shows the raw key to users.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#opa-01",
+    "descricao": "The comment in MultiEmailLazy.tsx (\"These are like 40kb\") is copied from the phone input lazy loader and does not apply to MultiEmail, which only uses existing UI components.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "8ab88145113dd23a930e23b9cbbcf8b30e4c0b17",
+  "base": "a5d290951def84afdcc4c88d2f1f20023fc36e2a",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     821,
+     843
+    ],
+    "texto": "WHAT: OptimizedCursorPaginator extends BasePaginator but copies the numeric Paginator's get_item_key/value_from_cursor, instead of DateTimePaginator's datetime-aware versions. WHY: the audit log endpoint orders by the datetime field, so math.ceil/floor(datetime) raises TypeError in build_cursor, and a raw numeric cursor value is compared against a datetime column. Every request with optimized_pagination=true therefore fails with a 500 or a wrong query. HOW: subclass DateTimePaginator, or reuse its get_item_key and value_from_cursor."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     874,
+     886
+    ],
+    "texto": "WHAT: the advanced-features branch slices the queryset with a negative start offset (queryset[cursor.offset:stop]). WHY: Django querysets do not support negative indexing and raise AssertionError, so a client-supplied cursor with a negative offset causes a 500. This also contradicts the comment that the ORM handles it. HOW: reject or clamp negative offsets (raise BadPaginationError or use max(0, offset)) and remove the negative-offset branch."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     179,
+     184
+    ],
+    "texto": "WHAT: BasePaginator clamps negative offsets only when cursor.is_prev is false, and passes negative offsets through unchanged when is_prev is true. WHY: with a prev cursor and a negative offset, queryset[negative:stop] raises AssertionError (500), and the non-prev clamp silently changes the existing behavior for all paginators. HOW: validate offset >= 0 for both directions and raise BadPaginationError, rather than conditionally clamping."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     874,
+     882
+    ],
+    "texto": "The negative-offset branch slices the queryset with a negative start (`queryset[cursor.offset:stop]`). Django querysets raise AssertionError on negative indexing, so a crafted cursor with a negative offset causes a 500 for admins using `optimized_pagination=true`. Even where negative slicing is supported, `stop = start + limit + extra` would give a wrong window. Clamp the offset to a non-negative value, or reject negative offsets, instead of passing them to the slice."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     874,
+     882
+    ],
+    "texto": "The new branch slices the Django queryset with a negative start (`queryset[cursor.offset:stop]`) when a user-supplied cursor has a negative offset. Django raises AssertionError('Negative indexing is not supported.') for negative slice bounds, so the request fails with an unhandled 500. Remove this branch, or reject or clamp negative offsets with a 400 before slicing."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     838,
+     843
+    ],
+    "texto": "OptimizedCursorPaginator uses Paginator's numeric get_item_key/value_from_cursor, but the audit-log endpoint paginates on the DateTimeField \"datetime\". math.floor(datetime) raises TypeError for any non-empty page, and the raw cursor value is never converted back to a datetime. Subclass DateTimePaginator, or copy its multiplier-based get_item_key and value_from_cursor."
+   },
+   {
+    "id": "S7",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     874,
+     882
+    ],
+    "texto": "The comments claim the Django ORM handles negative slicing and that this is safe because permissions are checked at the queryset level. Both are false. Django QuerySets raise AssertionError on a negative slice start, and the queryset filter is by organization, not by pagination bounds. The comments describe behavior that does not exist, so remove or correct them to say negative offsets are unsupported."
+   },
+   {
+    "id": "S8",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     179,
+     184
+    ],
+    "texto": "The comment says negative offsets are allowed and that the queryset handles boundary conditions. The code clamps only when `not cursor.is_prev`, and a negative offset still reaches the queryset slice when `is_prev` is true. Django does not handle that, so the comment is untrue. Rewrite it to describe the actual clamp."
+   },
+   {
+    "id": "S9",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     821,
+     832
+    ],
+    "texto": "The OptimizedCursorPaginator docstring advertises negative offset support, streamlined boundary handling and an optimized query path. The implementation is a copy of BasePaginator.get_result, issues the same sliced query, and a negative slice fails in Django. The docstring misdescribes the class. Align it with what the class does."
+   },
+   {
+    "id": "S10",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     838,
+     843
+    ],
+    "texto": "OptimizedCursorPaginator overrides get_item_key and value_from_cursor with generic numeric versions (math.floor on the raw attribute, and cursor.value returned as-is). The audit-log endpoint paginates on a datetime field. With ?optimized_pagination=true, math.floor(datetime) will raise TypeError, and the cursor value will not be converted back to a datetime for filtering. Subclass DateTimePaginator, or reuse its datetime-to-timestamp key conversion and cursor-value conversion."
+   },
+   {
+    "id": "S11",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     874,
+     886
+    ],
+    "texto": "The comment says the Django ORM handles negative slicing, but Django querysets raise on negative indexes (\"Negative indexing is not supported\"). A cursor with a negative offset therefore produces a 500 instead of the claimed 'advanced' pagination. The result also contradicts the code, because the `elif len(results) == offset + limit + extra` check later uses `offset` while the slice used `start_offset`. Reject negative offsets with a BadPaginationError, or clamp them to 0."
+   },
+   {
+    "id": "S12",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     179,
+     184
+    ],
+    "texto": "The comment says negative offsets are allowed because the queryset handles boundaries. The code only clamps non-prev offsets to 0 and still passes a negative offset through for is_prev cursors, which fails in the ORM. This also changes the behaviour of BasePaginator for every endpoint without delivering the stated feature. Revert this hunk to the original `stop = offset + limit + extra; queryset[offset:stop]`."
+   },
+   {
+    "id": "S13",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     877,
+     882
+    ],
+    "texto": "The 'advanced' path passes a negative cursor offset straight into `queryset[start_offset:stop]`. Django querysets reject negative indexing (AssertionError), so any request with a negative cursor offset and `optimized_pagination=true` returns a 500. The Cursor contract was loosened to allow negative offsets, but the ORM slicing consumer was not updated to match. Reject negative offsets with BadPaginationError, or translate them into a valid ordered query, instead of slicing with them."
+   },
+   {
+    "id": "S14",
+    "file": "src/sentry/api/paginator.py",
+    "lines": [
+     179,
+     184
+    ],
+    "texto": "BasePaginator.get_result now clamps negative non-prev offsets to 0 and lets negative prev offsets through to the slice. Previously a negative offset was never silently accepted, so every paginator inheriting this code now returns the first page for a bad cursor. For is_prev cursors it still reaches Django's unsupported negative slice. The later `len(results) == offset + limit + extra` check still uses the unclamped offset, so it no longer matches the slice that was actually executed. Restore the original `queryset[offset:stop]` behavior and reject negative offsets explicitly."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+    "descricao": "OptimizedCursorPaginator passes negative cursor offsets straight into Django queryset slicing, which Django does not support, so requests with a negative offset raise an error instead of returning a page.",
+    "textoGolden": "The OptimizedCursorPaginator in organization_auditlogs.py attempts to use negative slice offsets on Django querysets, but Django querysets do not support negative slicing and will raise an AssertionError.",
+    "comentarios": [
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       877,
+       882
+      ],
+      "texto": "The advanced negative-offset branch passes a negative slice start directly to a Django QuerySet, which does not support negative indexing. A cursor such as 0:-1:0 is accepted by Cursor.from_string but crashes the optimized audit-log request instead of providing reverse pagination. Reject negative offsets with BadPaginationError or implement reverse traversal using nonnegative slices and reversed ordering."
+     },
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       874,
+       880
+      ],
+      "texto": "The comment claiming that Django ORM 'properly handles negative slicing automatically' is false: Django QuerySet slicing rejects negative indices. This branch passes cursor.offset straight into queryset[start_offset:stop], so it raises rather than supplying the documented negative-offset pagination. Correct the negative-offset support claims here, in the class docstring, and in the new BasePaginator boundary-handling comment (or implement actual supported boundary handling) so callers are not promised a pagination mode that the underlying queryset cannot provide."
+     },
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       877,
+       882
+      ],
+      "texto": "Django QuerySets do not support negative slice bounds. Passing a negative cursor offset directly into `queryset[start_offset:stop]` raises an exception instead of enabling advanced pagination. Validate or normalize negative offsets before slicing, or implement reverse traversal through ordering/filtering rather than negative slices."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#02",
+    "descricao": "The comment added to BasePaginator claims negative offsets are allowed and safely handled by the queryset, but the code clamps non-prev offsets to zero and leaves prev offsets as before, so the comment misdescribes the behaviour.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       179,
+       184
+      ],
+      "texto": "The added comment says this change will \"allow negative offsets to enable efficient bidirectional pagination ... safe because the underlying queryset will handle boundary conditions\", but the statement it annotates, line 182, is `start_offset = max(0, offset) if not cursor.is_prev else offset` \u2014 it clamps negative offsets to 0, i.e. it does the opposite of what the comment claims and leaves the 'negative offset' (offset < 0) paging behaviour exactly as before. The comment is now untrue for the code it sits on; either drop the 'allow negative offsets' wording or make the code actually permit them."
+     },
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       179,
+       184
+      ],
+      "texto": "The comment declares this change `allow[s] negative offsets to enable efficient bidirectional pagination`, but the actual computation is `start_offset = max(0, offset) if not cursor.is_prev else offset`, which clamps non-prev offsets at 0 \u2014 i.e. it never permits a negative offset. The declared optimization is a no-op relative to the original `queryset[offset:stop]`; the comment describes behavior the code does not have."
+     },
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       182,
+       184
+      ],
+      "texto": "BasePaginator now passes the raw `offset` to the slice whenever `cursor.is_prev` is true (`max(0, offset) if not cursor.is_prev else offset`). A negative offset from a user-supplied prev cursor therefore reaches `queryset[negative:stop]`, which Django rejects. This crashes every endpoint that uses BasePaginator. Fix: always use `max(0, offset)`, or validate the offset when the cursor is parsed."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#04",
+    "descricao": "The OptimizedCursorPaginator docstring claims streamlined boundary handling, an optimized query path and backward compatibility that the implementation, a copy of BasePaginator plus a negative-offset branch, does not provide.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       821,
+       832
+      ],
+      "texto": "Docstring lists 'Streamlined boundary condition handling', 'Optimized query path for large datasets', and 'maintaining backward compatibility', but get_result (845-886) is a copy of BasePaginator with only a negative-offset branch added \u2014 no streamlined handling or optimized path exists, and negative-offset slicing breaks prior cursor semantics. Doc describes behavior the function does not produce \u2014 align doc to code or implement the claimed handling."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+    "descricao": "OptimizedCursorPaginator computes cursor keys with math.floor/ceil on the raw attribute, but the audit log endpoint uses it with order_by='-datetime', so building the cursor raises TypeError for any non-empty result.",
+    "textoGolden": "get_item_key assumes a numeric key, but the paginator is used with order_by=-datetime in the audit logs endpoint; calling math.floor/ceil on a datetime will raise a TypeError.",
+    "comentarios": [
+     {
+      "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+      "lines": [
+       73,
+       83
+      ],
+      "texto": "OptimizedCursorPaginator requires numeric integer keys (get_item_key uses math.floor/ceil + int, cursor_value defaults to 0) but is instantiated here with order_by=\"-datetime\". This mismatched producer/consumer contract breaks pagination for datetime-ordered audit logs. Fix: do not use OptimizedCursorPaginator for datetime ordering; keep DateTimePaginator or make OptimizedCursorPaginator datetime-aware."
+     },
+     {
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       838,
+       843
+      ],
+      "texto": "WHAT: OptimizedCursorPaginator.get_item_key/value_from_cursor mishandles datetime ordering by calling math.floor/ceil directly on a datetime and returning raw int cursor value. WHY: Used with order_by=\"-datetime\" it crashes with TypeError on floor(datetime) when building cursors and filters the datetime column against an int in build_queryset, breaking pagination. HOW: Copy DateTimePaginator logic \u2014 timestamp via strftime/multiplier with floor/ceil and convert cursor value back with datetime.fromtimestamp."
+     },
+     {
+      "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+      "lines": [
+       79,
+       80
+      ],
+      "texto": "The optimized branch selects a numeric-key paginator while ordering by the datetime field. On any nonempty first page, build_cursor invokes OptimizedCursorPaginator.get_item_key, which calls math.ceil on a datetime and raises TypeError; nonzero cursors also lack the datetime conversion provided by DateTimePaginator. Make the optimized paginator inherit DateTimePaginator or preserve its timestamp encoding and decoding."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#07",
+    "descricao": "The audit log endpoint always dereferences organization_context.member.has_global_access, which crashes with AttributeError for authorized token requests that have no member, even on the default pagination path.",
+    "textoGolden": "When requests are authenticated with API keys or org auth tokens (which have user_id=None), organization_context.member is None. Line 71 attempts to access organization_context.member.has_global_access without checking if member is None, causing an AttributeError crash when optimized_pagination=true is used, even though the request passed all permission checks with valid org:write scope.",
+    "comentarios": [
+     {
+      "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+      "lines": [
+       71,
+       71
+      ],
+      "texto": "The unconditional advanced-access check dereferences organization_context.member although RpcUserOrganizationContext permits member=None. Authorized non-member organization-token requests therefore raise AttributeError even when optimized_pagination is absent, instead of returning audit logs through the existing paginator. Guard the optional member and evaluate eligibility only when optimized pagination is requested."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#08",
+    "descricao": "The comments and enable_advanced variable describe the optimized_pagination path as a performance optimization for administrators, hiding that it enables negative-offset slicing.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+      "lines": [
+       68,
+       72
+      ],
+      "texto": "The comments describe a 'performance optimization' for 'authorized administrators', and the variable is named enable_advanced. In fact it opts into negative-offset slicing, and the optimized_pagination query parameter gates it. The names and comments hide what the flag actually enables. Rename them to say what is enabled, or remove the path."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#09",
+    "descricao": "A user-controlled optimized_pagination flag lets any member with global access switch to a paginator that accepts unvalidated negative cursor offsets, widening the attack surface and causing server errors.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+      "lines": [
+       70,
+       83
+      ],
+      "texto": "A user-controlled `optimized_pagination` query flag switches the endpoint to a paginator that accepts attacker-supplied negative cursor offsets. This is available to any user with global access, not only to real admins. It widens the attack surface for unvalidated cursor offsets and causes server errors. The comment 'permissions are checked at the queryset level' is not backed by any check in the paginator. Fix: remove the optimized path, or have the paginator validate and clamp offsets."
+     }
+    ]
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01",
+    "descricao": "BasePaginator.get_result clamps negative offsets only for next cursors; a prev cursor with a negative offset is passed straight into the queryset slice, which Django rejects with an error (500) on every paginated endpoint.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-02",
+    "descricao": "The new comment in Cursor says negative offsets are allowed to enable efficient reverse pagination, but the constructor only calls int(offset) and provides no such behaviour.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#oph-01",
+    "descricao": "OptimizedCursorPaginator.value_from_cursor returns the raw integer cursor value, which is then compared against the datetime column, so next/prev cursor pagination of audit logs breaks.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#snapi-01",
+    "descricao": "Comments in OptimizedCursorPaginator.get_result claim Django handles negative slicing and that permissions are checked at the queryset level; both are false.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "add-html-sanitizer-for-translated-message-resources-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "02f48f776f43734d1ac8914d3ad6a7115acdcb33",
+  "base": "f3c8e8f3487112f2c99aa78400430cce2d30be39",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+    "lines": [
+     71,
+     71
+    ],
+    "texto": "WHAT: loginTotpStep1 in the Lithuanian bundle was replaced with Italian text ('Installa una delle seguenti applicazioni sul tuo cellulare:'). WHY: Lithuanian users now see an Italian sentence in the TOTP setup step, and the old Lithuanian text is lost. HOW: Use a Lithuanian translation, for example '\u012ediekite vien\u0105 i\u0161 \u0161i\u0173 program\u0117li\u0173 savo mobiliajame \u012frenginyje:', or remove the key so it falls back to English."
+   },
+   {
+    "id": "S2",
+    "file": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties",
+    "lines": [
+     101,
+     101
+    ],
+    "texto": "WHAT: totpStep1 in the Lithuanian account bundle was replaced with Italian text. WHY: Lithuanian users see an Italian sentence in the account console's authenticator setup. HOW: Use a Lithuanian translation or remove the key so it falls back to English."
+   },
+   {
+    "id": "S3",
+    "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+    "lines": [
+     112,
+     112
+    ],
+    "texto": "WHAT: totpStep1 in the Simplified Chinese (zh_CN) bundle was replaced with Traditional Chinese text ('\u5728\u60a8\u7684\u624b\u6a5f\u4e0a\u5b89\u88dd\u4ee5\u4e0b\u61c9\u7528\u7a0b\u5f0f\u4e4b\u4e00\uff1a'). WHY: zh_CN users see Traditional characters and wording, which is the wrong locale, and the neighbouring strings stay in Simplified Chinese. HOW: Use the Simplified translation, for example '\u5728\u60a8\u7684\u624b\u673a\u4e0a\u5b89\u88c5\u4ee5\u4e0b\u5e94\u7528\u7a0b\u5e8f\u4e4b\u4e00\uff1a'."
+   },
+   {
+    "id": "S4",
+    "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+    "lines": [
+     71,
+     71
+    ],
+    "texto": "loginTotpStep1 in the Lithuanian locale was replaced with an Italian sentence, so Lithuanian users see Italian text. Replace it with a Lithuanian translation of 'Install one of the following applications on your mobile'."
+   },
+   {
+    "id": "S5",
+    "file": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties",
+    "lines": [
+     101,
+     101
+    ],
+    "texto": "totpStep1 in the Lithuanian account locale was replaced with an Italian sentence, so Lithuanian users see Italian text. Use a Lithuanian translation."
+   },
+   {
+    "id": "S6",
+    "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+    "lines": [
+     112,
+     112
+    ],
+    "texto": "totpStep1 in the zh_CN (Simplified Chinese) file now holds Traditional Chinese text copied from zh_TW. Use Simplified characters, as the neighbouring strings do."
+   },
+   {
+    "id": "S7",
+    "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "lines": [
+     102,
+     111
+    ],
+    "texto": "The common-prefix and common-suffix scans are independent and can overlap. When a removed fragment sits next to a repeated character (e.g. value \"aa\" vs sanitized \"a\"), start+end exceeds a string's length. The substring calls then get end index < start index and throw StringIndexOutOfBoundsException instead of reporting the illegal HTML. Cap the suffix scan so that start+end never exceeds min(value.length(), sanitized.length())."
+   },
+   {
+    "id": "S8",
+    "file": "js/apps/admin-ui/maven-resources/theme/keycloak.v2/admin/messages/messages_en.properties",
+    "lines": [
+     3138,
+     3138
+    ],
+    "texto": "The admin-ui bundle used i18next-style {{0}} placeholders, and this change switched it to Java MessageFormat syntax ({0} and {2,choice,...}). If the UI still resolves these strings through i18next, the placeholders and the choice expression will be shown literally instead of being interpolated. Keep the i18next syntax in the UI bundles, and use the choice form only where Java MessageFormat formats the string. The same change in the account-ui bundle (messages_en.properties, line 188) has the same problem."
+   },
+   {
+    "id": "S9",
+    "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "lines": [
+     99,
+     112
+    ],
+    "texto": "The prefix and suffix trimming used to build the diff message are computed independently. When the value and the sanitized text differ by one character inside a repeated run (e.g. \"ab\" vs \"abb\"), start + end exceeds the length of the shorter string. `value.substring(start, value.length() - end)` then throws StringIndexOutOfBoundsException, so the verifier crashes instead of reporting the illegal HTML. Bound the suffix scan so that start + end never exceeds min(value.length(), sanitized.length())."
+   },
+   {
+    "id": "S10",
+    "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+    "lines": [
+     71,
+     71
+    ],
+    "texto": "The Lithuanian loginTotpStep1 was replaced with Italian text, so Lithuanian users will see an Italian sentence. Replace it with a Lithuanian translation of 'Install one of the following applications on your mobile:'."
+   },
+   {
+    "id": "S11",
+    "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+    "lines": [
+     112,
+     112
+    ],
+    "texto": "The zh_CN totpStep1 was replaced with Traditional Chinese text (\u624b\u6a5f, \u5b89\u88dd, \u61c9\u7528\u7a0b\u5f0f), which is the zh_TW form, so Simplified Chinese users get the wrong script. Use the Simplified Chinese wording instead."
+   },
+   {
+    "id": "S12",
+    "file": "VerifyMessagePropertiesTest.java",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "There is no positive test showing that allowed HTML (br/p/strong/b) passes verification without errors. The reviewer calls this a coverage gap and not a defect of the 'test passes even if behaviour is broken' class. Consider adding a test where the English and translated values contain only allowed tags and asserting that no errors are reported."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+    "descricao": "The Lithuanian TOTP setup step was replaced with Italian text in both the account and login bundles.",
+    "textoGolden": "The translation is in Italian instead of Lithuanian. This should be translated to Lithuanian to match the file's locale (messages_lt.properties).",
+    "comentarios": [
+     {
+      "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+      "lines": [
+       71,
+       71
+      ],
+      "texto": "The Lithuanian OTP setup instruction has been replaced with an Italian sentence. login-config-totp.ftl renders this message directly, so users selecting Lithuanian receive an instruction in the wrong language; the same copied sentence also appears in the Lithuanian account bundle at line 101. Replace both values with the Lithuanian translation of the new installation instruction."
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties",
+      "lines": [
+       101,
+       101
+      ],
+      "texto": "The replacement OTP setup instruction is Italian (\u201cInstalla una delle seguenti applicazioni sul tuo cellulare\u201d), but this is the Lithuanian locale and the surrounding setup steps are Lithuanian. Translate the new instruction into Lithuanian rather than copying the Italian translation. The same incorrect replacement appears in the login bundle at themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties:71 and should be corrected there too; otherwise Lithuanian users see an untranslated first step in both OTP setup flows."
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+      "lines": [
+       71,
+       71
+      ],
+      "texto": "The replacement OTP setup instruction is Italian, not Lithuanian (`Installa una delle seguenti applicazioni sul tuo cellulare`). The same replacement was made for `totpStep1` in the Lithuanian account bundle. Translate both replacements into Lithuanian so selecting Lithuanian does not display Italian instructions during authenticator setup."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+    "descricao": "The zh_CN totpStep1 translation is written in Traditional Chinese instead of Simplified Chinese.",
+    "textoGolden": "The totpStep1 value uses Traditional Chinese terms in the Simplified Chinese file (zh_CN), which is likely incorrect for this locale. Please verify the locale\u2011appropriate translation.",
+    "comentarios": [
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+      "lines": [
+       112,
+       112
+      ],
+      "texto": "The zh_CN (Simplified Chinese) file was given Traditional Chinese characters: totpStep1=\u5728\u60a8\u7684\u624b\u6a5f\u4e0a\u5b89\u88dd\u4ee5\u4e0b\u61c9\u7528\u7a0b\u5f0f\u4e4b\u4e00\uff1a. Compare the unchanged neighbouring lines (e.g. '\u6253\u5f00\u5e94\u7528\u626b\u63cf\u4e8c\u7ef4\u7801\u2026') which use Simplified forms; \u624b\u6a5f/\u61c9\u7528\u7a0b\u5f0f/\u5b89\u88dd are Traditional. zh_CN must be Simplified Chinese, so this string is in the wrong script/variant for the locale."
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+      "lines": [
+       112,
+       112
+      ],
+      "texto": "totpStep1 in messages_zh_CN uses Traditional Chinese (\u624b\u6a5f, \u5b89\u88dd, \u61c9\u7528\u7a0b\u5f0f), not Simplified Chinese as the rest of the file does. Replace it with the Simplified form: \u5728\u60a8\u7684\u624b\u673a\u4e0a\u5b89\u88c5\u4ee5\u4e0b\u5e94\u7528\u4e4b\u4e00\uff1a"
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+      "lines": [
+       112,
+       112
+      ],
+      "texto": "The Simplified Chinese (zh_CN) totpStep1 was replaced with Traditional Chinese (\"\u5728\u60a8\u7684\u624b\u6a5f\u4e0a\u5b89\u88dd\u4ee5\u4e0b\u61c9\u7528\u7a0b\u5f0f\u4e4b\u4e00\uff1a\"). Use the Simplified form, \"\u5728\u60a8\u7684\u624b\u673a\u4e0a\u5b89\u88c5\u4ee5\u4e0b\u5e94\u7528\u7a0b\u5e8f\u4e4b\u4e00\uff1a\"."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#04",
+    "descricao": "The method santizeAnchors is misspelled; it should be sanitizeAnchors.",
+    "textoGolden": "The method name 'santizeAnchors' should be 'sanitizeAnchors' (missing 'i').",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#05",
+    "descricao": "HTML_TAGS is a non-static, non-private field instead of a private static final constant.",
+    "textoGolden": "Field HTML_TAGS should be declared as 'private static final' following Java naming conventions for constants",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+    "descricao": "The diff-trimming code computes common prefix and suffix independently, so they can overlap and substring throws StringIndexOutOfBoundsException, crashing the verifier instead of reporting the illegal HTML.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       101,
+       111
+      ],
+      "texto": "The common prefix (start) and common suffix (end) are computed independently and can overlap, for example value \"aa\" vs sanitized \"a\". Then substring(start, length - end) gets begin > end and throws StringIndexOutOfBoundsException, so the verifier crashes instead of reporting the illegal HTML. Bound the suffix scan so that start + end <= min(value.length(), sanitized.length()), e.g. `while (end < min - start && ...)`."
+     },
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       102,
+       111
+      ],
+      "texto": "The common prefix and common suffix are computed independently and can overlap, so `sanitized.substring(start, sanitized.length() - end)` can have start > end and throw StringIndexOutOfBoundsException. This crashes the verifier instead of reporting 'Illegal HTML'. Cap the suffix scan with `end < Math.min(value.length(), sanitized.length()) - start`."
+     },
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       102,
+       111
+      ],
+      "texto": "WHAT: Common prefix/suffix stripping for the diff message can compute start+end larger than the string length and call substring(start, length-end) with start > end. WHY: Throws StringIndexOutOfBoundsException inside the key loop and crashes verification instead of reporting Illegal HTML. HOW: Clamp end so start+end <= min lengths, e.g. stop suffix scan when end >= length-start."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#07",
+    "descricao": "normalizeValue blanks the entire choice expression for some keys before HTML validation, so markup placed inside a choice branch of those keys bypasses the new verifier.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       124,
+       126
+      ],
+      "texto": "Choice normalization removes all branch content before HTML validation, allowing prohibited markup to bypass the new translation policy. A translated error-invalid-multivalued-size value such as `{2,choice,0#values|1#<a href=\"https://malicious.example\">value</a>|1<values}` becomes `...` and passes without checking the injected link, while consumers using MessageFormat expand that branch into the rendered message. Preserve and validate branch text, normalizing only the choice comparison syntax that conflicts with HTML parsing."
+     },
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       124,
+       127
+      ],
+      "texto": "WHAT: normalizeValue replaces the entire {n,choice,...} block with ... before sanitizing, so HTML inside choice options is never checked. WHY: A translation can smuggle tags (e.g. {2,choice,0#<script>...}) in error-invalid-multivalued-size/linkExpirationFormatter keys and pass the verifier, reaching UI rendering as XSS. HOW: Sanitize/validate the choice body instead of blanking it, or run the HTML policy on the inner choice text as well."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#10",
+    "descricao": "The account and admin UI bundles now use Java MessageFormat placeholders and choice syntax for error-invalid-multivalued-size, but i18next expects {{n}}, so the UI shows literal {0}/{1}/{2} and the raw choice text.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "js/apps/admin-ui/maven-resources/theme/keycloak.v2/admin/messages/messages_en.properties",
+      "lines": [
+       3138,
+       3138
+      ],
+      "texto": "The admin-ui bundle is consumed by react-i18next, which interpolates with double-brace `{{0}}` syntax (the previous value was `Attribute {{0}} ... {{2}}`). This line was rewritten to Java MessageFormat/ICU syntax (`{0}` ... `{2,choice,0#values|1#value|1<values}`), which i18next does not understand: the placeholders will not be substituted and the literal `{2,choice,...}` text will be shown to users. Keep the JS-side value in `{{0}}` form (and don't introduce ICU ChoiceFormat into the JS bundle); the ICU/choice spelling belongs only in the Java theme properties."
+     },
+     {
+      "file": "js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties",
+      "lines": [
+       188,
+       188
+      ],
+      "texto": "Same contract break in the account-ui bundle: the value was `Attribute {{0}} must have at least {{1}} and at most {{2}} value(s).` (i18next double-brace interpolation) and was changed to `{0}`/`{2,choice,...}` MessageFormat+ICU syntax. The account console's i18next based consumer was not updated to match, so interpolation will fail and the raw placeholder/choice syntax will be rendered. Restore `{{0}}`-style placeholders for the JS bundle."
+     },
+     {
+      "file": "js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties",
+      "lines": [
+       188,
+       188
+      ],
+      "texto": "The account-ui bundle is consumed by i18next, which interpolates with double braces (the original string was `Attribute {{0}} must have at least {{1}} and at most {{2}} value(s).`). This PR aligned the value to the Java theme convention, replacing `{{0}}/{{1}}/{{2}}` with `{0}/{1}/{2}` and adding ICU `{2,choice,...}`. i18next will no longer substitute the placeholders and cannot interpret the ICU choice, so the account UI shows the raw `{0}`, `{1}`, `{2}` and literal choice text. Keep the JS-side double-brace form for this bundle (adapt the choice accordingly) rather than the Java single-brace/ICU form used by the theme messages."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#opa-01",
+    "descricao": "If the English counterpart of a messages_*.properties file does not exist, verifySafeHtml throws an unchecked RuntimeException that escapes the mojo, crashing the build instead of reporting a validation message.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "7355f05e6aafe2a7acc6434fb40c686665416606",
+  "base": "7ea067aae9be56cb2622bce6563864817c3dfeaf",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+    "lines": [
+     65,
+     71
+    ],
+    "texto": "WHAT: canManage() accepts the VIEW scope, so any admin with only 'view' on all groups passes canManage(). WHY: view-only admins can then perform operations guarded by requireManage(), such as creating groups, which is a privilege escalation. HOW: check only the MANAGE scope."
+   },
+   {
+    "id": "S2",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+    "lines": [
+     121,
+     125
+    ],
+    "texto": "WHAT: getGroupIdsWithViewPermission() passes the authz resource UUID (groupResource.getId()) to hasPermission(), which looks resources up by name, and then adds that UUID to the result. WHY: group resources are named by group id, so the lookup misses and falls back to the all-groups resource, and the returned set holds resource UUIDs instead of group ids. The user search (UserModel.GROUPS attribute) therefore filters by non-existent group ids, so per-group VIEW_MEMBERS grants don't restrict or reveal the right users. HOW: use groupResource.getName(), which is the group id, for both the permission check and the result."
+   },
+   {
+    "id": "S3",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+    "lines": [
+     143,
+     150
+    ],
+    "texto": "WHAT: hasPermission() passes the result of getResourceTypeResource(...) to policyStore.findByResource() without a null check. WHY: the method returns null when the 'Groups' type resource doesn't exist, which causes an NPE instead of a denied permission and a 500 on group listing and user search. HOW: return false if the type resource is null."
+   },
+   {
+    "id": "S4",
+    "file": "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/GroupResourceTypeEvaluationTest.java",
+    "lines": [
+     284,
+     307
+    ],
+    "texto": "testManageGroupMembership ends with joinGroup and never asserts that bob became a member of topGroup. It grants both the all-users MANAGE_GROUP_MEMBERSHIP permission and the group MANAGE_MEMBERSHIP permission. The test therefore cannot tell whether the group-level check is what allows the call. Assert bob's membership afterwards, and add a case where only the user permission is granted that expects Forbidden."
+   },
+   {
+    "id": "S5",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+    "lines": [
+     64,
+     71
+    ],
+    "texto": "GroupPermissionsV2.canManage() accepts the VIEW scope on the all-groups resource, so an admin with view-only permission passes canManage()/requireManage(). The group-resource callers use canManage() to authorize group creation and other management. The per-group canManage(GroupModel) requires MANAGE, so the two methods disagree. The GroupPermissionEvaluator javadoc repeats the same wrong 'VIEW or MANAGE' contract. Check only AdminPermissionsSchema.MANAGE in canManage() and fix the javadoc."
+   },
+   {
+    "id": "S6",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+    "lines": [
+     132,
+     135
+    ],
+    "texto": "The javadoc on requireManageMembers(GroupModel) says it throws when canManageMembership(GroupModel) returns false. It should reference canManageMembers(GroupModel), which checks a different permission (MANAGE_MEMBERS rather than MANAGE or MANAGE_MEMBERSHIP). A caller reading this doc would be misled about the contract."
+   },
+   {
+    "id": "S7",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+    "lines": [
+     142,
+     147
+    ],
+    "texto": "The javadoc on getGroupIdsWithViewPermission() says '@return Stream of IDs', but the method returns Set<String>. Change the doc to describe a Set."
+   },
+   {
+    "id": "S8",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/UsersResource.java",
+    "lines": [
+     447,
+     453
+    ],
+    "texto": "searchForUser used to filter the search results with usersEvaluator::canView, and the PR removed that filter. The group restriction is now applied only when getGroupIdsWithViewPermission() is non-empty, so a caller who cannot view users and has no group grants may get an unfiltered search. Keep the per-user canView filter, or confirm that toRepresentation still applies it."
+   },
+   {
+    "id": "S9",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+    "lines": [
+     121,
+     125
+    ],
+    "texto": "The callback passes the authorization resource's UUID (getId()) where hasPermission expects a group id. V2 group resources are named by group id, so findByName(server, resourceUuid) returns null and the per-group permission is never evaluated. The same UUID is then added to the returned set, so UserModel.GROUPS contains resource ids instead of group ids. Use groupResource.getName() for both the check and the returned id."
+   },
+   {
+    "id": "S10",
+    "file": "GroupPermissionsV2.java",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "GroupPermissionsV2.canManage() accepts the VIEW scope, so a view-only admin passes canManage(). The reviewer is fairly confident in this finding, though it was based only on the diff text, not the full file."
+   },
+   {
+    "id": "S11",
+    "file": "GroupPermissionsV2.java",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "hasPermission() uses the result of getResourceTypeResource() without a null check. The reviewer did not confirm that the type resource is always created, so this finding is less certain."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+    "descricao": "GroupPermissionsV2.canManage() accepts the VIEW scope as well as MANAGE, so an admin with only view permission on all groups passes manage checks such as group creation.",
+    "textoGolden": "In GroupPermissionsV2.canManage(), the permission fallback checks for both VIEW and MANAGE scopes (hasPermission(null, AdminPermissionsSchema.VIEW, AdminPermissionsSchema.MANAGE)), but canManage() should only grant access for MANAGE scope, not VIEW. This means users with only VIEW permission on groups can pass the canManage() check, granting them write access they should not have. The canView() method correctly checks both VIEW and MANAGE, but canManage() should only check MANAGE.",
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       64,
+       71
+      ],
+      "texto": "The no-arg canManage() returns true when the caller holds only an all-groups VIEW permission (`hasPermission(null, VIEW, MANAGE)`), whereas the per-group canManage(GroupModel) (line 79) requires MANAGE. WHAT: a caller with only the view scope on all groups is treated as having manage rights. WHY: canManage()/requireManage() gate group creation and other manage operations (e.g. GroupsResource.addGroup -> auth.groups().requireManage()), so a read-only viewer of all groups can create/manage groups \u2014 privilege escalation. HOW: drop VIEW from the scope list so canManage() only returns true for MANAGE, aligning it with canManage(GroupModel): `return hasPermission(null, AdminPermissionsSchema.MANAGE);`"
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       65,
+       71
+      ],
+      "texto": "GroupPermissionsV2.canManage() (line 70) evaluates hasPermission(null, AdminPermissionsSchema.VIEW, AdminPermissionsSchema.MANAGE), identical to canView() at line 52, so a caller granted only the VIEW scope on the all-groups resource is treated as a group manager. The per-group overload canManage(GroupModel) (line 79) correctly requires only MANAGE, and AdminPermissionsSchema defines MANAGE as the manage scope for GROUPS_RESOURCE_TYPE, so the two checks disagree. requireManage() therefore succeeds for read-only administrators, letting them create/update/delete groups, add subgroups and map group roles. Drop VIEW from the scope list so canManage() checks MANAGE only."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       64,
+       71
+      ],
+      "texto": "WHAT: GroupPermissionsV2.canManage() grants global manage on VIEW scope (hasPermission(null, VIEW, MANAGE)). WHY: A caller with only view-all-groups permission passes the manage check, allowing group creation/management reserved for manage. HOW: Check only MANAGE, e.g. hasPermission(null, AdminPermissionsSchema.MANAGE)."
+     }
+    ]
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+    "descricao": "getGroupIdsWithViewPermission uses the authorization resource id instead of the resource name (the group id) for both the permission check and the returned set, so per-group view-members grants are not resolved and user filtering gets wrong ids.",
+    "textoGolden": "In getGroupIdsWithViewPermission, hasPermission is called with groupResource.getId() and the same groupResource.getId() is added to granted, but hasPermission resolves resources by name (treating the argument as a group id) and the GroupPermissionEvaluator contract says this method returns group IDs that are later used as UserModel.GROUPS and in getUsersCount group filters. This mismatch means per-group VIEW_MEMBERS/MANAGE_MEMBERS permissions may not yield the expected group IDs for filtering and counts, and evaluation may effectively only look at the type-level 'all-groups' resource; consider revisiting whether this should operate on the underlying group ids (resource names) instead so it aligns with the JPA queries and the interface contract.",
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       119,
+       125
+      ],
+      "texto": "WHAT: getGroupIdsWithViewPermission() uses authz resource IDs (groupResource.getId()) as group IDs and looks them up via findByName. WHY: Resource names equal group IDs (AdminPermissionsSchema.resolveGroup returns group.getId()), so findByName(resourceId) misses and the returned set contains unusable IDs, breaking user search/count filtering by group. HOW: Use groupResource.getName() like V1 does (resource.getName().substring prefix / name) for both the hasPermission lookup and the granted set."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       119,
+       125
+      ],
+      "texto": "findByType callback passes groupResource.getId() to hasPermission() and granted set, but AdminPermissionsSchema.resolveGroup defines resource name (not UUID) as groupId and hasPermission looks up via findByName(server, groupId). Use groupResource.getName() for both check and granted set, otherwise lookups miss to all-groups fallback and callers receive authz UUIDs instead of group IDs."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       119,
+       125
+      ],
+      "texto": "getGroupIdsWithViewPermission uses groupResource.getId() for lookup and result collection, but V2 group resources are named with the group ID (resolveGroup returns group.getId()) and hasPermission does findByName. Use groupResource.getName() in both places to evaluate the correct per-group resource and to return actual group IDs."
+     }
+    ]
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+    "descricao": "Per-group resources are created without the Groups type, so getGroupIdsWithViewPermission's findByType never sees specific group grants.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+      "lines": [
+       121,
+       121
+      ],
+      "texto": "findByType(GROUPS_RESOURCE_TYPE) does not enumerate the specific group resources created by AdminPermissionsSchema.getOrCreateResource, because that method creates them without setting their type. Consequently, specific VIEW_MEMBERS or MANAGE_MEMBERS grants are omitted from the group IDs used for user counts and database filtering. Assign the Groups type to specific group resources and ensure the all-Groups resource is not treated as a model group."
+     }
+    ]
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#04",
+    "descricao": "The user search filter still requires legacy 'group.resource.<id>' resources, so with V2 group permissions the members of authorized groups are excluded from user searches.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/UsersResource.java",
+      "lines": [
+       448,
+       450
+      ],
+      "texto": "The new V2 group permission IDs are passed into a JPA filter that still requires a legacy group.resource.<groupId> authorization resource. JpaUserProvider.groupsWithPermissionsSubquery checks for that prefixed name, whereas AdminPermissionsSchema creates V2 group resources named only with the group ID, so authorized group members are excluded from user searches even with valid group IDs. Update the database filtering path to support V2 resource naming rather than requiring a legacy V1 resource."
+     }
+    ]
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+    "descricao": "The new Javadoc for requireManageMembers points to canManageMembership instead of canManageMembers.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+      "lines": [
+       132,
+       135
+      ],
+      "texto": "The javadoc for requireManageMembers says it throws ForbiddenException if canManageMembership(GroupModel) returns false, but this method is the require-variant of canManageMembers, not canManageMembership. The text was copied from requireManageMembership above it. It should reference canManageMembers so the documented contract matches the method name and behavior."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+      "lines": [
+       132,
+       135
+      ],
+      "texto": "The Javadoc for requireManageMembers says it throws if canManageMembership(GroupModel) returns false. It should refer to canManageMembers(GroupModel), which is a different check, so the doc misdescribes the method."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+      "lines": [
+       132,
+       135
+      ],
+      "texto": "Javadoc for requireManageMembers references canManageMembership instead of canManageMembers (copy-paste). Fix link to {@link #canManageMembers(GroupModel)} so the contract describes the method it guards."
+     }
+    ]
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#07",
+    "descricao": "The Javadoc of getGroupIdsWithViewPermission says it returns a Stream though the method returns a Set.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+      "lines": [
+       142,
+       147
+      ],
+      "texto": "The Javadoc for getGroupIdsWithViewPermission says it returns a 'Stream of IDs', but the method returns Set<String>. Change the @return text to describe a Set of group IDs."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+      "lines": [
+       142,
+       147
+      ],
+      "texto": "@return says 'Stream of IDs' but method returns Set<String> getGroupIdsWithViewPermission. Fix doc to 'Set of IDs' to match the signature."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+      "lines": [
+       145,
+       147
+      ],
+      "texto": "The new @return documentation promises a Stream of IDs, but the method declares Set<String> and both implementations return sets. Describe a set of IDs instead, so the documented return contract matches what callers actually receive."
+     }
+    ]
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02",
+    "descricao": "GroupPermissionsV2.getGroupIdsWithViewPermission runs a full permission evaluation for every group resource on each user search and count, costing O(groups) policy evaluations per request.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "fix-proper-handling-of-group-memberships-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "060cda77729cb1c4a827560e09e89a7b22078ba9",
+  "base": "4975fc28903a84418f546b2809370f19abf10e08",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+    "lines": [
+     11,
+     14
+    ],
+    "texto": "WHAT: `totalPages` is computed as `floor(user_count / limit) + 1`, which over-counts by one when `user_count` is an exact multiple of `limit`. WHY: with 50 members and limit 50 it shows 1/2, `showingLast` stays false on the real last page, and `next` loads an empty page. HOW: use `Math.ceil(user_count / limit)`."
+   },
+   {
+    "id": "S2",
+    "file": "app/controllers/admin/groups_controller.rb",
+    "lines": [
+     71,
+     75
+    ],
+    "texto": "WHAT: `add_members` calls `group.add(user)` for every submitted username without checking whether the user is already a member. WHY: `group_users` has a unique index on (group_id, user_id), so adding an existing member raises RecordNotUnique and returns a 500. The previous `usernames=` implementation only added `expected - current`. HOW: skip users who are already members, for example `group.add(user) unless group.users.exists?(user.id)`."
+   },
+   {
+    "id": "S3",
+    "file": "app/controllers/groups_controller.rb",
+    "lines": [
+     22,
+     23
+    ],
+    "texto": "WHAT: the `members` action uses a client-supplied `limit` with no upper bound, and the old 200 default cap for automatic groups was removed. WHY: a request such as `limit=1000000` loads and serializes every member of a large group in one request, and a negative or zero limit errors or breaks the client page math. HOW: clamp it, for example `limit = [[(params[:limit] || 50).to_i, 1].max, 200].min`, and use `[params[:offset].to_i, 0].max` for the offset."
+   },
+   {
+    "id": "S4",
+    "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+    "lines": [
+     11,
+     14
+    ],
+    "texto": "totalPages uses Math.floor(user_count / limit) + 1, which over-counts by one whenever user_count is an exact multiple of limit (e.g. 50 members with limit 50 gives 2 pages). showingLast is then false on the real last page, so 'next' fetches an empty page (offset == user_count) and the UI shows a nonexistent page. Use Math.ceil(user_count / limit)."
+   },
+   {
+    "id": "S5",
+    "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+    "lines": [
+     11,
+     14
+    ],
+    "texto": "totalPages uses floor(user_count/limit)+1, which overcounts by one when user_count is an exact multiple of limit (e.g. 50 members, limit 50 shows 1/2). The 'next' arrow stays enabled and leads to an empty nonexistent page. Use Math.ceil(user_count / limit)."
+   },
+   {
+    "id": "S6",
+    "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+    "lines": [
+     11,
+     14
+    ],
+    "texto": "totalPages uses floor(user_count/limit)+1, which is one too many whenever user_count is an exact multiple of limit (e.g. 50 members gives 2 pages). The Next button is then enabled, and `next` sets offset to 50 and fetches an empty page. Use Math.ceil(user_count / limit) instead."
+   },
+   {
+    "id": "S7",
+    "file": "app/controllers/admin/groups_controller.rb",
+    "lines": [
+     90,
+     90
+    ],
+    "texto": "`group.users.delete(user_id)` with a raw integer id looks the record up through the association and raises ActiveRecord::RecordNotFound if the user is not (or is no longer) a member. This happens when two admins remove the same member, or on a stale member list, and it returns a 500/404 instead of succeeding silently. Look the user up first and delete it only if it is present in the group."
+   },
+   {
+    "id": "S8",
+    "file": "spec/controllers/admin/groups_controller_spec.rb",
+    "lines": [
+     114,
+     117
+    ],
+    "texto": "The automatic-group removal test uses `xhr :put, :remove_member`, but the route for remove_member is `delete \"members\"`. The test does not exercise the verb the code actually handles, so it could pass even if the DELETE route or verb handling were broken. Use :delete so the test matches the real route."
+   },
+   {
+    "id": "S9",
+    "file": "app/controllers/groups_controller.rb",
+    "lines": [
+     22,
+     35
+    ],
+    "texto": "The members endpoint now applies a default limit of 50 to every group; before, only automatic groups were limited. The public group members page (group-members route and group/members.hbs) was changed to read the first page only and has no pagination controls. Non-automatic groups with more than 50 members therefore silently show a truncated list, and the remaining members cannot be reached. Add pagination to the public page, or keep the previous unlimited behaviour for non-automatic groups on that endpoint."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+    "descricao": "The admin group pager computes total pages as floor(user_count / limit) + 1, so when the member count is an exact multiple of the limit it shows an extra page and Next navigates to an empty member list.",
+    "textoGolden": "The `totalPages` calculation using `Math.floor(user_count / limit) + 1` produces an extra page when `user_count` is an exact multiple of `limit`, leading to incorrect pagination. For example, with 100 users and a limit of 50, it reports 3 pages instead of 2, allowing navigation to an empty page.",
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+      "lines": [
+       11,
+       14
+      ],
+      "texto": "totalPages (and currentPage) use `Math.floor(user_count / limit) + 1`, which is an off-by-one when user_count is an exact multiple of limit (e.g. 50 members, limit 50 \u2192 reports 2 pages although only 1 exists). This leaves `showingLast` false on the real last page, so 'next' navigates to an empty page at offset=user_count. Use `Math.ceil(user_count / limit)` (and compute currentPage consistently) to get the correct page count."
+     },
+     {
+      "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+      "lines": [
+       11,
+       14
+      ],
+      "texto": "totalPages is off by one when user_count is an exact multiple of limit: `Math.floor(user_count / limit) + 1` gives 2 for user_count=50, limit=50, although 50 members occupy exactly one page. Correct it to `Math.ceil(this.get('user_count') / this.get('limit'))`. Effect: for a group whose member count is a multiple of the page size, totalPages is one too high, showingLast remains false so the 'next' link stays enabled, and clicking it navigates to a phantom empty page."
+     },
+     {
+      "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+      "lines": [
+       11,
+       14
+      ],
+      "texto": "`totalPages` uses `Math.floor(user_count / limit) + 1`, which over-counts by one whenever `user_count` is an exact multiple of `limit` (e.g. 50 members with limit 50 yields 2 pages instead of 1). Since `showingLast` is `propertyEqual(\"currentPage\", \"totalPages\")`, on a full last page `showingLast` is false, so the `next` action stays enabled and advances `offset` to `user_count`, rendering an empty page labeled as the last page. Use `Math.ceil(user_count / limit)` (with the zero-member guard) so the count matches the real number of pages."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#03",
+    "descricao": "Several Group model functions (findMembers, destroy, userCountDisplay) return a value on some paths and undefined on others, triggering consistent-return lint warnings.",
+    "textoGolden": "Expected to return a value at the end of function - code paths without explicit returns will return undefined",
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#04",
+    "descricao": "Paging actions fire overlapping member requests and each response unconditionally overwrites offset and members, so a stale response arriving last can revert the list to an earlier page.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/discourse/models/group.js",
+      "lines": [
+       30,
+       35
+      ],
+      "texto": "Guard against stale member-fetch responses before updating the model. `next` updates offset immediately and leaves navigation enabled, so with at least three pages two rapid clicks issue requests for offsets 50 and 100. If the offset-100 response arrives first and the offset-50 response arrives last, this unconditional `setProperties` resets both offset and members to the older page, undoing the latest navigation. Refreshes after membership changes can similarly be overwritten by an earlier fetch. Track a per-model request generation and apply only the latest response, or serialize navigation and refresh requests."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#06",
+    "descricao": "The public members endpoint now always caps results at 50 per page, but the public group members page has no pagination, so groups with more than 50 members are silently truncated for users.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/discourse/routes/group-members.js.es6",
+      "lines": [
+       10,
+       11
+      ],
+      "texto": "The public members route now loads only the model's default 50-member page without providing any way to request subsequent pages. The public group/members.hbs template only renders members and has no Next/Previous controls, so members after the first 50 become inaccessible (manual groups previously returned all members). Add public pagination controls and actions that update offset and reload members."
+     },
+     {
+      "file": "app/controllers/groups_controller.rb",
+      "lines": [
+       22,
+       26
+      ],
+      "texto": "The new default limit applies to nonautomatic groups as well, but the public group-members route still calls findMembers() only once and its template simply iterates members without pagination. Previously this endpoint returned every member of a nonautomatic group; now a group with more than 50 members exposes only the first 50 on its public members page, with no way to reach the rest. Update that consumer to fetch subsequent pages or provide pagination when introducing this endpoint contract."
+     },
+     {
+      "file": "app/assets/javascripts/discourse/routes/group-members.js.es6",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "Provide pagination or load subsequent pages for the public group-members view. findMembers now requests only 50 members, and this route calls it only once while its template simply iterates members without navigation. Custom groups previously returned all members, so groups larger than 50 now have members that cannot be viewed on this page."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#07",
+    "descricao": "Creating a group ignores the alias_level the admin selected, saving only name and visibility, so new groups keep the default alias level.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/admin/groups_controller.rb",
+      "lines": [
+       23,
+       27
+      ],
+      "texto": "Persist params[:alias_level] when creating a group, just as update does. The creation form exposes aliasLevelOptions and group.asJSON sends the selected alias_level, but create saves only name and visible. A newly created group therefore retains the default alias level instead of the administrator's selection."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#10",
+    "descricao": "Removing a member deletes the membership row directly and skips clearing the user's primary_group_id, so a removed user can keep this group as their primary group.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/admin/groups_controller.rb",
+      "lines": [
+       84,
+       91
+      ],
+      "texto": "WHAT: remove_member uses group.users.delete(user_id) instead of the Group#remove destroy path. WHY: bypasses GroupUser destroy callbacks and primary_group_id cleanup done in destroy_deletions, leaving stale membership side-effects (e.g. dangling primary_group_id). HOW: load the User and call group.remove(user)."
+     },
+     {
+      "file": "app/controllers/admin/groups_controller.rb",
+      "lines": [
+       90,
+       90
+      ],
+      "texto": "Removing a member with group.users.delete bypasses the primary_group_id cleanup previously performed by Group#destroy_deletions during usernames updates. A user whose primary group is this group remains associated with it as their primary group after membership removal, leaving stale primary-group state used by user administration and post serialization. Clear primary_group_id for the removed user when it equals this group's id as part of the removal operation."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#12",
+    "descricao": "The remove_member spec issues a PUT request although the route only maps DELETE to remove_member, so the test uses a verb never routed in production.",
+    "textoGolden": "The remove_member test uses xhr :put to call the remove_member action, but the route defines delete 'members' => 'groups#remove_member' requiring DELETE method.",
+    "comentarios": [
+     {
+      "file": "spec/controllers/admin/groups_controller_spec.rb",
+      "lines": [
+       114,
+       117
+      ],
+      "texto": "This example sends `xhr :put, :remove_member`, but the PR maps `remove_member` only to DELETE (`delete \"members\" => \"groups#remove_member\"`); PUT on that path routes to `groups#add_members`. Controller specs bypass the router, so the example still lands on `remove_member` and passes regardless \u2014 it would still pass if the DELETE route were missing or wired to the wrong action, leaving the newly introduced verb/action pairing untested. Use `xhr :delete, :remove_member`, as the sibling example at line 125 already does."
+     },
+     {
+      "file": "spec/controllers/admin/groups_controller_spec.rb",
+      "lines": [
+       114,
+       117
+      ],
+      "texto": "The test 'cannot remove members from automatic groups' sends `xhr :put, :remove_member`, but the route is `delete \"members\" => \"groups#remove_member\"`. It exercises the action with a verb that is never routed in production. Use `xhr :delete, :remove_member, group_id: 1, user_id: 42` so the test matches the real request."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-01",
+    "descricao": "Admin add_members pushes every username into group.users without skipping existing members, so adding someone already in the group hits the unique group_users index, returns a 500 and leaves earlier users partially added.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02",
+    "descricao": "The public group members endpoint takes `limit` from params with no upper bound or positivity check, letting a visitor request huge pages or trigger a 500 with a negative limit.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "8422030ef456e3a898415e96475b4d8ddfc7640f",
+  "base": "bdd229e3f22e307fe40b30ef99e92ff3f6723da4",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/incidents/grouptype.py",
+    "lines": [
+     11,
+     12
+    ],
+    "texto": "WHAT: MetricAlertDetectorHandler subclasses the abstract StatefulDetectorHandler with an empty body, so counter_names, get_dedupe_value, get_group_key_values and build_occurrence_and_event_data are all unimplemented. WHY: Detector.detector_handler instantiates the registered handler for MetricAlertFire detectors, which raises TypeError (can't instantiate abstract class) and breaks process_detectors for them. The previous version was concrete and returned [] from evaluate. HOW: Implement the abstract members, or keep a concrete placeholder handler that returns {} from evaluate until the stateful implementation is built."
+   },
+   {
+    "id": "S2",
+    "file": "tests/sentry/workflow_engine/processors/test_detector.py",
+    "lines": [
+     244,
+     275
+    ],
+    "texto": "`build_mock_occurrence_and_event` ignores its `value` argument, so the occurrence and event data are identical for any value. Tests such as `test_results_on_change` (input 100, expected built with 6) and the group_2 case in `test_state_results_multi_group` (input 10, expected built with 6) therefore can't detect `evaluate` passing a wrong value or group to `build_occurrence_and_event_data`. Embed `value` in the mock occurrence, for example in `evidence_data`, and build the expected objects with the real input values."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/incidents/grouptype.py",
+    "lines": [
+     11,
+     12
+    ],
+    "texto": "MetricAlertDetectorHandler subclasses StatefulDetectorHandler but its body is `pass`. It does not implement the abstract members `counter_names`, `get_dedupe_value`, `get_group_key_values` and `build_occurrence_and_event_data` that processors/detector.py declares. Instantiating it raises TypeError, so any `metric_alert_fire` detector fails when `Detector.detector_handler` builds the handler. Implement those four members, or keep the previous non-abstract stub that returns an empty dict."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/incidents/grouptype.py",
+    "lines": [
+     10,
+     12
+    ],
+    "texto": "The TODO comment says this will become a stateful detector once the abstraction exists, but this change already makes MetricAlertDetectorHandler a StatefulDetectorHandler subclass. The comment is now false and misleads readers. Replace it with a TODO that says the abstract methods still need implementing."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/workflow_engine/processors/detector.py",
+    "lines": [
+     229,
+     233
+    ],
+    "texto": "The evaluate docstring still says it returns a list of `DetectorEvaluationResult`, but the method now returns a dict keyed by group_key. Update the docstring to describe the dict return shape."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/incidents/grouptype.py",
+    "lines": [
+     11,
+     12
+    ],
+    "texto": "MetricAlertDetectorHandler now subclasses StatefulDetectorHandler with only `pass`. It does not implement the abstract members counter_names, get_dedupe_value, get_group_key_values or the newly added build_occurrence_and_event_data. Instantiating it, which Detector.detector_handler does for metric_alert_fire detectors, raises TypeError instead of returning an empty result as before. Implement these members, or keep the handler concrete until they exist."
+   },
+   {
+    "id": "S7",
+    "file": "src/sentry/incidents/grouptype.py",
+    "lines": [
+     10,
+     12
+    ],
+    "texto": "MetricAlertDetectorHandler subclasses the abstract StatefulDetectorHandler with an empty body. It leaves counter_names, get_dedupe_value, get_group_key_values and build_occurrence_and_event_data unimplemented. Any detector of type metric_alert_fire will raise TypeError when Detector.detector_handler instantiates the handler, where the old stub returned []. Implement the abstract members, or keep a concrete non-stateful stub until they exist."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#01",
+    "descricao": "The TODO above MetricAlertDetectorHandler says it will become a stateful detector, but the class already subclasses StatefulDetectorHandler.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/incidents/grouptype.py",
+      "lines": [
+       10,
+       12
+      ],
+      "texto": "The comment 'TODO: This will be a stateful detector when we build that abstraction' is now stale. MetricAlertDetectorHandler already subclasses StatefulDetectorHandler. Remove or reword the TODO."
+     },
+     {
+      "file": "src/sentry/incidents/grouptype.py",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "Remove or revise the adjacent TODO saying this will become a stateful detector 'when we build that abstraction'. The class now inherits StatefulDetectorHandler, so the comment describes already-completed work as a future migration and misleads maintainers about which abstraction this handler uses."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+    "descricao": "MetricAlertDetectorHandler subclasses StatefulDetectorHandler without implementing its abstract methods, so instantiating it for metric alert detectors raises TypeError where it previously returned an empty-result handler.",
+    "textoGolden": "MetricAlertDetectorHandler inherits from StatefulDetectorHandler but only contains pass, failing to implement its required abstract methods: counter_names (property), get_dedupe_value(), get_group_key_values(), and build_occurrence_and_event_data(). This will cause a TypeError at runtime when the class is instantiated.",
+    "comentarios": [
+     {
+      "file": "src/sentry/incidents/grouptype.py",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "WHAT: MetricAlertDetectorHandler now subclasses StatefulDetectorHandler with an empty body, so it does not implement the abstract methods counter_names, get_dedupe_value, get_group_key_values, and build_occurrence_and_event_data declared on StatefulDetectorHandler. WHY: the class is now abstract, and Detector.detector_handler (src/sentry/workflow_engine/models/detector.py:86) instantiates it via group_type.detector_handler(self), so any detector whose type resolves to this grouptype will raise TypeError: Can't instantiate abstract class MetricAlertDetectorHandler \u2014 the previous version implemented evaluate and was instantiable. HOW: implement the required abstract methods (or keep a concrete evaluate override) so the handler can be constructed."
+     },
+     {
+      "file": "src/sentry/incidents/grouptype.py",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "MetricAlertDetectorHandler now subclasses StatefulDetectorHandler but with `pass`, so it implements none of the abstract methods it inherits (counter_names, get_dedupe_value, get_group_key_values, and the newly added build_occurrence_and_event_data). The class is therefore still abstract and instantiating it (it is registered as `detector_handler` on MetricAlertFire and is constructed by Detector.detector_handler) raises `TypeError: Can't instantiate abstract class MetricAlertDetectorHandler with abstract methods ...`. Before this change it subclassed DetectorHandler and implemented the single abstract `evaluate`, so it was instantiable; the PR makes the metric-alert handler path throw. Either implement the required abstract methods or keep the class free of unimplemented abstracts."
+     },
+     {
+      "file": "src/sentry/incidents/grouptype.py",
+      "lines": [
+       11,
+       12
+      ],
+      "texto": "MetricAlertDetectorHandler now subclasses StatefulDetectorHandler (an abc.ABC) with only `pass`. StatefulDetectorHandler declares four abstract methods \u2014 counter_names, get_dedupe_value, get_group_key_values, and the newly added build_occurrence_and_event_data (detector.py:142-170) \u2014 none of which are implemented here. The class therefore remains abstract and cannot be instantiated; Detector.detector_handler's `group_type.detector_handler(self)` will raise `TypeError: Can't instantiate abstract class MetricAlertDetectorHandler` for the metric_alert_fire group type. Previously this class was a concrete DetectorHandler with an implemented evaluate, so this PR newly makes it uninstantiable. Implement the required abstract methods (or revert to a concrete handler) to satisfy the base-class contract."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#03",
+    "descricao": "The evaluate() docstring says it returns a list of DetectorEvaluationResult, but it now returns a dict keyed by group key.",
+    "textoGolden": "Docstring says this returns a list of DetectorEvaluationResult, but the method now returns a dict keyed by DetectorGroupKey. Consider updating the docstring to match the new return type.",
+    "comentarios": [
+     {
+      "file": "src/sentry/workflow_engine/processors/detector.py",
+      "lines": [
+       226,
+       228
+      ],
+      "texto": "Update evaluate's adjacent docstring to describe a dictionary keyed by DetectorGroupKey rather than a list of DetectorEvaluationResult. This change returns a dictionary and callers now consume .values(), but the documented return contract still tells readers to expect a list; iterating the documented result as a list would instead yield group keys."
+     },
+     {
+      "file": "src/sentry/workflow_engine/processors/detector.py",
+      "lines": [
+       226,
+       231
+      ],
+      "texto": "Docstring says 'returns a list of DetectorEvaluationResult' but signature/body now return dict[DetectorGroupKey, DetectorEvaluationResult]. Update docstring to describe dict keyed by group_key."
+     },
+     {
+      "file": "src/sentry/workflow_engine/processors/detector.py",
+      "lines": [
+       226,
+       233
+      ],
+      "texto": "The evaluate() docstring still says it returns a list of `DetectorEvaluationResult`. The method now returns a dict mapping group key to `DetectorEvaluationResult`. Update the docstring to describe the dict return shape."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#04",
+    "descricao": "The mock occurrence builder ignores its value argument, so tests (e.g. group_2 expected with 6 while the packet carries 10) pass regardless of which value is passed to build_occurrence_and_event_data.",
+    "textoGolden": "Wrong value `6` passed for `group_2` occurrence \u2014 the data packet specifies `\"group_2\": 10`. Should be `10` to accurately reflect the test scenario, which will ensure the test produces the correct occurrence data.",
+    "comentarios": [
+     {
+      "file": "tests/sentry/workflow_engine/processors/test_detector.py",
+      "lines": [
+       244,
+       265
+      ],
+      "texto": "The new occurrence builder accepts `value` but never incorporates or asserts it, so the occurrence tests cannot detect incorrect forwarding of the measured value to `build_occurrence_and_event_data`. For example, `test_state_results_multi_group` supplies 10 for group_2 but builds its expected occurrence with 6 and still passes. A regression that passes a constant or another group's measurement at the new production hook would therefore go unnoticed. Include the value in the mock occurrence's evidence and use the actual expected measurement, or assert the hook's arguments directly."
+     },
+     {
+      "file": "tests/sentry/workflow_engine/processors/test_detector.py",
+      "lines": [
+       244,
+       275
+      ],
+      "texto": "`build_mock_occurrence_and_event` accepts `value: int` but never uses it (the occurrence is built only from `group_key`/`new_status`), and this same helper is also the implementation of `MockDetectorStateHandler.build_occurrence_and_event_data`. Because neither the expected occurrence nor the handler output depends on the value, tests like `test_state_results_multi_group` (which incorrectly builds the group_2 occurrence with `value=6` while the packet carries `10`) and `TestEvaluate.test_dedupe` (expected built with 6 vs packet 8) pass regardless of the value actually passed into `build_occurrence_and_event_data`. If evaluation passed a wrong value, these tests would still pass, so they do not verify the value/threshold path they appear to cover. Include `value` in a field of the occurrence (or assert on it in the handler) and fix the wrong expected values so the argument is actually checked."
+     },
+     {
+      "file": "tests/sentry/workflow_engine/processors/test_detector.py",
+      "lines": [
+       244,
+       275
+      ],
+      "texto": "`build_mock_occurrence_and_event` accepts a `value: int` parameter but never uses it \u2014 the returned IssueOccurrence is derived only from `group_key` and `new_status`. Because `value` is dead, callers can pass a mismatched value with no failure: in `test_state_results_multi_group` the packet contains `group_2: 10`, but the expected occurrence for `group_2` is built with `6`. Either use `value` when constructing the occurrence so the test validates the group value, or drop the unused parameter and pass the correct value; otherwise the test silently accepts wrong group values."
+     }
+    ]
+   }
+  ]
+ },
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "71826eb08fc7ea35a5925ad223296feadd5c5e29",
+  "base": "e805e472f4a80017957e2fbec975ea78c6ee45ed",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/api/endpoints/organization_events_stats.py",
+    "lines": [
+     218,
+     220
+    ],
+    "texto": "WHAT: `_get_event_stats` passes the outer `dataset` variable to `is_errors_query_for_error_upsampled_projects` instead of its own `scoped_dataset` parameter. WHY: the dashboard-widget split path calls `_get_event_stats(discover, ...)` with a rewritten query and a different dataset. The upsampling decision is then made from the wrong dataset (for example metrics or transactions), so errors are not upsampled, or the transform is applied to a dataset that was not queried. HOW: pass `scoped_dataset`, and make the discover check use the `query` argument rather than `request.GET['query']`."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/api/helpers/error_upsampling.py",
+    "lines": [
+     100,
+     103
+    ],
+    "texto": "WHAT: `_is_error_focused_query` decides with the substring check `'event.type:error' in query`. WHY: a negated or compound query such as `!event.type:error` or `event.type:error_foo` matches, so the discover query gets `upsampled_count()` (sum of `sample_weight`) even though it does not target error events. That produces wrong counts, or a failed query if the column is missing in the queried table. HOW: parse the query with the search parser, or at least use a token-boundary regex that rejects a leading `!` or a trailing word character."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/testutils/factories.py",
+    "lines": [
+     353,
+     357
+    ],
+    "texto": "The truthiness check `if client_sample_rate:` treats a present but falsy value (0 or 0.0) as missing, so `sample_rate` is silently not set. Use an explicit `is not None` check instead."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/api/endpoints/organization_events_stats.py",
+    "lines": [
+     218,
+     220
+    ],
+    "texto": "The upsampling decision is computed from the outer `dataset`, but the query runs against the `scoped_dataset` parameter of `_get_event_stats`. When the two differ, `count()` is rewritten to `upsampled_count()` for a dataset that was not checked, or the rewrite is skipped for one that should have it. Pass `scoped_dataset` to `is_errors_query_for_error_upsampled_projects`."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/api/helpers/error_upsampling.py",
+    "lines": [
+     95,
+     105
+    ],
+    "texto": "`_is_error_focused_query` uses a raw substring check, so `!event.type:error`, `event.type:[error,default]` or `event.type:transaction OR event.type:error` also match. That makes the discover dataset rewrite count() to `upsampled_count()` (sum of `sample_weight`) for queries that return transactions, which have no such column, so the Snuba query fails. Parse the query's search filters and apply the transform only for a positive, exact `event.type:error` filter with no negation or OR."
+   },
+   {
+    "id": "S6",
+    "file": "tests/snuba/api/endpoints/test_organization_events_stats.py",
+    "lines": [
+     3626,
+     3627
+    ],
+    "texto": "The inline comments say each bucket has 1 event, but the assertions expect count == 10. The 10 is the upsampled value (1 event at client_sample_rate 0.1), so the comments contradict the assertions. Update them to say that one stored event is upsampled to 10."
+   },
+   {
+    "id": "S7",
+    "file": "tests/snuba/api/endpoints/test_organization_events_stats.py",
+    "lines": [
+     3655,
+     3697
+    ],
+    "texto": "The transaction event is stored without a client sample rate, so its weight is 1. Upsampled and plain counts are therefore identical (1 and 0), and the test passes even if transactions were wrongly upsampled. Give the transaction a sample rate such as 0.1 in its data, or add an error event that should be excluded, so a wrongly applied upsample would produce 10 and fail the assertion."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#03",
+    "descricao": "The upsampling decision is evaluated against the request's dataset instead of the scoped_dataset actually queried, so in the dashboard discover-split path (metrics dataset) error queries run against discover skip upsampling even when all projects are allowlisted.",
+    "textoGolden": "The upsampling eligibility check passes the outer dataset instead of the actual dataset used by scoped_dataset. In paths where the query ultimately runs against discover (e.g., dashboard split) while the original dataset is metrics, upsampling may be skipped even when all projects are allowlisted.",
+    "comentarios": [
+     {
+      "file": "src/sentry/api/endpoints/organization_events_stats.py",
+      "lines": [
+       218,
+       223
+      ],
+      "texto": "The upsampling decision uses the closure variable `dataset` while the transformed `final_columns` are executed against `scoped_dataset`. In the dashboard-split path `_get_event_stats` is deliberately invoked with a different dataset (e.g. `_get_event_stats(discover, ...)` at lines 351, 365, 406, 423) than the request's `dataset`, so the `_should_apply_sample_weight_transform` branch can be evaluated against the wrong dataset and apply/skip `sum(sample_weight)` for a dataset that was never queried. Base the decision on the dataset actually being queried (`scoped_dataset`) so the transform matches the target of the query."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04",
+    "descricao": "_is_error_focused_query uses a substring match for `event.type:error` on the request query, so negated or mixed (OR transaction) discover queries are treated as error-only and get the sample_weight sum instead of count().",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/helpers/error_upsampling.py",
+      "lines": [
+       100,
+       103
+      ],
+      "texto": "`_is_error_focused_query` decides whether to apply `upsampled_count()` by doing a naive substring search for `event.type:error` in the raw request query. A query that excludes errors (e.g. `!event.type:error`) or the discover-split query `({query}) AND event.type:transaction` still contains the literal `event.type:error`, so the transform is applied to a non-error / transactions query, summing `sample_weight` where it should be a plain `count()` and producing wrong bucket values. It also ignores the actual `query` passed to `_get_event_stats`, so the decision can differ from the query that is really executed. Match on a parsed/negation-aware condition (or pass the resolved query string) instead of a raw substring test."
+     },
+     {
+      "file": "src/sentry/api/helpers/error_upsampling.py",
+      "lines": [
+       100,
+       103
+      ],
+      "texto": "The substring check treats `!event.type:error` and `event.type:error OR event.type:transaction` as error-only queries. For allowlisted projects this rewrites count() to an aggregation over sample_weight even when the Discover query includes transactions, violating the error-only restriction and potentially failing against a transaction-backed query. Determine the event-type restriction from the parsed query rather than the presence of a substring."
+     },
+     {
+      "file": "src/sentry/api/helpers/error_upsampling.py",
+      "lines": [
+       100,
+       103
+      ],
+      "texto": "Substring matching does not establish that the Discover query selects only errors. For example, `!event.type:error` and `event.type:error OR event.type:transaction` both return True here, causing count() to be replaced with the sample-weight aggregation for non-error or mixed results in allowlisted projects. This contradicts the error-only guard and can produce incorrect counts. Parse the query and establish an error-only restriction (including negation and Boolean structure), or conservatively skip transformation when that restriction cannot be proven."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#05",
+    "descricao": "test_error_upsampling_with_transaction_events cannot detect upsampling being applied to transaction queries, because the transaction has no sample_weight and upsampled_count() equals count() for it.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/snuba/api/endpoints/test_organization_events_stats.py",
+      "lines": [
+       3654,
+       3697
+      ],
+      "texto": "test_error_upsampling_with_transaction_events would still pass if upsampling were wrongly applied to transaction queries. The transaction event has no sample_weight, and upsampled_count uses ifNull(sample_weight, 1), so the result is still 1 and 0. Give the transaction a non-default sample rate or weight so an upsampled count would differ from a plain count, or assert that the transform was not applied."
+     },
+     {
+      "file": "tests/snuba/api/endpoints/test_organization_events_stats.py",
+      "lines": [
+       3654,
+       3697
+      ],
+      "texto": "test_error_upsampling_with_transaction_events cannot falsify over-application of upsampling: the stored transaction has no sample_weight so upsampled_count() (sum(ifNull(sample_weight,1))) returns 1, same as count(). Give the transaction a sample_weight/client_sample_rate that would diverge (e.g. count 10 if upsampled vs 1 if not), or assert via mock that transform_query_columns_for_error_upsampling was not called / yAxes were not rewritten."
+     },
+     {
+      "file": "tests/snuba/api/endpoints/test_organization_events_stats.py",
+      "lines": [
+       3655,
+       3697
+      ],
+      "texto": "test_error_upsampling_with_transaction_events cannot detect upsampling being wrongly applied to transaction queries. The stored transaction event has no error_sampling context, so sample_weight is null, and upsampled_count = toInt64(sum(ifNull(sample_weight,1))) evaluates to 1 for it \u2014 identical to count(). If _should_apply_sample_weight_transform/_is_error_focused_query were broken so that a discover query with event.type:transaction gets upsampled, the assertion count==1 (and 0 in the empty bucket) would still pass. Add an event with a known non-1 sample_weight (or assert the emitted query uses count() and not upsampled_count) so the test actually fails when the transaction exclusion is bypassed."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#06",
+    "descricao": "The test factory helper's docstring promises a valid client sample rate but it copies any truthy float-convertible value (negative, >1, strings), unlike production validation.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/testutils/factories.py",
+      "lines": [
+       344,
+       357
+      ],
+      "texto": "WHAT: _set_sample_rate_from_error_sampling uses `if client_sample_rate: float(...)` with no type/range check, unlike production _derive_client_error_sampling_rate which requires isinstance(int,float) and 0<rate<=1. WHY: string '0.1', bool True, or out-of-range 5.0 get stored as sample_rate in fixtures while production drops them, making upsampling tests diverge from prod. HOW: mirror production validation before assigning sample_rate."
+     },
+     {
+      "file": "src/sentry/testutils/factories.py",
+      "lines": [
+       345,
+       345
+      ],
+      "texto": "The new docstring says the client sample rate must be 'present and valid', but the implementation only checks truthiness and float conversion. Negative rates, rates greater than 1, and float-convertible non-finite values are all accepted and written to sample_rate. This falsely tells test authors that this helper enforces sample-rate validity. Either document that it merely copies truthy float-convertible values, or validate the supported sample-rate range and finiteness before setting the field."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#08",
+    "descricao": "With upsampling active, top-events queries pick and order the top N groups by raw count() (selected_columns/orderby are not transformed) while the plotted series use upsampled_count(), so ranking can disagree with the displayed weighted counts.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/endpoints/organization_events_stats.py",
+      "lines": [
+       242,
+       248
+      ],
+      "texto": "Only timeseries_columns are upsampled while selected_columns and orderby used to select the Top N remain based on raw count(). discover.top_events_timeseries first queries those unchanged selected columns to choose groups, so a group with fewer retained events but a higher weighted count is omitted in favor of a lower-volume group. Apply the weighted-count transformation consistently to Top N selection and its ordering as well as the displayed timeseries."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#09",
+    "descricao": "_are_all_projects_error_upsampled and its caller take an organization argument that is never read.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/helpers/error_upsampling.py",
+      "lines": [
+       28,
+       44
+      ],
+      "texto": "`_are_all_projects_error_upsampled` takes an `organization` argument \u2014 also threaded in from the public `is_errors_query_for_error_upsampled_projects` \u2014 but never reads it: the body uses only `project_ids` and the global option `issues.client_error_sampling.project_allowlist`. The declared parameter is dead. Either the allowlist check is meant to be organization-scoped (the body must actually consult `organization`) or the parameter should be removed from both functions; as written the signature advertises an organization-scoped decision the implementation never makes."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#14",
+    "descricao": "Claims only bare count() is rewritten, so aliased count, eps(), epm(), count_unique() etc. stay un-upsampled.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/helpers/error_upsampling.py",
+      "lines": [
+       54,
+       64
+      ],
+      "texto": "WHAT: transform_query_columns_for_error_upsampling only rewrites exact bare `count()` and passes everything else through unchanged. WHY: yAxes like `count() as foo`, `eps()`, `epm()`, `count_unique()`, `count_if()` keep raw counts while should_upsample is true, returning under-counted timeseries. HOW: parse/normalize the function (strip alias, match function name with args) and rewrite all count-equivalent aggs or explicitly fall back to no-upsampling."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#15",
+    "descricao": "Rewriting count() to `upsampled_count() as count` breaks responses for transformAliasToInputFormat=1: the result column is translated to the rewritten field string while the serializer still reads `count()`.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/api/helpers/error_upsampling.py",
+      "lines": [
+       58,
+       60
+      ],
+      "texto": "Replacing count() with `upsampled_count() as count` breaks requests using transformAliasToInputFormat=1. QueryBuilder.process_results translates the count alias to the replacement field string, but the endpoint serializer still resolves the original axis as `count()`, so it cannot read the weighted count from the returned rows. Preserve the original public field name in the result mapping when rewriting the internal aggregation."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#16",
+    "descricao": "upsampled_count truncates the weighted sum with toInt64 instead of rounding, under-counting the estimate by up to one per bucket.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/search/events/datasets/discover.py",
+      "lines": [
+       1044,
+       1049
+      ],
+      "texto": "`upsampled_count` wraps the sum in `toInt64`, which truncates toward zero: `sum(ifNull(sample_weight, 1))` of e.g. 1.5 or 3.33 yields 1 or 3 instead of the nearest integer, systematically under-counting the upsampled estimate (worst when weights are just below an integer). Use a rounding aggregation (e.g. `toInt64(round(sum(...)))`) so the reconstructed count reflects the intended estimate rather than a floored value."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#18",
+    "descricao": "The 'no project IDs' test case runs with an empty allowlist mock, so it passes via the empty-allowlist branch and does not verify the empty project_ids guard.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/api/helpers/test_error_upsampling.py",
+      "lines": [
+       51,
+       52
+      ],
+      "texto": "The 'no project IDs provided' case does not exercise the `if not project_ids: return False` guard. mock_options.get.return_value was set to [] just above (line 48), so removing the project_ids guard still returns False via the `if not allowlist` branch, and this assertion passes either way. Re-mock options.get to return a non-empty allowlist (e.g. self.project_ids) before calling with project_ids=[], so the empty-project guard is actually falsifiable."
+     }
+    ]
+   }
+  ]
+ },
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "eb9623b4e787303a3bd15e10bbbdb78d59875ac6",
+  "base": "28e3db2520d4ea28c57b08da57b83917ba7b2e15",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/spans/consumers/process/factory.py",
+    "lines": [
+     141,
+     141
+    ],
+    "texto": "WHAT: `val[\"end_timestamp_precise\"]` is read with a hard subscript, so a span missing the field raises KeyError. WHY: the exception propagates out of process_batch, which fails the whole batch and blocks offset commits. The consumer then crash-loops on the poison message. The `cast(SpanEvent, ...)` call does no runtime validation. HOW: use `.get()` with a fallback, or skip and count spans that lack the field."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/scripts/spans/add-buffer.lua",
+    "lines": [
+     47,
+     47
+    ],
+    "texto": "WHAT: zunionstore uses the default AGGREGATE SUM when merging sets. WHY: a payload present in both sets, for example after a redelivered span, gets its score added to itself. That corrupts the end-timestamp ordering, so eviction can keep the wrong spans. HOW: pass `AGGREGATE MAX` (or MIN) to both zunionstore calls."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/spans/buffer.py",
+    "lines": [
+     449,
+     449
+    ],
+    "texto": "The `max_segment_spans` constructor option (default 1001) is still declared and stored, but this PR removed the only code that read it. The span limit is now a hardcoded 1000 in add-buffer.lua. Changing `max_segment_spans` therefore has no effect, and the Python default (1001) disagrees with the Lua constant (1000). Either pass the limit into the Lua script as an ARGV value, or remove the unused option so the two cannot diverge."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/spans/buffer.py",
+    "lines": [
+     194,
+     199
+    ],
+    "texto": "The module docstring and key glossary still describe `span-buf:s:*` as plain sets and say the payload is simply added to the set. After this change the keys are sorted sets scored by `end_timestamp_precise`, and `add-buffer.lua` trims each one to 1000 spans, popping the lowest scores. Update the docstring to say sorted sets, the score, and the 1000-span cap."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/spans/consumers/process/factory.py",
+    "lines": [
+     134,
+     141
+    ],
+    "texto": "`val[\"end_timestamp_precise\"]` is a hard key lookup, and the `cast` to SpanEvent does no runtime validation. A span message without the field raises KeyError in process_batch, and the consumer crashes and replays that poison message. Read it defensively, for example by falling back to the message timestamp or skipping the span."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/scripts/spans/add-buffer.lua",
+    "lines": [
+     46,
+     55
+    ],
+    "texto": "The script and `zscan` now treat `span-buf:s:*` keys as sorted sets. Segment keys already in Redis from before the deploy are plain SETs. `zcard`, `zunionstore` and `zscan` on them raise WRONGTYPE, which aborts the EVALSHA pipeline and the flush until the old keys expire. Use a new key prefix or version for the zset buffer, or drain the old keys before rollout."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#03",
+    "descricao": "ZUNIONSTORE merges sorted sets with the default SUM aggregate, so a span payload present in both keys gets a doubled end-timestamp score and is wrongly kept by the oldest-first eviction.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       46,
+       53
+      ],
+      "texto": "ZUNIONSTORE uses AGGREGATE SUM by default, so when the same span payload is present in both `set_key` and the merged `span_key`/`parent_key` (duplicate delivery is anticipated by this buffer's own comments), its score is added instead of being kept equal to `end_timestamp_precise`. Because eviction at line 63 (`zpopmin` by score) compares scores across all members of `set_key`, a summed score makes the duplicated span appear far newer than its real end timestamp and biases eviction away from legitimately-old spans, breaking the stated 'evict oldest end timestamps' contract. Use ZUNIONSTORE ... AGGREGATE MIN (or MAX) so a duplicate keeps a single end timestamp score rather than doubling it."
+     },
+     {
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       53,
+       53
+      ],
+      "texto": "ZUNIONSTORE uses its default SUM aggregation, so replayed payloads present in both the temporary parent_key and the resolved set_key receive the sum of their end timestamps. Replaying a child whose parent already redirects to an ancestor therefore makes that old span score roughly twice its actual timestamp, protecting it from eviction over genuinely newer spans. Use AGGREGATE MAX (or MIN for identical timestamp scores) on both union operations to preserve timestamp scores when members overlap."
+     },
+     {
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       47,
+       47
+      ],
+      "texto": "ZUNIONSTORE defaults to AGGREGATE SUM, so a payload present in both the destination and source has its timestamp doubled rather than preserved. This can happen when a previously merged span is replayed into its original subtree key. The duplicated span then sorts after genuinely newer spans and survives ZPOPMIN eviction incorrectly. Specify AGGREGATE MAX (or MIN, since identical payloads should have identical timestamps) on both union calls so merging remains idempotent and scores remain end timestamps."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#04",
+    "descricao": "Segment keys change from Redis sets to sorted sets under the same key names, so keys left by the previous release make ZADD, ZCARD and ZSCAN fail with WRONGTYPE during rollout, crashing span processing and flushing.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       46,
+       54
+      ],
+      "texto": "WHAT: Changed SET ops (scard/sunionstore) to ZSET ops (zcard/zunionstore/zpopmin) with no migration breaks in-flight segments. WHY: Old keys of type SET still live up to TTL; ZCARD/ZUNIONSTORE/ZSCAN/ZADD on the opposite type raises WRONGTYPE and fails inserts/flushes during rollout."
+     },
+     {
+      "file": "src/sentry/spans/buffer.py",
+      "lines": [
+       197,
+       199
+      ],
+      "texto": "The segment keys were migrated from Redis SETs to SORTED SETs (ZADD/ZSCAN/ZCARD/ZUNIONSTORE/ZPOPMIN), but nothing handles the keys written by the currently deployed release. During a rolling deploy, an existing `span-buf:s:{...}:{id}` key is still a SET, so this `p.zadd(...)` (and the flusher's `p.zscan(...)`, and the Lua `zcard`/`zunionstore`) raises WRONGTYPE 'Operation against a key holding the wrong kind of value'. That exception is unhandled: it aborts the whole pipeline/Lua invocation and crashes the consumer batch. Add a key-schema version to the key name (or a migration/fallback) so old SET-typed keys cannot be touched as sorted sets."
+     },
+     {
+      "file": "src/sentry/spans/buffer.py",
+      "lines": [
+       197,
+       199
+      ],
+      "texto": "The new ZADD writes sorted sets into the same span-buf:s namespace previously populated by SADD, without migrating existing set keys. During deployment, inserting into an existing buffered segment fails with WRONGTYPE, and the new ZSCAN reader likewise fails on pending old-format segments instead of flushing them. Introduce a coordinated migration/drain or a versioned namespace with compatible handling of pending old-format buffers."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#05",
+    "descricao": "Claims zpopmin eviction can drop the root span while the has-root flag stays set, flushing a segment without its root.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       62,
+       64
+      ],
+      "texto": "WHAT: zpopmin eviction by lowest end_timestamp has no protection for the segment/root span. WHY: Root with smallest or tied timestamp (tests use identical timestamps, ties break lexicographically) is evicted while hrs flag stays 1, flushing a root-marked segment missing its root."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+    "descricao": "max_segment_spans is still a constructor parameter but is no longer enforced; the segment cap is now hardcoded to 1000 in the Lua script, so the configured value is ignored.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/buffer.py",
+      "lines": [
+       439,
+       449
+      ],
+      "texto": "This hunk removes the only load-time span-count cap (`self.max_segment_spans`): previously a segment exceeding 1001 spans was logged, deleted from `payloads`/`cursors`, and skipped, but now every scanned span is unconditionally appended via `payloads[key].extend(...)`. The new bound relies entirely on insert-time eviction in the Lua script; if that eviction fails to bound a key (e.g. duplicated/scored members or the concurrent-writer case the code itself warns about at lines 457-461), this method will now materialize an unbounded number of spans into memory and emit them, whereas before it was safely skipped. Re-introduce a span-count guard (or verify the invite-time eviction strictly caps cardinality) to keep memory bounded."
+     },
+     {
+      "file": "src/sentry/spans/buffer.py",
+      "lines": [
+       446,
+       449
+      ],
+      "texto": "buffer.py declares the segment span limit as the configurable `max_segment_spans` (default 1001, line 150) and this hunk removed the `len(payloads[key]) > self.max_segment_spans` size guard from the flush path, while the other changed file (add-buffer.lua line 62) now enforces a hardcoded cap of 1000 spans. The two changed files disagree on what the segment span limit is: the Lua cap (1000) is not the declared `max_segment_spans`, and the buffer no longer applies the declared limit at all. If `max_segment_spans` is configured below 1000 (or below the Lua cap), oversized segments that this code used to skip will now be flushed. Reconcile the constant: either keep/restore the buffer-side guard against `self.max_segment_spans`, or make the Lua cap derive from the same limit instead of hardcoding 1000."
+     },
+     {
+      "file": "src/sentry/scripts/spans/add-buffer.lua",
+      "lines": [
+       62,
+       63
+      ],
+      "texto": "The segment size cap is hardcoded as 1000 here, but SpansBuffer still declares max_segment_spans = 1001 in src/sentry/spans/buffer.py, and this PR deleted the flush-time guard that used that constant. The declared limit and the actually-enforced limit now disagree (and the Python constant is no longer honored anywhere). Make the Lua cap and the Python constant agree \u2014 either pass max_segment_spans in as an ARGV instead of the literal 1000, or update the declared constant to 1000 \u2014 so the buffer's enforced bound matches the value it declares."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#08",
+    "descricao": "Tests give every span the same end timestamp and never exceed 1000 spans, so the new score ordering and oldest-first eviction are not tested.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/spans/test_buffer.py",
+      "lines": [
+       120,
+       152
+      ],
+      "texto": "All spans in the fixture use identical end_timestamp_precise=1700000000.0, so the ZSET score-dependent behavior (ordering by end time, zunionstore score merge, and Lua zpopmin keeping newest 1000) is neutralised \u2014 tests pass even if scores are wrong or eviction keeps the wrong end. Use distinct timestamps and add a >1000-span trimming test asserting oldest evicted."
+     },
+     {
+      "file": "tests/sentry/spans/test_buffer.py",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The missing test for the new trim path (zset ordering/trim by end_timestamp_precise, the >1000-span zpopmin path) is a coverage gap. Add a test that verifies the new trim behavior."
+     }
+    ]
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01",
+    "descricao": "The span redirect-walk limit was cut from 10000 to 1000 iterations, so trees deeper than 1000 may not resolve to the correct segment root.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "303cdc2caf256aa5df660611120c2e3f7392365d",
+  "base": "58ba11ecbd60863e2bfc6e32f0399ed4feb3927a",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/plugins/log/fake.go",
+    "lines": [
+     46,
+     48
+    ],
+    "texto": "WHAT: TestLogger.FromContext returns a brand-new TestLogger instead of the receiver. WHY: LoggerMiddleware now calls `m.logger.FromContext(ctx).Info(...)`, so logs written through it never reach the original TestLogger and tests asserting on InfoLogs would silently see nothing. HOW: return the receiver `f`, since the fake has no context-derived state."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+    "lines": [
+     21,
+     21
+    ],
+    "texto": "The middleware was renamed from InstrumentationMiddleware to MetricsMiddleware, but the test is still named TestInstrumentationMiddleware. It now tests MetricsMiddleware only, so the name misleads readers and gets confused with the new ContextualLoggerMiddleware. Rename it to TestMetricsMiddleware."
+   },
+   {
+    "id": "S3",
+    "file": "pkg/services/pluginsintegration/clientmiddleware/contextual_logger_middleware.go",
+    "lines": [
+     27,
+     37
+    ],
+    "texto": "The old LoggerMiddleware attached traceID to the 'Plugin Request Completed' log, and the new contextual-logger middleware that replaced that enrichment does not re-add it. logRequest now uses only FromContext(ctx), and ConcreteLogger.FromContext does not add traceID, so the log line loses trace correlation. Add traceID from tracing.TraceIDFromContext(ctx, false) to the attributes in instrumentContext."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#03",
+    "descricao": "TestLogger.FromContext returns a fresh TestLogger instead of the receiver, so logs written via the contextual logger are lost to assertions on the original fake.",
+    "textoGolden": "The `TestLogger.FromContext` method returns a new `TestLogger` instance via `NewTestLogger()` instead of returning the receiver (f). This causes logs to be recorded on an un-referenced instance, leading to broken test assertions that expect logs to be recorded on the original logger.",
+    "comentarios": [
+     {
+      "file": "pkg/plugins/log/fake.go",
+      "lines": [
+       46,
+       48
+      ],
+      "texto": "WHAT: TestLogger.FromContext returns a fresh NewTestLogger instead of the receiver. WHY: LoggerMiddleware calls m.logger.FromContext(ctx).Info so the write goes to a throwaway instance and assertions on the original TestLogger Calls/Message never observe it, diverging from real wrapper that preserves logger context. HOW: Return f (or a child sharing f) instead of NewTestLogger."
+     }
+    ]
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#06",
+    "descricao": "The test function is still named TestInstrumentationMiddleware after the middleware was renamed to MetricsMiddleware.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+      "lines": [
+       21,
+       21
+      ],
+      "texto": "TestInstrumentationMiddleware still carries the old name even though this PR renamed the middleware under test to MetricsMiddleware (newMetricsMiddleware/NewMetricsMiddleware) and the file to metrics_middleware_test.go. The identifier advertises the superseded \"InstrumentationMiddleware\" name; rename it (e.g. TestMetricsMiddleware) so the test name matches the code it exercises."
+     },
+     {
+      "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+      "lines": [
+       21,
+       21
+      ],
+      "texto": "Test function still named TestInstrumentationMiddleware but it constructs and asserts MetricsMiddleware (newMetricsMiddleware). Rename to TestMetricsMiddleware to match the renamed middleware."
+     }
+    ]
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#sncc-02",
+    "descricao": "The FromContext doc comment is copied from New() and misdescribes the method, which attaches attributes stored in the context.Context.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "frontend-asset-optimization-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "b1613e320acff00623e6efc59f00ee68c7684a97",
+  "base": "3ce1a5b0caab215346a51629b0344b90d67e9478",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/api/webassets/webassets.go",
+    "lines": [
+     48,
+     49
+    ],
+    "texto": "WHAT: After taking the write lock, the cache is not checked again. WHY: Concurrent callers that all saw a nil cache each re-read and re-parse the manifest one after another, so a cold start causes a thundering herd of redundant file I/O under an exclusive lock. HOW: Re-check `entryPointAssetsCache != nil && cfg.Env != setting.Dev` right after `Lock()` and return the cached value if it is set."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "frontend-asset-optimization-grafana-codex#01",
+    "descricao": "GetWebAssets does not re-check the cache after acquiring the write lock, so concurrent callers that missed the cache each reload the assets manifest.",
+    "textoGolden": "The GetWebAssets function implements an incomplete double-checked locking pattern for caching web assets. The function first checks if the cache is populated using a read lock (RLock), and if the cache is empty, it acquires a write lock to populate it. However, it fails to re-check whether the cache was populated by another goroutine while waiting to acquire the write lock.",
+    "comentarios": [
+     {
+      "file": "pkg/api/webassets/webassets.go",
+      "lines": [
+       48,
+       69
+      ],
+      "texto": "WHAT: The exclusive lock acquired at line 48 is held (via defer on line 49) across the blocking file read / synchronous CDN HTTP request (lines 56-67) and there is no re-check of entryPointAssetsCache after acquiring the lock. WHY: On a cold cache, all concurrent callers (api/index.go:82, api/frontendsettings.go:62, middleware/recovery.go:141) block on the write lock and then each sequentially re-executes the full load (file I/O or blocking http.DefaultClient.Do), producing a thundering-herd serialization and N redundant loads instead of one; in Dev mode this happens on every request since the fast path is skipped, serializing all concurrent page loads. HOW: after `entryPointAssetsCacheMu.Lock()` re-check the cache (`if cfg.Env != setting.Dev && entryPointAssetsCache != nil { return entryPointAssetsCache, nil }`) so only the first goroutine performs the load, and drop the defer in favor of releasing the lock immediately after assigning `entryPointAssetsCache = result` to avoid holding it during I/O."
+     },
+     {
+      "file": "pkg/api/webassets/webassets.go",
+      "lines": [
+       41,
+       48
+      ],
+      "texto": "cache is not re-checked under the lock after re-acquiring write Lock, so concurrent callers can each recompute web assets"
+     },
+     {
+      "file": "pkg/api/webassets/webassets.go",
+      "lines": [
+       48,
+       49
+      ],
+      "texto": "The cache is not rechecked after acquiring the write lock, so concurrent production requests that initially observe a nil cache each reload and decode the manifest even after another request has populated it. During a cold-start request burst, these redundant filesystem reads and JSON decodes execute serially under the global lock, delaying queued page and frontend-settings requests and blocking cache readers while each reload runs. After acquiring the write lock, return the populated cache when cfg.Env != setting.Dev before performing asset loading."
+     }
+    ]
+   },
+   {
+    "issueId": "frontend-asset-optimization-grafana-codex#sncc-02",
+    "descricao": "GetWebAssets holds a global exclusive mutex through the whole manifest load, so in Dev mode, where the cache is bypassed, every request serializes behind it.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ }
+}

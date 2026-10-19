@@ -1,0 +1,35 @@
+{
+ "caseId": "async-import-of-the-appstore-packages-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Describes unawaited async forEach callbacks in calendar cancellation, allowing rescheduling to continue early and rejections to escape the surrounding try/catch. It also explicitly includes the affected vital and wipemycalother loops."
+  },
+  {
+   "id": "S2",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Describes the same unawaited async credential loop in handleCancelBooking, causing recurring-event cleanup to run detached and errors to go unhandled."
+  },
+  {
+   "id": "S3",
+   "match": "async-import-of-the-appstore-packages-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "Describes the same eager execution of import(...) expressions in the appStore object, which loads all integrations when index.ts is evaluated instead of lazily."
+  },
+  {
+   "id": "S4",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Describes the same fire-and-forget calendar cancellation loop: forEach discards callback promises, preventing cleanup from being awaited and failures from reaching the surrounding catch."
+  },
+  {
+   "id": "S5",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Describes the same unawaited async forEach calendar deletion callbacks, which let rescheduling proceed before cleanup finishes and produce unhandled rejections."
+  }
+ ]
+}

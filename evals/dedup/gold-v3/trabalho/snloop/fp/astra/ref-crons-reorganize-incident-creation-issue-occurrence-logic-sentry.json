@@ -1,0 +1,17 @@
+{
+ "caseId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry",
+ "items": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reports misleading prose referring to commits instead of check-ins. None of the rejected issues concerns this wording."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Reports unused logger objects. This differs from the rejected claims about indexing, SimpleCheckIn imports, and redundant queries."
+  }
+ ]
+}

@@ -1,0 +1,65 @@
+{
+ "caseId": "feat-2fa-backup-codes-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-2fa-backup-codes-cal-com#02",
+   "newGroup": null,
+   "reason": "Dismissal through Escape or an outside click skips onEnable and resetState, leaving the parent showing 2FA as disabled."
+  },
+  {
+   "id": "S2",
+   "match": "feat-2fa-backup-codes-cal-com#01",
+   "newGroup": null,
+   "reason": "A valid backup code plus a dummy totpCode bypasses password verification and authenticates."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This reports an un-awaited isChecked() assertion and missing dialog completion in the enable-flow test. No golden issue describes this test defect."
+  },
+  {
+   "id": "S4",
+   "match": "feat-2fa-backup-codes-cal-com#13",
+   "newGroup": null,
+   "reason": "The comment includes the download test's filename-only assertion, which fails to verify exported backup-code contents. It also covers the clipboard-test defect described by #05."
+  },
+  {
+   "id": "S5",
+   "match": "feat-2fa-backup-codes-cal-com#07",
+   "newGroup": null,
+   "reason": "Non-atomic backup-code consumption permits concurrent reuse and overwrites other requests' removals."
+  },
+  {
+   "id": "S6",
+   "match": "feat-2fa-backup-codes-cal-com#15",
+   "newGroup": null,
+   "reason": "resetState leaves plaintext backup codes in memory and does not revoke their blob URL."
+  },
+  {
+   "id": "S7",
+   "match": "feat-2fa-backup-codes-cal-com#14",
+   "newGroup": null,
+   "reason": "The disable endpoint incorrectly describes its operation as backup-code login in its error log."
+  },
+  {
+   "id": "S8",
+   "match": "feat-2fa-backup-codes-cal-com#04",
+   "newGroup": null,
+   "reason": "BackupCode.tsx incorrectly names its exported component TwoFactor."
+  },
+  {
+   "id": "S9",
+   "match": "feat-2fa-backup-codes-cal-com#01",
+   "newGroup": null,
+   "reason": "An unvalidated totpCode skips password verification while a valid backup code completes authentication."
+  },
+  {
+   "id": "S10",
+   "match": "feat-2fa-backup-codes-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "Array.indexOf compares secret backup codes without constant-time guarantees, exposing timing information."
+  }
+ ]
+}

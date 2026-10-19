@@ -1,0 +1,11 @@
+{
+ "caseId": "async-import-of-the-appstore-packages-cal-com",
+ "items": [
+  {
+   "id": "S8",
+   "match": "async-import-of-the-appstore-packages-cal-com#03",
+   "newGroup": null,
+   "reason": "It repeats the claim that getCalendarCredentials exposes an un-awaited Promise to consumers accessing .calendar directly. The rejected issue covers this same claim; all consumers go through getConnectedCalendars, which awaits it."
+  }
+ ]
+}

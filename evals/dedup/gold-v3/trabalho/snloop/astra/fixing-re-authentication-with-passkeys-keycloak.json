@@ -1,0 +1,11 @@
+{
+ "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "S1 describes account and credential enumeration caused by per-user passkey rendering after a failed password attempt. None of the golden issues describes this behavior; fixing it would not fix the template omission, inaccurate comments, or missing test coverage."
+  }
+ ]
+}

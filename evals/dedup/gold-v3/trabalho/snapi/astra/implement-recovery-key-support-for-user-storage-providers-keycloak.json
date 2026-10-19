@@ -1,0 +1,11 @@
+{
+ "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#05",
+   "newGroup": null,
+   "reason": "Both describe successful recovery-code creation in external storage leaving the previous local recovery-codes credential intact. Removing the local credential in the userStorageCreated branch fixes the shared problem, despite the different consequences described."
+  }
+ ]
+}

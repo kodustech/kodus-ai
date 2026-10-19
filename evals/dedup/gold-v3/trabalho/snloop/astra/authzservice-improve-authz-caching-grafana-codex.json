@@ -1,0 +1,47 @@
+{
+ "caseId": "authzservice-improve-authz-caching-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This describes stale denials after resource creation or permission grants because denial entries remain valid until TTL expiry. None of the golden issues describes this invalidation problem."
+  },
+  {
+   "id": "S2",
+   "match": "authzservice-improve-authz-caching-grafana-codex#04",
+   "newGroup": null,
+   "reason": "The test seeds a false permission instead of true, so it cannot verify the denial-cache short-circuit."
+  },
+  {
+   "id": "S3",
+   "match": "authzservice-improve-authz-caching-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Underscore-separated name and parent fields can collide, causing a cached denial to affect another resource."
+  },
+  {
+   "id": "S4",
+   "match": "authzservice-improve-authz-caching-grafana-codex#01",
+   "newGroup": null,
+   "reason": "This describes the same ambiguous denial-cache key encoding and resulting cross-resource denial collisions."
+  },
+  {
+   "id": "S5",
+   "match": "authzservice-improve-authz-caching-grafana-codex#04",
+   "newGroup": null,
+   "reason": "The false permission fixture lets the test pass even without the denial-cache short-circuit."
+  },
+  {
+   "id": "S6",
+   "match": "authzservice-improve-authz-caching-grafana-codex#01",
+   "newGroup": null,
+   "reason": "This describes collisions between name/parent tuples caused by underscore concatenation in the denial-cache key."
+  },
+  {
+   "id": "S7",
+   "match": "authzservice-improve-authz-caching-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Despite broader wording, this identifies the same ambiguous underscore-based denial-cache key construction; unambiguous field encoding fixes the golden issue as well."
+  }
+ ]
+}

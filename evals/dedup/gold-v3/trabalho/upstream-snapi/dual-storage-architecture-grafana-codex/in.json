@@ -1,0 +1,24 @@
+{
+ "caseId": "dual-storage-architecture-grafana-codex",
+ "prTitle": "Dual Storage Architecture",
+ "upstream": "grafana/grafana",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/grafana",
+ "base": "66c4dff17e9147b11fb9b14c6ed63089a599da65",
+ "head": "e369f24665ec70e1e3700f457d25ef83301d931a",
+ "prOriginalConhecido": {
+  "numero": 90045,
+  "url": "https://github.com/grafana/grafana/pull/90045",
+  "mergedAt": "2024-07-24",
+  "nota": "Found via gh pr list by author leonorfmartins (\"Dual writer: mode 3\", branch dualwriter_mode3). Its headRefOid is e369f24665ec, the benchmark head; squash-merged as 67b74e1e8a. The mode3 file was deleted on 2025-03-01 (#101393) and folded into pkg/storage/legacysql/dualwrite/dualwriter.go."
+ },
+ "tps": [
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#snapi-01",
+   "severity": "medium",
+   "category": "style",
+   "bug": "Mode 3 legacy-storage write errors (create/update/delete/delete-collection) are no longer logged after moving to async goroutines; only a duration metric with an error flag is recorded.",
+   "evidenciaOpus": "In dualwriter_mode3.go the legacy writes moved into goroutines that only call recordLegacyDuration(err != nil, ...) (Create, Update, Delete, DeleteCollection); the previous log.Error calls for legacy failures were removed. Failures are still counted in metrics, so the effect is loss of error detail in logs, not a behaviour change.",
+   "evidenciaAstra": "The PR removes legacy-error logging; the replacement goroutines only pass error booleans to metrics in pkg/apiserver/rest/dualwriter_mode3.go:55-56,112-113,139-140,165-166. Those helpers only observe histograms (pkg/apiserver/rest/metrics.go:54-61), so failure counts remain observable but the actual error details are lost, impairing diagnosis."
+  }
+ ]
+}

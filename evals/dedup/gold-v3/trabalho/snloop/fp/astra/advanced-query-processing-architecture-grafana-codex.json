@@ -1,0 +1,11 @@
+{
+ "caseId": "advanced-query-processing-architecture-grafana-codex",
+ "items": [
+  {
+   "id": "S4",
+   "match": "advanced-query-processing-architecture-grafana-codex#06",
+   "newGroup": null,
+   "reason": "It makes the same claim that hardcoding the applyTemplateVariables call count makes the interpolation test brittle to unrelated changes in splitting or call structure."
+  }
+ ]
+}

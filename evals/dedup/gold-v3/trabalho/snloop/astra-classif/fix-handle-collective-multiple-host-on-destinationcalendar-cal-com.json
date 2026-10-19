@@ -1,0 +1,12 @@
+{
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "items": [
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#snloop-01",
+   "class": "TP",
+   "subclass": "nit",
+   "reason": "packages/core/EventManager.ts:592-595 constructs and updates `message`, but the catch block returns at lines 597-608 without consuming the resulting string. The PR removes the previous `console.error(message)`, leaving dead computation with no user-visible effect.",
+   "severity": "low"
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+{
+ "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "No rejected claims were provided. This comment alleges missing null checks in the three getSubGroupsStream overloads when concurrent deletion makes modelSupplier.get() return null."
+  }
+ ]
+}

@@ -1,0 +1,71 @@
+{
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "Identifies strategy shutdown destroying the factory-owned pool reused after rebalance. The different claimed commit consequence does not change the shared lifecycle bug."
+  },
+  {
+   "id": "S2",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#01",
+   "newGroup": null,
+   "reason": "Identifies the commit scan requiring every integer offset and treating legitimate Kafka offset gaps as blockers."
+  },
+  {
+   "id": "S3",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "newGroup": null,
+   "reason": "Identifies unbounded worker queues and missing backpressure, allowing unlimited memory growth when processing falls behind."
+  },
+  {
+   "id": "S4",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "Identifies the shared factory-owned pool being shut down by a strategy and then reused after rebalance."
+  },
+  {
+   "id": "S5",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03",
+   "newGroup": null,
+   "reason": "Identifies failed offsets being completed in finally despite the successful-processing guarantee. Suggesting a documentation change instead does not change the underlying problem."
+  },
+  {
+   "id": "S6",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "newGroup": null,
+   "reason": "Identifies the backpressure guarantee contradicted by unbounded queues and unconditional submission."
+  },
+  {
+   "id": "S7",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#04",
+   "newGroup": null,
+   "reason": "Identifies the error-handling test asserting no commit despite claiming errors should not block commits, and requests a positive commit assertion. Its timing observation also explains why that contradictory assertion passes."
+  },
+  {
+   "id": "S8",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03",
+   "newGroup": null,
+   "reason": "Identifies unconditional completion in finally making failed messages committable, contrary to the documented success-only guarantee."
+  },
+  {
+   "id": "S9",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "Identifies strategy lifecycle methods shutting down the shared pool that subsequent strategies reuse after rebalance."
+  },
+  {
+   "id": "S10",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "Identifies reuse of the shut-down factory-owned pool after rebalance, with enqueue failures swallowed and unprocessed offsets marked complete."
+  },
+  {
+   "id": "S11",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "Identifies the scan start jumping over a missing offset after committed offsets are pruned, allowing a later commit cycle to cross the gap."
+  }
+ ]
+}

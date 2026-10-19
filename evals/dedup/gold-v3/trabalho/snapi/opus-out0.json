@@ -1,0 +1,514 @@
+{
+ "dual-storage-architecture-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "dual-storage-architecture-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Async legacy goroutine context derived from request ctx gets cancelled; same as #05."
+  },
+  {
+   "id": "S2",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Legacy DeleteCollection recorded with recordStorageDuration."
+  },
+  {
+   "id": "S3",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage Create/Update failure recorded via recordLegacyDuration."
+  },
+  {
+   "id": "S4",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Delete success path passes name as kind label."
+  },
+  {
+   "id": "S5",
+   "match": "dual-storage-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Delete puts d.Log instead of enriched log into context."
+  },
+  {
+   "id": "S6",
+   "match": "dual-storage-architecture-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Request-derived context cancels async legacy writes."
+  },
+  {
+   "id": "S7",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Legacy DeleteCollection recorded with recordStorageDuration."
+  },
+  {
+   "id": "S8",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Failed Storage.Create recorded with recordLegacyDuration."
+  },
+  {
+   "id": "S9",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Failed Storage.Update recorded with recordLegacyDuration."
+  },
+  {
+   "id": "S10",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Delete success path uses name as kind label."
+  },
+  {
+   "id": "S11",
+   "match": "dual-storage-architecture-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Request-derived context cancels async legacy writes."
+  },
+  {
+   "id": "S12",
+   "match": "dual-storage-architecture-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Legacy.Update gets raw objInfo instead of updateWrapper with storage result."
+  },
+  {
+   "id": "S13",
+   "match": "dual-storage-architecture-grafana-codex#sncc-01",
+   "newGroup": null,
+   "reason": "Delete returns on any storage error incl. NotFound, legacy-only objects undeletable."
+  },
+  {
+   "id": "S14",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Failed Storage.Create recorded with recordLegacyDuration."
+  },
+  {
+   "id": "S15",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Failed Storage.Update recorded with recordLegacyDuration."
+  },
+  {
+   "id": "S16",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Legacy DeleteCollection recorded with recordStorageDuration."
+  },
+  {
+   "id": "S17",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Delete success path uses name as kind label."
+  },
+  {
+   "id": "S18",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Legacy errors in the async goroutines are only metered, never logged; no golden issue covers missing error logging."
+  },
+  {
+   "id": "S19",
+   "match": "dual-storage-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Delete puts d.Log instead of enriched log into context."
+  },
+  {
+   "id": "S20",
+   "match": "dual-storage-architecture-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Tests never wait for/assert async legacy writes; shared mock."
+  }
+ ],
+ "implement-access-token-context-encoding-framework-keycloak": [
+  {
+   "id": "S1",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "isAccessTokenId reads grant shortcut at wrong offset and/or inverted comparison."
+  },
+  {
+   "id": "S2",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Constructor checks grantType twice; rawTokenId never validated."
+  },
+  {
+   "id": "S3",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "isAccessTokenId reads grant shortcut at wrong offset and/or inverted comparison."
+  },
+  {
+   "id": "S4",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "isAccessTokenId reads grant shortcut at wrong offset and/or inverted comparison."
+  },
+  {
+   "id": "S5",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Constructor checks grantType twice; rawTokenId never validated."
+  },
+  {
+   "id": "S6",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "isAccessTokenId reads grant shortcut at wrong offset and/or inverted comparison."
+  },
+  {
+   "id": "S7",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "isAccessTokenId reads grant shortcut at wrong offset and/or inverted comparison."
+  },
+  {
+   "id": "S8",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "isAccessTokenId reads grant shortcut at wrong offset and/or inverted comparison."
+  },
+  {
+   "id": "S9",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Constructor checks grantType twice; rawTokenId never validated."
+  },
+  {
+   "id": "S10",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "isAccessTokenId reads grant shortcut at wrong offset and/or inverted comparison."
+  },
+  {
+   "id": "S11",
+   "match": "implement-access-token-context-encoding-framework-keycloak#04",
+   "newGroup": null,
+   "reason": "Test catches RuntimeException, passes on NPE from null sessionFactory."
+  },
+  {
+   "id": "S12",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "isAccessTokenId reads grant shortcut at wrong offset and/or inverted comparison."
+  },
+  {
+   "id": "S13",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "isAccessTokenId reads grant shortcut at wrong offset and/or inverted comparison."
+  }
+ ],
+ "add-html-sanitizer-for-translated-message-resources-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Lithuanian TOTP step replaced with Italian text."
+  },
+  {
+   "id": "S2",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#opa-01",
+   "newGroup": null,
+   "reason": "Missing English counterpart makes verifySafeHtml throw unchecked RuntimeException."
+  },
+  {
+   "id": "S3",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Lithuanian login TOTP step in Italian."
+  },
+  {
+   "id": "S4",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Lithuanian account TOTP step in Italian."
+  },
+  {
+   "id": "S5",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+   "newGroup": null,
+   "reason": "zh_CN totpStep1 in Traditional Chinese."
+  },
+  {
+   "id": "S6",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Lithuanian TOTP step in Italian."
+  },
+  {
+   "id": "S7",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+   "newGroup": null,
+   "reason": "zh_CN totpStep1 in Traditional Chinese."
+  },
+  {
+   "id": "S8",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+   "newGroup": null,
+   "reason": "Prefix/suffix overlap makes substring throw StringIndexOutOfBoundsException."
+  },
+  {
+   "id": "S9",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+   "newGroup": null,
+   "reason": "Prefix/suffix overlap makes substring throw StringIndexOutOfBoundsException."
+  }
+ ],
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": [
+  {
+   "id": "S1",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "end computed from slotStartTime instead of slotEndTime."
+  },
+  {
+   "id": "S2",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "newGroup": null,
+   "reason": "dayjs objects compared with === (always false); also mentions offset sign, but includes #02."
+  },
+  {
+   "id": "S3",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "end computed from slotStartTime."
+  },
+  {
+   "id": "S4",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "end computed from slotStartTime."
+  },
+  {
+   "id": "S5",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "end computed from slotStartTime."
+  },
+  {
+   "id": "S6",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "newGroup": null,
+   "reason": "dayjs objects compared with ===; zero-length override never detected."
+  },
+  {
+   "id": "S7",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#04",
+   "newGroup": null,
+   "reason": "Working-hours find rejects slot outside any interval; split schedules rejected."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Optional override.timeZone passed undefined to dayjs.tz; no golden issue about missing timezone field."
+  }
+ ],
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "newGroup": null,
+   "reason": "canManage accepts VIEW scope."
+  },
+  {
+   "id": "S2",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "newGroup": null,
+   "reason": "Uses resource id instead of name (group id) in getGroupIdsWithViewPermission."
+  },
+  {
+   "id": "S3",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "newGroup": null,
+   "reason": "canManage accepts VIEW scope."
+  },
+  {
+   "id": "S4",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "newGroup": null,
+   "reason": "Uses resource UUID instead of group id."
+  },
+  {
+   "id": "S5",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+   "newGroup": null,
+   "reason": "requireManageMembers Javadoc points to canManageMembership."
+  },
+  {
+   "id": "S6",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#07",
+   "newGroup": null,
+   "reason": "Javadoc says Stream but returns Set."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Removed per-user canView filter in user search; different from #04 (legacy resource requirement in JPA filter)."
+  }
+ ],
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
+  {
+   "id": "S1",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "queued default timezone.now() evaluated at import."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Raw datetime in to_dict passed as Celery kwargs may fail JSON serialization; not in golden set."
+  },
+  {
+   "id": "S3",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "queued default evaluated at import."
+  },
+  {
+   "id": "S4",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "queued default evaluated at import."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "test_to_dict only asserts queued is not None; weak assertion not in golden set."
+  },
+  {
+   "id": "S6",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#03",
+   "newGroup": null,
+   "reason": "test_from_dict_empty_array passes empty dict."
+  }
+ ],
+ "sms-workflow-reminder-retry-count-tracking-cal-com": [
+  {
+   "id": "S1",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "retryCount>1 delete clause lacks SMS method filter."
+  },
+  {
+   "id": "S2",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
+   "newGroup": null,
+   "reason": "Unguarded retryCount update in catch block can abort the loop."
+  },
+  {
+   "id": "S3",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#03",
+   "newGroup": null,
+   "reason": "Cleanup comment omits retryCount>1 deletion branch."
+  },
+  {
+   "id": "S4",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "retryCount>1 delete clause lacks SMS method filter."
+  },
+  {
+   "id": "S5",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "retryCount>1 delete clause lacks SMS method filter."
+  }
+ ],
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Case-sensitive blocked email lookup bypass."
+  },
+  {
+   "id": "S2",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Non-atomic match_count increment loses updates under concurrency (part of #05)."
+  },
+  {
+   "id": "S3",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Case-sensitive blocked email lookup bypass."
+  },
+  {
+   "id": "S4",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Non-atomic match_count read-modify-write in should_block? (part of #05)."
+  },
+  {
+   "id": "S5",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Case-sensitive blocked email lookup bypass."
+  }
+ ],
+ "unified-storage-performance-optimizations-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "unified-storage-performance-optimizations-grafana-codex#01",
+   "newGroup": null,
+   "reason": "BuildIndex locks only final cache write; concurrent duplicate builds."
+  },
+  {
+   "id": "S2",
+   "match": "unified-storage-performance-optimizations-grafana-codex#01",
+   "newGroup": null,
+   "reason": "BuildIndex locks only final cache write; concurrent duplicate builds."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Eager Init in NewResourceServer with callers still calling Init separately; #03 is about uncancelled context, different problem."
+  }
+ ],
+ "frontend-asset-optimization-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "frontend-asset-optimization-grafana-codex#01",
+   "newGroup": null,
+   "reason": "No re-check of cache after acquiring write lock."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Cache overwritten with nil on load error; not in golden set."
+  }
+ ],
+ "feature-localization-fallbacks-server-side-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Fallback locales loaded only in controller; translate outside requests lacks fallbacks."
+  }
+ ],
+ "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": [
+  {
+   "id": "S1",
+   "match": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02",
+   "newGroup": null,
+   "reason": "Returns monitor.config instead of transformed config copy."
+  }
+ ],
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "upsampled_count possibly not registered for errors dataset; no golden issue covers this."
+  }
+ ]
+}

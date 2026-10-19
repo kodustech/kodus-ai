@@ -1,0 +1,11 @@
+{
+ "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "S1 identifies a test coverage gap: disabling realm passkeys prevents the test from exercising the per-user credential check. Issue #06 concerns only the stale test comment; correcting that comment would not fix this coverage gap."
+  }
+ ]
+}

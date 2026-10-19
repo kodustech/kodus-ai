@@ -1,0 +1,65 @@
+{
+ "caseId": "database-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Reports routine cleanup batches logging full ID lists at Error level, flooding error logs."
+  },
+  {
+   "id": "S2",
+   "match": "database-performance-optimizations-grafana-codex#08",
+   "newGroup": null,
+   "reason": "Reports the ticker change from 10 minutes to 1 minute and the resulting increased cleanup load."
+  },
+  {
+   "id": "S3",
+   "match": "database-performance-optimizations-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Reports uncapped per-ID placeholders exceeding MySQL and Postgres bind-parameter limits for large cleanup batches."
+  },
+  {
+   "id": "S4",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Reports the same Error-level cleanup logs with full ID lists; additional concerns about logged query text do not change the shared problem."
+  },
+  {
+   "id": "S5",
+   "match": "database-performance-optimizations-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "Reports that per-case fresh data means the repeated max-count cleanup test no longer executes a second cleanup or verifies idempotence."
+  },
+  {
+   "id": "S6",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Reports the same routine cleanup progress messages incorrectly logged at Error level."
+  },
+  {
+   "id": "S7",
+   "match": "database-performance-optimizations-grafana-codex#08",
+   "newGroup": null,
+   "reason": "Flags the same 1-minute ticker change and requests restoring the original 10-minute interval, citing the existing timeout as supporting context."
+  },
+  {
+   "id": "S8",
+   "match": "database-performance-optimizations-grafana-codex#08",
+   "newGroup": null,
+   "reason": "Reports the same increased cleanup frequency and requests reverting the same ticker change. The additional overlap claim does not change the shared problem."
+  },
+  {
+   "id": "S9",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Reports successful cleanup batches flooding error logs with full ID lists through the same debug logging calls."
+  },
+  {
+   "id": "S10",
+   "match": "database-performance-optimizations-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Reports the same uncapped placeholder count exceeding MySQL and Postgres bind-parameter limits; the confidence qualifier does not change the problem."
+  }
+ ]
+}

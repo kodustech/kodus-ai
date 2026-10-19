@@ -1,0 +1,17 @@
+{
+ "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+   "newGroup": null,
+   "reason": "Same claim: with V1 and V2 enabled, client-removal cleanup calls ClientPermissionsV2.setPermissionsEnabled, which throws UnsupportedOperationException and aborts deletion."
+  },
+  {
+   "id": "S5",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-03",
+   "newGroup": null,
+   "reason": "Same test-masking claim: granting CONFIGURE alongside MAP_ROLES_COMPOSITE lets the composite operation succeed even if canMapCompositeRoles checks the wrong scope. The additional discussion of MAP_ROLES extends the same criticism of the test."
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+{
+ "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
+ "items": [
+  {
+   "id": "S11",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This flags inaccurate explanatory comments about negative slicing and permission checks. It does not assert the rejected raw-offset trimming defect or any of the rejected missing-attribute or missing-class claims."
+  }
+ ]
+}

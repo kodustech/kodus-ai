@@ -1,0 +1,17 @@
+{
+ "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This concerns missing assertions that request-size metrics remain absent. Fixing those assertions would not fix the outdated test function name or either logging issue."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "This concerns potential loss of traceID in production request logs after removing its explicit addition. It is distinct from TestLogger discarding recorded logs and from the inaccurate FromContext documentation."
+  }
+ ]
+}

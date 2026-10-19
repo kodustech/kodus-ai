@@ -1,0 +1,12 @@
+{
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "items": [
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#snapi-01",
+   "class": "FP",
+   "subclass": "none",
+   "severity": "medium",
+   "reply": "I change my classification to FP. The base already sends each selected reference\u2019s uid and externalCalendarId to every calendar credential in the legacy fallback; this PR preserves that branch\u2019s logic. The new outer loop takes identifiers from each reference, so processing additional references does not itself establish duplicate deletions. Rejected deletes could already skip cancellation emails before this PR, making my earlier evidence insufficient under the pre-existing-code ruling."
+  }
+ ]
+}

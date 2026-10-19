@@ -1,0 +1,35 @@
+{
+ "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+ "prOriginal": {
+  "numero": null,
+  "url": "https://github.com/discourse/discourse/commit/060cda77729cb1c4a827560e09e89a7b22078ba9",
+  "mergedAt": "2015-01-05",
+  "nota": "Known from earlier check, reconfirmed: compare 060cda77...main = ahead (ancestor of main); committed directly to master 2015-01-05, no PR. Merged code is the benchmark head."
+ },
+ "tps": {
+  "fix-proper-handling-of-group-memberships-discourse-cursor#snloop-01": {
+   "status": "descontinuado",
+   "corrigidoEm": null,
+   "removidoEm": {
+    "data": "2016-12-12",
+    "pr": 4592,
+    "commit": "05f55dbc1001227261c24d055e8b37a685fa9625",
+    "url": "https://github.com/discourse/discourse/pull/4592"
+   },
+   "diasNoAr": 707,
+   "reason": "The raw-id association delete survived 1c545d4c1e (2015-02-25, became group.users.delete(user.id)) and the move of remove_member from Admin::GroupsController to GroupsController in 6dd4bc7d57 (2015-11-10). PR #4592 'FEATURE: Group logs' (merged 2016-12-12) replaced group.users.delete(user.id) with group.remove(user), which destroys group_users where(user:) and is a no-op for a non-member, so the RecordNotFound path is gone. The change was made to add logging, not aimed at the bug; today remove_member delegates to GroupMemberRemover and the admin action no longer exists.",
+   "astra": [
+    {
+     "pergunta": "Status for the raw-id delete replaced incidentally by group.remove(user) in the Group logs PR?",
+     "resposta": "Confirmado via 05f55dbc10 (PR #4592, 2016-12-12): incidental fix counts.",
+     "veredito": "confirmado"
+    },
+    {
+     "pergunta": "The descontinuado definition covers rewrites that remove the behaviour without targeting the bug; does that apply?",
+     "resposta": "Yes, by the more specific definition the swap was a logic change not aimed at the bug; milestone 05f55dbc10, PR #4592, 2016-12-12.",
+     "veredito": "descontinuado"
+    }
+   ]
+  }
+ }
+}

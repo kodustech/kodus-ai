@@ -1,0 +1,219 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "a308075bc39b77ed7059b0cae9d443d669a7bf98",
+  "head": "de628295646d0848226618108a52f2f1e5d04ac0",
+  "prTitle": "fix: handle collective multiple host on destinationCalendar",
+  "issues": [
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#snapi-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-snapi:S4",
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       473,
+       482
+      ],
+      "texto": "WHAT: In the non-credentialId branch, the loop deletes with the same `uid` and `externalCalendarId` of the current reference against every user calendar credential. WHY: With multiple calendar references, each reference now triggers deletes across all credentials, which produces duplicate or wrong-target delete calls and errors."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "c9a47dd0cebd121ff73f24e1f8c1829579daf8e3",
+  "head": "da09bc0808e7c6df1bc10e00d5acf764d94c7cc7",
+  "prTitle": "feat: convert InsightsBookingService to use Prisma.sql raw queries",
+  "issues": [
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#snapi-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-snapi:S1",
+      "file": "packages/lib/server/service/insightsBooking.ts",
+      "lines": [
+       105,
+       107
+      ],
+      "texto": "WHAT: The eventTypeId filter is built as an unparenthesized `a OR b`, and a single filter is returned as-is from the public getFilterConditions. WHY: Any caller that combines it with `AND` without wrapping it gets the wrong SQL precedence, which would silently widen results beyond the filter and the authorization conditions. HOW: Wrap the whole expression in parentheses."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "dual-storage-architecture-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "base": "66c4dff17e9147b11fb9b14c6ed63089a599da65",
+  "head": "e369f24665ec70e1e3700f457d25ef83301d931a",
+  "prTitle": "Dual Storage Architecture",
+  "issues": [
+   {
+    "issueId": "dual-storage-architecture-grafana-codex#snapi-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-snapi:S18",
+      "file": "dualwriter_mode3.go",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "Legacy-store errors are now dropped without being logged. This is an observability problem: failures from the legacy store become invisible. Log these errors, as the previous code did."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "fixing-re-authentication-with-passkeys-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "744e031019af8dbaacf407e792fbb3756364e2b4",
+  "head": "25bf964a844ea0bc64dc838bff038345048cb1fa",
+  "prTitle": "Fixing Re-authentication with passkeys",
+  "issues": [
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#snapi-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-snapi:S1",
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernamePasswordFormTest.java",
+      "lines": [
+       279,
+       308
+      ],
+      "texto": "reauthenticationOfUserWithoutPasskey sets passkeys enabled to FALSE for the realm, so the absence of the webauth form is guaranteed by isPasskeysEnabled() and not by the new per-user isConfiguredFor check. The test would still pass if that check were removed. Enable passkeys for the realm (as the sibling test in PasskeysUsernameFormTest does) so that the user-without-passkey case is actually exercised."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "base": "272cfc68dcc88615396ae62ed1571918e9c58ad3",
+  "head": "e944e2acf1e64421860a8e827f93ad06c169621b",
+  "prTitle": "Add caching support for IdentityProviderStorageProvider.getForLogin operations",
+  "issues": [
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#snapi-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-snapi:S1",
+      "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+      "lines": [
+       100,
+       100
+      ],
+      "texto": "WHAT: remove() now calls idpDelegate.getByAlias(alias) on every call. Previously it only did so when the alias cache key was invalid. WHY: every IDP removal now costs an extra database query even when the cached entry already has the model. HOW: resolve storedIdp from the cached entry when it exists, and fall back to the delegate lookup only on a cache miss or when the key is invalid."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "replays-self-serve-bulk-delete-system-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "49a275847631e231672d01b5dcd66558c069d25b",
+  "head": "ea188e2d736fd6ed27c1dba8aae63b7268e2a7a9",
+  "prTitle": "Replays Self-Serve Bulk Delete System",
+  "issues": [
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#snapi-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-snapi:S3",
+      "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+      "lines": [
+       56,
+       61
+      ],
+      "texto": "WHAT: The hook now returns `data` from useQuery, which is undefined until the first fetch completes (and the previous value is also undefined then). WHY: consumers that expect a TagCollection object get undefined instead of the `{}` the old implementation returned, which can crash on key access. HOW: default to `{}`, e.g. `attributes: (isFetching ? previous : data) ?? {}`."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#snapi-02",
+    "comentarios": [
+     {
+      "gid": "sonnet-snapi:S5",
+      "file": "src/sentry/projectoptions/defaults.py",
+      "lines": [
+       205,
+       205
+      ],
+      "texto": "WHAT: The default for `sentry:autofix_automation_tuning` changed from \"low\" to \"off\" (also in constants.py). WHY: projects that never set the option silently lose automatic autofix, a behavior change unrelated to the replays bulk-delete feature in this PR. HOW: if intended, ship it as a separate change with a migration or rollout plan."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "base": "93cb21f55a2a40d9116c014741f5679fbeff5fd9",
+  "head": "ee38fd295fd294b9fc787eba482bde24bbfea69b",
+  "prTitle": "Advanced date override handling and timezone compatibility improvements",
+  "issues": [
+   {
+    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#snapi-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-snapi:S8",
+      "file": "packages/lib/slots.ts",
+      "lines": [
+       211,
+       214
+      ],
+      "texto": "`getSlots` now depends on `override.timeZone`, but the field is optional on the shared `TimeRange` type. An override without it passes `undefined` to `dayjs.tz`, which probably uses the server's default timezone and gives a wrong offset. Fall back to the organizer timezone, or make the field required for overrides passed to `getSlots`."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ },
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "base": "a5d290951def84afdcc4c88d2f1f20023fc36e2a",
+  "head": "8ab88145113dd23a930e23b9cbbcf8b30e4c0b17",
+  "prTitle": "Enhanced Pagination Performance for High-Volume Audit Logs",
+  "issues": [
+   {
+    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#snapi-01",
+    "comentarios": [
+     {
+      "gid": "sonnet-snapi:S11",
+      "file": "src/sentry/api/paginator.py",
+      "lines": [
+       874,
+       880
+      ],
+      "texto": "The comments say Django ORM handles negative slicing automatically and that permissions are checked at the queryset level. Django QuerySets raise an AssertionError on negative slice bounds, and the paginator does no permission check. Remove or correct these comments so they describe the actual behavior."
+     }
+    ],
+    "goldens": [],
+    "precisaSeveridade": true,
+    "sevMembros": []
+   }
+  ]
+ }
+}

@@ -1,0 +1,17 @@
+{
+ "caseId": "github-oauth-security-enhancement-sentry",
+ "items": [
+  {
+   "id": "S10",
+   "match": "github-oauth-security-enhancement-sentry#04",
+   "newGroup": null,
+   "reason": "It makes the same claim that comparing OAuth state to pipeline.signature with != is not constant-time and leaks timing information."
+  },
+  {
+   "id": "S12",
+   "match": "github-oauth-security-enhancement-sentry#11",
+   "newGroup": null,
+   "reason": "It identifies the same weakness in test_github_user_mismatch: generic error assertions do not establish that the sender-login mismatch check caused rejection."
+  }
+ ]
+}

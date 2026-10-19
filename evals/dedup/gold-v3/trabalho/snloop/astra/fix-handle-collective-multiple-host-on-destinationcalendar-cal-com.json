@@ -1,0 +1,95 @@
+{
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "items": [
+  {
+   "id": "S1",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "The first destination calendar can be undefined, and accessing its integration crashes Meet booking creation instead of triggering the fallback."
+  },
+  {
+   "id": "S2",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#12",
+   "newGroup": null,
+   "reason": "updateLocation saves routing fields from updateEvent results that do not contain them, losing the calendar and credential association."
+  },
+  {
+   "id": "S3",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#prod-01",
+   "newGroup": null,
+   "reason": "The hangout-link patch receives an undefined calendarId when no destination matches because only the insert applies the primary-calendar fallback."
+  },
+  {
+   "id": "S4",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "The fallback searches for the already-falsy externalCalendarId, so updateEvent and deleteEvent fail to use the configured destination calendar."
+  },
+  {
+   "id": "S5",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "newGroup": null,
+   "reason": "The optional push discards secondary hosts' destination calendars when the organizer's destinationCalendar is null."
+  },
+  {
+   "id": "S6",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05",
+   "newGroup": null,
+   "reason": "Office365 and Lark select the first destination instead of the destination belonging to the credential creating the event."
+  },
+  {
+   "id": "S7",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "An undefined first destination calendar is dereferenced during the Meet fallback, crashing event creation."
+  },
+  {
+   "id": "S8",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "The unguarded integration access throws when the destination calendar array is empty, preventing the Cal Video fallback."
+  },
+  {
+   "id": "S9",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "The update/delete fallback compares destination external IDs against the absent externalCalendarId, losing the configured destination."
+  },
+  {
+   "id": "S10",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Reading integration from an undefined first destination calendar crashes Meet bookings with no destination."
+  },
+  {
+   "id": "S11",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "The fallback predicate uses the same falsy externalCalendarId that selected the fallback branch, so it cannot recover the destination calendar."
+  },
+  {
+   "id": "S12",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#09",
+   "newGroup": null,
+   "reason": "Non-calendar references lose result.credentialId, preventing later operations from resolving the video credential."
+  },
+  {
+   "id": "S13",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "It identifies the same unguarded integration access on a potentially undefined first destination calendar in EventManager."
+  },
+  {
+   "id": "S14",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#15",
+   "newGroup": null,
+   "reason": "It identifies the legacy createAllCalendarEvents branch omitting externalId and requests passing it through. That fixes the omission in issue #15 despite the comment's different explanation of its consequence."
+  },
+  {
+   "id": "S15",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The unused message variable in a catch block is a separate dead-code finding that no golden-set issue describes."
+  }
+ ]
+}

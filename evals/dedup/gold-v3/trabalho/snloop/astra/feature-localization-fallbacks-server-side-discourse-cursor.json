@@ -1,0 +1,23 @@
+{
+ "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes the same missing fallback catalogs outside controller requests because translate loads only the current locale."
+  },
+  {
+   "id": "S2",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes the same reliance on the controller filter to load fallback locales, leaving jobs and mailers without fallback translations."
+  },
+  {
+   "id": "S3",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes missing fallback catalogs in non-controller translation paths, with caching as an additional consequence. It does not describe the site-dependent cache-key problem in issue #06."
+  }
+ ]
+}

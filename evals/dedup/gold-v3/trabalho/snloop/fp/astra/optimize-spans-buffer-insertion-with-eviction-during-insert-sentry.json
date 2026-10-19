@@ -1,0 +1,23 @@
+{
+ "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#07",
+   "newGroup": null,
+   "reason": "Matches the rejected claim that directly indexing end_timestamp_precise raises KeyError when the field is missing and fails the entire batch."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Reports outdated documentation about buffer sets, scoring, and the span cap. No rejected issue describes this documentation problem; #01 concerns the redirect-resolution limit."
+  },
+  {
+   "id": "S5",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#07",
+   "newGroup": null,
+   "reason": "Asserts the same missing-end_timestamp_precise KeyError and batch failure as the rejected issue. The runtime-validation explanation and suggested fallback do not change the claim."
+  }
+ ]
+}

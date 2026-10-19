@@ -1,0 +1,506 @@
+{
+ "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "mobile .custom-message-length light value changed 70%->30%."
+  },
+  {
+   "id": "S2",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": ".topic-meta-data h5 a light value changed 30%->70%."
+  },
+  {
+   "id": "S3",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "mobile topic-post h3 light value changed 20%->50%."
+  },
+  {
+   "id": "S4",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "desktop user.scss .name light value 30%->50%."
+  },
+  {
+   "id": "S5",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "mobile user.scss .name light value 30%->50%."
+  },
+  {
+   "id": "S6",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "mobile .custom-message-length 70%->30% inversion."
+  },
+  {
+   "id": "S7",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "mobile h3 20%->50%, diverging from desktop 20/80."
+  },
+  {
+   "id": "S8",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "mobile .custom-message-length 70%->30% inversion."
+  },
+  {
+   "id": "S9",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "topic-post.scss:291 link light value 30%->70%."
+  },
+  {
+   "id": "S10",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "mobile h3 20%->50%."
+  },
+  {
+   "id": "S11",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "desktop .name 30%->50%."
+  },
+  {
+   "id": "S12",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "topic-post.scss:291 link light value 30%->70%."
+  },
+  {
+   "id": "S13",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "mobile .custom-message-length 70%->30%."
+  },
+  {
+   "id": "S14",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "mobile h3 20%->50%."
+  },
+  {
+   "id": "S15",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "desktop .name 30%->50%."
+  }
+ ],
+ "add-guest-management-functionality-to-existing-bookings-cal-com": [
+  {
+   "id": "S1",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "newGroup": null,
+   "reason": "Raw guests instead of uniqueGuests passed to sendAddGuestsEmails."
+  },
+  {
+   "id": "S2",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "newGroup": null,
+   "reason": "isTeamAdminOrOwner uses && instead of ||."
+  },
+  {
+   "id": "S3",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "newGroup": null,
+   "reason": "Guest compared case-sensitively to lowercased blacklist, bypassing it (also mentions attendee case dup, #05)."
+  },
+  {
+   "id": "S4",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "newGroup": null,
+   "reason": "Blacklist case-sensitivity bypass."
+  },
+  {
+   "id": "S5",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#05",
+   "newGroup": null,
+   "reason": "Case-sensitive existing-attendee comparison adds case-variant duplicates."
+  },
+  {
+   "id": "S6",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#13",
+   "newGroup": null,
+   "reason": "Template-string message always truthy, fallback unreachable."
+  },
+  {
+   "id": "S7",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#09",
+   "newGroup": null,
+   "reason": "updateCalendarAttendees unguarded after DB commit; same claim as #09."
+  },
+  {
+   "id": "S8",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#04",
+   "newGroup": null,
+   "reason": "Check-then-insert without transaction lets concurrent calls insert duplicates."
+  },
+  {
+   "id": "S9",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "newGroup": null,
+   "reason": "&& instead of || in admin/owner check."
+  },
+  {
+   "id": "S10",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "newGroup": null,
+   "reason": "Raw guests passed to sendAddGuestsEmails."
+  },
+  {
+   "id": "S11",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "newGroup": null,
+   "reason": "Blacklist case-sensitivity bypass."
+  },
+  {
+   "id": "S12",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#12",
+   "newGroup": null,
+   "reason": "Hard-coded \"Remove email\" tooltip bypasses i18n."
+  },
+  {
+   "id": "S13",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#13",
+   "newGroup": null,
+   "reason": "Template-string message always truthy, fallback unreachable."
+  }
+ ],
+ "replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "S1",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "zip(error_ids, events.values()) misaligns ids with nodestore results."
+  },
+  {
+   "id": "S2",
+   "match": "replays-self-serve-bulk-delete-system-sentry#01",
+   "newGroup": null,
+   "reason": "age/timestamp exclusion uses truthiness; zero values pass with both fields."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "useTraceItemAttributeKeys returning undefined data before first fetch is not in the golden set."
+  },
+  {
+   "id": "S4",
+   "match": "replays-self-serve-bulk-delete-system-sentry#12",
+   "newGroup": null,
+   "reason": "TableWidgetVisualization rendered with hardcoded empty columns/data."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "autofix_automation_tuning default change is not in the golden set."
+  },
+  {
+   "id": "S6",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "Positional zip with get_multi values misaligns ids."
+  },
+  {
+   "id": "S7",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "Positional zip with get_multi values misaligns ids."
+  },
+  {
+   "id": "S8",
+   "match": "replays-self-serve-bulk-delete-system-sentry#01",
+   "newGroup": null,
+   "reason": "Truthiness check lets age=0/timestamp both pass."
+  },
+  {
+   "id": "S9",
+   "match": "replays-self-serve-bulk-delete-system-sentry#02",
+   "newGroup": null,
+   "reason": "Validation warning logs entire raw attacker-controlled report."
+  },
+  {
+   "id": "S10",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "Positional zip with get_multi values misaligns ids."
+  },
+  {
+   "id": "S11",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Spec mock matcher on query.query never matching is not in the golden set."
+  }
+ ],
+ "github-oauth-security-enhancement-sentry": [
+  {
+   "id": "S1",
+   "match": "github-oauth-security-enhancement-sentry#06",
+   "newGroup": null,
+   "reason": "Missing-Integration branch advances without installer check."
+  },
+  {
+   "id": "S2",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "metadata[\"sender\"][\"login\"] KeyError when sender absent."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Non-constant-time state comparison is a different problem from the static-state issue #03."
+  },
+  {
+   "id": "S4",
+   "match": "github-oauth-security-enhancement-sentry#01",
+   "newGroup": null,
+   "reason": "_(error_short) on a variable breaks translation extraction."
+  },
+  {
+   "id": "S5",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "metadata[\"sender\"][\"login\"] KeyError."
+  },
+  {
+   "id": "S6",
+   "match": "github-oauth-security-enhancement-sentry#10",
+   "newGroup": null,
+   "reason": "installation-not-found test fails at state check instead."
+  },
+  {
+   "id": "S7",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "metadata[\"sender\"][\"login\"] KeyError."
+  },
+  {
+   "id": "S8",
+   "match": "github-oauth-security-enhancement-sentry#05",
+   "newGroup": null,
+   "reason": "Token exchange/user lookup not wrapped in error handling."
+  }
+ ],
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+  {
+   "id": "S1",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+   "newGroup": null,
+   "reason": "One try around the whole SendGrid cancel loop aborts all cancellations/deletes."
+  },
+  {
+   "id": "S2",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+   "newGroup": null,
+   "reason": "Reminder cancel helpers called without await in handleCancelBooking."
+  },
+  {
+   "id": "S3",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#11",
+   "newGroup": null,
+   "reason": "deleteScheduledEmailReminder/immediateDelete names do not match behaviour."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "immediateDelete branch leaves WorkflowReminder row neither deleted nor flagged; not in golden set."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Same as S4: immediateDelete branch leaves row orphaned."
+  },
+  {
+   "id": "S6",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+   "newGroup": null,
+   "reason": "Single try/catch for all cancellations; one failure blocks the batch."
+  },
+  {
+   "id": "S7",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+   "newGroup": null,
+   "reason": "Reminder helpers not awaited in cancellation handler."
+  }
+ ],
+ "feature-automatically-downsize-large-images-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "downsize defined twice; new signature breaks resize_emoji callers."
+  },
+  {
+   "id": "S2",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Hardcoded 10MB client limit replaces per-type size setting for attachments."
+  },
+  {
+   "id": "S3",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "downsize defined twice; ArgumentError in emoji resize."
+  },
+  {
+   "id": "S4",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "downsize redefinition breaks resize_emoji."
+  },
+  {
+   "id": "S5",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "downsize redefinition breaks resize_emoji."
+  },
+  {
+   "id": "S6",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "downsize redefinition breaks resize_emoji."
+  }
+ ],
+ "advanced-sql-analytics-framework-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "enableSqlExpressions always returns false, ignoring the flag."
+  },
+  {
+   "id": "S2",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "enableSqlExpressions always returns false."
+  },
+  {
+   "id": "S3",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "enableSqlExpressions always returns false."
+  },
+  {
+   "id": "S4",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "enableSqlExpressions always returns false; ReadQuery rejects SQL expressions."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "SQLCommand.Execute calling the stub sql.DB is not in the golden set."
+  },
+  {
+   "id": "S6",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "Function always returns false even when flag on; fix returns the flag value."
+  }
+ ],
+ "async-import-of-the-appstore-packages-cal-com": [
+  {
+   "id": "S1",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "forEach(async) after getCalendar became async; not awaited, errors escape try/catch."
+  },
+  {
+   "id": "S2",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "forEach(async) in handleCancelBooking not awaited."
+  },
+  {
+   "id": "S3",
+   "match": "async-import-of-the-appstore-packages-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "import() entries eager at module load, defeating lazy loading."
+  },
+  {
+   "id": "S4",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "forEach(async) not awaited, unhandled rejections."
+  },
+  {
+   "id": "S5",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "forEach(async) not awaited, unhandled rejections."
+  }
+ ],
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "readInteger not checking -1 length is not in the golden set."
+  },
+  {
+   "id": "S2",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-02",
+   "newGroup": null,
+   "reason": "getBouncyCastleProvider returns JDK provider, not BouncyCastle."
+  },
+  {
+   "id": "S3",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#10",
+   "newGroup": null,
+   "reason": "ES384/ES512 tests use default P-256 key (also mentions round-trip only, #11)."
+  },
+  {
+   "id": "S4",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Discarded ASN1Encoder writes are dead code."
+  }
+ ],
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Unparenthesized eventTypeId OR in filter conditions; prod-02 concerns the auth OR fragments returned by getBaseConditions, a different fragment."
+  },
+  {
+   "id": "S2",
+   "match": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#01",
+   "newGroup": null,
+   "reason": "Unreachable branches in getBaseConditions."
+  }
+ ],
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": [
+  {
+   "id": "S1",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "Reader thread not joined before assertion."
+  },
+  {
+   "id": "S2",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "Reader thread not joined/synchronized before assertion."
+  }
+ ],
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#oph-01",
+   "newGroup": null,
+   "reason": "testMissingOptionOnSave only asserts absence of a message."
+  }
+ ]
+}

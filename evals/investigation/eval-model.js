@@ -46,6 +46,7 @@ function buildModel(modelId = MODELO, options = {}) {
         if (!apiKey) throw new Error(`no API key for ${modelId} — set one of ${spec.keyEnvs.join('/')}`);
         return REGISTRY.get(spec.provider).build({ provider: spec.provider, model: spec.doModel || id, apiKey }, options);
     }
+    if (spec && spec.openrouterProviderOrder?.length) return modeloOpenRouterFixo(modelId, options);
     if (TIER0[modelId]) applyModelEnv(String(modelId));
 
     const { buildEvalModel } = require('../shared/build-model');
@@ -55,7 +56,32 @@ function buildModel(modelId = MODELO, options = {}) {
     return buildEvalModel(options, id === 'managed' || TIER0[modelId] ? undefined : id);
 }
 
+// OpenRouter preso ao provider do id: o slot BYOK `open_router` que a producao
+// monta, com o pin que ela passa por chamada (providerOptions.openrouter.provider,
+// libs/llm/reasoning-options.ts). Sem ele a OpenRouter roteia cada chamada para
+// um provider diferente.
+function modeloOpenRouterFixo(modelId, options = {}) {
+    const spec = require('../shared/tier0-models').TIER0[modelId];
+    const apiKey = spec.keyEnvs.map((e) => process.env[e]).find(Boolean);
+    if (!apiKey) throw new Error(`no API key for ${modelId} — set one of ${spec.keyEnvs.join('/')}`);
+    const { storedByokConfig } = require('../shared/model-route');
+    const { resolveModelSlot } = require('../../libs/llm/resolve-model-slot.ts');
+    const { buildModelFromSlot } = require('../../libs/llm/byok-to-vercel.ts');
+    const config = storedByokConfig({ provider: spec.provider, model: spec.doModel || modelId, apiKey, baseURL: spec.baseURL, openrouterProviderOrder: spec.openrouterProviderOrder });
+    const { wrapLanguageModel } = require('ai');
+    const pin = { order: spec.openrouterProviderOrder, allow_fallbacks: false };
+    return wrapLanguageModel({
+        model: buildModelFromSlot(resolveModelSlot(config, 'eval-model'), options),
+        middleware: {
+            transformParams: async ({ params }) => {
+                const or = params.providerOptions?.openrouter || {};
+                return { ...params, providerOptions: { ...params.providerOptions, openrouter: { ...or, provider: { ...(or.provider || {}), ...pin } } } };
+            },
+        },
+    });
+}
+
 const descreveModelo = (modelId = MODELO) =>
     /@sub$/.test(String(modelId)) ? `${modelId} (assinatura)` : `${modelId} (API)`;
 
-module.exports = { buildModel, descreveModelo, MODELO };
+module.exports = { buildModel, descreveModelo, modeloOpenRouterFixo, MODELO };

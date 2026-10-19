@@ -1,0 +1,47 @@
+{
+ "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#03",
+   "newGroup": null,
+   "reason": "Identifies the same use of the outer dataset instead of scoped_dataset for the upsampling eligibility check."
+  },
+  {
+   "id": "S2",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04",
+   "newGroup": null,
+   "reason": "Identifies the same substring check that incorrectly classifies negated or non-error Discover queries as error-only."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Requests accepting present zero sample rates. Issue #06 concerns accepting invalid truthy rates; fixing that validation would not implement this requested behavior."
+  },
+  {
+   "id": "S4",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#03",
+   "newGroup": null,
+   "reason": "Identifies the same mismatch between the dataset checked for eligibility and scoped_dataset used for execution."
+  },
+  {
+   "id": "S5",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04",
+   "newGroup": null,
+   "reason": "Identifies the same raw substring classification of negated or mixed queries as error-only, despite an inaccurate list-filter example."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Concerns inline comments describing stored event counts beside weighted-count assertions. No golden issue describes this documentation concern."
+  },
+  {
+   "id": "S7",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#05",
+   "newGroup": null,
+   "reason": "Identifies the same transaction test weakness: default weight makes upsampled_count() indistinguishable from count(), so incorrect upsampling remains undetected."
+  }
+ ]
+}

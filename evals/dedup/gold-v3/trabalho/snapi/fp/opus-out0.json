@@ -1,0 +1,238 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Duplicate/wrong-target deletes per credential in handleCancelBooking; no rejected issue covers it."
+  }
+ ],
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": [
+  {
+   "id": "S15",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#04",
+   "newGroup": null,
+   "reason": "Same claim: JSDoc wrongly calls appData.type the app slug."
+  }
+ ],
+ "feat-2fa-backup-codes-cal-com": [
+  {
+   "id": "S6",
+   "match": "feat-2fa-backup-codes-cal-com#03",
+   "newGroup": null,
+   "reason": "Same claim that DisableTwoFactorModal still calls disable with two args."
+  }
+ ],
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Unparenthesized OR in eventTypeId filter; no rejected issue about SQL precedence."
+  }
+ ],
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#25",
+   "newGroup": null,
+   "reason": "Same claim: request.referer interpolated into inline JS string enables XSS."
+  }
+ ],
+ "frontend-asset-optimization-grafana-codex": [
+  {
+   "id": "S2",
+   "match": "frontend-asset-optimization-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Same claim: unconditional cache assignment overwrites valid cache with nil on failure."
+  }
+ ],
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Same claim: test never asserts request size is absent for CheckHealth/CollectMetrics."
+  },
+  {
+   "id": "S2",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Same claim: traceID dropped from Plugin Request Completed log."
+  }
+ ],
+ "dual-storage-architecture-grafana-codex": [
+  {
+   "id": "S18",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Legacy-store errors no longer logged; no rejected issue about this."
+  }
+ ],
+ "unified-storage-performance-optimizations-grafana-codex": [
+  {
+   "id": "S3",
+   "match": "unified-storage-performance-optimizations-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Same claim: NewResourceServer now runs Init eagerly, changing constructor contract for callers."
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+   "newGroup": null,
+   "reason": "Same claim: client deletion with V1+V2 calls ClientPermissionsV2.setPermissionsEnabled which throws."
+  },
+  {
+   "id": "S4",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+   "newGroup": null,
+   "reason": "Same claim: client deletion with V1+V2 calls ClientPermissionsV2.setPermissionsEnabled which throws."
+  }
+ ],
+ "fixing-re-authentication-with-passkeys-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Test disables passkeys realm-wide so it does not exercise the per-user check; opa-02 is about missing failure-path test, different."
+  }
+ ],
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Extra DB query in remove() on every call; #09 is about null deref, different."
+  }
+ ],
+ "replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "useTraceItemAttributeKeys returns undefined instead of {}; #11 concerns data.summary elsewhere."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "autofix_automation_tuning default changed to off; no rejected issue covers it."
+  },
+  {
+   "id": "S11",
+   "match": "replays-self-serve-bulk-delete-system-sentry#17",
+   "newGroup": null,
+   "reason": "Same claim: mock matches query.query not substringMatch, so not-called assertion cannot fail."
+  }
+ ],
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
+  {
+   "id": "S2",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#04",
+   "newGroup": null,
+   "reason": "Same claim: raw datetime in to_dict breaks JSON serialization of Celery kwargs."
+  },
+  {
+   "id": "S5",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#08",
+   "newGroup": null,
+   "reason": "Same claim: queued not-None assertion is always true."
+  }
+ ],
+ "github-oauth-security-enhancement-sentry": [
+  {
+   "id": "S3",
+   "match": "github-oauth-security-enhancement-sentry#04",
+   "newGroup": null,
+   "reason": "Same claim: non-constant-time comparison of OAuth state."
+  }
+ ],
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": [
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Optional override.timeZone passed undefined to dayjs.tz in getSlots; #08 is about checkIfIsAvailable using organizer tz."
+  }
+ ],
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+  {
+   "id": "S4",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#12",
+   "newGroup": null,
+   "reason": "Same claim: immediateDelete branch leaves WorkflowReminder row neither deleted nor marked cancelled."
+  },
+  {
+   "id": "S5",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#12",
+   "newGroup": null,
+   "reason": "Same claim: immediateDelete branch leaves WorkflowReminder row neither deleted nor marked cancelled."
+  }
+ ],
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": [
+  {
+   "id": "S3",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Same claim: www vs forum sibling branch untested."
+  }
+ ],
+ "advanced-sql-analytics-framework-grafana-codex": [
+  {
+   "id": "S5",
+   "match": "advanced-sql-analytics-framework-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Same claim: duck DB replaced by stub returning not implemented, so execution and TablesList fail."
+  }
+ ],
+ "authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "authzservice-improve-authz-caching-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Same claim: cached denial blocks newly granted access for the TTL."
+  }
+ ],
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: readInteger passes -1 length to read(), throwing NegativeArraySizeException."
+  }
+ ],
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "S7",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#05",
+   "newGroup": null,
+   "reason": "Same claim: removing canView filter in searchForUser lets admins see users they cannot view."
+  }
+ ],
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": [
+  {
+   "id": "S11",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Misleading comments about negative slicing and permissions; no rejected issue covers it."
+  }
+ ],
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": [
+  {
+   "id": "S1",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: upsampled_count registered only in DiscoverDatasetConfig, errors dataset query fails."
+  }
+ ],
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "id": "S1",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#07",
+   "newGroup": null,
+   "reason": "Same claim: missing end_timestamp_precise raises KeyError and fails batch."
+  }
+ ]
+}

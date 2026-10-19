@@ -1,0 +1,47 @@
+{
+ "caseId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "Describes the same unimplemented abstract members that make MetricAlertDetectorHandler instantiation raise TypeError."
+  },
+  {
+   "id": "S2",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#04",
+   "newGroup": null,
+   "reason": "Describes the same mock builder ignoring its value argument, allowing incorrect expected measurements and wrong forwarded values to pass tests."
+  },
+  {
+   "id": "S3",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "Describes the same empty StatefulDetectorHandler subclass remaining abstract and raising TypeError when instantiated."
+  },
+  {
+   "id": "S4",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#01",
+   "newGroup": null,
+   "reason": "Identifies the same stale TODO describing the already-completed migration to StatefulDetectorHandler as future work."
+  },
+  {
+   "id": "S5",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#03",
+   "newGroup": null,
+   "reason": "Identifies the same evaluate docstring incorrectly documenting a list instead of a dictionary keyed by group key."
+  },
+  {
+   "id": "S6",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "Describes the same missing abstract implementations causing MetricAlertDetectorHandler construction to raise TypeError."
+  },
+  {
+   "id": "S7",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "Describes the same abstract handler instantiation failure caused by leaving all required abstract members unimplemented."
+  }
+ ]
+}

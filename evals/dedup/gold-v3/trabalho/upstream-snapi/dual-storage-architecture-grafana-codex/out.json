@@ -1,0 +1,24 @@
+{
+ "caseId": "dual-storage-architecture-grafana-codex",
+ "prOriginal": {
+  "numero": 90045,
+  "url": "https://github.com/grafana/grafana/pull/90045",
+  "mergedAt": "2024-07-24",
+  "nota": "Known from earlier check, confirmed: gh pr view shows headRefOid e369f24665ec (= benchmark head), merged 2024-07-24 as squash 67b74e1e8a. Merged dualwriter_mode3.go has the async legacy goroutines with only recordLegacyDuration."
+ },
+ "tps": {
+  "dual-storage-architecture-grafana-codex#snapi-01": {
+   "status": "confirmado",
+   "corrigidoEm": {
+    "data": "2024-10-23",
+    "pr": 93852,
+    "commit": "a03652494c",
+    "url": "https://github.com/grafana/grafana/pull/93852"
+   },
+   "removidoEm": null,
+   "diasNoAr": 91,
+   "reason": "Up to 66e0121dd5 (2024-08-29) the mode-3 goroutines for Legacy.Create/Delete/Update/DeleteCollection still only called recordLegacyDuration(err != nil, ...) with no log. PR #93852 'Dual Writer simplification' (2024-10-23) moved them into createOnLegacyStorage/deleteFromLegacyStorage/updateOnLegacyStorage/deleteCollectionFromLegacyStorage, each with log.Error(err, \"unable to ... in legacy storage\"), restoring legacy error logging. Later #98147 made legacy writes blocking and #101393 (2025-03-01) folded the file into legacysql/dualwrite, after the fix.",
+   "astra": []
+  }
+ }
+}

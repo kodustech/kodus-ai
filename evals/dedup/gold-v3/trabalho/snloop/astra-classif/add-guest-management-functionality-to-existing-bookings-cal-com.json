@@ -1,0 +1,12 @@
+{
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "items": [
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#snloop-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "apps/web/components/dialog/AddGuestsDialog.tsx:43-44 passes arbitrary server messages through translation and constructs an always-nonempty string, so unknown messages appear in the toast and the generic fallback never runs. packages/trpc/server/middlewares/captureErrorsMiddleware.ts:15 applies redactError, but packages/lib/redactError.ts:23-27 sanitizes only selected Prisma errors in production and returns other errors unchanged. Thus production Prisma errors are protected, but the broader raw-error display problem remains.",
+   "severity": "medium"
+  }
+ ]
+}

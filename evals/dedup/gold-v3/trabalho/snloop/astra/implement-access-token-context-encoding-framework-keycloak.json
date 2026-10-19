@@ -1,0 +1,83 @@
+{
+ "caseId": "implement-access-token-context-encoding-framework-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Describes the same incorrect grant-shortcut offset and inverted comparison in isAccessTokenId."
+  },
+  {
+   "id": "S2",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Describes the duplicate grantType null check that leaves rawTokenId unvalidated."
+  },
+  {
+   "id": "S3",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Identifies the same wrong substring indices and inverted grant-shortcut comparison."
+  },
+  {
+   "id": "S4",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Identifies the same constructor check of grantType instead of rawTokenId, allowing null raw IDs."
+  },
+  {
+   "id": "S5",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Describes the same wrongly indexed and inverted assertion in AssertEvents.isAccessTokenId."
+  },
+  {
+   "id": "S6",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Describes the same grant-shortcut extraction and comparison defects in the event matcher."
+  },
+  {
+   "id": "S7",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Identifies the same incorrect grant offset, accompanying comment, and inverted condition."
+  },
+  {
+   "id": "S8",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Describes the same null check applied to grantType instead of rawTokenId."
+  },
+  {
+   "id": "S9",
+   "match": "implement-access-token-context-encoding-framework-keycloak#03",
+   "newGroup": null,
+   "reason": "Describes the same Javadoc claiming three-letter shortcuts despite the required two-character format."
+  },
+  {
+   "id": "S10",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Identifies the incorrect substring offset explicitly covered by this issue."
+  },
+  {
+   "id": "S11",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Identifies the inverted grant-shortcut comparison explicitly covered by this issue."
+  },
+  {
+   "id": "S12",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Describes the same offset and comparison errors that prevent the matcher from validating the grant type."
+  },
+  {
+   "id": "S13",
+   "match": "implement-access-token-context-encoding-framework-keycloak#04",
+   "newGroup": null,
+   "reason": "Describes the same overly broad exception catch that lets the negative test pass on a null-sessionFactory NullPointerException."
+  }
+ ]
+}

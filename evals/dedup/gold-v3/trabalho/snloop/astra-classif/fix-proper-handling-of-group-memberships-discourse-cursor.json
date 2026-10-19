@@ -1,0 +1,12 @@
+{
+ "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+ "items": [
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#snloop-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The new action converts user_id to an integer and passes it directly to group.users.delete at app/controllers/admin/groups_controller.rb:86\u201390; users is a scoped association (app/models/group.rb:8). [Rails 4.1.8 collection_association.rb:240](https://github.com/rails/rails/blob/v4.1.8/activerecord/lib/active_record/associations/collection_association.rb#L240) resolves integer arguments through association find, so an already-removed member raises RecordNotFound before the success response. The previous removal used a membership query that safely did nothing when absent (app/models/group.rb:276\u2013277), making this a regression for stale lists or concurrent removals.",
+   "severity": "medium"
+  }
+ ]
+}

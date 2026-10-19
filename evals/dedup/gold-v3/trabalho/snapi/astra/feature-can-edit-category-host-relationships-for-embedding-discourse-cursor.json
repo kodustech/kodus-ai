@@ -1,0 +1,83 @@
+{
+ "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+ "items": [
+  {
+   "id": "S1",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Describes the swapped fabricator file contents. The additional duplicate-definition claim does not change the shared problem or fix."
+  },
+  {
+   "id": "S2",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Describes comparing lower(host) against a parsed hostname that has not been lowercased, rejecting mixed-case hosts."
+  },
+  {
+   "id": "S3",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Describes unchecked nil lookup results in update and destroy causing 500 errors for unknown IDs."
+  },
+  {
+   "id": "S4",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Describes unchecked empty migration query results causing a crash when embed_category is absent. This broader comment also includes the SQL interpolation problem in issue #06."
+  },
+  {
+   "id": "S5",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Describes the same missing lowercase normalization of the parsed host before comparison with lower(host)."
+  },
+  {
+   "id": "S6",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Describes mixed-case hosts being rejected because only the database side of the comparison is lowercased."
+  },
+  {
+   "id": "S7",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Describes the category and embeddable-host fabricator files having their contents swapped."
+  },
+  {
+   "id": "S8",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "Describes the misleading blank-host spec, which passes because the topic lacks an embed rather than testing host availability."
+  },
+  {
+   "id": "S9",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "Describes the blank-host spec lacking the prerequisites needed to isolate host availability, allowing it to pass regardless of host state."
+  },
+  {
+   "id": "S10",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Describes the normalization callback calling sub! on a nil host and raising instead of returning validation errors."
+  },
+  {
+   "id": "S11",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Describes update and destroy dereferencing nil lookup results for nonexistent host IDs."
+  },
+  {
+   "id": "S12",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Describes the migration indexing missing category-query rows before checking whether they exist, causing migration failure."
+  },
+  {
+   "id": "S13",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Describes the same unguarded first-row access that crashes the migration when embed_category is not stored."
+  }
+ ]
+}

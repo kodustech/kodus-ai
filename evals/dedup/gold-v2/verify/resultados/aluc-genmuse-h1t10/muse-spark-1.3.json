@@ -1,0 +1,2865 @@
+{
+ "model": "muse-spark-1.3",
+ "verificador": "muse-spark-1.3",
+ "versao": "genmuse-h1t10",
+ "versaoDedup": "genmuse-dedup",
+ "prs": {
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "isTeamAdminOrOwner uses && between isTeamAdmin (ADMIN or OWNER) and isTeamOwner (OWNER-only), so only OWNERs pass and ADMINs are denied.",
+     "claimNoTexto": null,
+     "evidence": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:46-48: \"const isTeamAdminOrOwner = (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) && (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0))\"; packages/lib/server/queries/teams/index.ts:270: \"OR: [{ role: \\\"ADMIN\\\" }, { role: \\\"OWNER\\\" }]\" and :286-294: \"export async function isTeamOwner... role: \\\"OWNER\\\"\"",
+     "reason": "Cited code uses && and helper definitions match the described ADMIN-or-OWNER vs OWNER-only semantics, so ADMIN-only users fail the conjunction.",
+     "passos": 4
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "sendAddGuestsEmails is called with raw guests instead of filtered uniqueGuests.",
+     "claimNoTexto": null,
+     "evidence": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:168 `await sendAddGuestsEmails(evt, guests);` vs lines 74-78 defining `uniqueGuests` filtered from `guests`, and packages/emails/email-manager.ts:541 `if (newGuests.includes(attendee.email))` sending `AttendeeScheduledEmail`",
+     "reason": "Handler passes raw guests while filtered uniqueGuests exists, and email-manager classifies via newGuests.includes to send AttendeeScheduledEmail.",
+     "passos": 7
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "blacklist is lowercased but the incoming guest is compared verbatim, and existing-attendee dedup uses exact === comparison",
+     "claimNoTexto": null,
+     "evidence": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:70-78 — `process.env.BLACKLISTED_GUEST_EMAILS.split(\",\").map((email) => email.toLowerCase())` vs `!booking.attendees.some((attendee) => guest === attendee.email) && !blacklistedGuestEmails.includes(guest)`; schema at addGuests.schema.ts:5 `guests: z.array(z.string().email())` performs no lowercasing",
+     "reason": "The cited code lowercases only the blocklist while both checks compare the raw guest string case-sensitively, so the bypass described is possible.",
+     "passos": 5
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "guests array has no length cap and no server-side uniqueness normalization",
+     "claimNoTexto": null,
+     "evidence": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts:3-6 `guests: z.array(z.string().email())` with no .max() or refine; packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:100-104 `createMany: { data: guestsFullDetails }`, 108-120 `bookingAttendees.attendees.map(async (attendee) => { ... await getTranslation ... })` + `await Promise.all`, packages/emails/email-manager.ts:539-549 `calendarEvent.attendees.map((attendee) => sendEmail(...))` + `await Promise.all(emailsToSend)`",
+     "reason": "Server schema indeed has no cap or dedup and handler fans out per-attendee DB, translation, email and calendar work.",
+     "passos": 7
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "isInvalidEmail is set true on failed validation but never reset to false on a subsequent successful validation.",
+     "claimNoTexto": null,
+     "evidence": "apps/web/components/dialog/AddGuestsDialog.tsx:52-57: `if (validationResult.success) { addGuestsMutation.mutate(...); } else { setIsInvalidEmail(true); }` with no reset in success branch; only other write is apps/web/components/dialog/AddGuestsDialog.tsx:91 `setIsInvalidEmail(false)` in Cancel handler",
+     "reason": "Success branch and input change contain no reset, so the flag stays true once set.",
+     "passos": 4
+    }
+   ],
+   "uso": {
+    "chamadas": 5,
+    "input": 105900,
+    "cacheRead": 56314,
+    "output": 13414,
+    "reasoning": 9766,
+    "ms": 34655
+   }
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The second OR branch deletes any WorkflowReminder with retryCount gt 1 without a method: SMS filter.",
+     "claimNoTexto": null,
+     "evidence": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:31-43 with quoted code \"OR: [ { method: WorkflowMethods.SMS, scheduledDate: { lte: ... } }, { retryCount: { gt: 1, }, }, ]\" showing second branch has only retryCount and no method filter",
+     "reason": "The cited where clause shows the retryCount branch contains no method condition while the first branch does.",
+     "passos": 2
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Both failure paths write retryCount from the stale in-memory reminder.retryCount + 1 instead of an atomic increment.",
+     "claimNoTexto": null,
+     "evidence": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:184 and 195 — `retryCount: reminder.retryCount + 1,` in both the `else` branch (179-186) and the `catch` branch (190-197); deletion at 39-41 uses `retryCount: { gt: 1 }`",
+     "reason": "Both updates compute from in-memory value with no atomic increment in the file, and the gt:1 delete clause exists as described.",
+     "passos": 3
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The catch block performs an awaited prisma update that can itself throw (e.g. P2025 if a concurrent run already deleted the row) with no guard.",
+     "claimNoTexto": null,
+     "evidence": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:189-198 — \"} catch (error) { await prisma.workflowReminder.update({ where: { id: reminder.id, }, data: { retryCount: reminder.retryCount + 1, }, }); console.log(`Error scheduling SMS with error ${error}`); }\"",
+     "reason": "The cited catch block contains a bare awaited prisma update with no inner try/catch inside a per-reminder loop whose final response follows the loop.",
+     "passos": 3
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "",
+     "reason": "",
+     "passos": 5
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 41413,
+    "cacheRead": 21181,
+    "output": 7982,
+    "reasoning": 6288,
+    "ms": 15271
+   }
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "mainHostDestinationCalendar is undefined when destinationCalendar is null/undefined/empty but .integration is accessed unguarded.",
+     "claimNoTexto": null,
+     "evidence": "packages/core/EventManager.ts:118-119 — `const [mainHostDestinationCalendar] = evt.destinationCalendar ?? [];` then `if (evt.location === MeetLocationType && mainHostDestinationCalendar.integration !== \"google_calendar\")` with no `?.`; type permits empty per packages/core/builders/CalendarEvent/class.ts:26 `destinationCalendar?: DestinationCalendar[] | null;`",
+     "reason": "Cited lines destructure first element with nullish fallback then access .integration without optional chaining, so null/undefined/empty yields TypeError when location is Meet.",
+     "passos": 5
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "evt.destinationCalendar is initialized to null when neither eventType nor organizer has one, so the later evt.destinationCalendar?.push(...teamDestinationCalendars) is skipped.",
+     "claimNoTexto": null,
+     "evidence": "packages/features/bookings/lib/handleNewBooking.ts:1063-1067 `destinationCalendar: eventType.destinationCalendar ? [eventType.destinationCalendar] : organizerUser.destinationCalendar ? [organizerUser.destinationCalendar] : null,` and :1078 `evt.destinationCalendar?.push(...teamDestinationCalendars);` with :987 `const teamDestinationCalendars: DestinationCalendar[] = [];` and :992-993 `if (isTeamEventType && eventType.schedulingType === \"COLLECTIVE\" && user.destinationCalendar) { teamDestinationCalendars.push(user.destinationCalendar);`",
+     "reason": "The cited initialization to null, the optional-chained push, and the collective secondary-host collection all exist as described, so the loss scenario holds.",
+     "passos": 10
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "updateEvent fallback searches destinationCalendar for cal.externalId === externalCalendarId when externalCalendarId is falsy, so it never matches and yields undefined.",
+     "claimNoTexto": null,
+     "evidence": "packages/app-store/googlecalendar/lib/CalendarService.ts:254-256: `const selectedCalendar = externalCalendarId ? externalCalendarId : event.destinationCalendar?.find((cal) => cal.externalId === externalCalendarId)?.externalId;` flowing to packages/app-store/googlecalendar/lib/CalendarService.ts:258-262 `calendar.events.update({ ... calendarId: selectedCalendar,`",
+     "reason": "The cited code exactly performs a self-comparison against the falsy externalCalendarId in the else-branch and passes the resulting undefined selectedCalendar as calendarId to calendar.events.update.",
+     "passos": 10
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 138305,
+    "cacheRead": 58806,
+    "output": 14699,
+    "reasoning": 11371,
+    "ms": 55218
+   }
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": [],
+   "uso": null
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Google refresh path reads res?.data when sync mode returns a fetch Response which has no .data.",
+     "claimNoTexto": null,
+     "evidence": "packages/app-store/googlecalendar/lib/CalendarService.ts:94 `const token = res?.data;` with res from refreshOAuthTokens; packages/app-store/_utils/oauth/refreshOAuthTokens.ts:8-15 `const response = await fetch(...); return response;` (native fetch Response, no .data)",
+     "reason": "Normal path returns Gaxios response with .data but sync path returns native fetch Response, so token is undefined and token.access_token throws.",
+     "passos": 5
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "parseRefreshTokenResponse returns a SafeParse result {success,data} but Google stores the whole wrapper as credential.key.",
+     "claimNoTexto": null,
+     "evidence": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:29 `return refreshTokenResponse;` combined with packages/app-store/googlecalendar/lib/CalendarService.ts:97-100 `const key = parseRefreshTokenResponse(googleCredentials, googleCredentialSchema); await prisma.credential.update({ where: { id: credential.id }, data: { key }, });` versus zoom unwrapping at packages/app-store/zoomvideo/lib/VideoApiAdapter.ts:111 `const newTokens = parsedToken.data;`",
+     "reason": "The cited function returns the SafeParse wrapper and Google persists that wrapper while zoom/office365 unwrap .data, so the reported shape mismatch exists.",
+     "passos": 6
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Zoho Bigin passes credential.id (credentialId) as the userId argument to refreshOAuthTokens.",
+     "claimNoTexto": null,
+     "evidence": "packages/app-store/zoho-bigin/lib/CalendarService.ts:53 `const credentialId = credential.id;` + :85-93 `refreshOAuthTokens(..., \"zoho-bigin\", credentialId)` where third param is `userId: number | null` in packages/app-store/_utils/oauth/refreshOAuthTokens.ts:3, while others e.g. packages/app-store/zohocrm/lib/CalendarService.ts:215 pass `credential.userId`",
+     "reason": "Cited code does pass credential.id where userId is expected, unlike all other calendar services which pass credential.userId.",
+     "passos": 5
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "JSON.parse on attacker-controlled req.query.state has no try/catch.",
+     "claimNoTexto": null,
+     "evidence": "packages/app-store/_utils/oauth/decodeOAuthState.ts:9: const state: IntegrationOAuthCallbackState = JSON.parse(req.query.state);",
+     "reason": "Cited file shows unguarded JSON.parse and callers invoke it with no try/catch.",
+     "passos": 8
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Missing refresh_token is replaced with literal string \"refresh_token\" and then persisted by callers.",
+     "claimNoTexto": null,
+     "evidence": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:25-26 and packages/app-store/zoomvideo/lib/VideoApiAdapter.ts:120,124",
+     "reason": "Code injects the dummy value and Zoom/Office365 callers write it to the DB, while sync responses contain only access token and expiry.",
+     "passos": 6
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Single static header comparison gates overwrite of any userId/appSlug credential keys with decrypted attacker-influenced JSON.",
+     "claimNoTexto": null,
+     "evidence": "apps/web/pages/api/webhook/app-credential.ts:24-29 and 57-80: header check `req.headers[...] !== process.env.CALCOM_WEBHOOK_SECRET` then `JSON.parse(symmetricDecrypt(reqBody.keys, ...))` followed by `prisma.credential.update/create` for `userId: reqBody.userId`",
+     "reason": "Cited lines perform only a static header equality check before parsing arbitrary userId/appSlug and overwriting credential keys, with no per-user auth, HMAC, replay or rate-limit code present.",
+     "passos": 7
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "",
+     "reason": "Constructor unconditionally calls getClient which unconditionally POSTs to the token endpoint with no expiry check.",
+     "passos": 6
+    }
+   ],
+   "uso": {
+    "chamadas": 7,
+    "input": 185061,
+    "cacheRead": 100091,
+    "output": 26193,
+    "reasoning": 19563,
+    "ms": 83697
+   }
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "",
+     "reason": "Code shows password check skipped when totpCode present while backup branch ignores totpCode, enabling the described bypass.",
+     "passos": 6
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "verdict": "refuted",
+     "claim": "The \"lost_access\"/\"go_back\" toggle Button inside the disable <Form> has no type=\"button\" so it acts as a submit.",
+     "claimNoTexto": null,
+     "evidence": "packages/ui/components/button/Button.tsx:125: type = \"button\",",
+     "reason": "The shared Button defaults to type=\"button\", so the toggle without an explicit type does not submit the Form or fire handleDisable.",
+     "passos": 4
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "`req.body.backupCode.replaceAll` is called without checking that backupCode is a string.",
+     "claimNoTexto": null,
+     "evidence": "apps/web/pages/api/auth/two-factor/totp/disable.ts:48 `if (user.twoFactorEnabled && req.body.backupCode)` and apps/web/pages/api/auth/two-factor/totp/disable.ts:61 `const index = backupCodes.indexOf(req.body.backupCode.replaceAll(\"-\", \"\"));` with no typeof check; same pattern at packages/features/auth/lib/next-auth-options.ts:144 `const index = backupCodes.indexOf(credentials.backupCode.replaceAll(\"-\", \"\"));` guarded only by packages/features/auth/lib/next-auth-options.ts:131 `if (user.twoFactorEnabled && credentials.backupCode)`",
+     "reason": "The cited line calls replaceAll directly after only a truthiness check, so a non-string truthy value has no replaceAll method and throws.",
+     "passos": 5
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 76968,
+    "cacheRead": 35743,
+    "output": 8570,
+    "reasoning": 6505,
+    "ms": 35234
+   }
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "order() copies $val verbatim into -webkit-box-ordinal-group/-moz-box-ordinal-group",
+     "claimNoTexto": null,
+     "evidence": "app/assets/stylesheets/common/foundation/mixins.scss:125-131: \"@mixin order($val) { -webkit-box-ordinal-group: $val; -moz-box-ordinal-group: $val; -ms-flex-order: $val; -webkit-order: $val; order: $val; }\"; app/assets/stylesheets/common/base/topic.scss:30: \"@include order(2);\"; app/assets/stylesheets/common/base/header.scss:39: \"@include order(3);\"",
+     "reason": "The mixin emits $val verbatim for both ordinal-group prefixes and both cited callers exist with those values.",
+     "passos": 5
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 447459,
+    "cacheRead": 10677,
+    "output": 2946,
+    "reasoning": 2256,
+    "ms": 42999
+   }
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Second `self.downsize(from,to,dimensions)` redefinition overwrites the 4-arg `self.downsize(from,to,max_width,max_height)` so the first is dead.",
+     "claimNoTexto": null,
+     "evidence": "app/models/optimized_image.rb:145 `def self.downsize(from, to, max_width, max_height, opts={})` and app/models/optimized_image.rb:149 `def self.downsize(from, to, dimensions, opts={})` with app/jobs/regular/resize_emoji.rb:14 `OptimizedImage.downsize(path, path, 100, 100, opts)`",
+     "reason": "Both definitions exist so Ruby keeps only the second, and the existing caller still passes 4 positionals which the remaining 3-positional signature cannot accept.",
+     "passos": 4
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Loop condition and `Upload.create_for` reuse cached `tempfile.size` after `convert` rewrites `tempfile.path` in place.",
+     "claimNoTexto": null,
+     "evidence": "app/controllers/uploads_controller.rb:66-72: `while attempt > 0 && tempfile.size > SiteSetting.max_image_size_kb.kilobytes` + `OptimizedImage.downsize(tempfile.path, tempfile.path, \"80%\", allow_animation: ...)` + `Upload.create_for(current_user.id, tempfile, filename, tempfile.size` and app/models/upload.rb:124: `upload.filesize = filesize`",
+     "reason": "Cited loop re-checks tempfile.size, ignores downsize return, and passes stale size to create_for which stores it as filesize checked by validator, so the described stale-size chain exists in the code.",
+     "passos": 10
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "API URL download limit changed from `SiteSetting.max_image_size_kb` to hardcoded `10.megabytes`.",
+     "claimNoTexto": null,
+     "evidence": "app/controllers/uploads_controller.rb:55: `tempfile = FileHelper.download(url, 10.megabytes, \"discourse-upload-#{type}\") rescue nil` with following lines 64-66 showing setting-based downsize loop still present",
+     "reason": "Line 55 uses hardcoded 10.megabytes for FileHelper.download while lines 64-66 still use SiteSetting.max_image_size_kb for the 5-attempt downsize loop, confirming the reported mismatch.",
+     "passos": 8
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Up to 5 synchronous `convert`/`gifsicle` invocations run inside `create_upload` request path for every oversized image.",
+     "claimNoTexto": null,
+     "evidence": "app/controllers/uploads_controller.rb:65-68: `attempt = 5` + `while attempt > 0 && tempfile.size > SiteSetting.max_image_size_kb.kilobytes` + `OptimizedImage.downsize(tempfile.path, tempfile.path, \"80%\", ...)`; app/models/optimized_image.rb:153-161: `optimize(\"downsize\",...)` -> `convert_with(instructions, to)` -> `` `#{instructions.join(\" \")} &> /dev/null` ``",
+     "reason": "Cited loop allows up to 5 iterations calling downsize which synchronously shells out to convert/gifsicle via backticks.",
+     "passos": 8
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 537791,
+    "cacheRead": 60237,
+    "output": 25526,
+    "reasoning": 21887,
+    "ms": 103066
+   }
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "embed_url is interpolated unescaped into stored raw HTML while cook_method raw_html bypasses sanitization",
+     "claimNoTexto": null,
+     "evidence": "app/models/topic_embed.rb:13 `contents << \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \"<a href='#{url}'>#{url}</a>\")}</small>\\n\"` and app/models/post.rb:133 `return raw if cook_method == Post.cook_methods[:raw_html]` with lib/post_creator.rb:105 `post.cooked ||= post.cook(post.raw, cooking_options)` and app/views/embed/best.html.erb:19 `<%= raw post.cooked %>`",
+     "reason": "Cited lines interpolate url without escaping and raw_html returns raw unsanitized which is stored as cooked and rendered raw, so factual premises hold.",
+     "passos": 10
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "request.referer is reflected unescaped into a JS string and used as postMessage targetOrigin.",
+     "claimNoTexto": null,
+     "evidence": "app/views/layouts/embed.html.erb:11 and the quoted code that supports the comment: parent.postMessage({type: 'discourse-resize', height: document['body'].offsetHeight}, '<%= request.referer %>');",
+     "reason": "Line 11 directly interpolates request.referer inside a single-quoted JS string as the second argument to parent.postMessage with no j() escaping.",
+     "passos": 7
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "i.content is assumed present and scrubbed unconditionally.",
+     "claimNoTexto": null,
+     "evidence": "app/jobs/scheduled/poll_feed.rb:35 and the quoted code `content = CGI.unescapeHTML(i.content.scrub)`",
+     "reason": "Line 35 calls i.content.scrub with no nil guard and no description fallback in the file.",
+     "passos": 7
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "import_remote passes open(url).read into Readability and doc.content into import without nil/error handling",
+     "claimNoTexto": null,
+     "evidence": "app/models/topic_embed.rb:44-53: `doc = Readability::Document.new(open(url).read,` ... `TopicEmbed.import(user, url, opts[:title] || doc.title, doc.content)` with no rescue/guard; and app/models/topic_embed.rb:13: `contents << \"\\n<hr>...` in `self.import`",
+     "reason": "Cited code shows unguarded open/read and direct pass of doc.content to import where << on nil would crash.",
+     "passos": 6
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "hourly job fetches the full feed with open() and imports every item in a blocking loop.",
+     "claimNoTexto": null,
+     "evidence": "app/jobs/scheduled/poll_feed.rb:11 `recurrence { hourly }`, app/jobs/scheduled/poll_feed.rb:29 `rss = SimpleRSS.parse open(SiteSetting.feed_polling_url)`, app/jobs/scheduled/poll_feed.rb:31-36 `rss.items.each do |i| ... TopicEmbed.import(user, url, i.title, content)` with no cap, and app/jobs/scheduled/poll_feed.rb:20-22 defines `def feed_key` which grep shows has no other caller",
+     "reason": "Cited code does unconditionally open the full feed and loop over all items calling TopicEmbed.import, and feed_key is defined but never used.",
+     "passos": 5
+    }
+   ],
+   "uso": {
+    "chamadas": 5,
+    "input": 3461497,
+    "cacheRead": 735633,
+    "output": 31818,
+    "reasoning": 26459,
+    "ms": 188133
+   }
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "update/destroy call save_host(nil)/nil.destroy when id is not found since where().first returns nil.",
+     "claimNoTexto": null,
+     "evidence": "app/controllers/admin/embeddable_hosts_controller.rb:10-11 `host = EmbeddableHost.where(id: params[:id]).first` + `save_host(host)` and :15-16 `host = EmbeddableHost.where(id: params[:id]).first` + `host.destroy`, with :22-23 `def save_host(host)` + `host.host = params[:embeddable_host][:host]` and no nil guard in file",
+     "reason": "The file shows unguarded where().first results flowing directly into nil-dereferencing save_host/destroy calls.",
+     "passos": 3
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "before_validation calls self.host.sub! without a nil guard",
+     "claimNoTexto": null,
+     "evidence": "app/models/embeddable_host.rb:5-8 — `before_validation do self.host.sub!(/^https?:\\/\\//, '') self.host.sub!(/\\/.*$/, '') end` with no nil/blank guard, and only `validates_format_of :host` on line 2",
+     "reason": "The cited code performs sub! directly on self.host with no guard, so a nil host would raise NoMethodError before validation can run.",
+     "passos": 5
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "verdict": "refuted",
+     "claim": "TopicEmbed.import (app/models/topic_embed.rb:36-43) crashes on malformed/unknown embed URLs instead of handling nil category.",
+     "claimNoTexto": null,
+     "evidence": "app/models/embeddable_host.rb:17: where(\"lower(host) = ?\", host).first — returns nil (not false) for unknown hosts; app/models/topic_embed.rb:19: return unless url =~ /^https?\\:\\/\\// — malformed URLs return early before record_for_host",
+     "reason": "Unknown hosts return nil which try handles safely, and malformed URLs return early, so the claimed crash path does not exist.",
+     "passos": 9
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "query lowercases the column but compares against the raw URI host without downcasing.",
+     "claimNoTexto": null,
+     "evidence": "app/models/embeddable_host.rb:14 `host = uri.host` and app/models/embeddable_host.rb:17 `where(\"lower(host) = ?\", host).first` with no downcase between",
+     "reason": "The code lowercases only the DB column while binding the raw URI host, so an uppercase host would not match.",
+     "passos": 6
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "migration interpolates raw site-setting host value into SQL string without quoting/escaping.",
+     "claimNoTexto": null,
+     "evidence": "db/migrate/20150818190757_create_embeddable_hosts.rb:25 `execute \"INSERT INTO embeddable_hosts (host, category_id, created_at, updated_at) VALUES ('#{h}', #{category_id}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)\"`",
+     "reason": "Line 25 directly interpolates h derived from site_settings value split by newline with no quoting or escaping visible in the file.",
+     "passos": 2
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "migration indexes [0]['id']/ [0]['value'] without checking for empty results.",
+     "claimNoTexto": null,
+     "evidence": "db/migrate/20150818190757_create_embeddable_hosts.rb:9-15 with quoted code `execute(\"SELECT c.id FROM categories AS c INNER JOIN site_settings AS s ON s.value = c.name WHERE s.name = 'embed_category'\")[0]['id'].to_i` and `execute(\"SELECT value FROM site_settings WHERE name = 'uncategorized_category_id'\")[0]['value'].to_i` with no empty/cmd_tuples guard, unlike lines 18-19 which do guard.",
+     "reason": "Cited lines directly index [0] with no empty-result check, so the factual basis holds.",
+     "passos": 2
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "_hydrateEmbedded calls obj[k].map unconditionally for *_ids keys.",
+     "claimNoTexto": null,
+     "evidence": "app/assets/javascripts/discourse/models/store.js.es6:196-197 — `if (m[2]) { const hydrated = obj[k].map(function(id) {` with no null/undefined guard before `.map`, and fallback `hydrated || []` only after mapping.",
+     "reason": "The cited code performs direct property mapping without coercion, so a null ids value would throw before the fallback applies.",
+     "passos": 3
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "every embed comment/retriever check now does a SELECT via record_for_host instead of the previous in-memory SiteSetting string check",
+     "claimNoTexto": null,
+     "evidence": "app/models/embeddable_host.rb:21: record_for_host(host).present? with app/models/embeddable_host.rb:17: where(\"lower(host) = ?\", host).first; callers app/controllers/embed_controller.rb:61: EmbeddableHost.host_allowed?(request.referer) and lib/topic_retriever.rb:16: !EmbeddableHost.host_allowed?(@embed_url)",
+     "reason": "The cited method delegates to a DB query and is called on the embed before_filter and retriever paths with no caching in the model.",
+     "passos": 6
+    }
+   ],
+   "uso": {
+    "chamadas": 8,
+    "input": 681324,
+    "cacheRead": 80115,
+    "output": 44851,
+    "reasoning": 39375,
+    "ms": 176271
+   }
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "SiteSetting.default_locale.to_sym is called before .uniq.compact, so a nil/blank default raises NoMethodError instead of being compacted away.",
+     "claimNoTexto": null,
+     "evidence": "config/initializers/i18n.rb:17 and the quoted code `[locale, SiteSetting.default_locale.to_sym, :en].uniq.compact`",
+     "reason": "The cited line calls to_sym inside the array before uniq.compact, so a nil value raises before it could be compacted.",
+     "passos": 10
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Raw request locale (user-controlled via User#effective_locale) is returned unsanitized in the fallback chain and interpolated into Regexp.new(\"\\.#{locale}\\.yml$\") in load_locale.",
+     "claimNoTexto": null,
+     "evidence": "config/initializers/i18n.rb:18 `[locale, SiteSetting.default_locale.to_sym, :en].uniq.compact`; lib/freedom_patches/translate_accelerator.rb:56 `I18n.backend.load_translations(I18n.load_path.grep Regexp.new(\"\\.#{locale}\\.yml$\"))`; app/models/user.rb:154-156 `def effective_locale / if SiteSetting.allow_user_locale && self.locale.present? / self.locale`; app/controllers/application_controller.rb:152-159 `I18n.locale = if current_user current_user.effective_locale` + `I18n.fallbacks.ensure_loaded!`",
+     "reason": "All cited code exists as described with no sanitization or Regexp.escape, and the caller chain connects effective_locale to load_locale.",
+     "passos": 8
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "set_locale now synchronously loads up to 3 locale YAML files via I18n.fallbacks.ensure_loaded! on every request",
+     "claimNoTexto": null,
+     "evidence": "app/controllers/application_controller.rb:36 before_filter :set_locale + 152-159 I18n.fallbacks.ensure_loaded!; config/initializers/i18n.rb:12-22 FallbackLocaleList#[] returns [locale, SiteSetting.default_locale.to_sym, :en] and ensure_loaded! iterates it calling I18n.ensure_loaded!; lib/freedom_patches/translate_accelerator.rb:45-64 LOAD_MUTEX with @loaded_locales check",
+     "reason": "All cited behaviors exist in code: per-request set_locale calls ensure_loaded! which fans out to up to 3 locales with SiteSetting lookup and file I/O under LOAD_MUTEX guarded only by @loaded_locales.",
+     "passos": 6
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 1229842,
+    "cacheRead": 268440,
+    "output": 15994,
+    "reasoning": 12568,
+    "ms": 82029
+   }
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "totalPages uses floor(user_count/limit)+1 which is one too many when user_count is an exact multiple of limit.",
+     "claimNoTexto": null,
+     "evidence": "app/assets/javascripts/admin/controllers/admin-group.js.es6:13 `return Math.floor(this.get(\"user_count\") / this.get(\"limit\")) + 1;` and app/assets/javascripts/admin/controllers/admin-group.js.es6:30-33 `if (this.get(\"showingLast\")) { return; } var group = this.get(\"model\"), offset = Math.min(group.get(\"offset\") + group.get(\"limit\"), group.get(\"user_count\"));`",
+     "reason": "Code shows the floor+1 formula overcounts exact multiples and the next-action guard allows advancing offset to user_count.",
+     "passos": 4
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "add_members splits on comma without stripping whitespace so \"a, b\" looks up \" b\" which misses.",
+     "claimNoTexto": null,
+     "evidence": "app/controllers/admin/groups_controller.rb:71-72 with `usernames.split(\",\").each do |username|` followed by `if user = User.find_by_username(username)` and no strip; app/models/user.rb:175-177 with `def self.find_by_username(username)` / `find_by(username_lower: username.downcase)` and no strip.",
+     "reason": "Both the split loop and the lookup lack stripping, so a spaced entry retains its space and fails to match, and the loop silently skips nil lookups.",
+     "passos": 7
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "remove_member uses group.users.delete(user_id) instead of the Group#remove(user) domain method used before.",
+     "claimNoTexto": null,
+     "evidence": "app/controllers/admin/groups_controller.rb:90 `group.users.delete(user_id)`; app/models/group.rb:276-277 `def remove(user) / self.group_users.where(user: user).each(&:destroy)`; app/models/group_user.rb:2 `belongs_to :group, counter_cache: \"user_count\"`",
+     "reason": "The cited line uses collection delete, the Group#remove method exists and destroys join records, and GroupUser maintains user_count via counter_cache which destroy triggers but delete bypasses.",
+     "passos": 7
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "limit comes straight from params with no maximum and offset has no floor.",
+     "claimNoTexto": null,
+     "evidence": "app/controllers/groups_controller.rb:22-23: `limit = (params[:limit] || 50).to_i` and `offset = params[:offset].to_i` then app/controllers/groups_controller.rb:26: `members = group.users.order(:username_lower).limit(limit).offset(offset)`",
+     "reason": "Code passes params directly to limit/offset with no min/max clamp, so large limit loads many rows.",
+     "passos": 6
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 1404737,
+    "cacheRead": 96935,
+    "output": 12113,
+    "reasoning": 8897,
+    "ms": 92229
+   }
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "CreateOrUpdateDevice does a separate CountDevices check then a separate INSERT with no lock/transaction.",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/anonymous/anonimpl/anonstore/database.go:110 and 149: CountDevices via `s.CountDevices(ctx, ...)` in its own `WithDbSession` (line 160) followed by separate `s.sqlStore.WithDbSession` for INSERT, with no mutex/transaction spanning lines 105-156",
+     "reason": "Code shows separate sessions for check and insert with no lock or transaction and no DB count constraint, so concurrent inserts can exceed limit.",
+     "passos": 6
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "updateDevice returns ErrDeviceLimitReached whenever rowsAffected==0, which includes an existing device_id whose updated_at is older than 30 days (outside the BETWEEN window).",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/anonymous/anonimpl/anonstore/database.go:74-81 `WHERE device_id = ? AND updated_at BETWEEN ? AND ?` with window `device.UpdatedAt.UTC().Add(-anonymousDeviceExpiration)` where `anonymousDeviceExpiration = 30 * 24 * time.Hour` (line 16), and database.go:95-97 `if rowsAffected == 0 { return ErrDeviceLimitReached }`, called via database.go:115-116 `if count >= s.deviceLimit { return s.updateDevice(ctx, device) }`",
+     "reason": "The code shows rowsAffected==0 maps to ErrDeviceLimitReached and the UPDATE only matches rows inside the 30-day BETWEEN window, so expired or missing devices hit that error on the limit path.",
+     "passos": 3
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "tagDeviceUI does localCache.SetDefault before CreateOrUpdateDevice and never deletes on error, while TagDevice now propagates the error.",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/anonymous/anonimpl/impl.go:87 `a.localCache.SetDefault(key, struct{}{})` before pkg/services/anonymous/anonimpl/impl.go:93 `if err := a.anonStore.CreateOrUpdateDevice(ctx, device); err != nil { return err }` with no Delete; pkg/services/anonymous/anonimpl/impl.go:144-148 `err = a.tagDeviceUI(...); if err != nil { ... return err }`",
+     "reason": "Code confirms cache is set before DB write with no invalidation on error, and TagDevice returns the error to the caller.",
+     "passos": 6
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "ProvideAnonDBStore now requires a bare int64 deviceLimit but pkg/server/wire.go still lists it as a provider with no int64 binding.",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/anonymous/anonimpl/anonstore/database.go:52 `func ProvideAnonDBStore(sqlStore db.DB, deviceLimit int64) *AnonDBStore`; pkg/server/wire.go:374 `anonstore.ProvideAnonDBStore,`; pkg/services/anonymous/anonimpl/impl.go:43 `anonStore: anonstore.ProvideAnonDBStore(sqlStore, cfg.AnonymousDeviceLimit),`",
+     "reason": "All factual premises checked hold: the provider takes bare int64, wire lists it, and impl.go manually passes the limit.",
+     "passos": 10
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Authenticate changed from fire-and-forget tagging to synchronous TagDevice doing CountDevices + upsert inline.",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/anonymous/anonimpl/client.go:44 `if err := a.anonDeviceService.TagDevice(ctx, httpReqCopy, anonymous.AnonDeviceUI); err != nil {` plus pkg/services/anonymous/anonimpl/impl.go:93 `if err := a.anonStore.CreateOrUpdateDevice(ctx, device)` plus pkg/services/anonymous/anonimpl/anonstore/database.go:110 `count, err := s.CountDevices(ctx, ...)`",
+     "reason": "Current code is a synchronous inline TagDevice call on the request context that on cache miss reaches CreateOrUpdateDevice which can do CountDevices plus upsert.",
+     "passos": 9
+    }
+   ],
+   "uso": {
+    "chamadas": 5,
+    "input": 202953,
+    "cacheRead": 105218,
+    "output": 17615,
+    "reasoning": 12997,
+    "ms": 68351
+   }
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "GetWebAssets acquires the exclusive entryPointAssetsCacheMu and holds it across readWebAssetsFromFile/CDN IO with no second cache check after Lock.",
+     "claimNoTexto": null,
+     "evidence": "pkg/api/webassets/webassets.go:48-49 `entryPointAssetsCacheMu.Lock()` + `defer entryPointAssetsCacheMu.Unlock()` held across pkg/api/webassets/webassets.go:56 `readWebAssetsFromCDN` and :60 `readWebAssetsFromFile`, with no re-read of entryPointAssetsCache between Lock and IO.",
+     "reason": "Code shows RLock check at 41-47 then unconditional Lock at 48 held via defer across file/CDN IO at 56/60 with no second hit check.",
+     "passos": 3
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 9408,
+    "cacheRead": 5331,
+    "output": 3481,
+    "reasoning": 3054,
+    "ms": 30986
+   }
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "NewMetricsMiddleware creates one MetricsMiddleware and mutates its next field on every CreateClientMiddleware call instead of returning a new instance.",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go:76-82: `imw := newMetricsMiddleware(promRegisterer, pluginRegistry)` + `return plugins.ClientMiddlewareFunc(func(next plugins.Client) plugins.Client { imw.next = next; return imw })` vs pkg/services/pluginsintegration/clientmiddleware/contextual_logger_middleware.go:14-19 returning `&ContextualLoggerMiddleware{next: next}` per call, and pkg/plugins/manager/client/decorator.go:34,101-111 rebuilding chain via `clientFromMiddlewares(d.middlewares, d.client)` on every request.",
+     "reason": "The cited code shares one instance and overwrites next on each call while the comparator returns a new instance and the decorator reuses the middleware slice per request.",
+     "passos": 6
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "instrumentPluginRequestSize/instrumentPluginRequest return plugins.ErrPluginNotRegistered when the plugin is missing from the registry and callers return before invoking next.",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go:85-98 and 104-108 and 149-151: pluginTarget returns plugins.ErrPluginNotRegistered when !exists, both instrument helpers return err early without calling fn/next, and QueryData does `if err := m.instrumentPluginRequestSize(...); return nil, err`.",
+     "reason": "Code shows lookup failure returns ErrPluginNotRegistered before next is invoked and QueryData returns nil plus error.",
+     "passos": 3
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "verdict": "refuted",
+     "claim": "Plugin Request Completed logs lose traceID correlation (and all fields when Logger is used without Contextual middleware first).",
+     "claimNoTexto": null,
+     "evidence": "pkg/infra/tracing/tracing.go:91-94: log.RegisterContextualLogProvider(func(ctx context.Context) ([]any, bool) { if traceID := TraceIDFromContext(ctx, false); traceID != \"\" { return []any{\"traceID\", traceID}, true",
+     "reason": "FromContext aggregates all registered providers so traceID is still supplied from the OpenTelemetry span even though instrumentContext does not add it.",
+     "passos": 10
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "TestLogger.FromContext returns a fresh NewTestLogger instead of the receiver.",
+     "claimNoTexto": null,
+     "evidence": "pkg/plugins/log/fake.go:46-48 `func (f *TestLogger) FromContext(_ context.Context) Logger { return NewTestLogger() }` and pkg/services/pluginsintegration/clientmiddleware/logger_middleware.go:58 `m.logger.FromContext(ctx).Info(\"Plugin Request Completed\", logParams...)`",
+     "reason": "Both cited behaviors exist in the code, so the loss of counts/messages described follows.",
+     "passos": 4
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "",
+     "reason": "ContextualLoggerMiddleware dereferences req.PluginContext with no nil guard while LoggerMiddleware has if req == nil guards, so the reported missing-guard facts hold.",
+     "passos": 4
+    }
+   ],
+   "uso": {
+    "chamadas": 5,
+    "input": 182269,
+    "cacheRead": 94074,
+    "output": 13610,
+    "reasoning": 9886,
+    "ms": 51240
+   }
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Removing the whole-function cacheMu lock leaves only the final map write locked, so two concurrent BuildIndex calls for the same NamespacedResource both run bleve.New/list/build simultaneously.",
+     "claimNoTexto": null,
+     "evidence": "pkg/storage/unified/search/bleve.go:137-139 `b.cacheMu.Lock(); b.cache[key] = idx; b.cacheMu.Unlock()` with unguarded `pkg/storage/unified/search/bleve.go:96-106 `bleve.New(dir...) / bleve.NewMemOnly...IndexTenants...Inc()` and `pkg/storage/unified/resource/search.go:287-298 `getOrCreateIndex` TODO noting no per-key blocking",
+     "reason": "BuildIndex does no cache check or per-key lock before bleve.New, builder ListIterator, and Inc, so concurrent same-key builds duplicate work and last-writer-wins the cache.",
+     "passos": 7
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "initWatcher was moved to run after the lengthy search.init, so the broadcaster captures its since-RV only after indexing finishes",
+     "claimNoTexto": null,
+     "evidence": "pkg/storage/unified/resource/server.go:303-311: \"s.initErr = s.search.init(ctx)\" then \"s.initErr = s.initWatcher()\"; pkg/storage/unified/sql/backend.go:558-566: \"WatchWriteEvents\" calls \"listLatestRVs\" to get \"since\" then starts poller",
+     "reason": "Code shows search.init runs before initWatcher and WatchWriteEvents snapshots latest RV at call time, so the claimed ordering and late since-RV hold.",
+     "passos": 10
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "NewResourceServer creates a cancellable watcher context (ctx,cancel) then returns nil,err on Init failure without calling cancel or stopping already-started search watch goroutines.",
+     "claimNoTexto": null,
+     "evidence": "pkg/storage/unified/resource/server.go:228-229 `ctx, cancel := context.WithCancel(...)` stored in server, and pkg/storage/unified/resource/server.go:258-262 `err := s.Init(ctx); if err != nil { s.log.Error(...); return nil, err }` with no cancel() or Stop; plus pkg/storage/unified/resource/search.go:202-213 `events, err := s.storage.WatchWriteEvents(watchctx)` followed by `go func() { for { v := <-events ... } }()` started inside init before Init can fail in initWatcher.",
+     "reason": "The Init error path discards the server without invoking the stored cancel func, leaving the watcher context and any successfully started search watch goroutine running.",
+     "passos": 6
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 303228,
+    "cacheRead": 159527,
+    "output": 12353,
+    "reasoning": 9151,
+    "ms": 41970
+   }
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "All four async legacy writes derive the timeout context from the request ctx",
+     "claimNoTexto": null,
+     "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:51, 110, 135, 163: `ctx, cancel := context.WithTimeoutCause(ctx, time.Second*10, ...)` inside `go func() {` in Create, Delete, Update, DeleteCollection; no `WithoutCancel` or `Background` in production code",
+     "reason": "Direct file read confirms all four goroutines derive WithTimeoutCause from the captured request ctx with no detach.",
+     "passos": 3
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Create (and Update:129) call recordLegacyDuration with startStorage when Storage.Create/Update fails.",
+     "claimNoTexto": null,
+     "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:45: d.recordLegacyDuration(true, mode3Str, options.Kind, method, startStorage); pkg/apiserver/rest/dualwriter_mode3.go:129: d.recordLegacyDuration(true, mode3Str, options.Kind, method, startStorage)",
+     "reason": "Both error paths call recordLegacyDuration with startStorage after a Storage failure, and metrics.go confirms that writes to the legacy histogram.",
+     "passos": 4
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The async legacy DeleteCollection path calls recordStorageDuration with startLegacy.",
+     "claimNoTexto": null,
+     "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:166 and the quoted code `d.recordStorageDuration(err != nil, mode3Str, options.Kind, method, startLegacy)` inside the `go func()` doing `d.Legacy.DeleteCollection`",
+     "reason": "The cited lines do call recordStorageDuration for the legacy DeleteCollection measurement, unlike sibling async legacy paths that call recordLegacyDuration.",
+     "passos": 5
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Delete success path passes name (unbounded object name) as the kind label where every other call passes options.Kind.",
+     "claimNoTexto": null,
+     "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:106 `d.recordStorageDuration(false, mode3Str, name, method, startStorage)` vs line 103 `d.recordStorageDuration(true, mode3Str, options.Kind, method, startStorage)`; pkg/apiserver/rest/metrics.go:23 labels `[]string{\"is_error\", \"mode\", \"kind\", \"method\"}` with func at line 59 `recordStorageDuration(isError bool, mode string, name string, method string` feeding `m.storage.WithLabelValues(..., mode, name, method)` at line 61",
+     "reason": "Line 106 passes `name` into the third label position that metrics.go defines as `kind`, while line 103 and all other recordStorageDuration callers pass `options.Kind`.",
+     "passos": 5
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Delete builds an enriched log with name/kind/method but propagates d.Log into the context instead of log.",
+     "claimNoTexto": null,
+     "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:96-97 — `log := d.Log.WithValues(\"name\", name, \"kind\", options.Kind, \"method\", method)` followed by `ctx = klog.NewContext(ctx, d.Log)`",
+     "reason": "Cited lines build enriched `log` but put `d.Log` in context, while Create/Get/List/Update/DeleteCollection all put `log` in context.",
+     "passos": 3
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The new code passes the same objInfo to Storage.Update and then Legacy.Update",
+     "claimNoTexto": null,
+     "evidence": "pkg/apiserver/rest/dualwriter_mode3.go:126 `res, async, err := d.Storage.Update(ctx, name, objInfo, ...)` and pkg/apiserver/rest/dualwriter_mode3.go:139 `_, _, errObjectSt := d.Legacy.Update(ctx, name, objInfo, ...)` inside `go func() {`",
+     "reason": "Both Update calls receive the identical objInfo with the second inside a goroutine and no updateWrapper is used, so the double-invocation claim holds.",
+     "passos": 10
+    }
+   ],
+   "uso": {
+    "chamadas": 6,
+    "input": 162886,
+    "cacheRead": 79550,
+    "output": 15075,
+    "reasoning": 11064,
+    "ms": 76868
+   }
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Grafana branch of FilterViewResults renders GrafanaRuleListItem without key={key} while sibling branches pass key.",
+     "claimNoTexto": null,
+     "evidence": "public/app/features/alerting/unified/rule-list/FilterView.tsx:157-165 — `<GrafanaRuleListItem rule={rule} groupIdentifier...` with no key prop, vs `return <DataSourceRuleLoader key={key} ... />` at line 165 and `<UnknownRuleListItem key={key} ...` at line 169",
+     "reason": "The cited code shows the Grafana branch omits key while both sibling branches include key={key}, so the factual basis holds.",
+     "passos": 2
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "canPause can become true via grafana promRule ability while Pause menu item still requires rulerRuleType.grafana.rule(rulerRule)",
+     "claimNoTexto": null,
+     "evidence": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx:83 `const canPause = (pauseSupported && pauseAllowed) || (grafanaPauseSupported && grafanaPauseAllowed);` and :123 `{canPause && rulerRuleType.grafana.rule(rulerRule) && groupIdentifier.groupOrigin === 'grafana' && (`; public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx:47 `actions: <RuleActionsButtons promRule={rule} groupIdentifier={groupIdentifier} compact />`",
+     "reason": "Code shows canPause ORs promRule ability but Pause render still requires rulerRule, which is undefined in ruler-free list view caller.",
+     "passos": 10
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Silence ability is grantable via promRule alone, but drawer only renders when rulerRuleType.grafana.alertingRule(rule) holds, causing silent no-op on prom-only rows.",
+     "claimNoTexto": null,
+     "evidence": "public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx:104-105: \"{rulerRuleType.grafana.alertingRule(rule) && showSilenceDrawer && (\"; public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx:94-96: \"const canSilence = (silenceSupported && silenceAllowed) || (grafanaSilenceSupported && grafanaSilenceAllowed)\"",
+     "reason": "Both halves of the claim hold in code: Silence menu can come from promRule ability while drawer gate requires ruler rule.",
+     "passos": 10
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Loader now maps only promResponse rules and dropped matchRules Creating/Deleting handling.",
+     "claimNoTexto": null,
+     "evidence": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx:68: \"{promResponse.data.groups.at(0)?.rules.map((promRule) => {\" with unconditional \"<GrafanaRuleListItem\" and no matchRules/RuleOperation usage; cf public/app/features/alerting/unified/rule-list/DataSourceGroupLoader.tsx:180: \"return matchRulesGroup(rulerGroup, promGroup);\" + 201-221 Rendering Creating/Deleting via RuleOperationListItem",
+     "reason": "Cited lines map only prom rules to normal items with actions and no operation prop, while the parallel loader shows the expected Creating/Deleting operation-aware pattern.",
+     "passos": 9
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 304350,
+    "cacheRead": 166447,
+    "output": 17385,
+    "reasoning": 12342,
+    "ms": 50966
+   }
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Changed getSubGroupsCount returns null when the group was concurrently deleted.",
+     "claimNoTexto": null,
+     "evidence": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java:275 and server-spi/src/main/java/org/keycloak/models/GroupModel.java:296: `return model == null ? null : model.getSubGroupsCount();` with contract `@return The number of groups beneath this group. Never returns {@code null}.`",
+     "reason": "Cited code returns null on missing delegate and interface documents never-null, so the reported violation exists.",
+     "passos": 7
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Reader thread is started but never joined before asserting caughtExceptions is empty.",
+     "claimNoTexto": null,
+     "evidence": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:139 `new Thread(() -> {` + :149 `}).start();` with no Thread reference kept, followed by :155 `deletedAll.set(true);` and :157 `assertThat(caughtExceptions, Matchers.empty());` with no join in between",
+     "reason": "Code confirms anonymous thread is started without keeping a reference and assertion runs immediately after the flag is set with no join.",
+     "passos": 4
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Reader thread busy-spins full listings with maxResults=Integer.MAX_VALUE and no throttle.",
+     "claimNoTexto": null,
+     "evidence": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:139-148: `new Thread(() -> { while (!deletedAll.get()) { try { managedRealm.admin().groups().groups(null, 0, Integer.MAX_VALUE, true);` with no sleep/yield/backoff in loop body",
+     "reason": "The cited loop repeatedly requests all groups with max=Integer.MAX_VALUE and contains no pagination change or throttle.",
+     "passos": 6
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 65099,
+    "cacheRead": 36496,
+    "output": 9634,
+    "reasoning": 7380,
+    "ms": 40668
+   }
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Constructor calls Objects.requireNonNull(grantType,...) twice and never checks rawTokenId.",
+     "claimNoTexto": null,
+     "evidence": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java:72-73 and quoted code `Objects.requireNonNull(grantType, \"Null grantType not allowed\"); Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\");` plus DefaultTokenContextEncoderProvider.java:114-117 `':' + tokenContext.getRawTokenId()` showing null suffix behavior",
+     "reason": "The cited lines duplicate the grantType check and omit rawTokenId, and encodeTokenId concatenates rawTokenId producing \"null\" suffix as claimed.",
+     "passos": 4
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "OAuth2GrantTypeFactory adds abstract String getShortcut() with no default implementation.",
+     "claimNoTexto": null,
+     "evidence": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java:33 `String getShortcut();` with no default; services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java:74 `String grantShortcut = gtf.getShortcut();` inside postInit calls it",
+     "reason": "Both the abstract method declaration and the postInit call to getShortcut() are present in the code.",
+     "passos": 4
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "isAccessTokenId uses substring(3,5) instead of (4,6) and returns false when the shortcut equals the expectation.",
+     "claimNoTexto": null,
+     "evidence": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java:483 `if (items[0].substring(3, 5).equals(expectedGrantShortcut)) return false;` corroborated by services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java:78-81 `// First 2 chars are \"sessionType\", next 2 chars \"tokenType\", last 2 chars \"grantType\"` + `String gtShortcut = encodedContext.substring(4, 6);`",
+     "reason": "The cited matcher code exactly as described uses substring(3,5) with inverted equality, while the encoder proves the grant shortcut is at substring(4,6).",
+     "passos": 7
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "grantType is snapshotted in the constructor but setFormParams() replaces formParams without updating it",
+     "claimNoTexto": null,
+     "evidence": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantType.java:102 `this.grantType = formParams.getFirst(OAuth2Constants.GRANT_TYPE);` with 105-107 `public void setFormParams(...) { this.formParams = formParams; }` not updating grantType, and 173-175 `getGrantType() { return grantType; }`; services/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeBase.java:109 `clientSessionCtx.setAttribute(Constants.GRANT_TYPE, context.getGrantType());`",
+     "reason": "Code shows snapshot without sync in setter and downstream use of getGrantType() for token context, so reported staleness and NPE-on-null mechanics exist.",
+     "passos": 8
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "initToken unconditionally encodes the ID and encodeTokenId throws IllegalStateException for any grantType with no registered shortcut.",
+     "claimNoTexto": null,
+     "evidence": "services/src/main/java/org/keycloak/protocol/oidc/TokenManager.java:1054 `token.id(encoder.encodeTokenId(tokenCtx));` and services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java:109-112 `String grantShort = factory.getShortcutByGrantType(tokenContext.getGrantType()); if (grantShort == null) { throw new IllegalStateException(\"Cannot encode token with unknown grantType: \" + tokenContext.getGrantType()); }`",
+     "reason": "Both cited behaviors are present in the code with no fallback for unmapped grant strings.",
+     "passos": 10
+    }
+   ],
+   "uso": {
+    "chamadas": 5,
+    "input": 196365,
+    "cacheRead": 97952,
+    "output": 18849,
+    "reasoning": 13911,
+    "ms": 68535
+   }
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "prefix/suffix trimming computes start and end independently with no overlap guard, so value.substring(start, value.length() - end) throws when start + end exceeds length.",
+     "claimNoTexto": null,
+     "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:102-111 and quoted code: 'while (start < sanitized.length() && start < value.length() ...)' / 'while (end < sanitized.length() && end < value.length() ...)' with no start+end guard before 'value.substring(start, value.length() - end)'",
+     "reason": "The prefix loop and suffix loop each bound only by the two string lengths with no overlap cap, so the following substring with start > length-end can throw.",
+     "passos": 4
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "verifySafeHtml throws unchecked RuntimeException when the translation or derived English file cannot be read.",
+     "claimNoTexto": null,
+     "evidence": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:70: throw new RuntimeException(\"unable to read file \" + file, e); and :79: throw new RuntimeException(\"unable to read file \" + englishFile, e); called from verify() at :46-54 which only catches IOException",
+     "reason": "Both file reads in verifySafeHtml rethrow IOException as unchecked RuntimeException, which verify() and ThemeVerifierMojo do not catch or collect into messages.",
+     "passos": 6
+    }
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 45450,
+    "cacheRead": 27114,
+    "output": 7789,
+    "reasoning": 6481,
+    "ms": 38192
+   }
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "getLoginPredicate dereferences idp.getConfig() without a null check on the new BROKER_PUBLIC clause",
+     "claimNoTexto": null,
+     "evidence": "server-spi/src/main/java/org/keycloak/models/IdentityProviderStorageProvider.java:254: .and(idp -> idp.getOrganizationId() == null || Boolean.parseBoolean(idp.getConfig().get(OrganizationModel.BROKER_PUBLIC)))",
+     "reason": "The cited line calls idp.getConfig().get without checking for null config, and create/update/remove reach it via registerIDPLoginInvalidation.",
+     "passos": 7
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "getForLogin stores one IdentityProviderListQuery per FetchMode containing a searchKey entry per distinct organizationId queried.",
+     "claimNoTexto": null,
+     "evidence": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java:77-78 `return realm.getId() + IDP_LOGIN_SUFFIX + \".\" + fetchMode;` and :223 `String searchKey = organizationId != null ? organizationId : \"\";` and :239 `query = new IdentityProviderListQuery(loaded, cacheKey, getRealm(), searchKey, cached, query);` with model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/IdentityProviderListQuery.java:39-44 `searchKeys.putAll(previous.searchKeys); this.searchKeys.put(searchKey, result);`",
+     "reason": "The cited lines and constructors show a per-FetchMode cache key and appending of each new organizationId searchKey into the same query object's map.",
+     "passos": 6
+    }
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 81824,
+    "cacheRead": 29245,
+    "output": 7811,
+    "reasoning": 5673,
+    "ms": 39818
+   }
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": true,
+     "verdict": "refuted",
+     "claim": "each obtain new LoginFormsProvider instances to render, so the re-auth error page loses hidden-username state and falls back to regular login form.",
+     "claimNoTexto": null,
+     "evidence": "services/src/main/java/org/keycloak/services/DefaultKeycloakSession.java:175-187 and services/src/main/java/org/keycloak/authentication/AuthenticationProcessor.java:589-592: `T provider = (T) providers.get(key);` with `if (provider == null) { ... provider = providerFactory.create(...) } return provider;` called via `LoginFormsProvider provider = getSession().getProvider(LoginFormsProvider.class)` in `form()`, so repeated `context.form()` calls return the same cached provider instance rather than new discarded instances.",
+     "reason": "context.form() reuses the same cached LoginFormsProvider instance, so attributes set by the helper persist to the later render call.",
+     "passos": 10
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 74647,
+    "cacheRead": 30058,
+    "output": 6360,
+    "reasoning": 4419,
+    "ms": 51423
+   }
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": true,
+     "verdict": "refuted",
+     "claim": "Deleting a client/role/group while ADMIN_FINE_GRAINED_AUTHZ_V2 is active crashes the removal flow instead of cleaning up.",
+     "claimNoTexto": null,
+     "evidence": "services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java:77 `if (Profile.isFeatureEnabled(Profile.Feature.ADMIN_FINE_GRAINED_AUTHZ)) {` and common/src/main/java/org/keycloak/common/Profile.java:305-307 `features.put(f, f == enabledFeature);` with grouping by unversioned key (Profile.java:355 `Stream.of(Feature.values()).forEach(f -> features.compute(f.getUnversionedKey(),`) where both features share unversioned key `admin-fine-grained-authz` per Profile.java:162-163",
+     "reason": "When V2 is enabled V1 is disabled so the V1-guarded listener never executes, and when the listener executes V2 is disabled so management() returns V1 permissions that do not throw.",
+     "passos": 10
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "hasPermission(ClientModel,String) dereferences the all-clients type resource without null-check before findByResource.",
+     "claimNoTexto": null,
+     "evidence": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:217-219 and server-spi-private/src/main/java/org/keycloak/authorization/AdminPermissionsSchema.java:116-133 showing getResourceTypeResource can return null",
+     "reason": "Code shows no null-check after getResourceTypeResource and that method can return null, with findByResource dereferencing resource.getId().",
+     "passos": 7
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "canMapRoles/canMapCompositeRoles/canMapClientScopeRoles only check fine-grained permission and never check MANAGE_CLIENTS role, unlike canManage/canManageClientScopes siblings",
+     "claimNoTexto": null,
+     "evidence": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:91-107 with `return hasPermission(client, AdminPermissionsSchema.MAP_ROLES);` vs `if (root.hasOneAdminRole(AdminRoles.MANAGE_CLIENTS)) return true;` in canManage and canManageClientScopes",
+     "reason": "Direct file read confirms the three map methods contain only hasPermission calls while siblings contain explicit MANAGE_CLIENTS checks.",
+     "passos": 10
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "getClientsWithPermission calls root.evaluatePermission separately for every Clients-type resource inside findByType.",
+     "claimNoTexto": null,
+     "evidence": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:138-142 `resourceStore.findByType(server, AdminPermissionsSchema.CLIENTS_RESOURCE_TYPE, resource -> { if (hasGrantedPermission(resource, scope)) {` and services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:274-276 `private boolean hasGrantedPermission(Resource resource, String scope) { ResourceServer server = root.realmResourceServer(); Collection<Permission> permissions = root.evaluatePermission(new ResourcePermission(resource, resource.getScopes(), server), server);`",
+     "reason": "The loop body delegates to hasGrantedPermission which directly invokes root.evaluatePermission per resource, so per-resource evaluation occurs.",
+     "passos": 7
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 298184,
+    "cacheRead": 110466,
+    "output": 27989,
+    "reasoning": 22848,
+    "ms": 87565
+   }
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "`queued: datetime = timezone.now()` is evaluated once at import so every AssignmentSource shares the same timestamp.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/integrations/services/assignment_source.py:18 `queued: datetime = timezone.now()` under `@dataclass(frozen=True)` with `from dataclasses import asdict, dataclass` and no field/default_factory",
+     "reason": "The cited default is evaluated once at class definition so instances omitting queued share one timestamp, making the default_factory fix applicable.",
+     "passos": 5
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "verdict": "refuted",
+     "claim": "the datetime is not JSON-serializable so outbound assignee sync tasks fail to serialize/enqueue instead of syncing.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/conf/server.py:739 `CELERY_TASK_SERIALIZER = \"pickle\"` (with 741 `CELERY_ACCEPT_CONTENT = {\"pickle\"}`), and src/sentry/integrations/tasks/sync_assignee_outbound.py:15-21 task defines no json serializer override, so kwargs are pickled not JSON-encoded and datetime pickles fine.",
+     "reason": "Celery is configured to pickle task payloads, so a datetime in kwargs does not cause a JSON serialization/enqueue failure.",
+     "passos": 10
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "`from_dict` passes a serialized `queued` string straight into a datetime field with no coercion, and returns None on any unexpected/missing key.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/integrations/services/assignment_source.py:31-34: `return cls(**input_dict)` with `except (ValueError, TypeError): return None` and no coercion; src/sentry/integrations/mixins/issues.py:390-393: `if sync_source and sync_source.integration_id == self.org_integration.integration_id: return False` then `return config.get(key, False)`",
+     "reason": "from_dict does no type coercion and returns None on TypeError, and should_sync with None skips the cycle guard and returns the config value.",
+     "passos": 5
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "",
+     "reason": "",
+     "passos": 7
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 227750,
+    "cacheRead": 70251,
+    "output": 14701,
+    "reasoning": 11301,
+    "ms": 39851
+   }
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "fetch_error_details pairs error_ids with events.values() via zip, but get_multi returns a dict keyed by node_id whose values() order need not match error_ids order",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:118: for event_id, data in zip(error_ids, events.values()); src/sentry/nodestore/django/backend.py:48-49: return {n.id: decompress(n.data) for n in Node.objects.filter(id__in=id_list)} (DB order, not id_list order); src/sentry/nodestore/base.py:205: items.update(cache_items) (appends cached items after uncached, breaking id_list order)",
+     "reason": "The cited zip exists and get_multi implementations do not guarantee values() follows id_list order, so the mismatch risk described is real.",
+     "passos": 8
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "validate_timestamp/validate_age test mutual exclusion with truthiness (initial_data.get(...)) so age=0 or timestamp=0 bypasses the check.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/issues/endpoints/browser_reporting_collector.py:52 `if self.initial_data.get(\"age\"):` and :58 `if self.initial_data.get(\"timestamp\"):`",
+     "reason": "Code uses truthiness checks so integer 0 is falsy and bypasses the mutual-exclusion error, with no other cross-field validation present.",
+     "passos": 4
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "update() reads validated_data.get(\"detector_type\") but the serializer field is `type` (validated by validate_type) and create() uses validated_data[\"type\"]",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/workflow_engine/endpoints/validators/base/detector.py:64 `instance.type = validated_data.get(\"detector_type\", instance.group_type).slug`; src/sentry/workflow_engine/endpoints/validators/base/detector.py:35 `type = serializers.CharField()` with src/sentry/workflow_engine/endpoints/validators/base/detector.py:39 `def validate_type(self, value: str)`; src/sentry/workflow_engine/endpoints/validators/base/detector.py:133 `type=validated_data[\"type\"].slug`",
+     "reason": "All cited facts match the code, so the missed lookup and fallback behavior as described exists.",
+     "passos": 6
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "the use-table-widget-visualization branch renders TableWidgetVisualization with hardcoded empty columns/data/meta instead of result.data, result.meta, fields and eventView",
+     "claimNoTexto": null,
+     "evidence": "static/app/views/dashboards/widgetCard/chart.tsx:164-174: `<TableWidgetVisualization columns={[]} tableData={{ data: [], meta: { fields: {}, units: {}, }, }} />` vs else-branch at 176-187 using `eventView={eventView} ... fields={fields} ... metadata={result.meta} data={result.data}`",
+     "reason": "Cited branch hardcodes empty table props while real result/fields/eventView are in scope and used only by the old branch, so flag-on would blank tables.",
+     "passos": 4
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "column fallback reads tableData?.meta.fields but only guards tableData, so meta===undefined throws TypeError while data uses tableData?.data ?? []",
+     "claimNoTexto": null,
+     "evidence": "static/app/views/dashboards/widgets/tableWidget/tableWidgetVisualization.tsx:94: Object.keys(tableData?.meta.fields).map((key: string) => ({ AND static/app/views/dashboards/widgets/tableWidget/tableWidgetVisualization.tsx:103: data={tableData?.data ?? []}",
+     "reason": "Code shows fallback uses tableData?.meta.fields with no guard on meta, so undefined meta throws, while data line safely falls back to [].",
+     "passos": 4
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "analytics.record fires before the organizations:preprod-artifact-assemble feature check",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/preprod/api/endpoints/organization_preprod_artifact_assemble.py:81-91 — \"analytics.record(...)\" at lines 81-86 precedes \"if not features.has(\\\"organizations:preprod-artifact-assemble\\\", ...)\" at lines 88-91",
+     "reason": "The cited file shows the record call unconditionally first and the feature gate second, so the ordering claim holds.",
+     "passos": 2
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "tag.key is interpolated directly into the request path",
+     "claimNoTexto": null,
+     "evidence": "static/app/views/explore/hooks/useGetTraceItemAttributeValues.tsx:69 - `/organizations/${orgSlug}/trace-items/attributes/${attributeKey}/values/` with no encodeURIComponent; static/app/api.tsx:203 - buildRequestUrl concatenates path raw",
+     "reason": "The cited lines interpolate attributeKey/tag.key directly with no encoding, and the API client does not encode the path.",
+     "passos": 7
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "the endpoint loops over an attacker-controlled unauthenticated raw_data list with no size cap, validating each item and emitting metrics",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/issues/endpoints/browser_reporting_collector.py:80 `permission_classes = ()`, :99 `if not isinstance(raw_data, list):`, :108 `for report in raw_data:`, :109 `serializer = BrowserReportSerializer(data=report)`, :124 `metrics.incr(` with no len/max check between 99-128",
+     "reason": "Code shows unauthenticated endpoint iterating raw request list with per-item DRF validation and per-item metrics.incr and no batch-size check.",
+     "passos": 7
+    }
+   ],
+   "uso": {
+    "chamadas": 8,
+    "input": 221607,
+    "cacheRead": 106024,
+    "output": 24223,
+    "reasoning": 18015,
+    "ms": 66119
+   }
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "MetricAlertDetectorHandler subclasses StatefulDetectorHandler but implements none of its abstractmethods (counter_names, get_dedupe_value, get_group_key_values, build_occurrence_and_event_data).",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/incidents/grouptype.py:11-12 `class MetricAlertDetectorHandler(StatefulDetectorHandler[QuerySubscriptionUpdate]):` + `pass`; src/sentry/workflow_engine/processors/detector.py:142-167 `@abc.abstractmethod def counter_names`, `get_dedupe_value`, `get_group_key_values`, `build_occurrence_and_event_data`; src/sentry/workflow_engine/models/detector.py:86 `return group_type.detector_handler(self)`; src/sentry/workflow_engine/processors/detector.py:52-58 `handler = detector.detector_handler` with no try/except before `handler.evaluate`",
+     "reason": "The cited class is an empty subclass of an ABC with those unimplemented abstractmethods, and Detector.detector_handler directly instantiates it without handling TypeError in process_detectors.",
+     "passos": 6
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 21024,
+    "cacheRead": 13222,
+    "output": 2295,
+    "reasoning": 1458,
+    "ms": 15342
+   }
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "grupos": [],
+   "uso": null
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Direct indexing integration.metadata[\"sender\"][\"login\"] raises KeyError when sender is absent.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/integrations/github/integration.py:503 `!= integration.metadata[\"sender\"][\"login\"]` with no .get guard and outside try/except; src/sentry/integrations/github/integration.py:376-377 `if state.get(\"sender\"): integration[\"metadata\"][\"sender\"] = state[\"sender\"]` shows sender can be absent",
+     "reason": "Cited lines use unguarded double indexing while build_integration conditionally sets sender, so missing sender raises KeyError.",
+     "passos": 6
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "get_user_info() calls raise_for_status() and resp.json() without try/except",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/identity/github/provider.py:7-17 `resp.raise_for_status()` with no try/except and `return resp.json()`; src/sentry/integrations/github/integration.py:434 `authenticated_user_info = get_user_info(payload[\"access_token\"])` with no surrounding try/except",
+     "reason": "Both the helper and its caller lack try/except as described, so exceptions propagate.",
+     "passos": 7
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Check uses `is None` so `?installation_id=` (empty string) passes as valid and is bound to pipeline state.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/integrations/github/integration.py:451 `if installation_id is None:` with 448-450 `installation_id = request.GET.get(\"installation_id\", pipeline.fetch_state(\"installation_id\"))` and 454 `pipeline.bind_state(\"installation_id\", installation_id)`, plus 478 `integration=Integration.objects.get(external_id=installation_id)`",
+     "reason": "Code uses `is None` so empty string skips redirect and is bound then used in Integration lookup with no intervening empty-check.",
+     "passos": 6
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 65672,
+    "cacheRead": 42595,
+    "output": 8510,
+    "reasoning": 6093,
+    "ms": 24561
+   }
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "isinstance(process, multiprocessing.Process) is False for processes created via mp_context.Process",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/spans/consumers/process/flusher.py:53: self.mp_context = mp_context = multiprocessing.get_context(\"spawn\"); src/sentry/spans/consumers/process/flusher.py:105: make_process = self.mp_context.Process; src/sentry/spans/consumers/process/flusher.py:254: if isinstance(process, multiprocessing.Process):; src/sentry/spans/consumers/process/flusher.py:346: if isinstance(process, multiprocessing.Process):",
+     "reason": "Cited isinstance gates exist in both _ensure_processes_alive and join, and real processes are created via spawn context's Process factory while tests use threading.Thread, so the gates distinguish them exactly as described.",
+     "passos": 5
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Negative max_processes passes the `or` fallback and min() yields a negative num_processes, so range() is empty and no flusher process is ever created.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/spans/consumers/process/flusher.py:51 `self.max_processes = max_processes or len(buffer.assigned_shards)` and src/sentry/spans/consumers/process/flusher.py:60 `self.num_processes = min(self.max_processes, len(buffer.assigned_shards))` with src/sentry/spans/consumers/process/flusher.py:61-62 `{i: [] for i in range(self.num_processes)}`",
+     "reason": "Negative ints are truthy so the `or` fallback is skipped and min() preserves the negative, leaving range() empty.",
+     "passos": 7
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "get_memory_info() returns cluster-wide iter_cluster_memory_usage via the same Redis client for every shard_buffer, but submit() calls it once per flusher process and sums the duplicated results.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/spans/buffer.py:375-376 `def get_memory_info(self) -> Generator[ServiceMemory]: return iter_cluster_memory_usage(self.client)` + src/sentry/processing/backpressure/memory.py:82-86 `def iter_cluster_memory_usage(cluster: Cluster)` yields INFO for each node + src/sentry/spans/buffer.py:117-118 `return redis.redis_clusters.get_binary(settings.SENTRY_SPAN_BUFFER_CLUSTER)` (same cluster for all buffers) + src/sentry/spans/consumers/process/flusher.py:299-301 `for buffer in self.buffers.values(): memory_infos.extend(buffer.get_memory_info())` with `used = sum(x.used ...)` + flusher.py:93,125 `shard_buffer = SpansBuffer(shards)` / `self.buffers[process_index] = shard_buffer` (one buffer per process)",
+     "reason": "Code confirms each buffer queries the same cluster-wide INFO and submit loops over all per-process buffers and sums the results.",
+     "passos": 9
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "time.sleep is monkeypatched to `lambda _: None` at test start, so the added time.sleep(0.1) does nothing.",
+     "claimNoTexto": null,
+     "evidence": "tests/sentry/spans/consumers/process/test_consumer.py:15 `monkeypatch.setattr(\"time.sleep\", lambda _: None)` and tests/sentry/spans/consumers/process/test_consumer.py:62 `time.sleep(0.1)` with `import time` at line 1; src/sentry/spans/consumers/process/flusher.py:331 `self.stopped.value = True` in join() and flusher.py:166 `while not stopped.value:` loop reading `current_drift.value` at line 168",
+     "reason": "The monkeypatch disables the wait and join() sets stopped which can terminate the flusher loop before it observes the drift, so the race described exists.",
+     "passos": 5
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 144384,
+    "cacheRead": 74234,
+    "output": 25386,
+    "reasoning": 21566,
+    "ms": 83326
+   }
+  },
+  "async-import-of-the-appstore-packages-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "getCalendarCredentials calls async getCalendar without await, storing a Promise in the calendar field while remaining a sync function.",
+     "claimNoTexto": null,
+     "evidence": "packages/app-store/_utils/getCalendar.ts:9 `export const getCalendar = async (credential: CredentialPayload | null): Promise<Calendar | null>` and packages/core/CalendarManager.ts:23-28 `export const getCalendarCredentials = (credentials: Array<CredentialPayload>) =>` with `const calendar = getCalendar(credential);` ; packages/core/CalendarManager.ts:48 `const calendar = await item.calendar;` shows Promise handling needed",
+     "reason": "The cited code does store the async result without await and requires awaiting at use site.",
+     "passos": 7
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Recurring-event cancellation uses .forEach(async ...) that pushes into apiDeletes asynchronously after the outer flow already proceeds to await apiDeletes.",
+     "claimNoTexto": null,
+     "evidence": "packages/features/bookings/lib/handleCancelBooking.ts:460: .forEach(async (credential) => { ; packages/features/bookings/lib/handleCancelBooking.ts:652: await Promise.all(prismaPromises.concat(apiDeletes));",
+     "reason": "The cited code uses async forEach with awaited deleteEvent then push, while the later await snapshots apiDeletes, so late pushes are missed.",
+     "passos": 4
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S2",
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "bookingRefsFiltered.forEach(async ...) does not await deleteEvent/deleteMeeting promises and try/catch around forEach cannot catch async errors.",
+     "claimNoTexto": null,
+     "evidence": "packages/app-store/vital/lib/reschedule.ts:125 – bookingRefsFiltered.forEach(async (bookingRef) => { ; packages/app-store/vital/lib/reschedule.ts:129 – return calendar?.deleteEvent(bookingRef.uid, builder.calendarEvent); ; packages/app-store/vital/lib/reschedule.ts:131 – return deleteMeeting(credentialsMap.get(bookingRef.type), bookingRef.uid); ; packages/types/Calendar.d.ts:222 – deleteEvent(uid: string, event: CalendarEvent, externalCalendarId?: string | null): Promise<unknown>;; packages/types/VideoApiAdapter.d.ts:20 – deleteMeeting(uid: string): Promise<unknown>;",
+     "reason": "The cited code uses forEach with an async callback without awaiting, and both callees return Promises, so the try/catch cannot catch async rejections.",
+     "passos": 4
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 55996,
+    "cacheRead": 32430,
+    "output": 7157,
+    "reasoning": 5061,
+    "ms": 23296
+   }
+  },
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "immediateDelete path cancels the SendGrid scheduled send then returns without deleting or updating the WorkflowReminder row",
+     "claimNoTexto": null,
+     "evidence": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts:213-223: \"if (immediateDelete) { await client.request({ url: \\\"/v3/user/scheduled_sends\\\", ... status: \\\"cancel\\\", }); return; }\" with no prisma delete/update before return, vs packages/features/ee/workflows/lib/reminders/smsReminderManager.ts:177-186 which does prisma.workflowReminder.delete after cancel",
+     "reason": "The cited code does exactly what the comment says, and the SMS path does delete the row, so the reported discrepancy exists.",
+     "passos": 10
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "SendGrid cancel loop queues Prisma deletes but a mid-loop throw skips Promise.all so queued deletes are never executed, and the catch only logs then continues scheduling.",
+     "claimNoTexto": null,
+     "evidence": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:56-77 — `for (const reminder of remindersToCancel) { await client.request({...}); const workflowReminderToDelete = prisma.workflowReminder.delete({where:{id: reminder.id,},}); workflowRemindersToDelete.push(workflowReminderToDelete); } await Promise.all(workflowRemindersToDelete); } catch (error) { console.log(...); }` followed by unscheduled-reminders scheduling code",
+     "reason": "Code shows deletes are queued then awaited after loop, any SendGrid throw skips the await, and catch only logs before scheduling continues.",
+     "passos": 3
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "remindersToCancel is loaded unbounded and each SendGrid cancel is awaited sequentially inside the for loop.",
+     "claimNoTexto": null,
+     "evidence": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:44-57 and quoted code `const remindersToCancel = await prisma.workflowReminder.findMany({` with no take/limit, and `for (const reminder of remindersToCancel) { await client.request({`",
+     "reason": "The findMany has no pagination/limit and the SendGrid request is awaited inside the for loop, so both factual premises hold.",
+     "passos": 2
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 66587,
+    "cacheRead": 35359,
+    "output": 10114,
+    "reasoning": 7986,
+    "ms": 40355
+   }
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Line 114 compares two Dayjs objects with === which is always false, so zero-length (unavailable-day) date overrides are never detected.",
+     "claimNoTexto": null,
+     "evidence": "packages/trpc/server/routers/viewer/slots.ts:114: `if (dayjs(date.start).add(utcOffset, \"minutes\") === dayjs(date.end).add(utcOffset, \"minutes\")) {`",
+     "reason": "The cited line constructs two distinct Dayjs objects and compares them with reference equality, so the zero-length check can never be true as described.",
+     "passos": 10
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Working-hours check computes both start and end from slotStartTime, ignoring eventLength/slotEndTime.",
+     "claimNoTexto": null,
+     "evidence": "packages/trpc/server/routers/viewer/slots.ts:141-142: `const start = slotStartTime.hour() * 60 + slotStartTime.minute();` and `const end = slotStartTime.hour() * 60 + slotStartTime.minute();` while slotEndTime is defined at line 99 as `const slotEndTime = time.add(eventLength, \"minutes\").utc();` but unused in this check.",
+     "reason": "Both variables are derived from slotStartTime, so end overflow past workingHour.endTime cannot be detected by line 143.",
+     "passos": 4
+    }
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 80324,
+    "cacheRead": 28846,
+    "output": 14366,
+    "reasoning": 12327,
+    "ms": 81142
+   }
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "packages/app-store/googlecalendar/lib/CalendarService.ts:1024 `await SelectedCalendarRepository.updateManyByCredentialId(this.credential.id, {});` and packages/lib/server/repository/selectedCalendar.ts:400-404 passes `data` straight to `prisma.selectedCalendar.updateMany({ where: { credentialId }, data })`",
+     "reason": "The cited call passes empty data and the repository forwards it unchanged to Prisma, so no column is touched.",
+     "passos": 10
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "handler directly instantiates CalendarCacheRepository instead of the calendar-cache.ts factory that returns CalendarCacheRepositoryMock when disabled",
+     "claimNoTexto": null,
+     "evidence": "packages/trpc/server/routers/viewer/calendars/connectedCalendars.handler.ts:28 `const cacheRepository = new CalendarCacheRepository();` and packages/features/calendar-cache/calendar-cache.ts:27-28 `if (isCalendarCacheEnabledGlobally) return new CalendarCacheRepository(calendar); return new CalendarCacheRepositoryMock();` and packages/features/calendar-cache/calendar-cache.repository.ts:174 `const cacheStatuses = await prisma.calendarCache.groupBy({`",
+     "reason": "All factual premises hold: handler uses `new CalendarCacheRepository()` and the factory returns Mock when disabled while real method queries prisma groupBy.",
+     "passos": 5
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "deleteCacheMutation has no query invalidation while disconnectMutation invalidates connectedCalendars/integrations",
+     "claimNoTexto": null,
+     "evidence": "packages/features/apps/components/CredentialActionsDropdown.tsx:42-50 `const deleteCacheMutation = trpc.viewer.calendars.deleteCache.useMutation({ onSuccess: () => { showToast... onSuccess?.(); }, onError... })` with no invalidate; and :61-64 `async onSettled() { await utils.viewer.calendars.connectedCalendars.invalidate(); await utils.viewer.apps.integrations.invalidate(); }`",
+     "reason": "Direct code read shows the asymmetry described by the comment exists, and cacheUpdatedAt prop comes from the connectedCalendars query that is not invalidated by the delete path itself.",
+     "passos": 10
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "sed -i '' -E uses BSD/macOS in-place syntax.",
+     "claimNoTexto": null,
+     "evidence": "scripts/test-gcal-webhooks.sh:68 `sed -i '' -E \"s|^GOOGLE_WEBHOOK_URL=.*|GOOGLE_WEBHOOK_URL=$TUNNEL_URL|\" \"$ENV_FILE\"`",
+     "reason": "Line 68 uses empty-string -i argument which is BSD syntax and fails on GNU sed, with no portable handling elsewhere.",
+     "passos": 3
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "fixed /tmp/tmole.log combined with rm -f and shell redirect follows symlinks",
+     "claimNoTexto": null,
+     "evidence": "scripts/test-gcal-webhooks.sh:4 `LOG_FILE=\"/tmp/tmole.log\"` and scripts/test-gcal-webhooks.sh:34-35 `rm -f \"$LOG_FILE\"` + `tmole $TM_PORT > \"$LOG_FILE\" 2>&1 &` with no mktemp in file",
+     "reason": "Cited lines use a predictable /tmp path with rm followed by truncating redirect, so the symlink concern and mktemp recommendation rest on true code facts.",
+     "passos": 3
+    }
+   ],
+   "uso": {
+    "chamadas": 5,
+    "input": 154825,
+    "cacheRead": 75838,
+    "output": 23823,
+    "reasoning": 19699,
+    "ms": 97656
+   }
+  },
+  "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "TopicUser.find_by can return nil when the user has no row, then tu.notification_level dereferences nil.",
+     "claimNoTexto": null,
+     "evidence": "app/controllers/topics_controller.rb:105-107: `tu = TopicUser.find_by(user_id: current_user.id, topic_id: params[:topic_id])` followed by `if tu.notification_level > TopicUser.notification_levels[:regular]` with no nil guard; app/models/topic_user.rb:68-72 defines `TopicUser.get` as `find_by` and 74-106 defines `change (creates a record when none is present)`",
+     "reason": "The endpoint dereferences the find_by result without handling nil and nothing in unsubscribe creates the row first, so the reported crash path exists.",
+     "passos": 10
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Per-topic unsubscribe mutates notification_level via GET (t/:slug/:topic_id/unsubscribe -> topics#unsubscribe with tu.save!).",
+     "claimNoTexto": null,
+     "evidence": "config/routes.rb:440 `get \"t/:slug/:topic_id/unsubscribe\" => \"topics#unsubscribe\"` and app/controllers/topics_controller.rb:98-113 `def unsubscribe ... tu.notification_level = ... tu.save!`",
+     "reason": "Routes map GET unsubscribe to topics#unsubscribe and that action mutates notification_level with save!, confirming the reported facts.",
+     "passos": 7
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "unsubscribe_link now interpolates %{unsubscribe_url} but MessageBuilder does not guarantee it is present when add_unsubscribe_link is true.",
+     "claimNoTexto": null,
+     "evidence": "config/locales/server.en.yml:1852-1855 `To stop receiving notifications about this particular topic, [click here](%{unsubscribe_url}).` + lib/email/message_builder.rb:24-28 template_args only defaults site_name/base_url/user_preferences_url with no unsubscribe_url, used unguarded at lib/email/message_builder.rb:67 `PrettyText.cook(I18n.t('unsubscribe_link', template_args))` and :90 `body << I18n.t('unsubscribe_link', template_args)` under `if @opts[:add_unsubscribe_link]`",
+     "reason": "Locale requires %{unsubscribe_url} and MessageBuilder interpolates it whenever add_unsubscribe_link is true without defaulting or guarding it.",
+     "passos": 5
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 588855,
+    "cacheRead": 276918,
+    "output": 11236,
+    "reasoning": 8205,
+    "ms": 68235
+   }
+  },
+  "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Light-theme branch uses $lightness 70% while the original was $lightness 30%.",
+     "claimNoTexto": null,
+     "evidence": "app/assets/stylesheets/desktop/topic-post.scss:291 `color: dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%));` and app/assets/stylesheets/common/foundation/variables.scss:46 `@function dark-light-choose($light-theme-result, $dark-theme-result) {`",
+     "reason": "Current code indeed has 70% as first arg and the function defines first arg as $light-theme-result, so the comment correctly describes the light-theme branch.",
+     "passos": 10
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Light-theme branch uses $lightness 30% while the original was $lightness 70%.",
+     "claimNoTexto": null,
+     "evidence": "app/assets/stylesheets/mobile/modal.scss:102 `color: dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%));` vs app/assets/stylesheets/desktop/modal.scss:94 `color: dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%));` with app/assets/stylesheets/common/foundation/variables.scss:46 `@function dark-light-choose($light-theme-result, $dark-theme-result)`",
+     "reason": "Mobile file indeed has 30% as first (light-theme) arg where desktop has 70%, matching the comment.",
+     "passos": 9
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Light-theme branch uses $lightness 50% while the original was $lightness 20%.",
+     "claimNoTexto": null,
+     "evidence": "app/assets/stylesheets/mobile/topic-post.scss:182 → `color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%));`; app/assets/stylesheets/desktop/topic-post.scss:321 → `color: dark-light-choose(scale-color($primary, $lightness: 20%), scale-color($secondary, $lightness: 80%));`; app/assets/stylesheets/common/foundation/variables.scss:46 → `@function dark-light-choose($light-theme-result, $dark-theme-result)`",
+     "reason": "Mobile h3 uses 50% as first (light-theme) arg while desktop counterpart uses 20%/80%, matching the comment.",
+     "passos": 9
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Light-theme branch uses $lightness 50% while the original was $lightness 30% for .group-member-info .name.",
+     "claimNoTexto": null,
+     "evidence": "app/assets/stylesheets/desktop/user.scss:522: color: dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%)); + app/assets/stylesheets/common/foundation/variables.scss:46: @function dark-light-choose($light-theme-result, $dark-theme-result)",
+     "reason": "Current code confirms first (light-theme) arg uses 50% for .group-member-info .name, matching the comment's premise.",
+     "passos": 7
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 885901,
+    "cacheRead": 123891,
+    "output": 15861,
+    "reasoning": 11645,
+    "ms": 61963
+   }
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "The conditional is named include_website_name without the trailing ? required by ActiveModel::Serializer 0.8.",
+     "claimNoTexto": null,
+     "evidence": "app/serializers/user_serializer.rb:153 `def include_website_name` — the sole `def include_` without `?` vs. app/serializers/user_serializer.rb:117 `def include_email?`, :161 `def include_card_image_badge_id?`, :201 `def include_stats?`, etc.",
+     "reason": "Inspection confirms the cited method lacks `?` while every other include_ predicate in the same file has it, so the reported naming facts hold.",
+     "passos": 5
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "URI without a scheme has nil host, so website_name returns nil even when website is present.",
+     "claimNoTexto": null,
+     "evidence": "app/serializers/user_serializer.rb:137-140 `website_host = URI(website.to_s).host rescue nil` + `return if website_host.nil?`; app/assets/javascripts/discourse/templates/user/user.hbs:66 `{{#if model.website_name}}`",
+     "reason": "Serializer returns early nil when host is nil and template gates display on website_name, matching the reported bug.",
+     "passos": 6
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Same-domain display concatenates only host + path, discarding query and fragment.",
+     "claimNoTexto": null,
+     "evidence": "app/serializers/user_serializer.rb:143 `website_host + URI(website.to_s).path` (same pattern at :146 and :148) and app/assets/javascripts/discourse/templates/user/user.hbs:69 `<a href={{model.website}} ...>{{model.website_name}}</a>`",
+     "reason": "The cited code uses only host plus URI#path, so query/fragment are dropped while href uses full website.",
+     "passos": 4
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 209672,
+    "cacheRead": 31135,
+    "output": 8748,
+    "reasoning": 6457,
+    "ms": 37559
+   }
+  },
+  "advanced-sql-analytics-framework-grafana-codex": {
+   "grupos": [],
+   "uso": null
+  },
+  "authzservice-improve-authz-caching-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Check returns deny from permDenialCache before trying cached perms or the DB requery",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/authz/rbac/service.go:116-121 `if _, ok := s.permDenialCache.Get(ctx, permDenialKey); ok { return &authzv1.CheckResponse{Allowed: false}, nil }` precedes getCachedIdentityPermissions at line 123 and getIdentityPermissions (DB) at line 139; only permDenialCache uses are Get at 117 and Set on !allowed at 154 with no Delete/clear.",
+     "reason": "Code order confirms denial short-circuit blocks both cache and DB paths and no invalidation exists.",
+     "passos": 7
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "userPermDenialCacheKey concatenates namespace/userUID/action/name/parent with '_' and omits IdentityType while TypeUser and TypeServiceAccount share the same key space.",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/authz/rbac/cache.go:30-32 `func userPermDenialCacheKey(namespace, userUID, action, name, parent string) string { return namespace + \".perm_\" + userUID + \"_\" + action + \"_\" + name + \"_\" + parent }` and pkg/services/authz/rbac/service.go:116 `permDenialKey := userPermDenialCacheKey(checkReq.Namespace.Value, checkReq.UserUID, checkReq.Action, checkReq.Name, checkReq.ParentFolder)`",
+     "reason": "The function joins the five fields with '_' without IdentityType and the single call site passes UserUID without IdentityType for all identity types.",
+     "passos": 10
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "A denial entry is stored per (namespace, user, action, name, parent) where name/parent are request-controlled, in a local cache with only TTL expiry.",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/authz/rbac/cache.go:30-32 `func userPermDenialCacheKey(namespace, userUID, action, name, parent string) string { return namespace + \".perm_\" + userUID + \"_\" + action + \"_\" + name + \"_\" + parent }`; pkg/services/authz/rbac/service.go:153-155 `if !allowed { s.permDenialCache.Set(ctx, permDenialKey, true) }` with key from line 116 from checkReq.Name/ParentFolder; pkg/services/authz/rbac/service.go:218-228 `Name: req.GetName(), ParentFolder: req.GetFolder()` with no added validation; pkg/services/authz/rbac.go:88 `cache.NewLocalCache(cache.Config{Expiry: 5 * time.Minute, CleanupInterval: 10 * time.Minute})` and cache.go:88 `c.cache.Set(ctx, key, data, c.ttl)` with shortCacheTTL=30s",
+     "reason": "All factual premises hold in the code: denial key includes name/parent taken directly from the request and is Set on deny into a TTL-only local cache wrapper.",
+     "passos": 7
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 169461,
+    "cacheRead": 87320,
+    "output": 12011,
+    "reasoning": 8791,
+    "ms": 47770
+   }
+  },
+  "advanced-query-processing-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "subRequest at shardQuerySplitting.ts:154 spreads original scopedVars/filters so the second pass re-runs addAdHocFilters, duplicating ad-hoc labels and corrupting the expr sent to runQuery",
+     "claimNoTexto": null,
+     "evidence": "public/app/plugins/datasource/loki/modifyQuery.ts:494-496 and the quoted code that contradicts the comment.",
+     "reason": "I could not fully verify duplication behavior from already-read code without checking labelExists coverage for all paths, so I cannot prove the corruption claim false.",
+     "passos": 10
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "verdict": "refuted",
+     "claim": "WHY: Old method (datasource.ts:436-438) stamped each query with datasource ref; new method (datasource.ts:1135-1140) returns only expr/step/legendFormat, leaving stale/missing datasource on split targets for downstream routing.",
+     "claimNoTexto": null,
+     "evidence": "public/app/plugins/datasource/loki/datasource.ts:1135-1140 and quoted code `return { ...target, expr: exprWithAdHoc, step, legendFormat, };`",
+     "reason": "The new method spreads `...target` so it preserves the existing datasource field rather than returning only expr/step/legendFormat.",
+     "passos": 5
+    }
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 128477,
+    "cacheRead": 45471,
+    "output": 10156,
+    "reasoning": 7543,
+    "ms": 61032
+   }
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "BlockedEmail.should_block? looks up with exact case-sensitive `where(email: email)` on the raw value.",
+     "claimNoTexto": null,
+     "evidence": "app/models/blocked_email.rb:12 `record = BlockedEmail.where(email: email).first` with no normalization; app/models/blocked_email.rb:21-23 `set_defaults` only sets action_type; lib/validators/email_validator.rb:13 passes raw `value` to `BlockedEmail.should_block?(value)`",
+     "reason": "The cited method does a raw exact lookup with no downcase/strip, the model has no write-time normalization, and the caller passes the raw value, so case/whitespace variants miss the block.",
+     "passos": 7
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "should_block? does read-modify-write `match_count += 1` followed by `save`.",
+     "claimNoTexto": null,
+     "evidence": "app/models/blocked_email.rb:14-16 and the quoted code `record.match_count += 1` + `record.last_match_at = Time.zone.now` + `record.save`",
+     "reason": "The cited lines perform non-atomic read-modify-write increment followed by save with no atomic counter or lock in the file.",
+     "passos": 2
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "unverified",
+     "claim": "emailValidation depends on `rejectedEmails.@each` while the array holds primitive strings pushed via `pushObject`.",
+     "claimNoTexto": null,
+     "evidence": "app/assets/javascripts/discourse/controllers/create_account_controller.js:96  }.property('accountEmail', 'rejectedEmails.@each'),",
+     "reason": "The cited dependency, array initialization, and pushObject call were all verified, but whether bare @each fails to invalidate on pushObject requires Ember internals not checked within the step limit.",
+     "passos": 10
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "validate_each calls should_block?, which does a SELECT plus a synchronous UPDATE (match_count/last_match_at save) inside the validation path",
+     "claimNoTexto": null,
+     "evidence": "lib/validators/email_validator.rb:13: if record.errors[attribute].blank? and BlockedEmail.should_block?(value); app/models/blocked_email.rb:11-18: record = BlockedEmail.where(email: email).first ... record.match_count += 1 ... record.save",
+     "reason": "The cited code does call should_block? which performs a SELECT and a save, so the reported problem exists.",
+     "passos": 6
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 3966493,
+    "cacheRead": 1033097,
+    "output": 16375,
+    "reasoning": 13135,
+    "ms": 243675
+   }
+  },
+  "database-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Added r.log.Error calls log the full ids slice (up to batch size, e.g. 32767 IDs) plus cond on every fetch/delete batch.",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/annotations/annotationsimpl/xorm_store.go:534: r.log.Error(\"Annotations to clean by time\", \"count\", len(ids), \"ids\", ids, \"cond\", cond, \"err\", err) inside untilDoneOrCancelled batch loop at line 528",
+     "reason": "The cited lines unconditionally log the full ids slice and cond at Error level on every cleanup batch, including success with nil err.",
+     "passos": 4
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Global cleanup ticker changed from 10 minutes to 1 minute.",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/cleanup/cleanup.go:77 `ticker := time.NewTicker(time.Minute * 1)` and pkg/services/cleanup/cleanup.go:96-105 `cleanupJobs := []cleanUpJob` with 8 entries (temporary files, snapshots, dashboard versions, images, annotations, invites, short URLs, query history)",
+     "reason": "Current code shows a 1-minute ticker driving all 8 jobs, and annotation cleanup uses batched fetch-then-delete loops, so the frequency and load premises hold.",
+     "passos": 8
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "MaxCount cleanup fetches victim IDs with LIMIT/OFFSET then deletes them in a separate statement with no transaction.",
+     "claimNoTexto": null,
+     "evidence": "pkg/services/annotations/annotationsimpl/xorm_store.go:549-556: cond := fmt.Sprintf(`%s ORDER BY id DESC %s`, annotationType, r.db.GetDialect().LimitOffset(...cfg.MaxCount)); ids, err := r.fetchIDs(ctx, \"annotation\", cond); x, y := r.deleteByIDs(ctx, \"annotation\", ids) — with fetchIDs using WithDbSession SELECT and deleteByIDs using separate WithDbSession DELETE WHERE id IN (...), and no InTransaction in CleanAnnotations",
+     "reason": "The cited code does fetch with OFFSET=MaxCount then delete by stale IDs in separate sessions without a transaction or membership re-check.",
+     "passos": 7
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 112922,
+    "cacheRead": 46563,
+    "output": 17571,
+    "reasoning": 14578,
+    "ms": 81045
+   }
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Global canManage() grants manage permission when caller has only VIEW scope.",
+     "claimNoTexto": null,
+     "evidence": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java:70 and 156-160: \"return hasPermission(null, AdminPermissionsSchema.VIEW, AdminPermissionsSchema.MANAGE);\" with \"if (expectedScopes.contains(scope)) { return true; }\"",
+     "reason": "The cited canManage() passes both VIEW and MANAGE as acceptable scopes and hasPermission returns true on any match, so VIEW alone grants manage.",
+     "passos": 6
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "getGroupIdsWithViewPermission passes authz resource UUID instead of group ID to hasPermission and granted set.",
+     "claimNoTexto": null,
+     "evidence": "GroupPermissionsV2.java:122-123: hasPermission(groupResource.getId()...) + granted.add(groupResource.getId()); AdminPermissionsSchema.java:185: return group == null ? null : group.getId(); GroupPermissionsV2.java:141: resourceStore.findByName(server, groupId)",
+     "reason": "Cited code uses getId() while hasPermission looks up by name and schema stores group ID as resource name, so statements hold.",
+     "passos": 10
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": true,
+     "verdict": "refuted",
+     "claim": "Admins relying on ADMIN role lose view/manage access (denial) diverging from prior contract and V1 behavior.",
+     "claimNoTexto": null,
+     "evidence": "services/src/main/java/org/keycloak/services/resources/admin/permissions/UserPermissions.java:298: `if (root.hasOneAdminRole(AdminRoles.MANAGE_USERS, AdminRoles.VIEW_USERS))` and services/src/main/java/org/keycloak/services/resources/admin/permissions/UserPermissions.java:234: `if (root.hasOneAdminRole(AdminRoles.MANAGE_USERS))` — V1 uses identical checks with no AdminRoles.ADMIN; ADMIN is composite parent per services/src/main/java/org/keycloak/services/managers/RealmManager.java:362-365 `adminRole.addCompositeRole(role)` for ALL_REALM_ROLES, resolved via server-spi/src/main/java/org/keycloak/models/utils/RoleUtils.java:91-92 `return roles.anyMatch(role -> Objects.equals(role, targetRole) || role.hasRole(targetRole));`",
+     "reason": "V1 never checked ADMIN explicitly and ADMIN holders still satisfy MANAGE_USERS/VIEW_USERS via composite-role resolution, so no denial or V1 divergence exists.",
+     "passos": 8
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 183375,
+    "cacheRead": 107160,
+    "output": 10769,
+    "reasoning": 7137,
+    "ms": 44216
+   }
+  },
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "New interface method int order() is abstract with no default, breaking all out-of-tree CryptoProvider implementations.",
+     "claimNoTexto": null,
+     "evidence": "common/src/main/java/org/keycloak/common/crypto/CryptoProvider.java:44 `int order();` with no default, used at common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java:57 `.sorted(Comparator.comparingInt(CryptoProvider::order).reversed())`",
+     "reason": "The cited interface indeed declares abstract int order() with no default and CryptoIntegration calls it to order providers.",
+     "passos": 10
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "concatenatedRSToASN1DER copies len bytes for r/s without verifying signature.length == signLength, silently ignoring trailing bytes or throwing ArrayIndexOutOfBoundsException",
+     "claimNoTexto": null,
+     "evidence": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java:103-110 shows System.arraycopy(signature,0,r,1,len) and System.arraycopy(signature,len,s,1,len) with no length check; core/src/main/java/org/keycloak/crypto/ECDSASignatureVerifierContext.java:30 calls ECDSAAlgorithm.concatenatedRSToASN1DER(signature, expectedSize)",
+     "reason": "Cited method performs unchecked copies and the named verifier passes JWS signature bytes directly to it.",
+     "passos": 9
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "readSequence subtracts child TLV sizes from declared length but never requires exactly zero and never checks trailing bytes, and maps indefinite length (-1) to empty sequence.",
+     "claimNoTexto": null,
+     "evidence": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java:55-62: `int length = readLength(); List<byte[]> result = new ArrayList<>(); while (length > 0) { byte[] bytes = readNext(); result.add(bytes); length = length - bytes.length; } return result;` plus lines 133-134 `if (length == 0x80) { return -1;`",
+     "reason": "Code shows while(length>0) with subtraction and immediate return, no zero-equality or trailing-bytes check, and -1 from 0x80 skips loop to return empty list.",
+     "passos": 5
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Default/Elytron/FIPS providers all return order 200 so the reversed sort ties and winner depends on ServiceLoader iteration order, while former multiple-provider error became debug-only.",
+     "claimNoTexto": null,
+     "evidence": "crypto/default/src/main/java/org/keycloak/crypto/def/DefaultCryptoProvider.java:83-84 'return 200', crypto/elytron/src/main/java/org/keycloak/crypto/elytron/WildFlyElytronProvider.java:76-77 'return 200', crypto/fips1402/src/main/java/org/keycloak/crypto/fips/FIPS1402Provider.java:114-115 'return 200', common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java:56-57 '.sorted(Comparator.comparingInt(CryptoProvider::order).reversed())' and 63-69 'logger.debugf(\"Detected crypto provider...\" + \"Ignored crypto providers: \"'",
+     "reason": "All three order() methods return 200 and detection sorts reversed then logs extras at debug level, so tie and debug-only behavior hold.",
+     "passos": 5
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "AuthzClient.create calls global CryptoIntegration.init which initializes a static singleton only once with the authz classloader view.",
+     "claimNoTexto": null,
+     "evidence": "authz/client/src/main/java/org/keycloak/authorization/client/AuthzClient.java:94-96 `public static AuthzClient create(Configuration configuration) { CryptoIntegration.init(AuthzClient.class.getClassLoader());` + common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java:29-33 `public static void init(ClassLoader classLoader) { if (cryptoProvider == null) { synchronized (lock) { if (cryptoProvider == null) {` + authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java:70-71 `public int order() { return 100;` vs crypto/default/src/main/java/org/keycloak/crypto/def/DefaultCryptoProvider.java:83-84 `return 200;`",
+     "reason": "All factual premises check out: create calls init, init is once-only singleton via ServiceLoader sorted by order, and Authz provider is order-100 with UnsupportedOperationException stubs versus order-200 server providers.",
+     "passos": 10
+    }
+   ],
+   "uso": {
+    "chamadas": 5,
+    "input": 306270,
+    "cacheRead": 155974,
+    "output": 25045,
+    "reasoning": 19117,
+    "ms": 89214
+   }
+  },
+  "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "RECREATE_UPGRADE_EXIT_CODE is renumbered from 4 to 3 while the old value 4 is reused for FEATURE_DISABLED.",
+     "claimNoTexto": null,
+     "evidence": "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/compatibility/CompatibilityResult.java:34-35: `int RECREATE_UPGRADE_EXIT_CODE = 3;` and `int FEATURE_DISABLED = 4;`",
+     "reason": "Current file shows 3 for recreate-upgrade and 4 for feature-disabled, matching the comment's description, with IncompatibleResult returning RECREATE code and UpdateCompatibility commands exiting with FEATURE_DISABLED, and no contradicting code was found.",
+     "passos": 8
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "",
+     "claimNoTexto": null,
+     "evidence": "",
+     "reason": "The test at lines 46-50 only launches the metadata subcommand, UpdateCompatibilityCheck.run has an identical feature gate, and no other test asserts the disabled-feature error for the check subcommand.",
+     "passos": 6
+    }
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 96886,
+    "cacheRead": 43950,
+    "output": 8119,
+    "reasoning": 5974,
+    "ms": 55838
+   }
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "OptimizedCursorPaginator.get_item_key calls math.floor/ceil directly on the datetime key and value_from_cursor returns raw numeric value.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/api/paginator.py:838-843: 'value = getattr(item, self.key)' + 'return int(math.floor(value) if self._is_asc(for_prev) else math.ceil(value))' and 'return cursor.value'; sole caller src/sentry/api/endpoints/organization_auditlogs.py:79-80: 'paginator_cls=OptimizedCursorPaginator' + 'order_by=\"-datetime\"'; field type src/sentry/models/auditlogentry.py:69: 'datetime = models.DateTimeField(default=timezone.now)'; DateTimePaginator contrast src/sentry/api/paginator.py:233-241 with strftime/fromtimestamp conversion",
+     "reason": "Cited code, sole caller with order_by -datetime on a DateTimeField, and DateTimePaginator conversion all match the comment.",
+     "passos": 7
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": true,
+     "verdict": "refuted",
+     "claim": "Any standard member with org:write can activate the vulnerable optimized paginator via ?optimized_pagination=true, defeating the intended superuser/admin-only restriction.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/conf/server.py:2168-2184 member role scopes are event:read/event:write/event:admin/project:releases/project:read/org:read/member:invite/member:read/team:read/alerts:read/alerts:write with no org:write; src/sentry/api/bases/organization.py:111 scope_map = {\"GET\": [\"org:write\"]}",
+     "reason": "The standard member role lacks org:write required to reach the endpoint, so standard members cannot activate the optimized paginator at all.",
+     "passos": 10
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Negative cursor.offset is passed directly to Django queryset slicing queryset[start_offset:stop].",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/api/paginator.py:877-882: `if self.enable_advanced_features and cursor.offset < 0:` then `start_offset = cursor.offset` and `results = list(queryset[start_offset:stop])`",
+     "reason": "Cursor.from_string allows negative offset, the branch passes it unsanitized to slicing, and paginate only catches BadPaginationError.",
+     "passos": 8
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 184034,
+    "cacheRead": 71832,
+    "output": 18720,
+    "reasoning": 14658,
+    "ms": 69707
+   }
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "createRecoveryCodesCredential never removes the credential in the non-chosen store, so re-setup leaves duplicates (new federated + old local, or new local + old federated).",
+     "claimNoTexto": null,
+     "evidence": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java:125-130: \"boolean userStorageCreated = user.credentialManager().updateCredential(recoveryCodesCredential); if (userStorageCreated) { ... } else { recoveryCodeCredentialProvider.createCredential(realm, user, credentialModel); }\" with no removal; server-spi/src/main/java/org/keycloak/models/utils/RecoveryAuthnCodesUtils.java:56-62 prefers federated then local; model/storage/src/main/java/org/keycloak/credential/UserCredentialManager.java:66-77 validates federated then local providers; services/src/main/java/org/keycloak/credential/RecoveryAuthnCodesCredentialProvider.java:101 checks \"getStoredCredentialsByTypeStream(getType())\"",
+     "reason": "Cited method has only if/else create with no cross-store delete, getCredential prefers federated, and isValid tries both federated and local validators so stale other-store codes remain accepted.",
+     "passos": 9
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "verdict": "refuted",
+     "claim": "After switching lookup to federated-first, the allCodesUsed cleanup still calls removeStoredCredentialById with a federated credential id, which only deletes local storage.",
+     "claimNoTexto": null,
+     "evidence": "model/storage/src/main/java/org/keycloak/credential/UserCredentialManager.java:298-304: \"private UserCredentialStore getStoreForUser(UserModel user) { StoreManagers p = (StoreManagers) session.getProvider(DatastoreProvider.class); if (StorageId.isLocalStorage(user.getId())) { return (UserCredentialStore) p.userLocalStorage(); } else { return (UserCredentialStore) p.userFederatedStorage(); } }\"",
+     "reason": "removeStoredCredentialById delegates to getStoreForUser which routes federated user ids to userFederatedStorage, so it does not only delete local storage.",
+     "passos": 10
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Constructor calls credentialModelOpt.get() with no presence check",
+     "claimNoTexto": null,
+     "evidence": "services/src/main/java/org/keycloak/forms/login/freemarker/model/RecoveryAuthnCodeInputLoginBean.java:19: RecoveryAuthnCodesCredentialModel recoveryCodeCredentialModel = RecoveryAuthnCodesCredentialModel.createFromCredentialModel(credentialModelOpt.get());",
+     "reason": "The cited lines show an unchecked Optional.get() on the result of RecoveryAuthnCodesUtils.getCredential, which can be empty.",
+     "passos": 10
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 255562,
+    "cacheRead": 110029,
+    "output": 21171,
+    "reasoning": 16277,
+    "ms": 91167
+   }
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": true,
+     "verdict": "refuted",
+     "claim": "An allowlisted errors-dataset stats query is rewritten to upsampled_count() which the errors resolver cannot resolve, failing the query instead of upsampling.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/search/events/builder/errors.py:119 `class ErrorsQueryBuilder(ErrorsQueryBuilderMixin, DiscoverQueryBuilder):` and src/sentry/search/events/builder/discover.py:65-71 `if self.dataset in [Dataset.Discover, Dataset.Transactions, Dataset.Events, Dataset.IssuePlatform]: return DiscoverDatasetConfig(self)` and src/sentry/search/events/datasets/discover.py:1041-1042 `SnQLFunction( \"upsampled_count\",`",
+     "reason": "The errors builder inherits DiscoverQueryBuilder which loads DiscoverDatasetConfig that already defines upsampled_count, so the rewritten function resolves.",
+     "passos": 10
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "_get_event_stats gates upsampling on the outer closure dataset instead of its scoped_dataset argument",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/api/endpoints/organization_events_stats.py:209 shows def _get_event_stats(scoped_dataset: Any, ...); src/sentry/api/endpoints/organization_events_stats.py:218-220 shows should_upsample = is_errors_query_for_error_upsampled_projects(snuba_params, organization, dataset, request); src/sentry/api/endpoints/organization_events_stats.py:341-342 shows split_dataset = discover and 351-359 passes split_dataset to _get_event_stats; src/sentry/api/helpers/error_upsampling.py:77-92 shows gate branches on dataset == errors/transactions/discover vs other datasets",
+     "reason": "The helper uses outer dataset while split paths query a different scoped_dataset, so the gate can decide for the wrong dataset.",
+     "passos": 5
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "_is_error_focused_query uses substring `\"event.type:error\" in query`",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/api/helpers/error_upsampling.py:100-103 and quoted code: `query = request.GET.get(\"query\", \"\").lower()` + `if \"event.type:error\" in query: return True` with no NOT/`!` handling before `return False`",
+     "reason": "The cited lines do plain substring matching with no negation handling, so both reported behaviors follow directly.",
+     "passos": 4
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "transform_query_columns_for_error_upsampling only rewrites the exact string `count()` and passes everything else through.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/api/helpers/error_upsampling.py:58-63: `if column_lower == \"count()\":` -> `transformed_columns.append(\"upsampled_count() as count\")` else `transformed_columns.append(column)`; caller src/sentry/api/endpoints/organization_events_stats.py:222-223 passes arbitrary query_columns through transform with no eps/epm/alias guard",
+     "reason": "The cited function does exact-match only on count() and the caller applies it to arbitrary yAxis columns without filtering unsupported aggregations.",
+     "passos": 10
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "_set_sample_rate_from_error_sampling stores any truthy float(client_sample_rate) without range validation",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/testutils/factories.py:353-355: `if client_sample_rate:` + `normalized_data[\"sample_rate\"] = float(client_sample_rate)` with no range/finite check",
+     "reason": "Code stores float() of any truthy value with only generic Exception handling and no 0<rate<=1 check, unlike production validation.",
+     "passos": 6
+    }
+   ],
+   "uso": {
+    "chamadas": 5,
+    "input": 210934,
+    "cacheRead": 106129,
+    "output": 16064,
+    "reasoning": 11232,
+    "ms": 77469
+   }
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "SimpleQueueProcessingStrategy.close()/terminate() shuts down the factory-owned FixedQueuePool shared across strategies.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:335-342 `self.queue_pool.shutdown()` in both close() and terminate(); src/sentry/remote_subscriptions/consumers/result_consumer.py:247-255 `assert self.queue_pool is not None` then `SimpleQueueProcessingStrategy(queue_pool=self.queue_pool, ...)` reusing factory pool; result_consumer.py:131-137 pool created once in factory __init__",
+     "reason": "Cited close/terminate do shut down the pool, and the factory creates the pool once and passes the same object to every new strategy, so the rebalance-reuse and ShutDown-on-submit scenario described holds.",
+     "passos": 4
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": true,
+     "verdict": "refuted",
+     "claim": "Threads then guard add_offset/complete_offset/get_committable with different locks, breaking mutual exclusion and corrupting all_offsets/outstanding commit decisions.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:54: return self.partition_locks.setdefault(partition, threading.Lock())",
+     "reason": "setdefault stores only the first lock and returns that stored lock to every caller, so concurrent creators end up guarding with the same lock and mutual exclusion holds.",
+     "passos": 2
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "OrderedQueueWorker loop condition while not self.shutdown exits immediately once shutdown is set, even with items still queued.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:129 `while not self.shutdown:` with get at 131, and src/sentry/remote_subscriptions/consumers/queue_consumer.py:231-238 `for worker in self.workers: worker.shutdown = True` before `q.shutdown(immediate=False)`",
+     "reason": "Code shows flag-checked loop that skips drain and shutdown that sets flag before graceful queue shutdown.",
+     "passos": 6
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "FixedQueuePool creates unbounded queue.Queue() and submit() does non-blocking put with no maxsize, pause, or block.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:185 `work_queue: queue.Queue[WorkItem[T]] = queue.Queue()` and src/sentry/remote_subscriptions/consumers/queue_consumer.py:212 `work_queue.put(work_item)` with src/sentry/remote_subscriptions/consumers/queue_consumer.py:327-333 `def poll(self) -> None:` only emitting metrics gauge and no blocking/pausing, while line 253 claims `Natural backpressure when queues fill up`",
+     "reason": "Code shows unbounded Queue, blocking-irrelevant put with no maxsize, and poll with no backpressure despite docstring claim.",
+     "passos": 6
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": true,
+     "verdict": "refuted",
+     "claim": "When head-of-line is blocked all_offsets grows unbounded and a sparse range (e.g. missing offsets, retention jumps) makes each 1s commit poll O(range) CPU, stalling the commit thread.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:89-93 `for offset in range(start, max_offset + 1): if offset in all_offsets and offset not in outstanding: highest_committable = offset else: break`",
+     "reason": "The loop breaks on the first gap or outstanding offset, so head-blocked or sparse ranges exit after O(1) iterations, not O(range).",
+     "passos": 3
+    }
+   ],
+   "uso": {
+    "chamadas": 5,
+    "input": 102542,
+    "cacheRead": 47188,
+    "output": 18322,
+    "reasoning": 15059,
+    "ms": 61366
+   }
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Existing span-buf:s:* keys written as SETs by old code are now accessed with ZADD/ZCARD/ZUNIONSTORE/ZSCAN/ZPOPMIN",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/spans/buffer.py:197 p.zadd(set_key...); src/sentry/scripts/spans/add-buffer.lua:46-47 zcard/zunionstore, :63 zpopmin; src/sentry/spans/buffer.py:434 p.zscan(key...); src/sentry/spans/buffer.py:151 redis_ttl: int = 3600",
+     "reason": "Current code uses sorted-set commands on span-buf:s:* keys with 3600s TTL and no key rename or type migration was found.",
+     "passos": 10
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "process_batch indexes val[\"end_timestamp_precise\"] directly with no fallback.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/spans/consumers/process/factory.py:141: end_timestamp_precise=val[\"end_timestamp_precise\"],",
+     "reason": "Direct indexing with no .get, fallback, or try/except in process_batch was verified, and buffer.process_spans is called with the built batch.",
+     "passos": 7
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Both merges use ZUNIONSTORE default AGGREGATE SUM",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/scripts/spans/add-buffer.lua:47 `span_count = redis.call(\"zunionstore\", set_key, 2, set_key, span_key)` and :53 `span_count = redis.call(\"zunionstore\", set_key, 2, set_key, parent_key)` with no AGGREGATE arg; src/sentry/spans/buffer.py:197-199 `p.zadd(set_key, {span.payload: span.end_timestamp_precise ...})` shows score is timestamp; add-buffer.lua:62-64 `if span_count > 1000 then redis.call(\"zpopmin\", set_key, span_count - 1000)` shows min-score eviction.",
+     "reason": "Cited merges omit AGGREGATE so Redis SUM applies, scores are end-timestamps, and eviction is ZPOPMIN, so a member in both inputs would be summed to look newest.",
+     "passos": 7
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Eviction scores only by end timestamp with no hierarchy boost, so ZPOPMIN can evict the segment/root payload while span-buf:hrs stays \"1\".",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/spans/buffer.py:198 `set_key, {span.payload: span.end_timestamp_precise for span in subsegment}` and src/sentry/scripts/spans/add-buffer.lua:62-64 `if span_count > 1000 then redis.call(\"zpopmin\", set_key, span_count - 1000) end` with no boost/exclusion, and hrs handling at 66-70 that never clears on eviction.",
+     "reason": "Scores come solely from end_timestamp_precise and eviction is plain ZPOPMIN while hrs is only set, never cleared on eviction.",
+     "passos": 10
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Untrusted SDK-controlled end_timestamp_precise is used verbatim as the ZSET score driving ZPOPMIN eviction.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/spans/buffer.py:198 `set_key, {span.payload: span.end_timestamp_precise for span in subsegment}` and src/sentry/scripts/spans/add-buffer.lua:63 `redis.call(\"zpopmin\", set_key, span_count - 1000)` with src/sentry/spans/consumers/process/factory.py:141 `end_timestamp_precise=val[\"end_timestamp_precise\"]` showing direct use of client payload with no clamp",
+     "reason": "The cited lines use client-supplied timestamp as ZSET score and the Lua script evicts lowest scores via ZPOPMIN, so far-future values would be retained while legitimate spans are evicted.",
+     "passos": 9
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "nit": false,
+     "verdict": "confirmed",
+     "claim": "Every span insert runs up to two ZUNIONSTORE full copies of the up-to-1000-member set plus ZCARD/ZPOPMIN.",
+     "claimNoTexto": null,
+     "evidence": "src/sentry/scripts/spans/add-buffer.lua:46-55 and src/sentry/spans/buffer.py:210-212: `if not is_root_span and redis.call(\"zcard\", span_key) > 0 then span_count = redis.call(\"zunionstore\", set_key, 2, set_key, span_key)` + second `if set_span_id ~= parent_span_id and redis.call(\"zcard\", parent_key) > 0 then span_count = redis.call(\"zunionstore\", set_key, 2, set_key, parent_key)` called per-span via `for span in subsegment: p.execute_command(\"EVALSHA\", add_buffer_sha...`, with cap at `if span_count > 1000 then redis.call(\"zpopmin\", set_key...`",
+     "reason": "The cited lines do contain two conditional ZUNIONSTOREs guarded by ZCARDs with a 1000-member cap, invoked once per span from process_spans, so the performance characterization holds.",
+     "passos": 5
+    }
+   ],
+   "uso": {
+    "chamadas": 6,
+    "input": 355062,
+    "cacheRead": 167984,
+    "output": 33793,
+    "reasoning": 27454,
+    "ms": 123363
+   }
+  }
+ }
+}

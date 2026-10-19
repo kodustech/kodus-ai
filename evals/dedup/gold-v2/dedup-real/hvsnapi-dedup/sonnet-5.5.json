@@ -1,0 +1,5063 @@
+{
+ "model": "sonnet-5.5",
+ "dedupModel": "claude-sonnet-5.5@sdk-api",
+ "fonte": "gold",
+ "prs": {
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "n": 5,
+   "camposFinder": {
+    "producedBy": 5,
+    "label": 5,
+    "relevantFile": 5,
+    "relevantLinesStart": 5,
+    "relevantLinesEnd": 5,
+    "suggestionContent": 5
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 5,
+    "language": 5,
+    "suggestionContent": 5,
+    "oneSentenceSummary": 5,
+    "relevantLinesStart": 5,
+    "relevantLinesEnd": 5,
+    "label": 5,
+    "severity": 5,
+    "llmPrompt": 5
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 1,
+   "camposDedup": {
+    "label": 5,
+    "relevantFile": 5,
+    "relevantLinesStart": 5,
+    "relevantLinesEnd": 5,
+    "suggestionContent": 5,
+    "llmPrompt": 5
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 5,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5"
+   ],
+   "groups": [
+    {
+     "keep": "S4",
+     "duplicates": [
+      "S1",
+      "S5",
+      "S3"
+     ]
+    }
+   ],
+   "unique": [
+    "S2"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S4",
+     "lex": 0.2619047619047619,
+     "cos": 0.8214350325332125,
+     "tb": true
+    },
+    {
+     "dup": "S5",
+     "keep": "S4",
+     "lex": 0.4166666666666667,
+     "cos": 0.8928866981152767,
+     "tb": true
+    },
+    {
+     "dup": "S3",
+     "keep": "S4",
+     "lex": 0.16,
+     "cos": 0.6854125249676224,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 4818,
+    "cacheRead": 0,
+    "output": 389,
+    "reasoning": 0,
+    "ms": 9808
+   }
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "n": 17,
+   "camposFinder": {
+    "producedBy": 17,
+    "label": 17,
+    "relevantFile": 17,
+    "relevantLinesStart": 17,
+    "relevantLinesEnd": 17,
+    "suggestionContent": 17
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 17,
+    "language": 17,
+    "suggestionContent": 17,
+    "oneSentenceSummary": 17,
+    "relevantLinesStart": 17,
+    "relevantLinesEnd": 17,
+    "label": 17,
+    "severity": 17,
+    "llmPrompt": 17
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 0,
+   "camposDedup": {
+    "label": 17,
+    "relevantFile": 17,
+    "relevantLinesStart": 17,
+    "relevantLinesEnd": 17,
+    "suggestionContent": 17,
+    "llmPrompt": 17
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 17,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S7",
+    "S8",
+    "S9",
+    "S10",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17"
+   ],
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S6",
+      "S8",
+      "S11",
+      "S17"
+     ]
+    },
+    {
+     "keep": "S2",
+     "duplicates": [
+      "S9"
+     ]
+    },
+    {
+     "keep": "S3",
+     "duplicates": [
+      "S7",
+      "S10",
+      "S12",
+      "S14",
+      "S16"
+     ]
+    }
+   ],
+   "unique": [
+    "S4",
+    "S5",
+    "S13",
+    "S15"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S6",
+     "keep": "S1",
+     "lex": 0.3684210526315789,
+     "cos": 0.8776688253246051,
+     "tb": true
+    },
+    {
+     "dup": "S8",
+     "keep": "S1",
+     "lex": 0.3392857142857143,
+     "cos": 0.8469746375462892,
+     "tb": true
+    },
+    {
+     "dup": "S11",
+     "keep": "S1",
+     "lex": 0.2631578947368421,
+     "cos": 0.8796036012665209,
+     "tb": true
+    },
+    {
+     "dup": "S17",
+     "keep": "S1",
+     "lex": 0.2033898305084746,
+     "cos": 0.8493947327408331,
+     "tb": true
+    },
+    {
+     "dup": "S9",
+     "keep": "S2",
+     "lex": 0.6226415094339622,
+     "cos": 0.8479689107801703,
+     "tb": true
+    },
+    {
+     "dup": "S7",
+     "keep": "S3",
+     "lex": 0.4594594594594595,
+     "cos": 0.9291480764822454,
+     "tb": true
+    },
+    {
+     "dup": "S10",
+     "keep": "S3",
+     "lex": 0.42857142857142855,
+     "cos": 0.9004533921284202,
+     "tb": true
+    },
+    {
+     "dup": "S12",
+     "keep": "S3",
+     "lex": 0.34285714285714286,
+     "cos": 0.8828545779404066,
+     "tb": true
+    },
+    {
+     "dup": "S14",
+     "keep": "S3",
+     "lex": 0.3,
+     "cos": 0.8955772335174981,
+     "tb": true
+    },
+    {
+     "dup": "S16",
+     "keep": "S3",
+     "lex": 0.5666666666666667,
+     "cos": 0.8669558464129877,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 11,
+    "input": 12902,
+    "cacheRead": 0,
+    "output": 1436,
+    "reasoning": 0,
+    "ms": 10751
+   }
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "n": 13,
+   "camposFinder": {
+    "producedBy": 13,
+    "label": 13,
+    "relevantFile": 13,
+    "relevantLinesStart": 13,
+    "relevantLinesEnd": 13,
+    "suggestionContent": 13
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 13,
+    "language": 13,
+    "suggestionContent": 13,
+    "oneSentenceSummary": 13,
+    "relevantLinesStart": 13,
+    "relevantLinesEnd": 13,
+    "label": 13,
+    "severity": 13,
+    "llmPrompt": 13
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 0,
+   "camposDedup": {
+    "label": 13,
+    "relevantFile": 13,
+    "relevantLinesStart": 13,
+    "relevantLinesEnd": 13,
+    "suggestionContent": 13,
+    "llmPrompt": 13
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 13,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S7",
+    "S8",
+    "S9",
+    "S10",
+    "S11",
+    "S12",
+    "S13"
+   ],
+   "groups": [
+    {
+     "keep": "S10",
+     "duplicates": [
+      "S1"
+     ]
+    },
+    {
+     "keep": "S9",
+     "duplicates": [
+      "S2"
+     ]
+    },
+    {
+     "keep": "S3",
+     "duplicates": [
+      "S4",
+      "S5",
+      "S11"
+     ]
+    },
+    {
+     "keep": "S13",
+     "duplicates": [
+      "S6"
+     ]
+    }
+   ],
+   "unique": [
+    "S7",
+    "S8",
+    "S12"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S10",
+     "lex": 0.37209302325581395,
+     "cos": 0.7953295454880673,
+     "tb": true
+    },
+    {
+     "dup": "S2",
+     "keep": "S9",
+     "lex": 0.5185185185185185,
+     "cos": 0.9031240334566111,
+     "tb": true
+    },
+    {
+     "dup": "S4",
+     "keep": "S3",
+     "lex": 0.24390243902439024,
+     "cos": 0.8342394371890718,
+     "tb": true
+    },
+    {
+     "dup": "S5",
+     "keep": "S3",
+     "lex": 0.21951219512195122,
+     "cos": 0.6751605843817905,
+     "tb": false
+    },
+    {
+     "dup": "S11",
+     "keep": "S3",
+     "lex": 0.2127659574468085,
+     "cos": 0.8295689164359644,
+     "tb": true
+    },
+    {
+     "dup": "S6",
+     "keep": "S13",
+     "lex": 0.43902439024390244,
+     "cos": 0.7831622637699528,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 7,
+    "input": 8319,
+    "cacheRead": 0,
+    "output": 1411,
+    "reasoning": 0,
+    "ms": 11594
+   }
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "n": 2,
+   "camposFinder": {
+    "producedBy": 2,
+    "label": 2,
+    "relevantFile": 2,
+    "relevantLinesStart": 2,
+    "relevantLinesEnd": 2,
+    "suggestionContent": 2
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 2,
+    "language": 2,
+    "suggestionContent": 2,
+    "oneSentenceSummary": 2,
+    "relevantLinesStart": 2,
+    "relevantLinesEnd": 2,
+    "label": 2,
+    "severity": 2,
+    "llmPrompt": 2
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 0,
+   "camposDedup": {
+    "label": 2,
+    "relevantFile": 2,
+    "relevantLinesStart": 2,
+    "relevantLinesEnd": 2,
+    "suggestionContent": 2,
+    "llmPrompt": 2
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 2,
+   "idsEntradaDedup": [
+    "S1",
+    "S2"
+   ],
+   "groups": [],
+   "unique": [
+    "S1",
+    "S2"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 1832,
+    "cacheRead": 0,
+    "output": 19,
+    "reasoning": 0,
+    "ms": 1708
+   }
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "n": 6,
+   "camposFinder": {
+    "producedBy": 6,
+    "label": 6,
+    "relevantFile": 6,
+    "relevantLinesStart": 6,
+    "relevantLinesEnd": 6,
+    "suggestionContent": 6
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 6,
+    "language": 6,
+    "suggestionContent": 6,
+    "oneSentenceSummary": 6,
+    "relevantLinesStart": 6,
+    "relevantLinesEnd": 6,
+    "label": 6,
+    "severity": 6,
+    "llmPrompt": 6
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 1,
+   "camposDedup": {
+    "label": 6,
+    "relevantFile": 6,
+    "relevantLinesStart": 6,
+    "relevantLinesEnd": 6,
+    "suggestionContent": 6,
+    "llmPrompt": 6
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 6,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6"
+   ],
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S2"
+     ]
+    }
+   ],
+   "unique": [
+    "S3",
+    "S4",
+    "S5",
+    "S6"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S2",
+     "keep": "S1",
+     "lex": 0.3974358974358974,
+     "cos": 0.9289834615726557,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 3447,
+    "cacheRead": 0,
+    "output": 147,
+    "reasoning": 0,
+    "ms": 5992
+   }
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "n": 0,
+   "camposFinder": {},
+   "descartadoConversor": [],
+   "camposConversor": {},
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 0,
+   "camposDedup": {},
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 0,
+   "idsEntradaDedup": [],
+   "groups": [],
+   "unique": [],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": null
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "n": 13,
+   "camposFinder": {
+    "producedBy": 13,
+    "label": 13,
+    "relevantFile": 13,
+    "relevantLinesStart": 13,
+    "relevantLinesEnd": 13,
+    "suggestionContent": 13
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 13,
+    "language": 13,
+    "suggestionContent": 13,
+    "oneSentenceSummary": 13,
+    "relevantLinesStart": 13,
+    "relevantLinesEnd": 13,
+    "label": 13,
+    "severity": 13,
+    "llmPrompt": 13
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 4,
+   "camposDedup": {
+    "label": 13,
+    "relevantFile": 13,
+    "relevantLinesStart": 13,
+    "relevantLinesEnd": 13,
+    "suggestionContent": 13,
+    "llmPrompt": 13
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 13,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S7",
+    "S8",
+    "S9",
+    "S10",
+    "S11",
+    "S12",
+    "S13"
+   ],
+   "groups": [
+    {
+     "keep": "S9",
+     "duplicates": [
+      "S1",
+      "S6",
+      "S7",
+      "S10",
+      "S12"
+     ]
+    },
+    {
+     "keep": "S13",
+     "duplicates": [
+      "S2",
+      "S5",
+      "S8",
+      "S11"
+     ]
+    }
+   ],
+   "unique": [
+    "S3",
+    "S4"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S9",
+     "lex": 0.45098039215686275,
+     "cos": 0.8641057032679721,
+     "tb": true
+    },
+    {
+     "dup": "S6",
+     "keep": "S9",
+     "lex": 0.4634146341463415,
+     "cos": 0.8851436361615409,
+     "tb": true
+    },
+    {
+     "dup": "S7",
+     "keep": "S9",
+     "lex": 0.4782608695652174,
+     "cos": 0.8583288154055172,
+     "tb": true
+    },
+    {
+     "dup": "S10",
+     "keep": "S9",
+     "lex": 0.5106382978723404,
+     "cos": 0.8600477976666028,
+     "tb": true
+    },
+    {
+     "dup": "S12",
+     "keep": "S9",
+     "lex": 0.46153846153846156,
+     "cos": 0.8908862563566172,
+     "tb": true
+    },
+    {
+     "dup": "S2",
+     "keep": "S13",
+     "lex": 0.4888888888888889,
+     "cos": 0.8857193699360953,
+     "tb": true
+    },
+    {
+     "dup": "S5",
+     "keep": "S13",
+     "lex": 0.3333333333333333,
+     "cos": 0.8864773866853448,
+     "tb": true
+    },
+    {
+     "dup": "S8",
+     "keep": "S13",
+     "lex": 0.3404255319148936,
+     "cos": 0.8733254807138319,
+     "tb": true
+    },
+    {
+     "dup": "S11",
+     "keep": "S13",
+     "lex": 0.45652173913043476,
+     "cos": 0.909622965542293,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 10,
+    "input": 11534,
+    "cacheRead": 0,
+    "output": 1465,
+    "reasoning": 0,
+    "ms": 17312
+   }
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "n": 11,
+   "camposFinder": {
+    "producedBy": 11,
+    "label": 11,
+    "relevantFile": 11,
+    "relevantLinesStart": 11,
+    "relevantLinesEnd": 11,
+    "suggestionContent": 11
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 11,
+    "language": 11,
+    "suggestionContent": 11,
+    "oneSentenceSummary": 11,
+    "relevantLinesStart": 11,
+    "relevantLinesEnd": 11,
+    "label": 11,
+    "severity": 11,
+    "llmPrompt": 11
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 0,
+   "camposDedup": {
+    "label": 11,
+    "relevantFile": 11,
+    "relevantLinesStart": 11,
+    "relevantLinesEnd": 11,
+    "suggestionContent": 11,
+    "llmPrompt": 11
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 11,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S7",
+    "S8",
+    "S9",
+    "S10",
+    "S11"
+   ],
+   "groups": [
+    {
+     "keep": "S7",
+     "duplicates": [
+      "S3"
+     ]
+    }
+   ],
+   "unique": [
+    "S1",
+    "S2",
+    "S4",
+    "S5",
+    "S6",
+    "S8",
+    "S9",
+    "S10",
+    "S11"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S3",
+     "keep": "S7",
+     "lex": 0.5714285714285714,
+     "cos": 0.815417019639779,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 3941,
+    "cacheRead": 0,
+    "output": 175,
+    "reasoning": 0,
+    "ms": 6106
+   }
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "n": 1,
+   "camposFinder": {
+    "producedBy": 1,
+    "label": 1,
+    "relevantFile": 1,
+    "relevantLinesStart": 1,
+    "relevantLinesEnd": 1,
+    "suggestionContent": 1
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 1,
+    "language": 1,
+    "suggestionContent": 1,
+    "oneSentenceSummary": 1,
+    "relevantLinesStart": 1,
+    "relevantLinesEnd": 1,
+    "label": 1,
+    "severity": 1,
+    "llmPrompt": 1
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 0,
+   "camposDedup": {
+    "label": 1,
+    "relevantFile": 1,
+    "relevantLinesStart": 1,
+    "relevantLinesEnd": 1,
+    "suggestionContent": 1,
+    "llmPrompt": 1
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 1,
+   "idsEntradaDedup": [
+    "S1"
+   ],
+   "groups": [],
+   "unique": [
+    "S1"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 0,
+    "input": 0,
+    "cacheRead": 0,
+    "output": 0,
+    "reasoning": 0,
+    "ms": 0
+   }
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "n": 13,
+   "camposFinder": {
+    "producedBy": 13,
+    "label": 13,
+    "relevantFile": 13,
+    "relevantLinesStart": 13,
+    "relevantLinesEnd": 13,
+    "suggestionContent": 13
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 13,
+    "language": 13,
+    "suggestionContent": 13,
+    "oneSentenceSummary": 13,
+    "relevantLinesStart": 13,
+    "relevantLinesEnd": 13,
+    "label": 13,
+    "severity": 13,
+    "llmPrompt": 13
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 2,
+   "camposDedup": {
+    "label": 13,
+    "relevantFile": 13,
+    "relevantLinesStart": 13,
+    "relevantLinesEnd": 13,
+    "suggestionContent": 13,
+    "llmPrompt": 13
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 13,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S7",
+    "S8",
+    "S9",
+    "S10",
+    "S11",
+    "S12",
+    "S13"
+   ],
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S7"
+     ]
+    },
+    {
+     "keep": "S5",
+     "duplicates": [
+      "S2",
+      "S6"
+     ]
+    },
+    {
+     "keep": "S3",
+     "duplicates": [
+      "S11"
+     ]
+    },
+    {
+     "keep": "S4",
+     "duplicates": [
+      "S12",
+      "S13"
+     ]
+    }
+   ],
+   "unique": [
+    "S8",
+    "S9",
+    "S10"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S7",
+     "keep": "S1",
+     "lex": 0.24074074074074073,
+     "cos": 0.8969672527507281,
+     "tb": true
+    },
+    {
+     "dup": "S2",
+     "keep": "S5",
+     "lex": 0.20754716981132076,
+     "cos": 0.7123619999849206,
+     "tb": true
+    },
+    {
+     "dup": "S6",
+     "keep": "S5",
+     "lex": 0.2978723404255319,
+     "cos": 0.7759888614292605,
+     "tb": true
+    },
+    {
+     "dup": "S11",
+     "keep": "S3",
+     "lex": 0.5714285714285714,
+     "cos": 0.8715144656656252,
+     "tb": true
+    },
+    {
+     "dup": "S12",
+     "keep": "S4",
+     "lex": 0.15625,
+     "cos": 0.7720179680361376,
+     "tb": true
+    },
+    {
+     "dup": "S13",
+     "keep": "S4",
+     "lex": 0.26666666666666666,
+     "cos": 0.7735984463940294,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 7,
+    "input": 8920,
+    "cacheRead": 0,
+    "output": 862,
+    "reasoning": 0,
+    "ms": 9769
+   }
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "n": 2,
+   "camposFinder": {
+    "producedBy": 2,
+    "label": 2,
+    "relevantFile": 2,
+    "relevantLinesStart": 2,
+    "relevantLinesEnd": 2,
+    "suggestionContent": 2
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 2,
+    "language": 2,
+    "suggestionContent": 2,
+    "oneSentenceSummary": 2,
+    "relevantLinesStart": 2,
+    "relevantLinesEnd": 2,
+    "label": 2,
+    "severity": 2,
+    "llmPrompt": 2
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [
+    {
+     "id": "S2",
+     "arquivo": "pkg/api/webassets/webassets.go",
+     "linhas": [
+      69,
+      70
+     ],
+     "distancia": 16
+    }
+   ],
+   "ajustadoAnchoring": 0,
+   "camposDedup": {
+    "label": 1,
+    "relevantFile": 1,
+    "relevantLinesStart": 1,
+    "relevantLinesEnd": 1,
+    "suggestionContent": 1,
+    "llmPrompt": 1
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 1,
+   "idsEntradaDedup": [
+    "S1"
+   ],
+   "groups": [],
+   "unique": [
+    "S1"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 0,
+    "input": 0,
+    "cacheRead": 0,
+    "output": 0,
+    "reasoning": 0,
+    "ms": 0
+   }
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "n": 6,
+   "camposFinder": {
+    "producedBy": 6,
+    "label": 6,
+    "relevantFile": 6,
+    "relevantLinesStart": 6,
+    "relevantLinesEnd": 6,
+    "suggestionContent": 6
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 6,
+    "language": 6,
+    "suggestionContent": 6,
+    "oneSentenceSummary": 6,
+    "relevantLinesStart": 6,
+    "relevantLinesEnd": 6,
+    "label": 6,
+    "severity": 6,
+    "llmPrompt": 6
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 4,
+   "camposDedup": {
+    "label": 6,
+    "relevantFile": 6,
+    "relevantLinesStart": 6,
+    "relevantLinesEnd": 6,
+    "suggestionContent": 6,
+    "llmPrompt": 6
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 6,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6"
+   ],
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S3",
+      "S4",
+      "S5",
+      "S6"
+     ]
+    }
+   ],
+   "unique": [
+    "S2"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S3",
+     "keep": "S1",
+     "lex": 0.5147058823529411,
+     "cos": 0.8947813625323849,
+     "tb": true
+    },
+    {
+     "dup": "S4",
+     "keep": "S1",
+     "lex": 0.2692307692307692,
+     "cos": 0.8432293520440552,
+     "tb": true
+    },
+    {
+     "dup": "S5",
+     "keep": "S1",
+     "lex": 0.4782608695652174,
+     "cos": 0.8881658872312594,
+     "tb": true
+    },
+    {
+     "dup": "S6",
+     "keep": "S1",
+     "lex": 0.3150684931506849,
+     "cos": 0.8335690010473604,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 5,
+    "input": 6971,
+    "cacheRead": 0,
+    "output": 555,
+    "reasoning": 0,
+    "ms": 6790
+   }
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "n": 5,
+   "camposFinder": {
+    "producedBy": 5,
+    "label": 5,
+    "relevantFile": 5,
+    "relevantLinesStart": 5,
+    "relevantLinesEnd": 5,
+    "suggestionContent": 5
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 5,
+    "language": 5,
+    "suggestionContent": 5,
+    "oneSentenceSummary": 5,
+    "relevantLinesStart": 5,
+    "relevantLinesEnd": 5,
+    "label": 5,
+    "severity": 5,
+    "llmPrompt": 5
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [
+    {
+     "id": "S1",
+     "arquivo": "pkg/services/anonymous/anonimpl/impl.go",
+     "linhas": [
+      87,
+      95
+     ],
+     "distancia": 23
+    }
+   ],
+   "ajustadoAnchoring": 2,
+   "camposDedup": {
+    "label": 4,
+    "relevantFile": 4,
+    "relevantLinesStart": 4,
+    "relevantLinesEnd": 4,
+    "suggestionContent": 4,
+    "llmPrompt": 4
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 4,
+   "idsEntradaDedup": [
+    "S2",
+    "S3",
+    "S4",
+    "S5"
+   ],
+   "groups": [
+    {
+     "keep": "S2",
+     "duplicates": [
+      "S5"
+     ]
+    },
+    {
+     "keep": "S4",
+     "duplicates": [
+      "S3"
+     ]
+    }
+   ],
+   "unique": [],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S5",
+     "keep": "S2",
+     "lex": 0.43137254901960786,
+     "cos": 0.873503562991341,
+     "tb": true
+    },
+    {
+     "dup": "S3",
+     "keep": "S4",
+     "lex": 0.33783783783783783,
+     "cos": 0.8455396090140759,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 4207,
+    "cacheRead": 0,
+    "output": 309,
+    "reasoning": 0,
+    "ms": 5609
+   }
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "n": 2,
+   "camposFinder": {
+    "producedBy": 2,
+    "label": 2,
+    "relevantFile": 2,
+    "relevantLinesStart": 2,
+    "relevantLinesEnd": 2,
+    "suggestionContent": 2
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 2,
+    "language": 2,
+    "suggestionContent": 2,
+    "oneSentenceSummary": 2,
+    "relevantLinesStart": 2,
+    "relevantLinesEnd": 2,
+    "label": 2,
+    "severity": 2,
+    "llmPrompt": 2
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 1,
+   "camposDedup": {
+    "label": 2,
+    "relevantFile": 2,
+    "relevantLinesStart": 2,
+    "relevantLinesEnd": 2,
+    "suggestionContent": 2,
+    "llmPrompt": 2
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 2,
+   "idsEntradaDedup": [
+    "S1",
+    "S2"
+   ],
+   "groups": [],
+   "unique": [
+    "S1",
+    "S2"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 1826,
+    "cacheRead": 0,
+    "output": 19,
+    "reasoning": 0,
+    "ms": 2323
+   }
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "n": 7,
+   "camposFinder": {
+    "producedBy": 7,
+    "label": 7,
+    "relevantFile": 7,
+    "relevantLinesStart": 7,
+    "relevantLinesEnd": 7,
+    "suggestionContent": 7
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 7,
+    "language": 7,
+    "suggestionContent": 7,
+    "oneSentenceSummary": 7,
+    "relevantLinesStart": 7,
+    "relevantLinesEnd": 7,
+    "label": 7,
+    "severity": 7,
+    "llmPrompt": 7
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 0,
+   "camposDedup": {
+    "label": 7,
+    "relevantFile": 7,
+    "relevantLinesStart": 7,
+    "relevantLinesEnd": 7,
+    "suggestionContent": 7,
+    "llmPrompt": 7
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 7,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S7"
+   ],
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S3",
+      "S4",
+      "S6"
+     ]
+    },
+    {
+     "keep": "S2",
+     "duplicates": [
+      "S7"
+     ]
+    }
+   ],
+   "unique": [
+    "S5"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S3",
+     "keep": "S1",
+     "lex": 0.4878048780487805,
+     "cos": 0.9100790327070747,
+     "tb": true
+    },
+    {
+     "dup": "S4",
+     "keep": "S1",
+     "lex": 0.6578947368421053,
+     "cos": 0.9344005378027942,
+     "tb": true
+    },
+    {
+     "dup": "S6",
+     "keep": "S1",
+     "lex": 0.3953488372093023,
+     "cos": 0.8777602830384763,
+     "tb": true
+    },
+    {
+     "dup": "S7",
+     "keep": "S2",
+     "lex": 0.16363636363636364,
+     "cos": 0.5906587066670522,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 5,
+    "input": 5971,
+    "cacheRead": 0,
+    "output": 631,
+    "reasoning": 0,
+    "ms": 8981
+   }
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "n": 3,
+   "camposFinder": {
+    "producedBy": 3,
+    "label": 3,
+    "relevantFile": 3,
+    "relevantLinesStart": 3,
+    "relevantLinesEnd": 3,
+    "suggestionContent": 3
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 3,
+    "language": 3,
+    "suggestionContent": 3,
+    "oneSentenceSummary": 3,
+    "relevantLinesStart": 3,
+    "relevantLinesEnd": 3,
+    "label": 3,
+    "severity": 3,
+    "llmPrompt": 3
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 1,
+   "camposDedup": {
+    "label": 3,
+    "relevantFile": 3,
+    "relevantLinesStart": 3,
+    "relevantLinesEnd": 3,
+    "suggestionContent": 3,
+    "llmPrompt": 3
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 3,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3"
+   ],
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S2"
+     ]
+    }
+   ],
+   "unique": [
+    "S3"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S2",
+     "keep": "S1",
+     "lex": 0.36486486486486486,
+     "cos": 0.8297927320878897,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 3007,
+    "cacheRead": 0,
+    "output": 174,
+    "reasoning": 0,
+    "ms": 5910
+   }
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "n": 20,
+   "camposFinder": {
+    "producedBy": 20,
+    "label": 20,
+    "relevantFile": 20,
+    "relevantLinesStart": 20,
+    "relevantLinesEnd": 20,
+    "suggestionContent": 20
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 20,
+    "language": 20,
+    "suggestionContent": 20,
+    "oneSentenceSummary": 20,
+    "relevantLinesStart": 20,
+    "relevantLinesEnd": 20,
+    "label": 20,
+    "severity": 20,
+    "llmPrompt": 20
+   },
+   "descartadoParse": [
+    {
+     "id": "S18",
+     "faltando": [
+      "relevantLinesStart",
+      "relevantLinesEnd"
+     ]
+    },
+    {
+     "id": "S19",
+     "faltando": [
+      "relevantLinesStart",
+      "relevantLinesEnd"
+     ]
+    }
+   ],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 1,
+   "camposDedup": {
+    "label": 18,
+    "relevantFile": 18,
+    "relevantLinesStart": 18,
+    "relevantLinesEnd": 18,
+    "suggestionContent": 18,
+    "llmPrompt": 18
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 18,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S7",
+    "S8",
+    "S9",
+    "S10",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17",
+    "S20"
+   ],
+   "groups": [
+    {
+     "keep": "S11",
+     "duplicates": [
+      "S1",
+      "S6"
+     ]
+    },
+    {
+     "keep": "S2",
+     "duplicates": [
+      "S7",
+      "S16"
+     ]
+    },
+    {
+     "keep": "S3",
+     "duplicates": [
+      "S8",
+      "S9",
+      "S14",
+      "S15"
+     ]
+    },
+    {
+     "keep": "S4",
+     "duplicates": [
+      "S10",
+      "S17"
+     ]
+    }
+   ],
+   "unique": [
+    "S5",
+    "S12",
+    "S13",
+    "S20"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S11",
+     "lex": 0.27586206896551724,
+     "cos": 0.8007891616646786,
+     "tb": true
+    },
+    {
+     "dup": "S6",
+     "keep": "S11",
+     "lex": 0.4782608695652174,
+     "cos": 0.8153246724027994,
+     "tb": true
+    },
+    {
+     "dup": "S7",
+     "keep": "S2",
+     "lex": 0.36666666666666664,
+     "cos": 0.9114157835742676,
+     "tb": true
+    },
+    {
+     "dup": "S16",
+     "keep": "S2",
+     "lex": 0.3548387096774194,
+     "cos": 0.8882385544833847,
+     "tb": true
+    },
+    {
+     "dup": "S8",
+     "keep": "S3",
+     "lex": 0.225,
+     "cos": 0.8294346147269879,
+     "tb": true
+    },
+    {
+     "dup": "S9",
+     "keep": "S3",
+     "lex": 0.2647058823529412,
+     "cos": 0.8325578820028694,
+     "tb": true
+    },
+    {
+     "dup": "S14",
+     "keep": "S3",
+     "lex": 0.28205128205128205,
+     "cos": 0.8926672624249978,
+     "tb": true
+    },
+    {
+     "dup": "S15",
+     "keep": "S3",
+     "lex": 0.4,
+     "cos": 0.8947907201453164,
+     "tb": true
+    },
+    {
+     "dup": "S10",
+     "keep": "S4",
+     "lex": 0.3333333333333333,
+     "cos": 0.682054365628763,
+     "tb": true
+    },
+    {
+     "dup": "S17",
+     "keep": "S4",
+     "lex": 0.40540540540540543,
+     "cos": 0.7871349563112162,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 11,
+    "input": 11993,
+    "cacheRead": 0,
+    "output": 1318,
+    "reasoning": 0,
+    "ms": 7139
+   }
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "n": 6,
+   "camposFinder": {
+    "producedBy": 6,
+    "label": 6,
+    "relevantFile": 6,
+    "relevantLinesStart": 6,
+    "relevantLinesEnd": 6,
+    "suggestionContent": 6
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 6,
+    "language": 6,
+    "suggestionContent": 6,
+    "oneSentenceSummary": 6,
+    "relevantLinesStart": 6,
+    "relevantLinesEnd": 6,
+    "label": 6,
+    "severity": 6,
+    "llmPrompt": 6
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 2,
+   "camposDedup": {
+    "label": 6,
+    "relevantFile": 6,
+    "relevantLinesStart": 6,
+    "relevantLinesEnd": 6,
+    "suggestionContent": 6,
+    "llmPrompt": 6
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 6,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6"
+   ],
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S3"
+     ]
+    },
+    {
+     "keep": "S2",
+     "duplicates": [
+      "S6"
+     ]
+    },
+    {
+     "keep": "S5",
+     "duplicates": [
+      "S4"
+     ]
+    }
+   ],
+   "unique": [],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S3",
+     "keep": "S1",
+     "lex": 0.46,
+     "cos": 0.9198716682970981,
+     "tb": true
+    },
+    {
+     "dup": "S6",
+     "keep": "S2",
+     "lex": 0.3333333333333333,
+     "cos": 0.8598232047325022,
+     "tb": true
+    },
+    {
+     "dup": "S4",
+     "keep": "S5",
+     "lex": 0.42592592592592593,
+     "cos": 0.9277901775674009,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 5641,
+    "cacheRead": 0,
+    "output": 510,
+    "reasoning": 0,
+    "ms": 8361
+   }
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "n": 9,
+   "camposFinder": {
+    "producedBy": 9,
+    "label": 9,
+    "relevantFile": 9,
+    "relevantLinesStart": 9,
+    "relevantLinesEnd": 9,
+    "suggestionContent": 9
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 9,
+    "language": 9,
+    "suggestionContent": 9,
+    "oneSentenceSummary": 9,
+    "relevantLinesStart": 9,
+    "relevantLinesEnd": 9,
+    "label": 9,
+    "severity": 9,
+    "llmPrompt": 9
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 0,
+   "camposDedup": {
+    "label": 9,
+    "relevantFile": 9,
+    "relevantLinesStart": 9,
+    "relevantLinesEnd": 9,
+    "suggestionContent": 9,
+    "llmPrompt": 9
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 9,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S7",
+    "S8",
+    "S9"
+   ],
+   "groups": [
+    {
+     "keep": "S6",
+     "duplicates": [
+      "S1",
+      "S3",
+      "S4"
+     ]
+    },
+    {
+     "keep": "S5",
+     "duplicates": [
+      "S7"
+     ]
+    },
+    {
+     "keep": "S8",
+     "duplicates": [
+      "S9"
+     ]
+    }
+   ],
+   "unique": [
+    "S2"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S6",
+     "lex": 0.22413793103448276,
+     "cos": 0.8307544468581448,
+     "tb": true
+    },
+    {
+     "dup": "S3",
+     "keep": "S6",
+     "lex": 0.6666666666666666,
+     "cos": 0.9370362562502941,
+     "tb": true
+    },
+    {
+     "dup": "S4",
+     "keep": "S6",
+     "lex": 0.16216216216216217,
+     "cos": 0.7263502619828925,
+     "tb": true
+    },
+    {
+     "dup": "S7",
+     "keep": "S5",
+     "lex": 0.45454545454545453,
+     "cos": 0.7447660772851358,
+     "tb": true
+    },
+    {
+     "dup": "S9",
+     "keep": "S8",
+     "lex": 0.39622641509433965,
+     "cos": 0.7960874981194758,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 6,
+    "input": 7133,
+    "cacheRead": 0,
+    "output": 640,
+    "reasoning": 0,
+    "ms": 5303
+   }
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "n": 1,
+   "camposFinder": {
+    "producedBy": 1,
+    "label": 1,
+    "relevantFile": 1,
+    "relevantLinesStart": 1,
+    "relevantLinesEnd": 1,
+    "suggestionContent": 1
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 1,
+    "language": 1,
+    "suggestionContent": 1,
+    "oneSentenceSummary": 1,
+    "relevantLinesStart": 1,
+    "relevantLinesEnd": 1,
+    "label": 1,
+    "severity": 1,
+    "llmPrompt": 1
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 1,
+   "camposDedup": {
+    "label": 1,
+    "relevantFile": 1,
+    "relevantLinesStart": 1,
+    "relevantLinesEnd": 1,
+    "suggestionContent": 1,
+    "llmPrompt": 1
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 1,
+   "idsEntradaDedup": [
+    "S1"
+   ],
+   "groups": [],
+   "unique": [
+    "S1"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 0,
+    "input": 0,
+    "cacheRead": 0,
+    "output": 0,
+    "reasoning": 0,
+    "ms": 0
+   }
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "n": 2,
+   "camposFinder": {
+    "producedBy": 2,
+    "label": 2,
+    "relevantFile": 2,
+    "relevantLinesStart": 2,
+    "relevantLinesEnd": 2,
+    "suggestionContent": 2
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 2,
+    "language": 2,
+    "suggestionContent": 2,
+    "oneSentenceSummary": 2,
+    "relevantLinesStart": 2,
+    "relevantLinesEnd": 2,
+    "label": 2,
+    "severity": 2,
+    "llmPrompt": 2
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 0,
+   "camposDedup": {
+    "label": 2,
+    "relevantFile": 2,
+    "relevantLinesStart": 2,
+    "relevantLinesEnd": 2,
+    "suggestionContent": 2,
+    "llmPrompt": 2
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 2,
+   "idsEntradaDedup": [
+    "S1",
+    "S2"
+   ],
+   "groups": [
+    {
+     "keep": "S2",
+     "duplicates": [
+      "S1"
+     ]
+    }
+   ],
+   "unique": [],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S2",
+     "lex": 0.3448275862068966,
+     "cos": 0.8341079106602175,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 2767,
+    "cacheRead": 0,
+    "output": 317,
+    "reasoning": 0,
+    "ms": 6557
+   }
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "n": 4,
+   "camposFinder": {
+    "producedBy": 4,
+    "label": 4,
+    "relevantFile": 4,
+    "relevantLinesStart": 4,
+    "relevantLinesEnd": 4,
+    "suggestionContent": 4
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 4,
+    "language": 4,
+    "suggestionContent": 4,
+    "oneSentenceSummary": 4,
+    "relevantLinesStart": 4,
+    "relevantLinesEnd": 4,
+    "label": 4,
+    "severity": 4,
+    "llmPrompt": 4
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 1,
+   "camposDedup": {
+    "label": 4,
+    "relevantFile": 4,
+    "relevantLinesStart": 4,
+    "relevantLinesEnd": 4,
+    "suggestionContent": 4,
+    "llmPrompt": 4
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 4,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4"
+   ],
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S4"
+     ]
+    },
+    {
+     "keep": "S2",
+     "duplicates": [
+      "S3"
+     ]
+    }
+   ],
+   "unique": [],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S4",
+     "keep": "S1",
+     "lex": 0.30357142857142855,
+     "cos": 0.8123831189544529,
+     "tb": true
+    },
+    {
+     "dup": "S3",
+     "keep": "S2",
+     "lex": 0.7777777777777778,
+     "cos": 0.8685958889094205,
+     "tb": false
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 4071,
+    "cacheRead": 0,
+    "output": 342,
+    "reasoning": 0,
+    "ms": 5311
+   }
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "n": 13,
+   "camposFinder": {
+    "producedBy": 13,
+    "label": 13,
+    "relevantFile": 13,
+    "relevantLinesStart": 13,
+    "relevantLinesEnd": 13,
+    "suggestionContent": 13
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 13,
+    "language": 13,
+    "suggestionContent": 13,
+    "oneSentenceSummary": 13,
+    "relevantLinesStart": 13,
+    "relevantLinesEnd": 13,
+    "label": 13,
+    "severity": 13,
+    "llmPrompt": 13
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 0,
+   "camposDedup": {
+    "label": 13,
+    "relevantFile": 13,
+    "relevantLinesStart": 13,
+    "relevantLinesEnd": 13,
+    "suggestionContent": 13,
+    "llmPrompt": 13
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 13,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S7",
+    "S8",
+    "S9",
+    "S10",
+    "S11",
+    "S12",
+    "S13"
+   ],
+   "groups": [
+    {
+     "keep": "S13",
+     "duplicates": [
+      "S1",
+      "S3",
+      "S4",
+      "S6",
+      "S7",
+      "S8",
+      "S10",
+      "S12"
+     ]
+    },
+    {
+     "keep": "S2",
+     "duplicates": [
+      "S5",
+      "S9"
+     ]
+    }
+   ],
+   "unique": [
+    "S11"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S13",
+     "lex": 0.34,
+     "cos": 0.7029527846344757,
+     "tb": true
+    },
+    {
+     "dup": "S3",
+     "keep": "S13",
+     "lex": 0.34210526315789475,
+     "cos": 0.7446354660026774,
+     "tb": true
+    },
+    {
+     "dup": "S4",
+     "keep": "S13",
+     "lex": 0.2564102564102564,
+     "cos": 0.6708372291251415,
+     "tb": true
+    },
+    {
+     "dup": "S6",
+     "keep": "S13",
+     "lex": 0.1702127659574468,
+     "cos": 0.8703776056069392,
+     "tb": true
+    },
+    {
+     "dup": "S7",
+     "keep": "S13",
+     "lex": 0.2702702702702703,
+     "cos": 0.6876161310754503,
+     "tb": true
+    },
+    {
+     "dup": "S8",
+     "keep": "S13",
+     "lex": 0.4,
+     "cos": 0.8216470150105313,
+     "tb": true
+    },
+    {
+     "dup": "S10",
+     "keep": "S13",
+     "lex": 0.30952380952380953,
+     "cos": 0.8158961003410904,
+     "tb": true
+    },
+    {
+     "dup": "S12",
+     "keep": "S13",
+     "lex": 0.3953488372093023,
+     "cos": 0.8174798039670444,
+     "tb": true
+    },
+    {
+     "dup": "S5",
+     "keep": "S2",
+     "lex": 0.30434782608695654,
+     "cos": 0.7542364003792892,
+     "tb": true
+    },
+    {
+     "dup": "S9",
+     "keep": "S2",
+     "lex": 0.20588235294117646,
+     "cos": 0.7967993311940197,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 11,
+    "input": 11984,
+    "cacheRead": 0,
+    "output": 2528,
+    "reasoning": 0,
+    "ms": 13356
+   }
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "n": 3,
+   "camposFinder": {
+    "producedBy": 3,
+    "label": 3,
+    "relevantFile": 3,
+    "relevantLinesStart": 3,
+    "relevantLinesEnd": 3,
+    "suggestionContent": 3
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 3,
+    "language": 3,
+    "suggestionContent": 3,
+    "oneSentenceSummary": 3,
+    "relevantLinesStart": 3,
+    "relevantLinesEnd": 3,
+    "label": 3,
+    "severity": 3,
+    "llmPrompt": 3
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 0,
+   "camposDedup": {
+    "label": 3,
+    "relevantFile": 3,
+    "relevantLinesStart": 3,
+    "relevantLinesEnd": 3,
+    "suggestionContent": 3,
+    "llmPrompt": 3
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 3,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3"
+   ],
+   "groups": [
+    {
+     "keep": "S3",
+     "duplicates": [
+      "S2"
+     ]
+    }
+   ],
+   "unique": [
+    "S1"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S2",
+     "keep": "S3",
+     "lex": 0.3333333333333333,
+     "cos": 0.8780636475455698,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 2955,
+    "cacheRead": 0,
+    "output": 161,
+    "reasoning": 0,
+    "ms": 5014
+   }
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "n": 11,
+   "camposFinder": {
+    "producedBy": 11,
+    "label": 11,
+    "relevantFile": 11,
+    "relevantLinesStart": 11,
+    "relevantLinesEnd": 11,
+    "suggestionContent": 11
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 11,
+    "language": 11,
+    "suggestionContent": 11,
+    "oneSentenceSummary": 11,
+    "relevantLinesStart": 11,
+    "relevantLinesEnd": 11,
+    "label": 11,
+    "severity": 11,
+    "llmPrompt": 11
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 1,
+   "camposDedup": {
+    "label": 11,
+    "relevantFile": 11,
+    "relevantLinesStart": 11,
+    "relevantLinesEnd": 11,
+    "suggestionContent": 11,
+    "llmPrompt": 11
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 11,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S7",
+    "S8",
+    "S9",
+    "S10",
+    "S11"
+   ],
+   "groups": [
+    {
+     "keep": "S6",
+     "duplicates": [
+      "S1",
+      "S7",
+      "S10"
+     ]
+    },
+    {
+     "keep": "S2",
+     "duplicates": [
+      "S8"
+     ]
+    }
+   ],
+   "unique": [
+    "S3",
+    "S4",
+    "S5",
+    "S9",
+    "S11"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S6",
+     "lex": 0.42105263157894735,
+     "cos": 0.8677311130328962,
+     "tb": true
+    },
+    {
+     "dup": "S7",
+     "keep": "S6",
+     "lex": 0.3958333333333333,
+     "cos": 0.816427904925847,
+     "tb": true
+    },
+    {
+     "dup": "S10",
+     "keep": "S6",
+     "lex": 0.5102040816326531,
+     "cos": 0.9203389586760904,
+     "tb": true
+    },
+    {
+     "dup": "S8",
+     "keep": "S2",
+     "lex": 0.1702127659574468,
+     "cos": 0.6942468074673653,
+     "tb": false
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 5,
+    "input": 6621,
+    "cacheRead": 0,
+    "output": 571,
+    "reasoning": 0,
+    "ms": 6678
+   }
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "n": 8,
+   "camposFinder": {
+    "producedBy": 8,
+    "label": 8,
+    "relevantFile": 8,
+    "relevantLinesStart": 8,
+    "relevantLinesEnd": 8,
+    "suggestionContent": 8
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 8,
+    "language": 8,
+    "suggestionContent": 8,
+    "oneSentenceSummary": 8,
+    "relevantLinesStart": 8,
+    "relevantLinesEnd": 8,
+    "label": 8,
+    "severity": 8,
+    "llmPrompt": 8
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 1,
+   "camposDedup": {
+    "label": 8,
+    "relevantFile": 8,
+    "relevantLinesStart": 8,
+    "relevantLinesEnd": 8,
+    "suggestionContent": 8,
+    "llmPrompt": 8
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 8,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S7",
+    "S8"
+   ],
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S6",
+      "S7"
+     ]
+    },
+    {
+     "keep": "S8",
+     "duplicates": [
+      "S5"
+     ]
+    }
+   ],
+   "unique": [
+    "S2",
+    "S3",
+    "S4"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S6",
+     "keep": "S1",
+     "lex": 0.34375,
+     "cos": 0.7696230930446383,
+     "tb": true
+    },
+    {
+     "dup": "S7",
+     "keep": "S1",
+     "lex": 0.4166666666666667,
+     "cos": 0.6522062962723395,
+     "tb": true
+    },
+    {
+     "dup": "S5",
+     "keep": "S8",
+     "lex": 0.2682926829268293,
+     "cos": 0.7947740221310254,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 5458,
+    "cacheRead": 0,
+    "output": 443,
+    "reasoning": 0,
+    "ms": 5458
+   }
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "n": 1,
+   "camposFinder": {
+    "producedBy": 1,
+    "label": 1,
+    "relevantFile": 1,
+    "relevantLinesStart": 1,
+    "relevantLinesEnd": 1,
+    "suggestionContent": 1
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 1,
+    "language": 1,
+    "suggestionContent": 1,
+    "oneSentenceSummary": 1,
+    "relevantLinesStart": 1,
+    "relevantLinesEnd": 1,
+    "label": 1,
+    "severity": 1,
+    "llmPrompt": 1
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 0,
+   "camposDedup": {
+    "label": 1,
+    "relevantFile": 1,
+    "relevantLinesStart": 1,
+    "relevantLinesEnd": 1,
+    "suggestionContent": 1,
+    "llmPrompt": 1
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 1,
+   "idsEntradaDedup": [
+    "S1"
+   ],
+   "groups": [],
+   "unique": [
+    "S1"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 0,
+    "input": 0,
+    "cacheRead": 0,
+    "output": 0,
+    "reasoning": 0,
+    "ms": 0
+   }
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "n": 6,
+   "camposFinder": {
+    "producedBy": 6,
+    "label": 6,
+    "relevantFile": 6,
+    "relevantLinesStart": 6,
+    "relevantLinesEnd": 6,
+    "suggestionContent": 6
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 6,
+    "language": 6,
+    "suggestionContent": 6,
+    "oneSentenceSummary": 6,
+    "relevantLinesStart": 6,
+    "relevantLinesEnd": 6,
+    "label": 6,
+    "severity": 6,
+    "llmPrompt": 6
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 0,
+   "camposDedup": {
+    "label": 6,
+    "relevantFile": 6,
+    "relevantLinesStart": 6,
+    "relevantLinesEnd": 6,
+    "suggestionContent": 6,
+    "llmPrompt": 6
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 6,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6"
+   ],
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S3",
+      "S4"
+     ]
+    }
+   ],
+   "unique": [
+    "S2",
+    "S5",
+    "S6"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S3",
+     "keep": "S1",
+     "lex": 0.3409090909090909,
+     "cos": 0.8637084799984776,
+     "tb": true
+    },
+    {
+     "dup": "S4",
+     "keep": "S1",
+     "lex": 0.3829787234042553,
+     "cos": 0.8681491427580993,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 3998,
+    "cacheRead": 0,
+    "output": 268,
+    "reasoning": 0,
+    "ms": 5045
+   }
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "n": 8,
+   "camposFinder": {
+    "producedBy": 8,
+    "label": 8,
+    "relevantFile": 8,
+    "relevantLinesStart": 8,
+    "relevantLinesEnd": 8,
+    "suggestionContent": 8
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 8,
+    "language": 8,
+    "suggestionContent": 8,
+    "oneSentenceSummary": 8,
+    "relevantLinesStart": 8,
+    "relevantLinesEnd": 8,
+    "label": 8,
+    "severity": 8,
+    "llmPrompt": 8
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 2,
+   "camposDedup": {
+    "label": 8,
+    "relevantFile": 8,
+    "relevantLinesStart": 8,
+    "relevantLinesEnd": 8,
+    "suggestionContent": 8,
+    "llmPrompt": 8
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 8,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S7",
+    "S8"
+   ],
+   "groups": [
+    {
+     "keep": "S7",
+     "duplicates": [
+      "S2",
+      "S5"
+     ]
+    }
+   ],
+   "unique": [
+    "S1",
+    "S3",
+    "S4",
+    "S6",
+    "S8"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S2",
+     "keep": "S7",
+     "lex": 0.3125,
+     "cos": 0.8480488959658482,
+     "tb": true
+    },
+    {
+     "dup": "S5",
+     "keep": "S7",
+     "lex": 0.3584905660377358,
+     "cos": 0.7734274296488498,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 4452,
+    "cacheRead": 0,
+    "output": 300,
+    "reasoning": 0,
+    "ms": 6053
+   }
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "n": 8,
+   "camposFinder": {
+    "producedBy": 8,
+    "label": 8,
+    "relevantFile": 8,
+    "relevantLinesStart": 8,
+    "relevantLinesEnd": 8,
+    "suggestionContent": 8
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 8,
+    "language": 8,
+    "suggestionContent": 8,
+    "oneSentenceSummary": 8,
+    "relevantLinesStart": 8,
+    "relevantLinesEnd": 8,
+    "label": 8,
+    "severity": 8,
+    "llmPrompt": 8
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 1,
+   "camposDedup": {
+    "label": 8,
+    "relevantFile": 8,
+    "relevantLinesStart": 8,
+    "relevantLinesEnd": 8,
+    "suggestionContent": 8,
+    "llmPrompt": 8
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 8,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S7",
+    "S8"
+   ],
+   "groups": [
+    {
+     "keep": "S7",
+     "duplicates": [
+      "S1",
+      "S2",
+      "S4",
+      "S8"
+     ]
+    }
+   ],
+   "unique": [
+    "S3",
+    "S5",
+    "S6"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S7",
+     "lex": 0.3064516129032258,
+     "cos": 0.9138941888867751,
+     "tb": true
+    },
+    {
+     "dup": "S2",
+     "keep": "S7",
+     "lex": 0.37037037037037035,
+     "cos": 0.942420461162244,
+     "tb": true
+    },
+    {
+     "dup": "S4",
+     "keep": "S7",
+     "lex": 0.4230769230769231,
+     "cos": 0.9452704048352366,
+     "tb": true
+    },
+    {
+     "dup": "S8",
+     "keep": "S7",
+     "lex": 0.23529411764705882,
+     "cos": 0.8700023664185434,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 5,
+    "input": 6798,
+    "cacheRead": 0,
+    "output": 623,
+    "reasoning": 0,
+    "ms": 5382
+   }
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+   "n": 2,
+   "camposFinder": {
+    "producedBy": 2,
+    "label": 2,
+    "relevantFile": 2,
+    "relevantLinesStart": 2,
+    "relevantLinesEnd": 2,
+    "suggestionContent": 2
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 2,
+    "language": 2,
+    "suggestionContent": 2,
+    "oneSentenceSummary": 2,
+    "relevantLinesStart": 2,
+    "relevantLinesEnd": 2,
+    "label": 2,
+    "severity": 2,
+    "llmPrompt": 2
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 0,
+   "camposDedup": {
+    "label": 2,
+    "relevantFile": 2,
+    "relevantLinesStart": 2,
+    "relevantLinesEnd": 2,
+    "suggestionContent": 2,
+    "llmPrompt": 2
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 2,
+   "idsEntradaDedup": [
+    "S1",
+    "S2"
+   ],
+   "groups": [],
+   "unique": [
+    "S1",
+    "S2"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 1867,
+    "cacheRead": 0,
+    "output": 19,
+    "reasoning": 0,
+    "ms": 3027
+   }
+  },
+  "async-import-of-the-appstore-packages-cal-com": {
+   "n": 5,
+   "camposFinder": {
+    "producedBy": 5,
+    "label": 5,
+    "relevantFile": 5,
+    "relevantLinesStart": 5,
+    "relevantLinesEnd": 5,
+    "suggestionContent": 5
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 5,
+    "language": 5,
+    "suggestionContent": 5,
+    "oneSentenceSummary": 5,
+    "relevantLinesStart": 5,
+    "relevantLinesEnd": 5,
+    "label": 5,
+    "severity": 5,
+    "llmPrompt": 5
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 4,
+   "camposDedup": {
+    "label": 5,
+    "relevantFile": 5,
+    "relevantLinesStart": 5,
+    "relevantLinesEnd": 5,
+    "suggestionContent": 5,
+    "llmPrompt": 5
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 5,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5"
+   ],
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S4",
+      "S5",
+      "S2"
+     ]
+    }
+   ],
+   "unique": [
+    "S3"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S4",
+     "keep": "S1",
+     "lex": 0.24285714285714285,
+     "cos": 0.773945840258038,
+     "tb": true
+    },
+    {
+     "dup": "S5",
+     "keep": "S1",
+     "lex": 0.3484848484848485,
+     "cos": 0.8600158091574046,
+     "tb": true
+    },
+    {
+     "dup": "S2",
+     "keep": "S1",
+     "lex": 0.273972602739726,
+     "cos": 0.7539229052326698,
+     "tb": false
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 5324,
+    "cacheRead": 0,
+    "output": 610,
+    "reasoning": 0,
+    "ms": 6774
+   }
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+   "n": 8,
+   "camposFinder": {
+    "producedBy": 8,
+    "label": 8,
+    "relevantFile": 8,
+    "relevantLinesStart": 8,
+    "relevantLinesEnd": 8,
+    "suggestionContent": 8
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 8,
+    "language": 8,
+    "suggestionContent": 8,
+    "oneSentenceSummary": 8,
+    "relevantLinesStart": 8,
+    "relevantLinesEnd": 8,
+    "label": 8,
+    "severity": 8,
+    "llmPrompt": 8
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 0,
+   "camposDedup": {
+    "label": 8,
+    "relevantFile": 8,
+    "relevantLinesStart": 8,
+    "relevantLinesEnd": 8,
+    "suggestionContent": 8,
+    "llmPrompt": 8
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 8,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S7",
+    "S8"
+   ],
+   "groups": [
+    {
+     "keep": "S7",
+     "duplicates": [
+      "S1",
+      "S3",
+      "S4",
+      "S5"
+     ]
+    },
+    {
+     "keep": "S2",
+     "duplicates": [
+      "S6"
+     ]
+    }
+   ],
+   "unique": [
+    "S8"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S7",
+     "lex": 0.12790697674418605,
+     "cos": 0.6987559435593999,
+     "tb": false
+    },
+    {
+     "dup": "S3",
+     "keep": "S7",
+     "lex": 0.12698412698412698,
+     "cos": 0.6967235435640216,
+     "tb": false
+    },
+    {
+     "dup": "S4",
+     "keep": "S7",
+     "lex": 0.18461538461538463,
+     "cos": 0.6901150218127026,
+     "tb": false
+    },
+    {
+     "dup": "S5",
+     "keep": "S7",
+     "lex": 0.12698412698412698,
+     "cos": 0.6849555422448954,
+     "tb": false
+    },
+    {
+     "dup": "S6",
+     "keep": "S2",
+     "lex": 0.20634920634920634,
+     "cos": 0.6680855086533023,
+     "tb": false
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 6,
+    "input": 7190,
+    "cacheRead": 0,
+    "output": 928,
+    "reasoning": 0,
+    "ms": 7912
+   }
+  },
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+   "n": 7,
+   "camposFinder": {
+    "producedBy": 7,
+    "label": 7,
+    "relevantFile": 7,
+    "relevantLinesStart": 7,
+    "relevantLinesEnd": 7,
+    "suggestionContent": 7
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 7,
+    "language": 7,
+    "suggestionContent": 7,
+    "oneSentenceSummary": 7,
+    "relevantLinesStart": 7,
+    "relevantLinesEnd": 7,
+    "label": 7,
+    "severity": 7,
+    "llmPrompt": 7
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 3,
+   "camposDedup": {
+    "label": 7,
+    "relevantFile": 7,
+    "relevantLinesStart": 7,
+    "relevantLinesEnd": 7,
+    "suggestionContent": 7,
+    "llmPrompt": 7
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 7,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S7"
+   ],
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S6"
+     ]
+    },
+    {
+     "keep": "S2",
+     "duplicates": [
+      "S7"
+     ]
+    },
+    {
+     "keep": "S5",
+     "duplicates": [
+      "S4"
+     ]
+    }
+   ],
+   "unique": [
+    "S3"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S6",
+     "keep": "S1",
+     "lex": 0.40625,
+     "cos": 0.8936290304864349,
+     "tb": true
+    },
+    {
+     "dup": "S7",
+     "keep": "S2",
+     "lex": 0.3684210526315789,
+     "cos": 0.8272283751386602,
+     "tb": true
+    },
+    {
+     "dup": "S4",
+     "keep": "S5",
+     "lex": 0.4716981132075472,
+     "cos": 0.9313972350705514,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 5485,
+    "cacheRead": 0,
+    "output": 474,
+    "reasoning": 0,
+    "ms": 5615
+   }
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+   "n": 3,
+   "camposFinder": {
+    "producedBy": 3,
+    "label": 3,
+    "relevantFile": 3,
+    "relevantLinesStart": 3,
+    "relevantLinesEnd": 3,
+    "suggestionContent": 3
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 3,
+    "language": 3,
+    "suggestionContent": 3,
+    "oneSentenceSummary": 3,
+    "relevantLinesStart": 3,
+    "relevantLinesEnd": 3,
+    "label": 3,
+    "severity": 3,
+    "llmPrompt": 3
+   },
+   "descartadoParse": [
+    {
+     "id": "S3",
+     "faltando": [
+      "relevantLinesStart",
+      "relevantLinesEnd"
+     ]
+    }
+   ],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 0,
+   "camposDedup": {
+    "label": 2,
+    "relevantFile": 2,
+    "relevantLinesStart": 2,
+    "relevantLinesEnd": 2,
+    "suggestionContent": 2,
+    "llmPrompt": 2
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 2,
+   "idsEntradaDedup": [
+    "S1",
+    "S2"
+   ],
+   "groups": [],
+   "unique": [
+    "S1",
+    "S2"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 1814,
+    "cacheRead": 0,
+    "output": 19,
+    "reasoning": 0,
+    "ms": 1801
+   }
+  },
+  "advanced-query-processing-architecture-grafana-codex": {
+   "n": 1,
+   "camposFinder": {
+    "producedBy": 1,
+    "label": 1,
+    "relevantFile": 1,
+    "relevantLinesStart": 1,
+    "relevantLinesEnd": 1,
+    "suggestionContent": 1
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 1,
+    "language": 1,
+    "suggestionContent": 1,
+    "oneSentenceSummary": 1,
+    "relevantLinesStart": 1,
+    "relevantLinesEnd": 1,
+    "label": 1,
+    "severity": 1,
+    "llmPrompt": 1
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 0,
+   "camposDedup": {
+    "label": 1,
+    "relevantFile": 1,
+    "relevantLinesStart": 1,
+    "relevantLinesEnd": 1,
+    "suggestionContent": 1,
+    "llmPrompt": 1
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 1,
+   "idsEntradaDedup": [
+    "S1"
+   ],
+   "groups": [],
+   "unique": [
+    "S1"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 0,
+    "input": 0,
+    "cacheRead": 0,
+    "output": 0,
+    "reasoning": 0,
+    "ms": 0
+   }
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+   "n": 5,
+   "camposFinder": {
+    "producedBy": 5,
+    "label": 5,
+    "relevantFile": 5,
+    "relevantLinesStart": 5,
+    "relevantLinesEnd": 5,
+    "suggestionContent": 5
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 5,
+    "language": 5,
+    "suggestionContent": 5,
+    "oneSentenceSummary": 5,
+    "relevantLinesStart": 5,
+    "relevantLinesEnd": 5,
+    "label": 5,
+    "severity": 5,
+    "llmPrompt": 5
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 0,
+   "camposDedup": {
+    "label": 5,
+    "relevantFile": 5,
+    "relevantLinesStart": 5,
+    "relevantLinesEnd": 5,
+    "suggestionContent": 5,
+    "llmPrompt": 5
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 5,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5"
+   ],
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S3",
+      "S5"
+     ]
+    },
+    {
+     "keep": "S4",
+     "duplicates": [
+      "S2"
+     ]
+    }
+   ],
+   "unique": [],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S3",
+     "keep": "S1",
+     "lex": 0.3673469387755102,
+     "cos": 0.8314403384403302,
+     "tb": true
+    },
+    {
+     "dup": "S5",
+     "keep": "S1",
+     "lex": 0.4444444444444444,
+     "cos": 0.7916955789481721,
+     "tb": true
+    },
+    {
+     "dup": "S2",
+     "keep": "S4",
+     "lex": 0.44,
+     "cos": 0.8892367166124859,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 4944,
+    "cacheRead": 0,
+    "output": 330,
+    "reasoning": 0,
+    "ms": 5833
+   }
+  },
+  "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+   "n": 6,
+   "camposFinder": {
+    "producedBy": 6,
+    "label": 6,
+    "relevantFile": 6,
+    "relevantLinesStart": 6,
+    "relevantLinesEnd": 6,
+    "suggestionContent": 6
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 6,
+    "language": 6,
+    "suggestionContent": 6,
+    "oneSentenceSummary": 6,
+    "relevantLinesStart": 6,
+    "relevantLinesEnd": 6,
+    "label": 6,
+    "severity": 6,
+    "llmPrompt": 6
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 0,
+   "camposDedup": {
+    "label": 6,
+    "relevantFile": 6,
+    "relevantLinesStart": 6,
+    "relevantLinesEnd": 6,
+    "suggestionContent": 6,
+    "llmPrompt": 6
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 6,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6"
+   ],
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S3",
+      "S4",
+      "S6"
+     ]
+    }
+   ],
+   "unique": [
+    "S2",
+    "S5"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S3",
+     "keep": "S1",
+     "lex": 0.22033898305084745,
+     "cos": 0.7911894789524876,
+     "tb": true
+    },
+    {
+     "dup": "S4",
+     "keep": "S1",
+     "lex": 0.25806451612903225,
+     "cos": 0.8809344717141243,
+     "tb": true
+    },
+    {
+     "dup": "S6",
+     "keep": "S1",
+     "lex": 0.27419354838709675,
+     "cos": 0.8733633762654224,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 5196,
+    "cacheRead": 0,
+    "output": 433,
+    "reasoning": 0,
+    "ms": 5885
+   }
+  },
+  "advanced-sql-analytics-framework-grafana-codex": {
+   "n": 6,
+   "camposFinder": {
+    "producedBy": 6,
+    "label": 6,
+    "relevantFile": 6,
+    "relevantLinesStart": 6,
+    "relevantLinesEnd": 6,
+    "suggestionContent": 6
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 6,
+    "language": 6,
+    "suggestionContent": 6,
+    "oneSentenceSummary": 6,
+    "relevantLinesStart": 6,
+    "relevantLinesEnd": 6,
+    "label": 6,
+    "severity": 6,
+    "llmPrompt": 6
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 1,
+   "camposDedup": {
+    "label": 6,
+    "relevantFile": 6,
+    "relevantLinesStart": 6,
+    "relevantLinesEnd": 6,
+    "suggestionContent": 6,
+    "llmPrompt": 6
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 6,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6"
+   ],
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S2",
+      "S3",
+      "S4",
+      "S6"
+     ]
+    }
+   ],
+   "unique": [
+    "S5"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S2",
+     "keep": "S1",
+     "lex": 0.20689655172413793,
+     "cos": 0.8169397302797308,
+     "tb": true
+    },
+    {
+     "dup": "S3",
+     "keep": "S1",
+     "lex": 0.25,
+     "cos": 0.8672594327499242,
+     "tb": true
+    },
+    {
+     "dup": "S4",
+     "keep": "S1",
+     "lex": 0.25,
+     "cos": 0.8320286095890841,
+     "tb": true
+    },
+    {
+     "dup": "S6",
+     "keep": "S1",
+     "lex": 0.19672131147540983,
+     "cos": 0.7999258905322738,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 5,
+    "input": 5973,
+    "cacheRead": 0,
+    "output": 454,
+    "reasoning": 0,
+    "ms": 6506
+   }
+  },
+  "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+   "n": 15,
+   "camposFinder": {
+    "producedBy": 15,
+    "label": 15,
+    "relevantFile": 15,
+    "relevantLinesStart": 15,
+    "relevantLinesEnd": 15,
+    "suggestionContent": 15
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 15,
+    "language": 15,
+    "suggestionContent": 15,
+    "oneSentenceSummary": 15,
+    "relevantLinesStart": 15,
+    "relevantLinesEnd": 15,
+    "label": 15,
+    "severity": 15,
+    "llmPrompt": 15
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 0,
+   "camposDedup": {
+    "label": 15,
+    "relevantFile": 15,
+    "relevantLinesStart": 15,
+    "relevantLinesEnd": 15,
+    "suggestionContent": 15,
+    "llmPrompt": 15
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 15,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S7",
+    "S8",
+    "S9",
+    "S10",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15"
+   ],
+   "groups": [
+    {
+     "keep": "S6",
+     "duplicates": [
+      "S1",
+      "S8",
+      "S13"
+     ]
+    },
+    {
+     "keep": "S12",
+     "duplicates": [
+      "S2",
+      "S9"
+     ]
+    },
+    {
+     "keep": "S7",
+     "duplicates": [
+      "S3",
+      "S10",
+      "S14"
+     ]
+    },
+    {
+     "keep": "S4",
+     "duplicates": [
+      "S11",
+      "S15"
+     ]
+    }
+   ],
+   "unique": [
+    "S5"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S6",
+     "lex": 0.26666666666666666,
+     "cos": 0.7135743198689037,
+     "tb": true
+    },
+    {
+     "dup": "S8",
+     "keep": "S6",
+     "lex": 0.2727272727272727,
+     "cos": 0.5732364448694038,
+     "tb": true
+    },
+    {
+     "dup": "S13",
+     "keep": "S6",
+     "lex": 0.3076923076923077,
+     "cos": 0.5795444654764216,
+     "tb": true
+    },
+    {
+     "dup": "S2",
+     "keep": "S12",
+     "lex": 0.45454545454545453,
+     "cos": 0.8140292710089897,
+     "tb": true
+    },
+    {
+     "dup": "S9",
+     "keep": "S12",
+     "lex": 0.30303030303030304,
+     "cos": 0.8318375785878543,
+     "tb": true
+    },
+    {
+     "dup": "S3",
+     "keep": "S7",
+     "lex": 0.3939393939393939,
+     "cos": 0.7613767554706165,
+     "tb": true
+    },
+    {
+     "dup": "S10",
+     "keep": "S7",
+     "lex": 0.175,
+     "cos": 0.7705821540049412,
+     "tb": true
+    },
+    {
+     "dup": "S14",
+     "keep": "S7",
+     "lex": 0.22857142857142856,
+     "cos": 0.8003449629078186,
+     "tb": true
+    },
+    {
+     "dup": "S11",
+     "keep": "S4",
+     "lex": 0.2,
+     "cos": 0.7664827134908796,
+     "tb": true
+    },
+    {
+     "dup": "S15",
+     "keep": "S4",
+     "lex": 0.32142857142857145,
+     "cos": 0.8020411446371498,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 11,
+    "input": 11525,
+    "cacheRead": 0,
+    "output": 1653,
+    "reasoning": 0,
+    "ms": 8864
+   }
+  },
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+   "n": 4,
+   "camposFinder": {
+    "producedBy": 4,
+    "label": 4,
+    "relevantFile": 4,
+    "relevantLinesStart": 4,
+    "relevantLinesEnd": 4,
+    "suggestionContent": 4
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 4,
+    "language": 4,
+    "suggestionContent": 4,
+    "oneSentenceSummary": 4,
+    "relevantLinesStart": 4,
+    "relevantLinesEnd": 4,
+    "label": 4,
+    "severity": 4,
+    "llmPrompt": 4
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 0,
+   "camposDedup": {
+    "label": 4,
+    "relevantFile": 4,
+    "relevantLinesStart": 4,
+    "relevantLinesEnd": 4,
+    "suggestionContent": 4,
+    "llmPrompt": 4
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 4,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4"
+   ],
+   "groups": [],
+   "unique": [
+    "S1",
+    "S2",
+    "S3",
+    "S4"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 2246,
+    "cacheRead": 0,
+    "output": 23,
+    "reasoning": 0,
+    "ms": 1896
+   }
+  },
+  "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+   "n": 1,
+   "camposFinder": {
+    "producedBy": 1,
+    "label": 1,
+    "relevantFile": 1,
+    "relevantLinesStart": 1,
+    "relevantLinesEnd": 1,
+    "suggestionContent": 1
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 1,
+    "language": 1,
+    "suggestionContent": 1,
+    "oneSentenceSummary": 1,
+    "relevantLinesStart": 1,
+    "relevantLinesEnd": 1,
+    "label": 1,
+    "severity": 1,
+    "llmPrompt": 1
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 0,
+   "camposDedup": {
+    "label": 1,
+    "relevantFile": 1,
+    "relevantLinesStart": 1,
+    "relevantLinesEnd": 1,
+    "suggestionContent": 1,
+    "llmPrompt": 1
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 1,
+   "idsEntradaDedup": [
+    "S1"
+   ],
+   "groups": [],
+   "unique": [
+    "S1"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 0,
+    "input": 0,
+    "cacheRead": 0,
+    "output": 0,
+    "reasoning": 0,
+    "ms": 0
+   }
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+   "n": 1,
+   "camposFinder": {
+    "producedBy": 1,
+    "label": 1,
+    "relevantFile": 1,
+    "relevantLinesStart": 1,
+    "relevantLinesEnd": 1,
+    "suggestionContent": 1
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 1,
+    "language": 1,
+    "suggestionContent": 1,
+    "oneSentenceSummary": 1,
+    "relevantLinesStart": 1,
+    "relevantLinesEnd": 1,
+    "label": 1,
+    "severity": 1,
+    "llmPrompt": 1
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 0,
+   "camposDedup": {
+    "label": 1,
+    "relevantFile": 1,
+    "relevantLinesStart": 1,
+    "relevantLinesEnd": 1,
+    "suggestionContent": 1,
+    "llmPrompt": 1
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 1,
+   "idsEntradaDedup": [
+    "S1"
+   ],
+   "groups": [],
+   "unique": [
+    "S1"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 0,
+    "input": 0,
+    "cacheRead": 0,
+    "output": 0,
+    "reasoning": 0,
+    "ms": 0
+   }
+  },
+  "authzservice-improve-authz-caching-grafana-codex": {
+   "n": 5,
+   "camposFinder": {
+    "producedBy": 5,
+    "label": 5,
+    "relevantFile": 5,
+    "relevantLinesStart": 5,
+    "relevantLinesEnd": 5,
+    "suggestionContent": 5
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 5,
+    "language": 5,
+    "suggestionContent": 5,
+    "oneSentenceSummary": 5,
+    "relevantLinesStart": 5,
+    "relevantLinesEnd": 5,
+    "label": 5,
+    "severity": 5,
+    "llmPrompt": 5
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 0,
+   "camposDedup": {
+    "label": 5,
+    "relevantFile": 5,
+    "relevantLinesStart": 5,
+    "relevantLinesEnd": 5,
+    "suggestionContent": 5,
+    "llmPrompt": 5
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 5,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5"
+   ],
+   "groups": [
+    {
+     "keep": "S2",
+     "duplicates": [
+      "S4"
+     ]
+    },
+    {
+     "keep": "S5",
+     "duplicates": [
+      "S3"
+     ]
+    }
+   ],
+   "unique": [
+    "S1"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S4",
+     "keep": "S2",
+     "lex": 0.4406779661016949,
+     "cos": 0.8635905616126529,
+     "tb": true
+    },
+    {
+     "dup": "S3",
+     "keep": "S5",
+     "lex": 0.3137254901960784,
+     "cos": 0.6981271441684058,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 4115,
+    "cacheRead": 0,
+    "output": 281,
+    "reasoning": 0,
+    "ms": 5944
+   }
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+   "n": 1,
+   "camposFinder": {
+    "producedBy": 1,
+    "label": 1,
+    "relevantFile": 1,
+    "relevantLinesStart": 1,
+    "relevantLinesEnd": 1,
+    "suggestionContent": 1
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 1,
+    "language": 1,
+    "suggestionContent": 1,
+    "oneSentenceSummary": 1,
+    "relevantLinesStart": 1,
+    "relevantLinesEnd": 1,
+    "label": 1,
+    "severity": 1,
+    "llmPrompt": 1
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 0,
+   "camposDedup": {
+    "label": 1,
+    "relevantFile": 1,
+    "relevantLinesStart": 1,
+    "relevantLinesEnd": 1,
+    "suggestionContent": 1,
+    "llmPrompt": 1
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 1,
+   "idsEntradaDedup": [
+    "S1"
+   ],
+   "groups": [],
+   "unique": [
+    "S1"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 0,
+    "input": 0,
+    "cacheRead": 0,
+    "output": 0,
+    "reasoning": 0,
+    "ms": 0
+   }
+  },
+  "database-performance-optimizations-grafana-codex": {
+   "n": 7,
+   "camposFinder": {
+    "producedBy": 7,
+    "label": 7,
+    "relevantFile": 7,
+    "relevantLinesStart": 7,
+    "relevantLinesEnd": 7,
+    "suggestionContent": 7
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 7,
+    "language": 7,
+    "suggestionContent": 7,
+    "oneSentenceSummary": 7,
+    "relevantLinesStart": 7,
+    "relevantLinesEnd": 7,
+    "label": 7,
+    "severity": 7,
+    "llmPrompt": 7
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 4,
+   "camposDedup": {
+    "label": 7,
+    "relevantFile": 7,
+    "relevantLinesStart": 7,
+    "relevantLinesEnd": 7,
+    "suggestionContent": 7,
+    "llmPrompt": 7
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 7,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S7"
+   ],
+   "groups": [
+    {
+     "keep": "S7",
+     "duplicates": [
+      "S1",
+      "S3",
+      "S4"
+     ]
+    },
+    {
+     "keep": "S2",
+     "duplicates": [
+      "S5"
+     ]
+    }
+   ],
+   "unique": [
+    "S6"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S7",
+     "lex": 0.19718309859154928,
+     "cos": 0.5896332703818197,
+     "tb": true
+    },
+    {
+     "dup": "S3",
+     "keep": "S7",
+     "lex": 0.25,
+     "cos": 0.6842849942907165,
+     "tb": true
+    },
+    {
+     "dup": "S4",
+     "keep": "S7",
+     "lex": 0.3728813559322034,
+     "cos": 0.759662983094271,
+     "tb": true
+    },
+    {
+     "dup": "S5",
+     "keep": "S2",
+     "lex": 0.39473684210526316,
+     "cos": 0.8909050484153213,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 5,
+    "input": 6038,
+    "cacheRead": 0,
+    "output": 502,
+    "reasoning": 0,
+    "ms": 7782
+   }
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "n": 7,
+   "camposFinder": {
+    "producedBy": 7,
+    "label": 7,
+    "relevantFile": 7,
+    "relevantLinesStart": 7,
+    "relevantLinesEnd": 7,
+    "suggestionContent": 7
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 7,
+    "language": 7,
+    "suggestionContent": 7,
+    "oneSentenceSummary": 7,
+    "relevantLinesStart": 7,
+    "relevantLinesEnd": 7,
+    "label": 7,
+    "severity": 7,
+    "llmPrompt": 7
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 1,
+   "camposDedup": {
+    "label": 7,
+    "relevantFile": 7,
+    "relevantLinesStart": 7,
+    "relevantLinesEnd": 7,
+    "suggestionContent": 7,
+    "llmPrompt": 7
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 7,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S7"
+   ],
+   "groups": [
+    {
+     "keep": "S1",
+     "duplicates": [
+      "S3"
+     ]
+    },
+    {
+     "keep": "S2",
+     "duplicates": [
+      "S4"
+     ]
+    }
+   ],
+   "unique": [
+    "S5",
+    "S6",
+    "S7"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S3",
+     "keep": "S1",
+     "lex": 0.3,
+     "cos": 0.8540637635094472,
+     "tb": true
+    },
+    {
+     "dup": "S4",
+     "keep": "S2",
+     "lex": 0.6,
+     "cos": 0.7804727789861126,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 4458,
+    "cacheRead": 0,
+    "output": 337,
+    "reasoning": 0,
+    "ms": 6920
+   }
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+   "n": 11,
+   "camposFinder": {
+    "producedBy": 11,
+    "label": 11,
+    "relevantFile": 11,
+    "relevantLinesStart": 11,
+    "relevantLinesEnd": 11,
+    "suggestionContent": 11
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 11,
+    "language": 11,
+    "suggestionContent": 11,
+    "oneSentenceSummary": 11,
+    "relevantLinesStart": 11,
+    "relevantLinesEnd": 11,
+    "label": 11,
+    "severity": 11,
+    "llmPrompt": 11
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 0,
+   "camposDedup": {
+    "label": 11,
+    "relevantFile": 11,
+    "relevantLinesStart": 11,
+    "relevantLinesEnd": 11,
+    "suggestionContent": 11,
+    "llmPrompt": 11
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 11,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S7",
+    "S8",
+    "S9",
+    "S10",
+    "S11"
+   ],
+   "groups": [
+    {
+     "keep": "S10",
+     "duplicates": [
+      "S1",
+      "S4",
+      "S9"
+     ]
+    },
+    {
+     "keep": "S6",
+     "duplicates": [
+      "S3"
+     ]
+    },
+    {
+     "keep": "S8",
+     "duplicates": [
+      "S5",
+      "S7"
+     ]
+    }
+   ],
+   "unique": [
+    "S2",
+    "S11"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S10",
+     "lex": 0.32051282051282054,
+     "cos": 0.8775475854112181,
+     "tb": true
+    },
+    {
+     "dup": "S4",
+     "keep": "S10",
+     "lex": 0.34285714285714286,
+     "cos": 0.8561533904092066,
+     "tb": true
+    },
+    {
+     "dup": "S9",
+     "keep": "S10",
+     "lex": 0.3561643835616438,
+     "cos": 0.8722852473471502,
+     "tb": true
+    },
+    {
+     "dup": "S3",
+     "keep": "S6",
+     "lex": 0.25,
+     "cos": 0.6066632416750888,
+     "tb": true
+    },
+    {
+     "dup": "S5",
+     "keep": "S8",
+     "lex": 0.20689655172413793,
+     "cos": 0.7506814754635516,
+     "tb": true
+    },
+    {
+     "dup": "S7",
+     "keep": "S8",
+     "lex": 0.21739130434782608,
+     "cos": 0.7367058170623306,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 7,
+    "input": 9120,
+    "cacheRead": 0,
+    "output": 901,
+    "reasoning": 0,
+    "ms": 6946
+   }
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+   "n": 6,
+   "camposFinder": {
+    "producedBy": 6,
+    "label": 6,
+    "relevantFile": 6,
+    "relevantLinesStart": 6,
+    "relevantLinesEnd": 6,
+    "suggestionContent": 6
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 6,
+    "language": 6,
+    "suggestionContent": 6,
+    "oneSentenceSummary": 6,
+    "relevantLinesStart": 6,
+    "relevantLinesEnd": 6,
+    "label": 6,
+    "severity": 6,
+    "llmPrompt": 6
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 3,
+   "camposDedup": {
+    "label": 6,
+    "relevantFile": 6,
+    "relevantLinesStart": 6,
+    "relevantLinesEnd": 6,
+    "suggestionContent": 6,
+    "llmPrompt": 6
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 6,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6"
+   ],
+   "groups": [
+    {
+     "keep": "S6",
+     "duplicates": [
+      "S4"
+     ]
+    }
+   ],
+   "unique": [
+    "S1",
+    "S2",
+    "S3",
+    "S5"
+   ],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S4",
+     "keep": "S6",
+     "lex": 0.26865671641791045,
+     "cos": 0.8127187907729178,
+     "tb": true
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 3409,
+    "cacheRead": 0,
+    "output": 199,
+    "reasoning": 0,
+    "ms": 5635
+   }
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+   "n": 14,
+   "camposFinder": {
+    "producedBy": 14,
+    "label": 14,
+    "relevantFile": 14,
+    "relevantLinesStart": 14,
+    "relevantLinesEnd": 14,
+    "suggestionContent": 14
+   },
+   "descartadoConversor": [],
+   "camposConversor": {
+    "relevantFile": 14,
+    "language": 14,
+    "suggestionContent": 14,
+    "oneSentenceSummary": 14,
+    "relevantLinesStart": 14,
+    "relevantLinesEnd": 14,
+    "label": 14,
+    "severity": 14,
+    "llmPrompt": 14
+   },
+   "descartadoParse": [],
+   "descartadoSanitizador": [],
+   "descartadoAnchoring": [],
+   "ajustadoAnchoring": 0,
+   "camposDedup": {
+    "label": 14,
+    "relevantFile": 14,
+    "relevantLinesStart": 14,
+    "relevantLinesEnd": 14,
+    "suggestionContent": 14,
+    "llmPrompt": 14
+   },
+   "llmPromptNoPromptDoDedup": false,
+   "entradaDedup": 14,
+   "idsEntradaDedup": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S7",
+    "S8",
+    "S9",
+    "S10",
+    "S11",
+    "S12",
+    "S13",
+    "S14"
+   ],
+   "groups": [
+    {
+     "keep": "S13",
+     "duplicates": [
+      "S1",
+      "S3",
+      "S5",
+      "S7",
+      "S9",
+      "S11",
+      "S14"
+     ]
+    },
+    {
+     "keep": "S2",
+     "duplicates": [
+      "S4",
+      "S6",
+      "S8",
+      "S10",
+      "S12"
+     ]
+    }
+   ],
+   "unique": [],
+   "unmentioned": [],
+   "followup": null,
+   "pares": [
+    {
+     "dup": "S1",
+     "keep": "S13",
+     "lex": 0.34,
+     "cos": 0.8834135035920854,
+     "tb": true
+    },
+    {
+     "dup": "S3",
+     "keep": "S13",
+     "lex": 0.26666666666666666,
+     "cos": 0.8324051171048588,
+     "tb": true
+    },
+    {
+     "dup": "S5",
+     "keep": "S13",
+     "lex": 0.46511627906976744,
+     "cos": 0.8456046533787273,
+     "tb": true
+    },
+    {
+     "dup": "S7",
+     "keep": "S13",
+     "lex": 0.2978723404255319,
+     "cos": 0.8735051659475905,
+     "tb": true
+    },
+    {
+     "dup": "S9",
+     "keep": "S13",
+     "lex": 0.20634920634920634,
+     "cos": 0.8470939179371568,
+     "tb": true
+    },
+    {
+     "dup": "S11",
+     "keep": "S13",
+     "lex": 0.22641509433962265,
+     "cos": 0.7013358721541388,
+     "tb": false
+    },
+    {
+     "dup": "S14",
+     "keep": "S13",
+     "lex": 0.45454545454545453,
+     "cos": 0.8757809598814391,
+     "tb": true
+    },
+    {
+     "dup": "S4",
+     "keep": "S2",
+     "lex": 0.18,
+     "cos": 0.6897204481178723,
+     "tb": true
+    },
+    {
+     "dup": "S6",
+     "keep": "S2",
+     "lex": 0.21818181818181817,
+     "cos": 0.6708117024026108,
+     "tb": true
+    },
+    {
+     "dup": "S8",
+     "keep": "S2",
+     "lex": 0.3333333333333333,
+     "cos": 0.7818601967986609,
+     "tb": true
+    },
+    {
+     "dup": "S10",
+     "keep": "S2",
+     "lex": 0.2549019607843137,
+     "cos": 0.7913293254797568,
+     "tb": true
+    },
+    {
+     "dup": "S12",
+     "keep": "S2",
+     "lex": 0.13793103448275862,
+     "cos": 0.626930875176241,
+     "tb": false
+    }
+   ],
+   "campos5": [
+    "label",
+    "relevantFile",
+    "relevantLinesStart",
+    "relevantLinesEnd",
+    "suggestionContent"
+   ],
+   "uso": {
+    "chamadas": 13,
+    "input": 14017,
+    "cacheRead": 0,
+    "output": 1890,
+    "reasoning": 0,
+    "ms": 12666
+   }
+  }
+ }
+}

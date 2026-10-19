@@ -1,0 +1,41 @@
+{
+ "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "This describes a missing end_timestamp_precise field causing a KeyError during batch processing. None of the golden issues describes this input-handling problem."
+  },
+  {
+   "id": "S2",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "Both describe the reduced redirect-walk limit preventing trees deeper than 1000 from resolving to the correct segment root."
+  },
+  {
+   "id": "S3",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#04",
+   "newGroup": null,
+   "reason": "Both describe reusing existing Redis set key names for sorted sets, causing WRONGTYPE failures on in-flight keys during rollout."
+  },
+  {
+   "id": "S4",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+   "newGroup": null,
+   "reason": "Both describe removal of the configurable max_segment_spans enforcement and its replacement with a hardcoded Lua cap of 1000."
+  },
+  {
+   "id": "S5",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#08",
+   "newGroup": null,
+   "reason": "Both describe missing coverage for timestamp-based ordering and eviction because fixtures use identical timestamps and never exceed the cap."
+  },
+  {
+   "id": "S6",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+   "newGroup": null,
+   "reason": "The comment includes the same ignored max_segment_spans setting and hardcoded Lua cap. Its additional concern about lost trimming signals does not change that match."
+  }
+ ]
+}

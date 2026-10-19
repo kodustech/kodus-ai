@@ -1,0 +1,89 @@
+{
+ "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
+ "items": [
+  {
+   "id": "S1",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+   "newGroup": null,
+   "reason": "Reports numeric cursor conversion applied to datetime ordering, causing TypeError when building cursors and invalid datetime filtering."
+  },
+  {
+   "id": "S2",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Reports the optimized paginator passing negative offsets into Django queryset slicing, causing an error."
+  },
+  {
+   "id": "S3",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "Reports BasePaginator passing negative prev-cursor offsets directly into queryset slicing, causing server errors."
+  },
+  {
+   "id": "S4",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Reports the same unsupported negative slicing in the optimized paginator. The additional window calculation concern does not change that shared problem."
+  },
+  {
+   "id": "S5",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Reports negative cursor offsets reaching the optimized paginator's queryset slice and causing an unhandled error."
+  },
+  {
+   "id": "S6",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+   "newGroup": null,
+   "reason": "Reports numeric key conversion and missing datetime decoding in the paginator used for datetime-ordered audit logs."
+  },
+  {
+   "id": "S7",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#snapi-01",
+   "newGroup": null,
+   "reason": "Targets the same false comments claiming Django supports negative slicing and queryset permissions make it safe."
+  },
+  {
+   "id": "S8",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#02",
+   "newGroup": null,
+   "reason": "Targets the misleading BasePaginator comment: non-prev offsets are clamped while negative prev offsets remain unsupported."
+  },
+  {
+   "id": "S9",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#04",
+   "newGroup": null,
+   "reason": "Reports the same unsupported optimization and boundary-handling claims in the OptimizedCursorPaginator docstring."
+  },
+  {
+   "id": "S10",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+   "newGroup": null,
+   "reason": "Reports the numeric cursor methods failing on the audit-log datetime field and omitting datetime cursor decoding."
+  },
+  {
+   "id": "S11",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Reports unsupported negative queryset slicing in the optimized paginator. The additional offset-consistency observation accompanies the same negative-offset failure."
+  },
+  {
+   "id": "S12",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#02",
+   "newGroup": null,
+   "reason": "Reports the BasePaginator comment falsely promising negative-offset support despite conditional clamping and unsupported prev slicing."
+  },
+  {
+   "id": "S13",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Reports the optimized path passing negative cursor offsets directly into Django queryset slicing, causing server errors."
+  },
+  {
+   "id": "S14",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "Includes the same BasePaginator failure where negative prev offsets reach an unsupported queryset slice, alongside additional concerns about non-prev clamping."
+  }
+ ]
+}

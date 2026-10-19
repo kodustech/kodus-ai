@@ -1,0 +1,12 @@
+{
+ "caseId": "dual-storage-architecture-grafana-codex",
+ "items": [
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#snapi-01",
+   "class": "TP",
+   "subclass": "none",
+   "reason": "The PR removes legacy-error logging; the replacement goroutines only pass error booleans to metrics in pkg/apiserver/rest/dualwriter_mode3.go:55-56,112-113,139-140,165-166. Those helpers only observe histograms (pkg/apiserver/rest/metrics.go:54-61), so failure counts remain observable but the actual error details are lost, impairing diagnosis.",
+   "severity": "medium"
+  }
+ ]
+}

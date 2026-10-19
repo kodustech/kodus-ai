@@ -1,0 +1,24 @@
+{
+ "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+ "prTitle": "Fixing Re-authentication with passkeys",
+ "upstream": "keycloak/keycloak",
+ "cloneLocal": "/Users/juniorsartori/projects/benchmark/keycloak",
+ "base": "744e031019af8dbaacf407e792fbb3756364e2b4",
+ "head": "25bf964a844ea0bc64dc838bff038345048cb1fa",
+ "prOriginalConhecido": {
+  "numero": 41249,
+  "url": "https://github.com/keycloak/keycloak/pull/41249",
+  "mergedAt": "2025-07-22",
+  "nota": "Found via gh pr list --search with the title; head 25bf964a is exactly the PR headRefOid (2 commits), merged via merge commit 57972d85 (closes #41242, #41008). Merged code matches the benchmark head."
+ },
+ "tps": [
+  {
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#snapi-01",
+   "severity": "medium",
+   "category": "test_gap",
+   "bug": "reauthenticationOfUserWithoutPasskey disables passkeys for the realm, so the hidden webauthn form is guaranteed by isPasskeysEnabled() and the new per-user isConfiguredFor check for users without a passkey is never exercised in UsernamePasswordForm.",
+   "evidenciaOpus": "reauthenticationOfUserWithoutPasskey (PasskeysUsernamePasswordFormTest.java:279-283) sets setWebAuthnPolicyPasskeysEnabled(FALSE), so UsernamePasswordForm.isConditionalPasskeysEnabled short-circuits on webauthnAuth.isPasskeysEnabled() and never reaches the new per-user isConfiguredFor check. The test's own assertion comment says the form is hidden because 'this user does not have passkey', but it would pass with that check removed; the sibling PasskeysUsernameFormTest variant enables passkeys.",
+   "evidenciaAstra": "PasskeysUsernamePasswordFormTest.java:283 disables realm passkeys before the absence assertion at line 308, so the test never exercises the user-without-passkey condition. UsernamePasswordForm.java:161-162 short-circuits on isPasskeysEnabled() before checking isConfiguredFor(), meaning removal of the new per-user guard would leave this test passing."
+  }
+ ]
+}

@@ -1,0 +1,17 @@
+{
+ "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+ "items": [
+  {
+   "id": "S1",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "The reader thread is not joined before asserting, so an in-flight read can report an exception after the test has already passed."
+  },
+  {
+   "id": "S2",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "The test does not synchronize reader execution or join it before asserting, allowing it to miss concurrent-deletion failures. This is the same regression-test synchronization problem described by issue #02."
+  }
+ ]
+}
