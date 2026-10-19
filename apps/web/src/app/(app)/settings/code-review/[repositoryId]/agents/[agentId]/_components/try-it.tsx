@@ -205,6 +205,16 @@ const FindingRow = ({ finding }: { finding: CustomAgentTryFinding }) => (
                             : ""}
                     </blockquote>
                 )}
+                {(finding.comment ?? finding.body) && (
+                    <details>
+                        <summary className="text-text-secondary cursor-pointer text-xs">
+                            {finding.comment ? "Comment" : "What it said"}
+                        </summary>
+                        <pre className="text-text-secondary bg-card-lv2 mt-1 max-h-64 overflow-auto rounded-lg px-3 py-2 text-xs whitespace-pre-wrap">
+                            {finding.comment ?? finding.body}
+                        </pre>
+                    </details>
+                )}
             </div>
         </div>
     </div>

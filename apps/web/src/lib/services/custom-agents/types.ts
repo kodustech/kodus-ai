@@ -153,6 +153,8 @@ export type CustomAgentTryFinding = {
     verdict: "kept" | "dropped" | "unverified";
     reason?: string;
     wouldPost: boolean;
+    /** A kept finding's comment text, with the rule it cites. */
+    comment?: string;
 };
 
 export type CustomAgentTryTrace = {

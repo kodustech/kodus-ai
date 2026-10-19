@@ -85,6 +85,27 @@ describe('findQuoteSection', () => {
             ),
         ).toBeNull();
     });
+
+    it('finds a quote shortened with "..." when each part is there, in order', () => {
+        const instructions =
+            'Review only duplicate code this PR adds. Skip generated files. Use the CLI output as evidence; cite both paths.';
+        expect(
+            findQuoteSection(
+                instructions,
+                'Review only duplicate code this PR adds. ... Use the CLI output as evidence; cite both paths.',
+            ),
+        ).not.toBeNull();
+        expect(
+            findQuoteSection(
+                instructions,
+                'Use the CLI output as evidence … Review only duplicate code this PR adds.',
+            ),
+        ).toBeNull();
+        // A part too short to name a rule does not count as found.
+        expect(
+            findQuoteSection(instructions, 'Review ... cite both paths.'),
+        ).toBeNull();
+    });
 });
 
 describe('checkConventionQuotes in a skill with rule files', () => {

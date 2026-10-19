@@ -130,6 +130,8 @@ export interface RawFinding {
     /** Custom agents: whether the finding applies a team rule, and which. */
     kind?: CodeSuggestion['kind'];
     source?: CodeSuggestion['source'];
+    /** On a discarded finding: why the check set it aside. */
+    discardReason?: string;
 }
 
 export interface MappableAgentResult {
@@ -349,6 +351,11 @@ export function mapAgentFindings(
             severity: (s.severity || 'medium') as CodeSuggestion['severity'],
             label: resolveSuggestionLabel(s, ctx.labelPolicy),
             oneSentenceSummary: s.oneSentenceSummary || '',
+            relevantLinesStart: s.relevantLinesStart,
+            relevantLinesEnd: s.relevantLinesEnd,
+            ...(s.kind && { kind: s.kind }),
+            ...(s.source && { source: s.source }),
+            ...(s.discardReason && { discardReason: s.discardReason }),
         }));
 
     return {

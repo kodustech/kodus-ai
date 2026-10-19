@@ -50,6 +50,40 @@ describe("TryResult", () => {
         ).toBeInTheDocument();
     });
 
+    it("shows the comment a kept finding would post and why a dropped one fell", () => {
+        render(
+            <TryResult
+                trace={trace({
+                    findings: [
+                        {
+                            file: "src/billing/refund.ts",
+                            summary: "Refund repeats the charge parser",
+                            verdict: "kept",
+                            wouldPost: true,
+                            comment: "The parser is copied from charge.ts.",
+                        },
+                        {
+                            file: "src/billing/void.ts",
+                            summary: "Void repeats the charge parser",
+                            body: "Void copies the parser too.",
+                            verdict: "dropped",
+                            reason: "src/billing/void.ts is not a guide linked to this review",
+                            wouldPost: false,
+                        },
+                    ],
+                })}
+            />,
+        );
+
+        expect(
+            screen.getByText("The parser is copied from charge.ts."),
+        ).toBeInTheDocument();
+        expect(screen.getByText("Void copies the parser too.")).toBeInTheDocument();
+        expect(
+            screen.getByText(/is not a guide linked to this review/),
+        ).toBeInTheDocument();
+    });
+
     it("shows the warnings of a failed run too", () => {
         render(
             <TryResult

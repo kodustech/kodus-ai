@@ -111,6 +111,8 @@ export type CustomAgentTryFinding = {
     reason?: string;
     /** Kept and above the agent's minimum severity and comment limit. */
     wouldPost: boolean;
+    /** A kept finding's comment text, with the rule it cites. */
+    comment?: string;
 };
 
 export type CustomAgentTryTrace = {

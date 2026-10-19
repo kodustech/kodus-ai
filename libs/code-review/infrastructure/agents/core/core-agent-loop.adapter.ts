@@ -515,12 +515,16 @@ export async function runAgentLoopViaCore(
             totalTokens: inputTokens + outputTokens,
         },
         discardedBySeverity: [],
-        droppedByVerify: r.droppedByVerify.map((d) => d.finding) as any,
+        droppedByVerify: r.droppedByVerify.map((d) => ({
+            ...d.finding,
+            discardReason: d.evidence,
+        })) as any,
         unverifiedByVerify: r.unverified.map((u) => u.finding) as any,
         ...(r.droppedByQuoteCheck.length > 0 && {
-            droppedByQuoteCheck: r.droppedByQuoteCheck.map(
-                (q) => q.finding,
-            ) as any,
+            droppedByQuoteCheck: r.droppedByQuoteCheck.map((q) => ({
+                ...q.finding,
+                discardReason: q.detail,
+            })) as any,
         }),
         coverage,
         verification,

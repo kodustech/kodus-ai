@@ -51,8 +51,10 @@ import type { CodeReviewPipelineContext } from '@libs/code-review/pipeline/conte
 import { buildOrchestratorInput } from '@libs/code-review/pipeline/stages/build-orchestrator-input';
 import { CreateSandboxStage } from '@libs/code-review/pipeline/stages/create-sandbox.stage';
 import { resolveContextWindow } from '@libs/llm/model-context-window';
+import { RUN_CLI_TOOL_NAME } from '@libs/code-review/infrastructure/agents/custom-agent-cli/run-cli.tool';
 import type {
     AgentProgressEvent,
+    CustomAgentCliRun,
     ReviewAgentOutput,
 } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import { convertToHunksWithLinesNumbers } from '@libs/common/utils/patch';
@@ -71,6 +73,7 @@ import {
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 
+import { ruleCitation } from './custom-agent-presentation';
 import { customAgentSlug, filesInAgentScope } from './custom-agent-scope';
 
 const logger = createLogger('CustomAgentSeams');
@@ -359,6 +362,8 @@ export function buildTryTrace(params: {
     startedAt: number;
     /** Skills the run could open, to name each opened one by its path. */
     skills?: Array<{ name: string; path: string; files?: string[] }>;
+    /** What each runCli call returned, in the order the calls ran. */
+    cliRuns?: CustomAgentCliRun[];
 }): CustomAgentTryTrace {
     const { agent, output, events } = params;
     const toolCalls = events.flatMap((event) => event.toolCalls ?? []);
@@ -372,6 +377,7 @@ export function buildTryTrace(params: {
         ? completed.toolCalls
         : toolCalls;
 
+    const cliOutputs = [...(params.cliRuns ?? [])];
     const skillPaths = new Map(
         (params.skills ?? []).map((skill) => [skill.name, skill]),
     );
@@ -426,24 +432,35 @@ export function buildTryTrace(params: {
         verdict,
         reason,
         wouldPost: verdict === 'kept' && posting.has(s),
+        // The comment as the review appends to it; the review's formatter,
+        // which rewrites the body, does not run here.
+        ...(verdict === 'kept' && {
+            comment: `${s.suggestionContent ?? ''}${ruleCitation(s)}`,
+        }),
     });
 
     return {
         status: 'completed',
         models: { run: agent.models?.run },
         skillsOpened: [...skillsOpened.values()],
-        toolCalls: calls.map((call) => ({
-            tool: call.tool,
-            input: call.args,
-            durationMs: call.durationMs,
-        })),
+        toolCalls: calls.map((call) => {
+            // runCli calls read back in the order they ran.
+            const run =
+                call.tool === RUN_CLI_TOOL_NAME ? cliOutputs.shift() : undefined;
+            return {
+                tool: call.tool,
+                input: call.args,
+                durationMs: call.durationMs,
+                ...(run && { outputPreview: run.output }),
+            };
+        }),
         findings: [
             ...kept.map((s) => finding(s, 'kept')),
             ...[...repeats].map((s) =>
                 finding(s, 'dropped', 'repeats a finding on the same lines'),
             ),
             ...(output.discardedByVerify ?? []).map((s) =>
-                finding(s, 'dropped', 'refuted by the check'),
+                finding(s, 'dropped', s.discardReason ?? 'refuted by the check'),
             ),
             ...(output.discardedBySeverity ?? []).map((s) =>
                 finding(s, 'dropped', 'below the severity floor'),
@@ -649,6 +666,7 @@ export class CustomAgentTryRunnerService implements ICustomAgentTryRunner {
         const sandbox = context.sandboxHandle;
 
         const events: AgentProgressEvent[] = [];
+        const cliRuns: CustomAgentCliRun[] = [];
         const warnings: ReviewWarning[] = [
             ...(context.customAgentClis?.warnings ?? []),
         ];
@@ -709,6 +727,7 @@ export class CustomAgentTryRunnerService implements ICustomAgentTryRunner {
                 customAgentTooling: {
                     sandbox,
                     installedClis: context.customAgentClis?.byAgentId,
+                    onCliRun: (run) => cliRuns.push(run),
                 },
             });
             const runWarnings = toTryWarnings([
@@ -741,6 +760,7 @@ export class CustomAgentTryRunnerService implements ICustomAgentTryRunner {
                     agent,
                     output,
                     events,
+                    cliRuns,
                     startedAt,
                     skills: knowledge.byTarget?.get(agent.id)?.skills,
                 }),

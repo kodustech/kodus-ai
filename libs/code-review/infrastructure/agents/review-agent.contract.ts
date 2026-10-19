@@ -197,6 +197,15 @@ export interface CustomAgentTooling {
     sandbox?: SandboxInstance;
     /** CLIs installed and fenced for this review, by custom agent id. */
     installedClis?: Record<string, InstalledCustomAgentCli[]>;
+    /** Told of every runCli call and what the agent read back (Try it). */
+    onCliRun?: (run: CustomAgentCliRun) => void;
+}
+
+/** One runCli call: the CLI, its arguments and the output the agent got. */
+export interface CustomAgentCliRun {
+    cli: string;
+    args: string[];
+    output: string;
 }
 
 /** Review behavior + rules the agent applies. */

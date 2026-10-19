@@ -291,6 +291,7 @@ describe('CustomAgentTryRunnerService', () => {
         expect(input.customAgentTooling).toEqual({
             sandbox,
             installedClis: { 'ledger-agent': installed },
+            onCliRun: expect.any(Function),
         });
         // The repository's config, as the review reads it.
         expect(input.languageResultPrompt).toBe('pt-BR');
@@ -487,6 +488,69 @@ describe('buildTryTrace — severity floor before repeats', () => {
             ['low', 'kept', false],
             ['critical', 'kept', true],
         ]);
+    });
+});
+
+describe('buildTryTrace — what the check saw', () => {
+    it("shows each drop's own reason, the CLI's output and the comment that would post", () => {
+        const trace = buildTryTrace({
+            agent: agent(),
+            output: {
+                suggestions: [
+                    {
+                        relevantFile: 'src/billing/refund.ts',
+                        oneSentenceSummary: 'Refund repeats the charge parser',
+                        suggestionContent: 'The parser is copied from charge.ts.',
+                        kind: 'convention',
+                        source: {
+                            file: 'TeamInstructions',
+                            quote: 'Report every copied parser.',
+                        },
+                    },
+                ],
+                discardedByVerify: [
+                    {
+                        relevantFile: 'src/billing/void.ts',
+                        oneSentenceSummary: 'Void repeats the charge parser',
+                        discardReason:
+                            'src/billing/void.ts is not a guide linked to this review',
+                    },
+                ],
+                agentName: 'x',
+                turnsUsed: 1,
+                durationMs: 1,
+            } as any,
+            events: [
+                {
+                    status: 'completed',
+                    toolCalls: [
+                        { tool: 'readFile', args: '{"path":"a"}' },
+                        { tool: 'runCli', args: '{"cli":"dupfinder"}' },
+                    ],
+                } as any,
+            ],
+            cliRuns: [
+                {
+                    cli: 'dupfinder',
+                    args: ['src'],
+                    output: 'refund.ts:1-20 ~ charge.ts:1-20',
+                },
+            ],
+            startedAt: Date.now(),
+        });
+
+        expect(trace.toolCalls.map((c) => c.outputPreview)).toEqual([
+            undefined,
+            'refund.ts:1-20 ~ charge.ts:1-20',
+        ]);
+        const [kept, dropped] = trace.findings;
+        expect(kept.comment).toBe(
+            "The parser is copied from charge.ts.\n\n**Rule** (agent's instructions):\n> Report every copied parser.",
+        );
+        expect(dropped.reason).toBe(
+            'src/billing/void.ts is not a guide linked to this review',
+        );
+        expect(dropped.comment).toBeUndefined();
     });
 });
 

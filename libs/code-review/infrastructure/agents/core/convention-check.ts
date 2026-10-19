@@ -82,6 +82,25 @@ export function normalizeQuoteText(text: string): string {
         .trim();
 }
 
+/** Whether normalized `text` holds the normalized `needle`. A quote the model
+ *  shortened with "..." holds when each part is there, in order, and each
+ *  part is long enough to identify a rule on its own. */
+function holdsQuote(text: string, needle: string): boolean {
+    const parts = needle
+        .split(/\s*\.{3}\s*/)
+        .map((part) => part.trim())
+        .filter(Boolean);
+    if (parts.length <= 1) return text.includes(needle);
+    if (parts.some((part) => part.length < MIN_QUOTE_LENGTH)) return false;
+    let from = 0;
+    for (const part of parts) {
+        const at = text.indexOf(part, from);
+        if (at < 0) return false;
+        from = at + part.length;
+    }
+    return true;
+}
+
 /** The section of `content` that contains `quote`, or null when the quote is
  *  not in the file. Sections are split at markdown headings; a file without
  *  headings is one section. */
@@ -90,7 +109,7 @@ export function findQuoteSection(
     quote: string,
 ): string | null {
     const needle = normalizeQuoteText(quote);
-    if (!needle || !normalizeQuoteText(content).includes(needle)) {
+    if (!needle || !holdsQuote(normalizeQuoteText(content), needle)) {
         return null;
     }
     const sections: string[] = [];
@@ -103,7 +122,7 @@ export function findQuoteSection(
         current.push(line);
     }
     sections.push(current.join('\n'));
-    const hit = sections.find((s) => normalizeQuoteText(s).includes(needle));
+    const hit = sections.find((s) => holdsQuote(normalizeQuoteText(s), needle));
     // The quote spans a heading boundary: the whole file holds it.
     const section = (hit ?? content).trim();
     return section.length > MAX_SECTION_CHARS

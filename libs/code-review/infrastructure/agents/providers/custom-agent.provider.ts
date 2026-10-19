@@ -317,6 +317,7 @@ export class CustomAgentProvider extends BaseCodeReviewAgentProvider {
             sandbox,
             installed: tooling?.installedClis?.[this.agent.id],
             decrypt,
+            onRun: tooling?.onCliRun,
         });
 
         return {

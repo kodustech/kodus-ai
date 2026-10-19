@@ -238,6 +238,11 @@ export type CodeSuggestion = {
      * alone does not say: one past its custom agent's `maxComments` (#2172).
      */
     notSentReason?: 'custom-agent-max-comments';
+    /**
+     * Why the check set a finding aside: the verifier's rationale, or what
+     * the quote gate could not find. Only on discarded findings.
+     */
+    discardReason?: string;
 
     isCommittable?: boolean;
     validatedData?: {
