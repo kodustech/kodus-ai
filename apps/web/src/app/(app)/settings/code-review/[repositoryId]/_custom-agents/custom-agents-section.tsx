@@ -18,6 +18,7 @@ import { toast } from "@components/ui/toaster/use-toast";
 import {
     agentChips,
     agentUsageLine,
+    deleteAgentNote,
     describeAgent,
     withoutAgent,
 } from "@services/custom-agents/drafts";
@@ -25,6 +26,7 @@ import { useCustomAgentsStatus } from "@services/custom-agents/hooks";
 import type { CustomAgent } from "@services/custom-agents/types";
 import {
     EllipsisIcon,
+    EyeIcon,
     FlaskConicalIcon,
     PencilIcon,
     PlusIcon,
@@ -85,8 +87,7 @@ const AgentRow = ({
     usage,
     canEdit,
     busy,
-    onToggle,
-    onDelete,
+    own,
 }: {
     agent: CustomAgent;
     href: string;
@@ -94,8 +95,13 @@ const AgentRow = ({
     usage?: string;
     canEdit: boolean;
     busy: boolean;
-    onToggle: (enabled: boolean) => void;
-    onDelete: () => void;
+    /** Absent for a repository agent at a directory: it is switched and
+     *  deleted on the repository, and opened here to read it, link skills
+     *  and docs to it, try it or override it. */
+    own?: {
+        onToggle: (enabled: boolean) => void;
+        onDelete: () => void;
+    };
 }) => {
     const router = useRouter();
     return (
@@ -105,14 +111,18 @@ const AgentRow = ({
                 !agent.enabled && "opacity-70",
             )}>
             {/* On the left, as the categories above it on What to review. */}
-            <Switch
-                size="sm"
-                className="relative z-10 shrink-0"
-                aria-label={`${agent.name} enabled`}
-                checked={agent.enabled}
-                disabled={!canEdit || busy}
-                onCheckedChange={onToggle}
-            />
+            {own ? (
+                <Switch
+                    size="sm"
+                    className="relative z-10 shrink-0"
+                    aria-label={`${agent.name} enabled`}
+                    checked={agent.enabled}
+                    disabled={!canEdit || busy}
+                    onCheckedChange={own.onToggle}
+                />
+            ) : (
+                <span aria-hidden className="aspect-video h-5 shrink-0" />
+            )}
             <span
                 aria-hidden
                 className="size-2.5 shrink-0 rounded-full"
@@ -121,11 +131,20 @@ const AgentRow = ({
             <div className="flex min-w-0 flex-1 flex-col gap-1">
                 {/* The name stretches over the row: a click anywhere that is
                     not the switch or the menu opens the agent. */}
-                <Link
-                    href={href}
-                    className="text-text-primary truncate text-sm font-medium after:absolute after:inset-0 hover:underline">
-                    {agent.name}
-                </Link>
+                <div className="flex min-w-0 items-center gap-2">
+                    <Link
+                        href={href}
+                        className="text-text-primary min-w-0 truncate text-sm font-medium after:absolute after:inset-0 hover:underline">
+                        {agent.name}
+                    </Link>
+                    {!own && (
+                        <Chip>
+                            {agent.enabled
+                                ? "From repository"
+                                : "From repository, off"}
+                        </Chip>
+                    )}
+                </div>
                 <p className="text-text-secondary truncate text-xs">
                     {describeAgent(agent)}
                 </p>
@@ -159,22 +178,30 @@ const AgentRow = ({
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                     <DropdownMenuItem onSelect={() => router.push(href)}>
-                        <PencilIcon className="size-4" aria-hidden />
-                        Edit
+                        {own ? (
+                            <PencilIcon className="size-4" aria-hidden />
+                        ) : (
+                            <EyeIcon className="size-4" aria-hidden />
+                        )}
+                        {own ? "Edit" : "View"}
                     </DropdownMenuItem>
                     <DropdownMenuItem
                         onSelect={() => router.push(`${href}#try-it`)}>
                         <FlaskConicalIcon className="size-4" aria-hidden />
                         Try it
                     </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                        disabled={!canEdit || busy}
-                        className="[--button-foreground:var(--color-danger)]"
-                        onSelect={onDelete}>
-                        <TrashIcon className="size-4" aria-hidden />
-                        Delete
-                    </DropdownMenuItem>
+                    {own && (
+                        <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                                disabled={!canEdit || busy}
+                                className="[--button-foreground:var(--color-danger)]"
+                                onSelect={own.onDelete}>
+                                <TrashIcon className="size-4" aria-hidden />
+                                Delete
+                            </DropdownMenuItem>
+                        </>
+                    )}
                 </DropdownMenuContent>
             </DropdownMenu>
         </li>
@@ -184,7 +211,9 @@ const AgentRow = ({
 /**
  * The custom agents of this level, one compact row each. A row opens the
  * agent's page, where everything about it is set; the list itself only
- * turns agents on and off and deletes them, each saved right away.
+ * turns agents on and off and deletes them, each saved right away. At a
+ * directory the repository's agents it runs are listed too, in the order a
+ * review runs them, marked as the repository's.
  */
 export const CustomAgentsList = ({ canEdit }: { canEdit: boolean }) => {
     const {
@@ -193,7 +222,8 @@ export const CustomAgentsList = ({ canEdit }: { canEdit: boolean }) => {
         directoryId,
         agents,
         knowledge,
-        inheritedAgentCount,
+        linkableAgents,
+        inheritedAgents,
         listNote,
         isSubmitting,
         otherFieldsDirty,
@@ -206,7 +236,7 @@ export const CustomAgentsList = ({ canEdit }: { canEdit: boolean }) => {
     const status = useCustomAgentsStatus({
         teamId,
         repositoryId,
-        enabled: !isGlobal && agents.length > 0,
+        enabled: !isGlobal && linkableAgents.length > 0,
     });
     const windowDays = status.data?.windowDays ?? 30;
 
@@ -229,7 +259,7 @@ export const CustomAgentsList = ({ canEdit }: { canEdit: boolean }) => {
         if (!deleting) return;
         await saveWithToast(
             save,
-            withoutAgent(agents, knowledge, deleting.id),
+            withoutAgent(agents, knowledge, deleting.id, inheritedAgents),
             {
                 done: `${deleting.name} deleted`,
                 failed: "Couldn't delete the agent. Try again.",
@@ -252,17 +282,7 @@ export const CustomAgentsList = ({ canEdit }: { canEdit: boolean }) => {
                     {listNote}
                 </p>
             )}
-            {inheritedAgentCount > 0 && (
-                <p role="note" className="text-text-secondary text-sm">
-                    Also runs the repository&apos;s{" "}
-                    {inheritedAgentCount === 1
-                        ? "agent"
-                        : `${inheritedAgentCount} agents`}
-                    .
-                </p>
-            )}
-
-            {agents.length === 0 ? (
+            {linkableAgents.length === 0 ? (
                 <div className="border-card-lv3/60 flex flex-col items-center gap-3 rounded-xl border border-dashed px-4 py-10 text-center">
                     <p className="text-text-primary text-sm font-medium">
                         No custom agents yet
@@ -285,7 +305,7 @@ export const CustomAgentsList = ({ canEdit }: { canEdit: boolean }) => {
                 <ul
                     aria-label="Custom agents"
                     className="border-card-lv3/60 bg-card-lv1 divide-card-lv3/60 flex flex-col divide-y overflow-hidden rounded-xl border">
-                    {agents.map((agent) => (
+                    {linkableAgents.map((agent) => (
                         <AgentRow
                             key={agent.id}
                             agent={agent}
@@ -311,8 +331,15 @@ export const CustomAgentsList = ({ canEdit }: { canEdit: boolean }) => {
                             // A list save writes only the agents and would
                             // mark the page's other edits as saved.
                             busy={isSubmitting || otherFieldsDirty}
-                            onToggle={(enabled) => toggle(agent, enabled)}
-                            onDelete={() => setDeleting(agent)}
+                            own={
+                                agents.some((entry) => entry.id === agent.id)
+                                    ? {
+                                          onToggle: (enabled) =>
+                                              toggle(agent, enabled),
+                                          onDelete: () => setDeleting(agent),
+                                      }
+                                    : undefined
+                            }
                         />
                     ))}
                 </ul>
@@ -322,7 +349,10 @@ export const CustomAgentsList = ({ canEdit }: { canEdit: boolean }) => {
             <ConfirmModal
                 open={!!deleting}
                 title={`Delete ${deleting?.name ?? "agent"}?`}
-                description="Its findings stay on past pull requests."
+                description={deleteAgentNote(
+                    deleting?.id ?? "",
+                    inheritedAgents,
+                )}
                 confirmText="Delete agent"
                 loading={isSubmitting}
                 onConfirm={confirmDelete}

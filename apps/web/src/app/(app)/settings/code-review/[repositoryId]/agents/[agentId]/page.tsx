@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
     Breadcrumb,
@@ -11,12 +12,14 @@ import {
     BreadcrumbSeparator,
 } from "@components/ui/breadcrumb";
 import { Button } from "@components/ui/button";
+import { Card } from "@components/ui/card";
 import { ConfirmModal } from "@components/ui/confirm-modal";
 import { Page } from "@components/ui/page";
 import { Spinner } from "@components/ui/spinner";
 import { toast } from "@components/ui/toaster/use-toast";
 import {
     agentNameError,
+    deleteAgentNote,
     withoutAgent,
     withoutSecretValues,
 } from "@services/custom-agents/drafts";
@@ -32,6 +35,7 @@ import { Trash2Icon } from "lucide-react";
 import { useUnsavedChangesGuard } from "src/core/hooks/use-unsaved-changes-guard";
 
 import {
+    agentPageHref,
     reviewScopeHref,
     skillsPageHref,
     useCustomAgentsForm,
@@ -60,8 +64,10 @@ function AgentContent() {
         directoryId,
         agents,
         knowledge,
+        inheritedAgents,
         isDirty,
         isSubmitting,
+        setAgents,
         setKnowledge,
         updateAgent,
         save,
@@ -73,10 +79,18 @@ function AgentContent() {
         repositoryId,
     );
     const [confirmingDelete, setConfirmingDelete] = useState(false);
-    const agent = agents.find((entry) => entry.id === agentId);
+    const ownAgent = agents.find((entry) => entry.id === agentId);
+    // At a directory, a repository agent it doesn't replace runs as the
+    // repository sets it: it reads here and is edited there. Its skills and
+    // docs links are per level, so those stay editable here.
+    const inheritedAgent = ownAgent
+        ? undefined
+        : inheritedAgents.find((entry) => entry.id === agentId);
+    const agent = ownAgent ?? inheritedAgent;
+    const canEditAgent = canEdit && !inheritedAgent;
     // Two agents with one command name can't be told apart; the server
     // refuses the save, so the page does too.
-    const nameError = agent ? agentNameError(agent, agents) : null;
+    const nameError = ownAgent ? agentNameError(ownAgent, agents) : null;
     const isGlobal = repositoryId === "global";
 
     const status = useCustomAgentsStatus({
@@ -139,7 +153,9 @@ function AgentContent() {
     const onDelete = async () => {
         if (!agent) return;
         try {
-            await save(withoutAgent(agents, knowledge, agent.id));
+            await save(
+                withoutAgent(agents, knowledge, agent.id, inheritedAgents),
+            );
             setConfirmingDelete(false);
             router.push(backHref);
         } catch (error) {
@@ -224,6 +240,39 @@ function AgentContent() {
                     </p>
                 ) : (
                     <>
+                        {inheritedAgent && (
+                            <Card
+                                color="lv1"
+                                role="note"
+                                className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
+                                <p className="text-text-secondary min-w-0 flex-1 text-sm">
+                                    This agent comes from the repository and
+                                    runs here as it is set there. The skills and
+                                    docs linked to it here are this
+                                    directory&apos;s.{" "}
+                                    <Link
+                                        href={agentPageHref(
+                                            repositoryId,
+                                            inheritedAgent.id,
+                                        )}
+                                        className="text-primary-light hover:underline">
+                                        Edit it on the repository
+                                    </Link>
+                                </p>
+                                {/* Same id: the copy replaces the repository's
+                                    agent at this directory, as the cascade
+                                    does for any directory agent. */}
+                                <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    disabled={!canEdit || isSubmitting}
+                                    onClick={() =>
+                                        setAgents([...agents, inheritedAgent])
+                                    }>
+                                    Override at this directory
+                                </Button>
+                            </Card>
+                        )}
                         <StatusStrip
                             agent={agent}
                             status={status.data?.agents.find(
@@ -233,7 +282,7 @@ function AgentContent() {
                             isLoading={status.isLoading && !isGlobal}
                             report={resolve.data}
                             isGlobal={isGlobal}
-                            canEdit={canEdit}
+                            canEdit={canEditAgent}
                             onEnabledChange={(on) =>
                                 patch((current) => ({
                                     ...current,
@@ -248,7 +297,7 @@ function AgentContent() {
                             <div className="flex flex-col gap-6 lg:col-start-1 lg:row-start-1">
                                 <InstructionsCard
                                     agent={agent}
-                                    canEdit={canEdit}
+                                    canEdit={canEditAgent}
                                     onChange={patch}
                                     nameError={nameError}
                                 />
@@ -264,6 +313,7 @@ function AgentContent() {
                                     knowledge={knowledge}
                                     report={resolve.data}
                                     canEdit={canEdit}
+                                    canEditFiles={canEditAgent}
                                     onChange={patch}
                                     onKnowledgeChange={setKnowledge}
                                     skillsHref={skillsPageHref(
@@ -275,33 +325,38 @@ function AgentContent() {
                                     agent={agent}
                                     report={resolve.data}
                                     loading={resolve.isLoading}
-                                    canEdit={canEdit}
+                                    canEdit={canEditAgent}
                                     onChange={patch}
                                 />
                                 <CommentsAndModel
                                     agent={agent}
-                                    canEdit={canEdit}
+                                    canEdit={canEditAgent}
                                     onChange={patch}
                                 />
-                                <div>
-                                    <Button
-                                        size="sm"
-                                        variant="cancel"
-                                        className="[--button-foreground:var(--color-danger)]"
-                                        leftIcon={<Trash2Icon />}
-                                        disabled={!canEdit || isSubmitting}
-                                        onClick={() =>
-                                            setConfirmingDelete(true)
-                                        }>
-                                        Delete agent
-                                    </Button>
-                                </div>
+                                {ownAgent && (
+                                    <div>
+                                        <Button
+                                            size="sm"
+                                            variant="cancel"
+                                            className="[--button-foreground:var(--color-danger)]"
+                                            leftIcon={<Trash2Icon />}
+                                            disabled={!canEdit || isSubmitting}
+                                            onClick={() =>
+                                                setConfirmingDelete(true)
+                                            }>
+                                            Delete agent
+                                        </Button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                         <ConfirmModal
                             open={confirmingDelete}
                             title={`Delete ${agent.name || "this agent"}?`}
-                            description="Its findings stay on past pull requests."
+                            description={deleteAgentNote(
+                                agent.id,
+                                inheritedAgents,
+                            )}
                             confirmText="Delete agent"
                             loading={isSubmitting}
                             onConfirm={onDelete}

@@ -102,6 +102,7 @@ export const FilesAndKnowledge = ({
     knowledge,
     report,
     canEdit,
+    canEditFiles = canEdit,
     onChange,
     onKnowledgeChange,
     skillsHref,
@@ -110,6 +111,8 @@ export const FilesAndKnowledge = ({
     knowledge: KnowledgeItem[];
     report?: CustomAgentResolveReport;
     canEdit: boolean;
+    /** False for an inherited agent, whose links are still this level's. */
+    canEditFiles?: boolean;
     onChange: Patch;
     onKnowledgeChange: (next: KnowledgeItem[]) => void;
     skillsHref: string;
@@ -127,7 +130,7 @@ export const FilesAndKnowledge = ({
                     <TagInput
                         id="agent-include"
                         tags={agent.scope.include ?? []}
-                        disabled={!canEdit}
+                        disabled={!canEditFiles}
                         placeholder="Add a glob and press Enter"
                         onTagsChange={(include) =>
                             onChange((current) => ({
@@ -144,7 +147,7 @@ export const FilesAndKnowledge = ({
                     <TagInput
                         id="agent-exclude"
                         tags={agent.scope.exclude ?? []}
-                        disabled={!canEdit}
+                        disabled={!canEditFiles}
                         placeholder="Add a glob and press Enter"
                         onTagsChange={(exclude) =>
                             onChange((current) => ({

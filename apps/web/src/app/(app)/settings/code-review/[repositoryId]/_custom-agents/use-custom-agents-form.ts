@@ -93,9 +93,9 @@ export const useCustomAgentsForm = () => {
 
     const agents = ownList(agentsNode, level);
     const knowledge = ownList(knowledgeNode, level);
-    // The repository's agents a directory also runs, for the note beside
-    // its list; none at any other level. Read from the list as loaded: an
-    // edit replaces the node without what it overrode.
+    // The repository's agents a directory also runs; none at any other
+    // level. Read from the list as loaded: an edit replaces the node without
+    // what it overrode.
     const loadedAgents = (
         form.control._defaultValues as Record<string, unknown>
     )?.customAgents as FieldNode<CustomAgent[]>;
@@ -245,7 +245,7 @@ export const useCustomAgentsForm = () => {
         agents,
         knowledge,
         linkableAgents,
-        inheritedAgentCount: inheritedAgents.length,
+        inheritedAgents,
         level,
         listNote,
         isDirty,

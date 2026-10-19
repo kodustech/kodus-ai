@@ -403,22 +403,35 @@ export const isLinked = (
 /**
  * Drops an agent and its links to skills and docs. The items themselves stay
  * registered, like `setKnowledgeLink` leaves them, for the main review or
- * another agent to keep following.
+ * another agent to keep following. At a directory, an agent that replaced an
+ * inherited one (same id) gives way to it again, so its links stay: they now
+ * apply to the inherited agent.
  */
 export const withoutAgent = (
     agents: CustomAgent[],
     knowledge: KnowledgeItem[],
     agentId: string,
+    inherited: CustomAgent[],
 ): { agents: CustomAgent[]; knowledge: KnowledgeItem[] } => ({
     agents: agents.filter((agent) => agent.id !== agentId),
-    knowledge: knowledge.map((item) => ({
-        ...item,
-        linkedTo: item.linkedTo.filter(
-            (target) =>
-                typeof target === "string" || target.agentId !== agentId,
-        ),
-    })),
+    knowledge: inherited.some((agent) => agent.id === agentId)
+        ? knowledge
+        : knowledge.map((item) => ({
+              ...item,
+              linkedTo: item.linkedTo.filter(
+                  (target) =>
+                      typeof target === "string" || target.agentId !== agentId,
+              ),
+          })),
 });
+
+/** What deleting an agent leaves behind, for the confirm dialog. */
+export const deleteAgentNote = (agentId: string, inherited: CustomAgent[]) => {
+    const restored = inherited.find((agent) => agent.id === agentId);
+    return restored
+        ? `The repository's ${restored.name || "agent"} runs here again, with the skills and docs this directory links to it. Its findings stay on past pull requests.`
+        : "Its findings stay on past pull requests.";
+};
 
 /**
  * Links or unlinks one skill or doc. An item stays registered with no links,

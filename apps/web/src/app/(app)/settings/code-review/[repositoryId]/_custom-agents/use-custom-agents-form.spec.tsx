@@ -104,7 +104,7 @@ const Probe = () => {
     const {
         agents,
         linkableAgents,
-        inheritedAgentCount,
+        inheritedAgents,
         setAgents,
         updateAgent,
         save,
@@ -114,7 +114,7 @@ const Probe = () => {
     return (
         <div>
             <span data-testid="dirty">{isDirty ? "unsaved" : "saved"}</span>
-            <span data-testid="inherited">{inheritedAgentCount}</span>
+            <span data-testid="inherited">{inheritedAgents.length}</span>
             <button onClick={() => setAgents([...agents, sprinkler])}>add</button>
             <button
                 onClick={() =>
