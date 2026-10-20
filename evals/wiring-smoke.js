@@ -166,6 +166,21 @@ async function main() {
                 return findings >= 1 ? null : `expected the scripted finding to reach scoring, got findings=${findings}`;
             },
         },
+        // The same review on an org's Claude slot: it runs on the Claude Agent SDK
+        // (#2113) — the real CLI, through the local gateway, to the scripted model
+        // in Anthropic format. A caller that bypasses LLM.run never reaches it.
+        {
+            name: 'claude-sdk',
+            model: true,
+            result: 'finder',
+            args: ['evals/investigation/run-recall.js', '--model=eval-fake-claude', `--cases=${FINDER_CASE}`, '--concurrency=1', `--output=${path.join(scratch, 'finder-recall-claude-sdk.json')}`],
+            check: ({ models }) => {
+                const viaCli = server.calls.filter((c) => c.path === '/v1/messages' && String(c.headers['anthropic-beta'] || '').includes('claude-code')).length;
+                if (!viaCli) return `no request came from the Claude Agent SDK (asked for: ${Object.keys(models).join(', ') || 'nothing'})`;
+                const findings = readJson(path.join(scratch, 'finder-recall-claude-sdk.json'))?.rows?.[0]?.metadata?.findings;
+                return findings >= 1 ? null : `expected the scripted finding to reach scoring on the SDK path, got findings=${findings}`;
+            },
+        },
         // An org with no model config: the same review on Kodus's default model and
         // key (the managed route, libs/llm/managed-slot.ts), its Fireworks endpoint
         // pointed at the scripted model. The evals measure every model on BYOK

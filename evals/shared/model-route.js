@@ -13,6 +13,17 @@ require('ts-node/register/transpile-only');
 require('tsconfig-paths/register');
 const path = require('path');
 
+// Production runs Claude slots on the Claude Agent SDK (#2113); in the cloud the
+// EE module registers it for every org. The evals measure what ships, so a run
+// registers it the same way when it resolves its route (after its env is set:
+// the engine modules read keys at import). Other models never reach it.
+let claudeSdkRegistered = false;
+function registerClaudeSdkOnce() {
+    if (claudeSdkRegistered) return;
+    claudeSdkRegistered = true;
+    require('../../libs/ee/claude-agent-sdk/register').registerClaudeSdk({ cloud: true, licensed: async () => true });
+}
+
 // ── The model, routed as production routes it ──────────────────────────────
 // Production hands the finder no model. execute() routes the codeReview task to
 // a slot (model-factory.ts resolveReviewAgentModel → permissionValidationService
@@ -142,6 +153,7 @@ function tier0ModelEntry(id, modelId) {
  * model production cannot run.
  */
 function resolveRoute(config) {
+    registerClaudeSdkOnce();
     const effort = process.env.RECALL_REASONING_EFFORT || null;
     if (config.provider === 'tier0') {
         const modelId = process.env.RECALL_MODEL || config.model;

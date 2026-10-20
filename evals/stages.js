@@ -128,6 +128,7 @@ const STAGES = [
             { kind: 'contract', name: "A scripted model's review of a PR reaches scoring with its finding", wiring: ['finder-recall'] },
             { kind: 'unit', name: "An org with no model of its own: the default model is built on Kodus's key", specs: ['libs/llm/byok-to-vercel.env-default.spec.ts'] },
             { kind: 'contract', name: "An org with no model of its own: the review runs end to end on Kodus's default model", wiring: ['managed-route'] },
+            { kind: 'contract', name: "An org's Claude slot: the review runs end to end on the Claude Agent SDK, through the local gateway", wiring: ['claude-sdk'] },
             { kind: 'contract', name: "Kodus's default model is a real model the provider answers", signal: 'contract.api', spec: 'libs/llm/trial-model-availability.contract.spec.ts' },
         ],
         eval: {
