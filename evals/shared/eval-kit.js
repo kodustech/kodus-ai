@@ -7,6 +7,9 @@ const path = require('path');
 const callScope = new AsyncLocalStorage();
 // The task (production's runName) a model call serves, for the request it sends.
 const taskScope = new AsyncLocalStorage();
+// The review step a model call serves (finder.generalist, finder.verify, dedup...),
+// for per-step tokens and time. Set with inStage; read by addCall.
+const stageScope = new AsyncLocalStorage();
 
 // Load the engine's TypeScript from plain node: esbuild, not ts-node, because
 // agent-loop.ts places value imports mid-file and ts-node leaves them
@@ -117,6 +120,41 @@ function tokensUsed() {
     return global.__EVAL_TOK;
 }
 
+// LOCAL BASELINE ONLY (#1821): tokens and time per review step, per PR.
+// Every model call is counted under the step running when it was made (the
+// innermost inStage); a call outside every step goes under 'sem-etapa'. A step's
+// `ms` sums its runs, `spanMs` is first start to last end (runs can overlap: the
+// verify judges candidates in parallel). Measuring changes nothing the step does.
+function stageOf(caseUse, name) {
+    caseUse.byStage = caseUse.byStage || {};
+    caseUse.byStage[name] = caseUse.byStage[name] || { runs: 0, ms: 0, spanMs: 0, firstStart: null, lastEnd: null, calls: 0, in: 0, out: 0, cacheRead: 0, cacheWrite: 0, callMs: 0 };
+    return caseUse.byStage[name];
+}
+function inStage(name, fn) {
+    const c = global.__EVAL_CASE_ALS?.getStore();
+    const start = Date.now();
+    const done = () => {
+        if (!c) return;
+        const s = stageOf(c, name);
+        const end = Date.now();
+        s.runs += 1;
+        s.ms += end - start;
+        s.firstStart = s.firstStart === null ? start : Math.min(s.firstStart, start);
+        s.lastEnd = s.lastEnd === null ? end : Math.max(s.lastEnd, end);
+        s.spanMs = s.lastEnd - s.firstStart;
+    };
+    let out;
+    try {
+        out = stageScope.run(name, fn);
+    } catch (error) {
+        done();
+        throw error;
+    }
+    if (out && typeof out.then === 'function') return out.finally(done);
+    done();
+    return out;
+}
+
 // One answered call: its usage (libs/llm/ai-sdk-usage.ts AiSdkUsage) and time.
 function addCall(usage, ms) {
     // LOCAL BASELINE ONLY (#1821): per-PR totals for the baseline comparison.
@@ -125,6 +163,10 @@ function addCall(usage, ms) {
         c.in += usage?.inputTokens ?? 0; c.out += usage?.outputTokens ?? 0;
         c.cacheRead += usage?.cacheReadTokens ?? 0; c.cacheWrite += usage?.cacheWriteTokens ?? 0;
         c.calls += 1; const t = taskScope.getStore() || 'unnamed'; c.byTask[t] = (c.byTask[t] || 0) + 1;
+        const st = stageOf(c, stageScope.getStore() || 'sem-etapa');
+        st.calls += 1; st.callMs += Math.round(ms);
+        st.in += usage?.inputTokens ?? 0; st.out += usage?.outputTokens ?? 0;
+        st.cacheRead += usage?.cacheReadTokens ?? 0; st.cacheWrite += usage?.cacheWriteTokens ?? 0;
     }
     const tok = tokensUsed();
     tok.in += usage?.inputTokens ?? 0;
@@ -152,4 +194,4 @@ async function withCallErrors(fn) {
     return { result, errors };
 }
 
-module.exports = { registerTs, countTokens, tokensUsed, addCall, failedCalls, withCallErrors, effortOf };
+module.exports = { registerTs, countTokens, tokensUsed, addCall, failedCalls, withCallErrors, effortOf, inStage };

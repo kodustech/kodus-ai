@@ -139,6 +139,164 @@ function observeTheReview() {
     reviewObserved = true;
 }
 
+// ── The finder, pass by pass (LOCAL BASELINE ONLY, #1821) ────────────────────
+// Production's finder is the generalist pass plus the synthesis-rescue pass; its
+// verify runs inside the same call (runFinderWithVerify) and only what it keeps
+// leaves. This records, without changing anything the model sees or the code
+// does: each pass's own output (the raw submitResult and what production
+// extracted from it, before the merge and the verify), the candidates the
+// verify judged with its verdict on each, and every model call's tokens and time
+// under its step (eval-kit inStage). The origin is never written into a finding:
+// the findings go back into the rescue and verify prompts.
+//
+// The engine's TypeScript is compiled to CommonJS with getter-only exports, so a
+// function is replaced in the module's cached exports before any consumer loads
+// it; a consumer already loaded would keep the real one, and this refuses then.
+const FINDER_PATH = 'code-review/infrastructure/agents/core/finder.agent.ts';
+const VERIFY_PASS_PATH = 'agent-harness/infrastructure/orchestration/verification-pass.ts';
+const FORMATTER_PATH = 'code-review/infrastructure/agents/engine/format-and-shape-suggestions.ts';
+const CONSUMERS = ['code-review/infrastructure/agents/core/core-agent-loop.adapter.ts', 'code-review/pipeline/stages/agent-review.stage.ts'];
+const finderRun = new AsyncLocalStorage();
+let finderObserved = false;
+function swapExports(rel, patch) {
+    const file = require.resolve(path.join(LIBS, rel));
+    const real = require(file);
+    require.cache[file].exports = { ...real, ...patch(real) };
+}
+function submitInputs(state) {
+    return (state?.steps || []).flatMap((s) => (s.message?.toolCalls || []).filter((tc) => tc.name === 'submitResult').map((tc) => clone(tc.input ?? {})));
+}
+const findingKey = (f) => [f.relevantFile, f.relevantLinesStart ?? '', f.relevantLinesEnd ?? '', f.suggestionContent].join('::');
+function observeFinderPasses() {
+    if (finderObserved) return;
+    const loaded = CONSUMERS.filter((c) => require.cache[require.resolve(path.join(LIBS, c))]);
+    if (loaded.length) throw new Error(`observeFinderPasses ran after ${loaded.join(', ')} loaded: the finder would not be observed`);
+    const { inStage } = require('./eval-kit');
+
+    swapExports(VERIFY_PASS_PATH, (real) => ({
+        runVerificationPass: async (args, ctx) => {
+            const run = finderRun.getStore();
+            if (!run) return real.runVerificationPass(args, ctx);
+            const startedAt = Date.now();
+            // RECALL_STOP_AFTER=finder measures the generalist and the rescue only:
+            // the verify judges after both, so skipping it changes nothing they
+            // produce. Every candidate is kept with the verdict production gives a
+            // candidate whose verify failed, and no model is called.
+            const out = process.env.RECALL_STOP_AFTER === 'finder'
+                ? { kept: [...args.candidates], keptVerdicts: args.candidates.map(() => ({ keep: true })), dropped: [], skipped: true }
+                : await inStage('finder.verify', () => real.runVerificationPass(args, ctx));
+            const idx = (c) => args.candidates.indexOf(c);
+            run.verify.push({
+                // The first pass judges every candidate; a second one is the
+                // evidence gate re-judging kept findings on files the finder never read.
+                pass: run.verify.length === 0 ? 'verify' : 'evidence-gate',
+                skipped: !!out.skipped,
+                ms: Date.now() - startedAt,
+                candidates: args.candidates.map((c) => findingKey(c)),
+                kept: out.kept.map((c, i) => ({ index: idx(c), parseMode: out.keptVerdicts?.[i]?.parseMode ?? null })),
+                dropped: out.dropped.map((d) => ({ index: idx(d.candidate), rationale: d.verdict?.rationale ?? null, parseMode: d.verdict?.parseMode ?? null })),
+            });
+            return out;
+        },
+    }));
+
+    swapExports(FINDER_PATH, (real) => ({
+        runFinderWithVerify: async (params, input, ctx) => {
+            const store = observedLoops.getStore();
+            if (!store?.finder) return real.runFinderWithVerify(params, input, ctx);
+            const agentName = params.agentName ?? 'finder';
+            const run = { loop: currentLoop.getStore()?.key || null, agentName, passes: [], verify: [], candidates: null };
+            let lastPass = null;
+            const runner = new Proxy(params.runner, {
+                get(target, prop, receiver) {
+                    if (prop !== 'run') return Reflect.get(target, prop, receiver);
+                    return async (spec, runInput, runCtx) => {
+                        const fid = runInput?.telemetry?.functionId;
+                        const label = fid === agentName ? 'generalist' : fid === `${agentName}-synthesis-rescue` ? 'synthesis-rescue' : null;
+                        // Any other run (the verifier's) is counted by the step around it.
+                        if (!label) return target.run(spec, runInput, runCtx);
+                        const startedAt = Date.now();
+                        const state = await inStage(`finder.${label}`, () => target.run(spec, runInput, runCtx));
+                        // The same extraction production runs on this state, without the
+                        // prose recovery (that one calls a model; recorded below when it runs).
+                        const extracted = await real.extractFindingsWithRecovery(state, undefined, params.telemetryMetadata);
+                        lastPass = {
+                            label,
+                            functionId: fid,
+                            startedAt,
+                            ms: Date.now() - startedAt,
+                            usage: clone(state?.usage),
+                            steps: state?.steps?.length ?? null,
+                            raw: submitInputs(state),
+                            findings: clone(extracted.suggestions),
+                            recovered: null,
+                        };
+                        run.passes.push(lastPass);
+                        return state;
+                    };
+                },
+            });
+            const recoverProse = params.recoverProse && (async (reasoning) => {
+                const pass = lastPass;
+                const out = await inStage(`finder.${pass?.label || 'sem-passada'}`, () => params.recoverProse(reasoning));
+                if (pass) pass.recovered = clone(out);
+                return out;
+            });
+            const r = await finderRun.run(run, () => real.runFinderWithVerify({ ...params, runner, recoverProse }, input, ctx));
+            // Every candidate the verify judged, with the pass it came from: a
+            // generalist finding the rescue repeated word for word was merged into
+            // the generalist's (production's merge key).
+            const fromGeneralist = new Set(run.passes.filter((p) => p.label === 'generalist').flatMap((p) => (p.recovered || p.findings).map(findingKey)));
+            run.candidates = (run.verify[0]?.candidates || []).map((key, index) => {
+                const v = run.verify[0];
+                const dropped = v.dropped.find((d) => d.index === index);
+                const gate = run.verify[1];
+                const gateIndex = gate ? gate.candidates.indexOf(key) : -1;
+                const gateDrop = gateIndex >= 0 ? gate.dropped.find((d) => d.index === gateIndex) : null;
+                return {
+                    index,
+                    origin: fromGeneralist.has(key) ? 'generalist' : 'synthesis-rescue',
+                    verify: v.skipped ? 'not-run' : dropped ? 'dropped' : gateDrop ? 'dropped-by-evidence-gate' : 'kept',
+                    rationale: dropped?.rationale ?? gateDrop?.rationale ?? null,
+                };
+            });
+            store.finder.push(run);
+            return r;
+        },
+    }));
+
+    swapExports(FORMATTER_PATH, (real) => ({
+        formatAndShapeSuggestions: (...args) => inStage('formatter', () => real.formatAndShapeSuggestions(...args)),
+    }));
+
+    // The loop observer swaps the adapter's exports too, and has to before the
+    // stage below loads its consumers.
+    observeTheLoop();
+
+    // Every later step, timed and counted the same way. To measure another step,
+    // add its AgentReviewStage method here.
+    const { AgentReviewStage } = lib('code-review/pipeline/stages/agent-review.stage.ts');
+    for (const [method, stage] of [['dropRepeats', 'repeat-drop'], ['dedupSuggestionStreams', 'dedup'], ['reclassifyAndFilterSeverity', 'severity']]) {
+        const original = AgentReviewStage.prototype[method];
+        AgentReviewStage.prototype[method] = function staged(...args) {
+            return inStage(stage, () => original.apply(this, args));
+        };
+    }
+    // RECALL_STOP_AFTER=finder: the review ends when the finder returns (its
+    // verify skipped, above). Anchoring gets nothing, so no later step has anything
+    // to judge and none calls a model.
+    const anchor = AgentReviewStage.prototype.anchorSuggestionsToDiff;
+    AgentReviewStage.prototype.anchorSuggestionsToDiff = function maybeStop(...args) {
+        const store = observedLoops.getStore();
+        if (process.env.RECALL_STOP_AFTER === 'finder' && store) {
+            store.stoppedAfterFinder = true;
+            return [];
+        }
+        return anchor.apply(this, args);
+    };
+    finderObserved = true;
+}
+
 // What the Kody Rules agent returned on each review (its warnings say whether
 // every rule was judged), observed on the provider without changing it.
 const observedRuleReviews = new AsyncLocalStorage();
@@ -511,6 +669,7 @@ async function prepareReview({ pr, team = {}, route, permissionService, previous
  * observeSteps: record what each post-agent step received (observeTheReview).
  */
 async function reviewPullRequest({ pr, team = {}, route, permissionService, previousDecisions, previousDecisionsUseCase, decisions, agentLoop, observeSteps, sandbox: sandboxMode = 'alive', wrapSandbox }) {
+    observeFinderPasses();
     observeTheLoop();
     observeTheRuleAgent();
     if (observeSteps) observeTheReview();
@@ -519,7 +678,8 @@ async function reviewPullRequest({ pr, team = {}, route, permissionService, prev
     // Every review loads it, as LoadExternalContextStage does in production; an
     // empty store changes nothing in the prompts (checked on the finder's case).
     const decisionsUseCase = previousDecisionsUseCase || decisionStore(decisions || []);
-    const { context, repo, codeManagement } = await prepareReview({ pr, team, route, permissionService, previousDecisions, previousDecisionsUseCase: decisionsUseCase });
+    const { inStage } = require('./eval-kit');
+    const { context, repo, codeManagement } = await inStage('prepare', () => prepareReview({ pr, team, route, permissionService, previousDecisions, previousDecisionsUseCase: decisionsUseCase }));
     if (!context.changedFiles?.length) {
         await repo.cleanup();
         return { shipped: [], discarded: [], loops: [], ruleReviews: [], context, skipped: context.statusInfo?.message || 'no files to review' };
@@ -531,7 +691,7 @@ async function reviewPullRequest({ pr, team = {}, route, permissionService, prev
     let sandbox = null;
     if (sandboxMode !== 'none') {
         try {
-            sandbox = await checkout(repo);
+            sandbox = await inStage('sandbox', () => checkout(repo));
         } catch (error) {
             await repo.cleanup();
             throw error;
@@ -539,10 +699,10 @@ async function reviewPullRequest({ pr, team = {}, route, permissionService, prev
     }
     try {
         const stage = buildAgentReviewStage({ permissionService, codeManagement, previousDecisionsUseCase: decisionsUseCase });
-        const store = { loops: [], agentLoop, steps: observeSteps ? {} : undefined };
+        const store = { loops: [], agentLoop, steps: observeSteps ? {} : undefined, finder: [], stoppedAfterFinder: false };
         const ruleReviews = [];
         const reviewed = sandbox ? { ...context, sandboxHandle: wrapSandbox ? wrapSandbox(sandbox) : sandbox } : context;
-        const out = await observedRuleReviews.run(ruleReviews, () => observedLoops.run(store, () => stage.execute(reviewed)));
+        const out = await observedRuleReviews.run(ruleReviews, () => observedLoops.run(store, () => inStage('agent-review', () => stage.execute(reviewed))));
         return {
             shipped: [...(out.validSuggestions || []), ...(out.validSuggestionsByPR || [])],
             // The same, split as posting takes them: comments on files, and on the PR.
@@ -552,6 +712,8 @@ async function reviewPullRequest({ pr, team = {}, route, permissionService, prev
             loops: store.loops,
             ruleReviews,
             steps: store.steps,
+            finder: store.finder,
+            stoppedAfterFinder: store.stoppedAfterFinder,
             context: out,
             errors: out.errors || [],
         };
