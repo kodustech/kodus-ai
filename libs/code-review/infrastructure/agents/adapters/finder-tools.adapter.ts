@@ -29,6 +29,7 @@ import {
     buildAgentTools,
     type DocumentationSearchAdapter,
 } from '@libs/code-review/infrastructure/agents/engine/agent-tools.factory';
+import { buildClaudeCodeTools } from '@libs/code-review/infrastructure/agents/engine/claude-code-tools.factory';
 import type { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import type { LinkedRepoAccess } from '@libs/ee/linked-repositories';
 
@@ -53,6 +54,9 @@ const READ_ONLY_NAV_TOOLS = new Set([
     'grep',
     'readFile',
     'listDir',
+    'Read',
+    'Grep',
+    'Glob',
     'getCallers',
     // External repo read via the GitHub API — pure for a given (repo,path,branch)
     // within a run, and the costliest call to repeat (a network round-trip).
@@ -79,13 +83,20 @@ export interface FinderToolRegistryOptions {
      *  One whose name is already taken is dropped: it never replaces a
      *  finder tool. */
     extraTools?: readonly AgentTool[];
+    /** Repository tools' interface (#2113, A10). 'kodus' (default): grep /
+     *  readFile / listDir as they are. 'claude-code': the same sandbox behind
+     *  Claude Code's Read / Grep / Glob. Decided by the eval matrix (T35). */
+    toolShape?: 'kodus' | 'claude-code';
 }
+
+/** The repository tools Claude Code's Read / Grep / Glob replace. */
+const CLAUDE_CODE_REPLACES = new Set(['grep', 'readFile', 'listDir']);
 
 export function buildFinderToolRegistry(options: FinderToolRegistryOptions): {
     registry: ToolRegistry;
     cache: ToolCallCache;
 } {
-    const raw = buildAgentTools(
+    const built = buildAgentTools(
         options.remoteCommands,
         options.gitHubToken,
         options.repositoryFullName,
@@ -94,6 +105,13 @@ export function buildFinderToolRegistry(options: FinderToolRegistryOptions): {
         options.callGraph,
         options.linkedRepoAccess,
     );
+    const raw =
+        options.toolShape === 'claude-code'
+            ? {
+                  ...buildClaudeCodeTools(options.remoteCommands),
+                  ...Object.fromEntries(Object.entries(built).filter(([name]) => !CLAUDE_CODE_REPLACES.has(name))),
+              }
+            : built;
 
     const tools: AgentTool[] = Object.entries(raw).map(
         ([name, def]: [string, any]) => ({
