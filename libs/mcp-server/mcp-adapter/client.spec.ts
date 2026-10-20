@@ -1,3 +1,5 @@
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { SpecCompliantMCPClient } from './client';
 
 describe('SpecCompliantMCPClient timers', () => {
@@ -43,6 +45,29 @@ describe('SpecCompliantMCPClient timers', () => {
 
         await client.executeTool('ping');
 
+        expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it('clears the call timeout when disconnecting during a pending tool call', async () => {
+        const server = new McpServer({ name: 'test', version: '1.0.0' });
+        server.registerTool('hang', {}, () => new Promise<never>(() => {}));
+        const [clientTransport, serverTransport] =
+            InMemoryTransport.createLinkedPair();
+        await server.connect(serverTransport);
+        const client = newClient();
+        jest.spyOn(client as any, 'createTransport').mockReturnValue(
+            clientTransport,
+        );
+        jest.spyOn(client, 'listRoots').mockResolvedValue({ roots: [] });
+        await client.connect();
+
+        const call = client.executeTool('hang').catch((error) => error);
+        await jest.advanceTimersByTimeAsync(0);
+        await client.disconnect();
+
+        await expect(call).resolves.toMatchObject({
+            message: expect.stringContaining('Connection closed'),
+        });
         expect(jest.getTimerCount()).toBe(0);
     });
 });
