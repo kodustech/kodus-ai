@@ -366,6 +366,9 @@ export function buildTryTrace(params: {
     skillReads?: SkillRead[];
     /** What each runCli call returned, in the order the calls ran. */
     cliRuns?: CustomAgentCliRun[];
+    /** The team's "Minimum severity to post", from the review config: the
+     *  floor when the agent sets none ("Team minimum"), as in the review. */
+    teamMinSeverity?: string;
 }): CustomAgentTryTrace {
     const { agent, output, events } = params;
     const toolCalls = events.flatMap((event) => event.toolCalls ?? []);
@@ -397,9 +400,9 @@ export function buildTryTrace(params: {
         }
     }
 
-    const minRank = agent.presentation?.minSeverity
-        ? rankOf(agent.presentation.minSeverity)
-        : Infinity;
+    // The agent's own floor, else the team's, as the review applies them.
+    const floor = agent.presentation?.minSeverity || params.teamMinSeverity;
+    const minRank = floor ? rankOf(floor) : Infinity;
     // The review's order: the agent's severity floor and comment limit, then
     // the dedup. Deduping first let a finding under the floor mark a severe
     // one on the same lines as its repeat, so neither read "would post".
@@ -827,6 +830,8 @@ export class CustomAgentTryRunnerService implements ICustomAgentTryRunner {
                     skillReads,
                     startedAt,
                     skills: knowledge.byTarget?.get(agent.id)?.skills,
+                    teamMinSeverity:
+                        config?.suggestionControl?.severityLevelFilter,
                 }),
                 warnings: runWarnings,
             };

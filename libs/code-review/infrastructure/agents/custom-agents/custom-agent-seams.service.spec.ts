@@ -231,6 +231,25 @@ describe('CustomAgentTryRunnerService', () => {
             ...over,
         });
 
+    it("holds a finding under the team's minimum severity when the agent sets none", async () => {
+        const { runner, codeBaseConfig } = setup();
+        codeBaseConfig.getConfig.mockResolvedValue({
+            languageResultPrompt: 'pt-BR',
+            reviewMode: 'normal',
+            byokModelId: 'repo-model',
+            customAgents: [],
+            knowledge: [],
+            suggestionControl: { severityLevelFilter: 'critical' },
+        } as any);
+
+        const trace = await run(runner);
+
+        const refund = trace.findings.find(
+            (f) => f.summary === 'One-sided refund',
+        );
+        expect(refund).toMatchObject({ verdict: 'kept', wouldPost: false });
+    });
+
     it('refuses a pull request URL of another repository', async () => {
         const { runner, orchestrator, createSandboxStage } = setup();
 
@@ -428,6 +447,48 @@ describe('buildTryTrace', () => {
             ['b', true],
             ['c', false],
         ]);
+    });
+
+    it("uses the team's minimum severity when the agent has none, and the agent's own over it", () => {
+        const output = {
+            suggestions: [
+                { oneSentenceSummary: 'medium one', severity: 'medium' },
+                { oneSentenceSummary: 'high one', severity: 'high' },
+            ],
+            agentName: 'x',
+            turnsUsed: 1,
+            durationMs: 1,
+        } as any;
+        const posting = (trace: ReturnType<typeof buildTryTrace>) =>
+            trace.findings.filter((f) => f.wouldPost).map((f) => f.summary);
+
+        expect(
+            posting(
+                buildTryTrace({
+                    agent: agent(),
+                    output,
+                    events: [],
+                    startedAt: Date.now(),
+                    teamMinSeverity: 'high',
+                }),
+            ),
+        ).toEqual(['high one']);
+        expect(
+            posting(
+                buildTryTrace({
+                    agent: agent({
+                        presentation: {
+                            ...agent().presentation,
+                            minSeverity: 'medium' as any,
+                        },
+                    }),
+                    output,
+                    events: [],
+                    startedAt: Date.now(),
+                    teamMinSeverity: 'high',
+                }),
+            ),
+        ).toEqual(['medium one', 'high one']);
     });
 
     it('lists the skill files the run read, not the whole folder', () => {
