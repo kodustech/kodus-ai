@@ -42,6 +42,8 @@ import {
     KodusConfigFile,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { PromptSourceType } from '@libs/ai-engine/domain/prompt/interfaces/promptExternalReference.interface';
+import { maskCodeReviewConfigSecrets } from '@libs/code-review/domain/custom-agents/cli-secrets';
+import { customAgentsRevisionsAtLevel } from '@libs/code-review/domain/custom-agents/revision';
 
 type CodeReviewRepositoryEntry = NonNullable<
     IParameters<ParametersKey.CODE_REVIEW_CONFIG>['configValue']['repositories']
@@ -161,12 +163,14 @@ export class GetCodeReviewParameterUseCase {
                 }
             }
 
+            // CLI secrets of custom agents are write-only: mask them before
+            // any formatting, so no level of the response carries ciphertext.
             const hasPermissionParameters = {
                 ...parameters,
-                configValue: {
+                configValue: maskCodeReviewConfigSecrets({
                     ...parameters.configValue,
                     repositories: filteredRepositories,
-                },
+                }),
             };
 
             const formattedConfigValue =
@@ -212,7 +216,10 @@ export class GetCodeReviewParameterUseCase {
             return {
                 ...hasPermissionParameters,
                 configValue: {
-                    ...formattedConfigValue,
+                    ...this.withCustomAgentsRevisions(
+                        formattedConfigValue,
+                        parameters.configValue,
+                    ),
                     configs: {
                         ...formattedConfigValue.configs,
                         showToggleCodeReviewVersion,
@@ -228,6 +235,44 @@ export class GetCodeReviewParameterUseCase {
             });
             throw error;
         }
+    }
+
+    /**
+     * Puts beside each level (global, repository, directory) the revision of
+     * the custom agents and knowledge it resolves to, read from the stored
+     * config. The screen sends them back with its save, so a save made from
+     * lists someone else replaced since is refused instead of dropping their
+     * changes. They sit beside `configs`, never inside it.
+     */
+    private withCustomAgentsRevisions(
+        formatted: FormattedGlobalCodeReviewConfig,
+        stored: IParameters<ParametersKey.CODE_REVIEW_CONFIG>['configValue'],
+    ): FormattedGlobalCodeReviewConfig {
+        const revisionsAt = (repositoryId?: string, directoryId?: string) => {
+            const revisions = customAgentsRevisionsAtLevel(stored, {
+                repositoryId,
+                directoryId,
+            });
+            return {
+                customAgentsRevision: revisions.customAgents,
+                knowledgeRevision: revisions.knowledge,
+            };
+        };
+
+        return {
+            ...formatted,
+            ...revisionsAt(),
+            repositories: (formatted.repositories ?? []).map((repository) => ({
+                ...repository,
+                ...revisionsAt(repository.id),
+                directories: (repository.directories ?? []).map(
+                    (directory) => ({
+                        ...directory,
+                        ...revisionsAt(repository.id, directory.id),
+                    }),
+                ),
+            })),
+        } as FormattedGlobalCodeReviewConfig;
     }
 
     private async getCodeReviewConfigFormatted(
@@ -534,12 +579,11 @@ export class GetCodeReviewParameterUseCase {
                 );
 
                 // Buscar e adicionar referências externas do nível diretório
-                const dirConfigKey =
-                    this.promptReferenceManager.buildConfigKey(
-                        organizationAndTeamData,
-                        repo.id,
-                        dir.id,
-                    );
+                const dirConfigKey = this.promptReferenceManager.buildConfigKey(
+                    organizationAndTeamData,
+                    repo.id,
+                    dir.id,
+                );
                 formattedDirFileConfig =
                     await this.enrichConfigWithExternalReferences(
                         formattedDirFileConfig,
@@ -844,8 +888,7 @@ export class GetCodeReviewParameterUseCase {
         config: FormattedCodeReviewConfig,
     ): string | undefined {
         const entry = config?.contextReferenceId as
-            | IFormattedConfigProperty<string>
-            | undefined;
+            IFormattedConfigProperty<string> | undefined;
         if (entry && typeof entry.value === 'string') {
             const trimmed = entry.value.trim();
             return trimmed.length ? trimmed : undefined;

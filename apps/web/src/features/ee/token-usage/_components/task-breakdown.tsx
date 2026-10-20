@@ -23,43 +23,7 @@ import { ChevronRightIcon } from "lucide-react";
 
 import { CHART_COLORS } from "../../cockpit/_components/charts/recharts-shared";
 import { rowCost } from "../_utils/cost";
-
-/** Task labels + descriptions (the `LlmTask` set in libs/llm/byok-config.ts).
- *  A task is WHICH model the org picked — the config axis. `''` = unattributable. */
-const TASK_META: Record<string, { label: string; description: string }> = {
-    codeReview: {
-        label: "Code Review",
-        description:
-            "The defect-finding review agents plus suggestion refinement and cross-file context — the model you set for Code Review.",
-    },
-    kodyRulesReview: {
-        label: "Kody Rules Review",
-        description:
-            "Enforcing your Kody Rules on the diff — the model set for Kody Rules Review (inherits Code Review's when unset).",
-    },
-    prSummary: {
-        label: "PR Summary",
-        description: "Writing the PR summary comment — the model set for PR Summary.",
-    },
-    businessValidation: {
-        label: "Business Validation",
-        description:
-            "The business-rules validation agent — the model set for Business Validation.",
-    },
-    ruleGeneration: {
-        label: "Rule Generation",
-        description: "Generating and learning Kody Rules from PR history and feedback.",
-    },
-    conversation: {
-        label: "Conversation",
-        description: "Answering your @kody replies in review threads.",
-    },
-    "": {
-        label: "Unrouted",
-        description:
-            "Spend not attributable to a routing task — internal/system steps, or older runs recorded before per-task routing.",
-    },
-};
+import { TASK_META, taskKeyOf } from "../_utils/task-meta";
 
 /** Process-area labels (the drill-down under each task). */
 const AREA_LABEL: Record<string, string> = {
@@ -237,7 +201,7 @@ export const TaskBreakdown = ({
         >();
         for (const row of rows) {
             if (!selected.has(row.model)) continue;
-            const task = row.task in TASK_META ? row.task : "";
+            const task = taskKeyOf(row.task);
             // Skip unattributable spend (internal/system steps, not a task the
             // org picked a model for). It still counts in the per-model total
             // below; the per-TASK view only lists real routing tasks.

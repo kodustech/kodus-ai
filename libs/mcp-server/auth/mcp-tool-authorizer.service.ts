@@ -76,7 +76,25 @@ export class McpToolAuthorizer {
             );
         }
 
-        return { ...args, organizationId };
+        // A team key is bound to a single team. Fill teamId in from the
+        // credential when the caller omitted it so downstream tools resolve the
+        // right team; a teamId that WAS supplied was already checked against the
+        // key above (ensureTeam). This is the only argument-shaping the tenant
+        // boundary does — the tool wrapper must not also rewrite these fields,
+        // or the same boundary ends up with two rules.
+        const pinned: T & { organizationId: string } = {
+            ...args,
+            organizationId,
+        };
+        if (
+            principal.kind === 'team-key' &&
+            (pinned.teamId === undefined ||
+                pinned.teamId === null ||
+                pinned.teamId === '')
+        ) {
+            (pinned as Record<string, unknown>).teamId = principal.teamId;
+        }
+        return pinned;
     }
 
     private async ensureTeam(

@@ -181,3 +181,34 @@ describe('AgentReviewStage — losses the run records (#2066)', () => {
         expect(kinds(result)).toEqual([]);
     });
 });
+
+describe('AgentReviewStage — kodus-config.yml keys set in the app', () => {
+    it('records customAgents dropped from the file, and the review still runs', async () => {
+        const { stage } = makeStage();
+        const ctx = makeContext({
+            codeReviewConfig: {
+                reviewOptions: {},
+                heavy: false,
+                resolvedModelSlot: { provider: 'openai', model: 'gpt-4o-mini' },
+                kodusConfigFileDroppedKeys: ['version', 'customAgents'],
+            },
+        });
+
+        const result = await run(stage, ctx);
+
+        const warning = result.reviewWarnings.find(
+            (w: any) => w.kind === 'CONFIG_FILE_KEY_IGNORED',
+        );
+        expect(warning.detail).toBe(
+            'kodus-config.yml: customAgents is not read from this file; configure custom agents in the app.',
+        );
+    });
+
+    it('records nothing when the file had no app-only key', async () => {
+        const { stage } = makeStage();
+
+        const result = await run(stage, makeContext());
+
+        expect(kinds(result)).not.toContain('CONFIG_FILE_KEY_IGNORED');
+    });
+});

@@ -76,6 +76,15 @@
                                             "en/how_to_use/code_review/learning/kody_rules_generation"
                                         ]
                                     },
+                                    {
+                                        "group": "Custom Agents",
+                                        "tag": "beta",
+                                        "pages": [
+                                            "en/how_to_use/code_review/custom_agents",
+                                            "en/how_to_use/code_review/custom_agents_knowledge_and_tools",
+                                            "en/how_to_use/code_review/custom_agents_best_practices"
+                                        ]
+                                    },
                                     "en/how_to_use/code_review/plugins",
                                     "en/how_to_use/code_review/business_logic_validation",
                                     "en/how_to_use/code_review/learning/kody_learning"
@@ -336,6 +345,14 @@
                                 ]
                             },
                             {
+                                "group": "Custom Agents",
+                                "pages": [
+                                    "en/cookbook/custom-agent-duplicate-code",
+                                    "en/cookbook/custom-agent-ast-grep-convention",
+                                    "en/cookbook/custom-agent-security-skill"
+                                ]
+                            },
+                            {
                                 "group": "LLM Provider Setup",
                                 "pages": [
                                     "en/cookbook/novita",
@@ -406,6 +423,15 @@
                                             "es/how_to_use/code_review/configs/repository_rules",
                                             "es/how_to_use/code_review/configs/global_rule_sources",
                                             "es/how_to_use/code_review/learning/kody_rules_generation"
+                                        ]
+                                    },
+                                    {
+                                        "group": "Agentes Personalizados",
+                                        "tag": "beta",
+                                        "pages": [
+                                            "es/how_to_use/code_review/custom_agents",
+                                            "es/how_to_use/code_review/custom_agents_knowledge_and_tools",
+                                            "es/how_to_use/code_review/custom_agents_best_practices"
                                         ]
                                     },
                                     "es/how_to_use/code_review/plugins",
@@ -668,6 +694,14 @@
                                 ]
                             },
                             {
+                                "group": "Agentes Personalizados",
+                                "pages": [
+                                    "es/cookbook/custom-agent-duplicate-code",
+                                    "es/cookbook/custom-agent-ast-grep-convention",
+                                    "es/cookbook/custom-agent-security-skill"
+                                ]
+                            },
+                            {
                                 "group": "Configuración de Proveedor LLM",
                                 "pages": [
                                     "es/cookbook/novita",
@@ -738,6 +772,15 @@
                                             "pt-BR/how_to_use/code_review/configs/repository_rules",
                                             "pt-BR/how_to_use/code_review/configs/global_rule_sources",
                                             "pt-BR/how_to_use/code_review/learning/kody_rules_generation"
+                                        ]
+                                    },
+                                    {
+                                        "group": "Agentes Personalizados",
+                                        "tag": "beta",
+                                        "pages": [
+                                            "pt-BR/how_to_use/code_review/custom_agents",
+                                            "pt-BR/how_to_use/code_review/custom_agents_knowledge_and_tools",
+                                            "pt-BR/how_to_use/code_review/custom_agents_best_practices"
                                         ]
                                     },
                                     "pt-BR/how_to_use/code_review/plugins",
@@ -1000,6 +1043,14 @@
                                 ]
                             },
                             {
+                                "group": "Agentes Personalizados",
+                                "pages": [
+                                    "pt-BR/cookbook/custom-agent-duplicate-code",
+                                    "pt-BR/cookbook/custom-agent-ast-grep-convention",
+                                    "pt-BR/cookbook/custom-agent-security-skill"
+                                ]
+                            },
+                            {
                                 "group": "Configuração de Provedor LLM",
                                 "pages": [
                                     "pt-BR/cookbook/novita",
@@ -1070,6 +1121,15 @@
                                             "ja/how_to_use/code_review/configs/repository_rules",
                                             "ja/how_to_use/code_review/configs/global_rule_sources",
                                             "ja/how_to_use/code_review/learning/kody_rules_generation"
+                                        ]
+                                    },
+                                    {
+                                        "group": "カスタムエージェント",
+                                        "tag": "beta",
+                                        "pages": [
+                                            "ja/how_to_use/code_review/custom_agents",
+                                            "ja/how_to_use/code_review/custom_agents_knowledge_and_tools",
+                                            "ja/how_to_use/code_review/custom_agents_best_practices"
                                         ]
                                     },
                                     "ja/how_to_use/code_review/plugins",
@@ -1332,6 +1392,14 @@
                                 ]
                             },
                             {
+                                "group": "カスタムエージェント",
+                                "pages": [
+                                    "ja/cookbook/custom-agent-duplicate-code",
+                                    "ja/cookbook/custom-agent-ast-grep-convention",
+                                    "ja/cookbook/custom-agent-security-skill"
+                                ]
+                            },
+                            {
                                 "group": "LLM プロバイダー設定",
                                 "pages": [
                                     "ja/cookbook/novita",
@@ -1402,6 +1470,15 @@
                                             "zh/how_to_use/code_review/configs/repository_rules",
                                             "zh/how_to_use/code_review/configs/global_rule_sources",
                                             "zh/how_to_use/code_review/learning/kody_rules_generation"
+                                        ]
+                                    },
+                                    {
+                                        "group": "自定义代理",
+                                        "tag": "beta",
+                                        "pages": [
+                                            "zh/how_to_use/code_review/custom_agents",
+                                            "zh/how_to_use/code_review/custom_agents_knowledge_and_tools",
+                                            "zh/how_to_use/code_review/custom_agents_best_practices"
                                         ]
                                     },
                                     "zh/how_to_use/code_review/plugins",
@@ -1661,6 +1738,14 @@
                                     "zh/cookbook/kodus-sprint-workflow",
                                     "zh/cookbook/team-onboarding",
                                     "zh/cookbook/compliance-review-pipeline"
+                                ]
+                            },
+                            {
+                                "group": "自定义代理",
+                                "pages": [
+                                    "zh/cookbook/custom-agent-duplicate-code",
+                                    "zh/cookbook/custom-agent-ast-grep-convention",
+                                    "zh/cookbook/custom-agent-security-skill"
                                 ]
                             },
                             {

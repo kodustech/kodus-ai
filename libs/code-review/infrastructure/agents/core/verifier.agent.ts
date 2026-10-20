@@ -32,6 +32,7 @@ import {
     buildFailureVerifierPrompt,
     FAILURE_SCORE_SCHEMA,
     VERIFIER_REPEAT_RULE,
+    verifierLaneRule,
 } from '@libs/code-review/infrastructure/agents/prompts/verifier-prompt';
 import { formatPreviousDecisions } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
 import {
@@ -98,6 +99,9 @@ export interface BuildVerifierSpecParams {
     /** A/B: pergunta se a FALHA pode ser instanciada, nao se a alegacao e
      *  verdadeira. Ver buildFailureVerifierPrompt. */
     failureMode?: boolean;
+    /** System prompt override — the convention verifier passes its own. The
+     *  HV2 prompt when absent. */
+    systemPrompt?: string;
 }
 
 export function buildVerifierAgentSpec(
@@ -105,13 +109,14 @@ export function buildVerifierAgentSpec(
 ): AgentSpec {
     // The system prompt is static (the per-finding evidence goes in the
     // run prompt), so we build it once with a placeholder bundle.
-    const { system } = params.failureMode
+    const { system: hv2System } = params.failureMode
         ? buildFailureVerifierPrompt('')
         : params.scoreMode
         ? buildVeracityScorePrompt('')
         : params.feasibilityMode
           ? buildFeasibilityVerifierPrompt('', 0)
           : buildVerifierPrompt('', 0);
+    const system = params.systemPrompt ?? hv2System;
     const submitTool = params.failureMode
         ? {
               ...submitVerdictTool,
@@ -175,12 +180,15 @@ export function buildVerifierAgentSpec(
 export function bundleFor(
     finding: FinderSuggestion,
     includeReason = false,
-    outrosDoGrupo?: Parameters<typeof verifierPromptFor>[4],
+    outrosDoGrupo?: VerifierPromptOptions['outrosDoGrupo'],
     previousDecisions?: readonly PrDecisionRecord[],
+    options: { laneFocus?: string } = {},
 ): string {
     const walk = includeReason
         ? (finding as { reason?: string }).reason
         : undefined;
+    const laneFocus =
+        typeof options?.laneFocus === 'string' ? options.laneFocus : '';
     const bundle = [
         `File: ${finding.relevantFile}`,
         finding.relevantLinesStart != null
@@ -211,23 +219,19 @@ export function bundleFor(
             : '',
         formatPreviousDecisions(previousDecisions),
         previousDecisions?.length ? VERIFIER_REPEAT_RULE : '',
+        laneFocus.trim() ? verifierLaneRule(laneFocus) : '',
     ]
         .filter(Boolean)
         .join('\n');
     return bundle;
 }
 
-/** Format a finding into the verifier's per-run task prompt. */
-export function verifierPromptFor(
-    finding: FinderSuggestion,
-    /** Suggestions already posted on THIS PR in a previous review round
-     *  (issue #1313). E o historico inteiro do PR, nao filtrado por arquivo —
-     *  ver LlmVerifier.verify() (#2020). Fica na posicao 2 porque e o contrato de
-     *  producao, coberto por verifier.agent.contract.spec.ts; os knobs de A/B
-     *  abaixo vieram depois e ficam no fim para nao deslocar ninguem. */
-    previousDecisions?: readonly PrDecisionRecord[],
+export type VerifierPromptOptions = {
+    /** A custom agent kept to its lane (#2172) adds the out-of-focus drop
+     *  criterion; absent, the prompt is unchanged. */
+    laneFocus?: string;
     /** Path-feasibility mode (A/B knob) — see buildFeasibilityVerifierPrompt. */
-    feasibilityMode = false,
+    feasibilityMode?: boolean;
     /** Inclui no bundle o percurso que PRODUZIU o achado (`reason`). Opt-in.
      *
      *  Sem ele o verificador recebe cinco campos — arquivo, linhas, severidade,
@@ -239,7 +243,7 @@ export function verifierPromptFor(
      *
      *  Desligado por padrao — isto muda o prompt de producao, e o efeito em
      *  recall e precisao nao esta medido. */
-    includeReason = false,
+    includeReason?: boolean;
     /** Os OUTROS achados que o atribuidor juntou neste grupo, quando ha. Opt-in.
      *
      *  Hoje o grupo chega ao verificador como o representante mais uma lista de
@@ -254,15 +258,25 @@ export function verifierPromptFor(
         relevantLinesEnd?: number;
         suggestionContent?: string;
         reason?: string;
-    }>,
+    }>;
+};
+
+/** Format a finding into the verifier's per-run task prompt (HV2 evidence).
+ *  `previousDecisions` (issue #1313) is the PR's history, not filtered by
+ *  file — see LlmVerifier.verify() (#2020). */
+export function verifierPromptFor(
+    finding: FinderSuggestion,
+    previousDecisions?: readonly PrDecisionRecord[],
+    options: VerifierPromptOptions = {},
 ): string {
     const bundle = bundleFor(
         finding,
-        includeReason,
-        outrosDoGrupo,
+        options.includeReason ?? false,
+        options.outrosDoGrupo,
         previousDecisions,
+        { laneFocus: options.laneFocus },
     );
-    return feasibilityMode
+    return options.feasibilityMode
         ? buildFeasibilityVerifierPrompt(bundle, 0).prompt
         : buildVerifierPrompt(bundle, 0).prompt;
 }
@@ -290,6 +304,26 @@ export function extractVerdict(
     // files it read/grepped) to the observability trace. submitVerdict itself
     // is excluded (it's the result tool, not investigation).
     const toolCalls = collectVerifierToolCalls(state);
+    // The verifier's own run failed (provider error, 429, abort): nothing was
+    // judged. Still fail open, as the Verifier port requires, but say so —
+    // runFinderWithVerify keeps these out of the published set (#2171). A
+    // partial verdict tool call made before the failure is not trusted.
+    if (state.status === 'error') {
+        const error = state.trace.find((e) => e.kind === 'error');
+        const message =
+            (error?.detail?.message as string | undefined) ?? 'unknown error';
+        logger.warn({
+            message: `verifier run failed, finding left unverified: ${message}`,
+            context: 'VerifierAgent',
+            metadata: { parseMode: 'verify-error', ...telemetry },
+        });
+        return {
+            keep: true,
+            rationale: `verification unavailable: ${message}`,
+            toolCalls,
+            parseMode: 'verify-error',
+        };
+    }
     // SHAPE recovery (#1786): a non-strict model may wrap ({result:{keep}}),
     // rename (decision/verdict/shouldKeep), stringify, or bare-array the
     // verdict — readVerdictObject recovers the scalar `keep` before the boolean
@@ -320,6 +354,22 @@ export function extractVerdict(
             },
         });
         return { ...fromText, toolCalls, parseMode: 'text' };
+    }
+    // A run that did not finish (out of steps, stopped by a policy) and left
+    // no verdict judged nothing: unavailable, as an errored run is. One that
+    // completed and answered without a readable verdict keeps the default.
+    if (state.status !== 'completed') {
+        logger.warn({
+            message: `verifier run ended ${state.status} without a verdict, finding left unverified`,
+            context: 'VerifierAgent',
+            metadata: { parseMode: 'verify-error', ...telemetry },
+        });
+        return {
+            keep: true,
+            rationale: `verification unavailable: verifier ended ${state.status} without a verdict`,
+            toolCalls,
+            parseMode: 'verify-error',
+        };
     }
     return {
         keep: true,
@@ -424,13 +474,16 @@ export interface LlmVerifierParams {
      *  e devolve as outras redacoes do MESMO defeito. Ver verifierPromptFor. */
     resolveGroupMembers?: (
         candidate: FinderSuggestion,
-    ) => Parameters<typeof verifierPromptFor>[4];
+    ) => VerifierPromptOptions['outrosDoGrupo'];
     /** Suggestions already posted on THIS PR in a previous review round
      *  (issue #1313). `verify()` filters this down to the candidate's own file
      *  before rendering it as evidence — matching by line range is deliberately
      *  NOT done here (line numbers shift across commits); the model judges
      *  whether a same-file record is "the same issue" semantically. */
     previousDecisions?: PrDecisionRecord[];
+    /** A custom agent kept to its lane (#2172): its focus, against which each
+     *  finding is also judged in the same run (see verifierLaneRule). */
+    laneFocus?: string;
 }
 
 /** The LLM-judge Verifier (HV2): runs a verifier AgentSpec once per finding on
@@ -529,13 +582,13 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
                     ? buildVeracityScorePrompt(
                           bundleFor(candidate, this.params.includeReason),
                       ).prompt
-                    : verifierPromptFor(
-                    candidate,
-                    matchingDecisions,
-                    this.params.feasibilityMode,
-                    this.params.includeReason,
-                    this.params.resolveGroupMembers?.(candidate),
-                ),
+                    : verifierPromptFor(candidate, matchingDecisions, {
+                          feasibilityMode: this.params.feasibilityMode,
+                          includeReason: this.params.includeReason,
+                          outrosDoGrupo:
+                              this.params.resolveGroupMembers?.(candidate),
+                          laneFocus: this.params.laneFocus,
+                      }),
                 ...toAiSdkTelemetryArgs(
                     buildLangfuseTelemetry(fnId, this.params.telemetryMetadata),
                 ),

@@ -1,0 +1,238 @@
+---
+title: "Custom Agents"
+description: "Reviewers your team defines, each with its own instructions, files, knowledge and tools. They run next to Kody on the pull requests their files match."
+tag: 'beta'
+---
+
+<Callout icon="alien" iconType="regular">Custom agents are in beta. Behavior and screens may still change.</Callout>
+
+## Overview
+
+A custom agent is a reviewer your team writes for one concern: architecture boundaries, duplicated code, a security policy, end-to-end test coverage. Each agent has:
+
+- **Instructions**: what to look for, what to ignore, and what proof a finding needs
+- **Files**: the globs it reviews. It runs only when a pull request changes one of them
+- **Skills & docs**: guides from the repository it follows
+- **Tools**: read-only plugins, your team's CLIs and ast-grep rules
+- **Comments & model**: its tag, format, severity floor, comment limit, writing style and model
+
+Agents run beside Kody's own review. Each one reports only its own focus, and its comments carry a tag with its name, so the team knows who is speaking.
+
+Available on **Teams and Enterprise** plans, and during the trial. On the Free plan no custom agent runs: not in reviews, not with `@kody -v`, not in **Try it**. Saved agents, skills and docs are kept and run again after an upgrade.
+
+<CardGroup cols={2}>
+  <Card title="Skills, docs and tools" icon="toolbox" href="/en/how_to_use/code_review/custom_agents_knowledge_and_tools">
+    Link repository guides, plugins, team CLIs and ast-grep rules.
+  </Card>
+  <Card title="Best practices" icon="list-check" href="/en/how_to_use/code_review/custom_agents_best_practices">
+    Write agents that find real problems and stay quiet otherwise.
+  </Card>
+</CardGroup>
+
+## Where to find them
+
+Open **Code review → What to review**. The **Custom agents** section sits below the review categories, with a **New agent** button and a link to **Skills & docs**.
+
+Each row shows the agent's switch, its tag color, the first line of its instructions, chips for its files, skills, docs and tools, and what it did lately (for example `9 PRs · 15 posted · 30 days`). Click a row to open the agent's page. The **⋯** menu has **Edit**, **Try it** and **Delete**.
+
+<Note>
+  Custom agents are configured in the app only. `customAgents` and `knowledge` keys in `kodus-config.yml` are ignored, and the review says so in its closing comment. See [FAQ](#faq).
+</Note>
+
+## Levels
+
+Agents follow the scope picker at the top of the **Code review** group, like the rest of your settings.
+
+| Level | What it does |
+| --- | --- |
+| **Global** | Agents for every repository that has no list of its own. |
+| **Repository** | The list starts as the global one. The first change you save there gives the repository its own list, which **replaces** the global one. From then on, changes to the global agents don't reach it, and the screen says: "This repository has its own agents list. Changes to the global agents don't reach it." |
+| **Directory** | **Adds** its agents to the repository's. The repository's agents show as **From repository** (or **From repository, off**) and are read-only there. |
+
+At a directory, an inherited agent opens read-only with **Override at this directory**. Overriding copies the agent into the directory with the same id, so the copy replaces the repository's agent for that directory: change its instructions, or turn it off. Deleting the override brings the repository's agent back.
+
+<Note>
+  A directory's agents run when the review uses that directory's settings. See [Directory-Level Settings](/en/how_to_use/code_review/configs/directory_level) for how a pull request picks its settings.
+</Note>
+
+## Create an agent
+
+<Steps>
+  <Step title="Click New agent">
+    In **What to review → Custom agents**, click **New agent**.
+  </Step>
+  <Step title="Pick a starting point">
+    **Templates** start from written instructions:
+
+    | Template | Focus |
+    | --- | --- |
+    | **Architecture** | Layer boundaries, dependency direction and where new code belongs. |
+    | **E2E coverage** | User-facing changes that ship without an end-to-end test for the flow. |
+    | **Regression & hallucination** | Behavior that silently changed, and calls to APIs that do not exist. |
+    | **Security reviewer** | Injection, auth and tenant checks, secrets and unsafe input handling. |
+    | **Blank** | Start from nothing and write your own instructions. |
+
+    **Import from repository** lists the skills found on the repository's default branch and turns one into a reviewer that loads it on every review. It is not available at the global level, since skills live in each repository.
+  </Step>
+  <Step title="Shape it on its page">
+    The agent is saved right away and its page opens. Set its files, link skills and docs, add tools.
+  </Step>
+  <Step title="Try it, then turn it on">
+    A new agent starts **off**. Run it with [Try it](#try-it) on a real pull request. When its comments look right, turn it on.
+  </Step>
+</Steps>
+
+<Tip>
+  The agent's name is also its command name: "Data Contracts" answers to `@kody -v data-contracts`. Two agents whose names give the same command name can't be saved at the same level.
+</Tip>
+
+## The agent page
+
+The page has a status line (on/off, the files it runs on and what it posted in the last 30 days), four cards, and the **Try it** panel. Changes on the page are kept with **Save**.
+
+### Instructions
+
+| Field | Notes |
+| --- | --- |
+| **Name** | Shown on the agent's tag. Avoid a name that repeats a Kody category (Bug, Performance, Security, Business Logic); the page suggests a distinct one. |
+| **Instructions** | Up to 8,000 characters. A brief to a reviewer who knows the codebase: what to look for, what to ignore, what proof a finding needs. |
+
+### Files & knowledge
+
+| Field | Notes |
+| --- | --- |
+| **Files** | Globs the agent reviews, e.g. `src/payments/**`. Empty runs on every pull request. |
+| **Except** | Globs it skips, e.g. `**/*.test.ts`, `**/generated/**`. |
+| **Skills & docs** | The guides this agent follows, read from the pull request's target branch. See [Skills, docs and tools](/en/how_to_use/code_review/custom_agents_knowledge_and_tools). |
+
+Globs are matched against the path from the repository root, at every level, including at a directory.
+
+**Ignored files.** Your repository's ignored paths (in **General**) still apply, with one exception: a glob that **names** a file reaches it even when the repository ignores it. A glob names a file when one of its path segments is literal and its last segment is more than `*` or `**`:
+
+| Glob | Reaches ignored files? |
+| --- | --- |
+| `package.json`, `apps/web/package.json`, `**/Dockerfile`, `infra/**/*.tf` | Yes |
+| `**`, `**/*`, `**/*.ts`, `*.{ts,tsx}`, `src/**`, `apps/web/*` | No |
+
+Secret files (`.env*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`, `id_rsa*` and other SSH keys) are never handed to an agent from the ignored paths, even by a glob that names them.
+
+A pull request whose changed files are all ignored is still reviewed by an agent that names one of them, and only by it: Kody's own review has nothing to look at.
+
+### Tools
+
+What the agent can run besides reading the code, all read-only towards your systems: **Plugins** (MCP), **CLIs** (up to 3) and, under **Advanced**, **Structural search (ast-grep rules)**. See [Skills, docs and tools](/en/how_to_use/code_review/custom_agents_knowledge_and_tools).
+
+### Comments & model
+
+| Field | Options |
+| --- | --- |
+| **Tag** | The color of the agent's tag on its comments. |
+| **Format** | **Inline comments**, or **One PR comment** with all the agent's findings, most severe first. |
+| **Minimum severity** | **Team minimum** follows **Minimum severity to post** in What to review. **Low (everything)**, **Medium**, **High** or **Critical** set the agent's own floor. |
+| **Max comments per pull request** | Posts the most severe ones. Empty for no limit. |
+| **Suggested fix** | **When confident**: the comment proposes code when the agent is sure of the change. **Never**: it only describes the problem. |
+| **How it writes** | Up to 2,000 characters on tone, length and what every comment must say. Empty uses the team's writing settings. Comments are always in the language set in **General**. |
+| **Model** | **Routing default** follows your AI providers routing. You can pick one of your BYOK models instead. Without BYOK models, the agent uses Kodus's models. |
+
+## Try it
+
+**Try it** runs the agent as it is on screen, saved or not, on one pull request of the repository. Nothing is posted.
+
+<Steps>
+  <Step title="Paste a pull request link">
+    On the agent's page, paste the link of a pull request from this repository and click **Run agent**. It takes a few minutes on a large change.
+  </Step>
+  <Step title="Read the result">
+    The header counts findings, how many were kept and how many would post. Below it:
+
+    - **Warnings**: what the run lost, such as no checkout (the agent read only the diff), a CLI that could not be installed, or a skill or doc that could not be used
+    - **Skills opened**, with the reference files the agent read
+    - **Tool calls**, each with its input and output, including CLI output
+    - **Findings**: each one **kept**, **dropped** or **unverified**, with the reason, the rule it quotes, and the **Comment** that would post
+  </Step>
+  <Step title="Change and run again">
+    Edit the instructions, globs or tools and run again. If you edit after a run, the page warns that the result is from an earlier version.
+  </Step>
+</Steps>
+
+Try it works at repository and directory level, and needs permission to edit code review settings. If no changed file matches the agent's globs, the run is skipped and says why.
+
+## Run one agent on a pull request
+
+Comment on a pull request with the agent's command name on the first line:
+
+```
+@kody -v data-contracts
+```
+
+Kody runs that agent alone, on the whole pull request, even while the agent is off, and posts its comments. Kody's own reviewers don't run, and the pull request is never approved by this command. If no agent answers to that name, Kody replies with the names that do.
+
+## How agents run in a review
+
+<Steps>
+  <Step title="Pick the agents">
+    Every enabled agent whose globs match at least one changed file runs. An agent with no matching file doesn't run.
+  </Step>
+  <Step title="Review">
+    Each agent reviews only its files, beside Kody's own review, and reports only what its instructions ask for. It reads skills and docs from the target branch and uses its tools.
+  </Step>
+  <Step title="Check every finding">
+    A convention finding must quote the rule it applies, from a linked guide or from the agent's instructions. A quote that is not in the guide on the target branch is dropped. A quote shortened with "..." passes when each part is there, in order. A verifier then drops findings outside the agent's focus or without support in the code. An ast-grep match counts as proof on its own.
+  </Step>
+  <Step title="Apply the agent's settings">
+    The agent's minimum severity, then its comment limit (the most severe are kept).
+  </Step>
+  <Step title="Merge with the main review">
+    When an agent and Kody report the same problem, one comment is kept. For a team rule inside the agent's focus, the agent's comment wins. For anything else, Kody's comment stays.
+  </Step>
+  <Step title="Post">
+    Comments carry the agent's tag. A convention comment cites the rule applied (the guide and its words, or "agent's instructions"). A finding backed by a CLI shows the CLI output lines that name the file, under **Evidence**.
+  </Step>
+</Steps>
+
+Each agent's comments carry its tag, so the pull request shows which agent said what. The agent's page shows what it did in the last 30 days: the pull requests it reviewed and the comments it posted.
+
+## Limits
+
+| Limit | Value |
+| --- | --- |
+| Instructions | 8,000 characters |
+| How it writes | 2,000 characters |
+| CLIs per agent | 3 |
+| Skills per agent (and for the main review) | 20 |
+| Docs per agent (and for the main review) | 10 |
+| Doc tokens per agent (and for the main review) | 20,000 |
+| ast-grep rules | 64,000 bytes |
+
+## FAQ
+
+<AccordionGroup>
+  <Accordion title="Why didn't my agent run?">
+    Check, in order:
+
+    - It is **off**. New agents start off. `@kody -v <name>` runs it anyway.
+    - No changed file matches its **Files** globs, or every match is in **Except**.
+    - Its files are in the repository's ignored paths and its globs don't name them. Name the files explicitly (see [Files & knowledge](#files--knowledge)).
+    - Its files were deleted in the pull request.
+    - At a repository with its own list, an agent added at the global level later doesn't reach it.
+    - At a directory, the review used the repository's settings (for example, the pull request touched two configured directories).
+  </Accordion>
+  <Accordion title="Why was a finding dropped?">
+    Run the agent with **Try it** on the same pull request: each dropped finding shows its reason. The usual ones:
+
+    - The quote is not in the guide on the target branch (paraphrased, or the guide changed only in the pull request).
+    - The finding is outside what the agent's instructions ask for.
+    - The verifier found no support for it in the code.
+    - It was below the agent's minimum severity, or over its comment limit.
+    - Kody's review reported the same problem and kept its comment.
+  </Accordion>
+  <Accordion title="Can I configure agents in kodus-config.yml?">
+    No. `customAgents` and `knowledge` in `kodus-config.yml` are not read. The closing comment says: "kodus-config.yml: customAgents is not read from this file; configure custom agents in the app."
+  </Accordion>
+  <Accordion title="Can a pull request change the rules it is judged by?">
+    No. Skills, docs and ast-grep rule files are read from the pull request's target branch. Edits to them in the pull request apply after it merges.
+  </Accordion>
+  <Accordion title="What happens to past comments when I delete an agent?">
+    Its findings stay on past pull requests. The skills and docs stay registered on the Skills & docs page.
+  </Accordion>
+</AccordionGroup>

@@ -4,6 +4,11 @@ import { Inject, Injectable } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import * as yaml from 'js-yaml';
 
+import {
+    maskCliSecrets,
+    maskCodeReviewConfigSecrets,
+} from '@libs/code-review/domain/custom-agents/cli-secrets';
+
 import { createLogger } from '@libs/core/log/logger';
 import {
     CODE_BASE_CONFIG_SERVICE_TOKEN,
@@ -77,14 +82,18 @@ export class GenerateKodusConfigFileUseCase {
                 organizationAndTeamData,
             );
 
+            // CLI secrets of custom agents are write-only: an exported file
+            // never carries their ciphertext.
+            const configValue = maskCodeReviewConfigSecrets(
+                codeReviewConfigs.configValue,
+            );
+
             let config: KodusConfigFile | undefined;
 
             if (repositoryId === 'global') {
-                config = codeReviewConfigs.configValue.configs as
-                    | KodusConfigFile
-                    | undefined;
+                config = configValue.configs as KodusConfigFile | undefined;
             } else if (repositoryId && directoryId) {
-                const repo = codeReviewConfigs.configValue.repositories?.find(
+                const repo = configValue.repositories?.find(
                     (repository) => repository.id === repositoryId,
                 );
 
@@ -94,7 +103,7 @@ export class GenerateKodusConfigFileUseCase {
 
                 config = directory?.configs as KodusConfigFile | undefined;
             } else if (repositoryId && repositoryId !== 'global') {
-                const repo = codeReviewConfigs.configValue.repositories?.find(
+                const repo = configValue.repositories?.find(
                     (repository) => repository.id === repositoryId,
                 );
 
@@ -126,7 +135,7 @@ export class GenerateKodusConfigFileUseCase {
         let yamlString: string;
 
         if (configObject && !this.isEmptyObject(configObject)) {
-            yamlString = yaml.dump(configObject);
+            yamlString = yaml.dump(maskCliSecrets(configObject));
         } else if (configObject && this.isEmptyObject(configObject)) {
             yamlString = '';
         } else {

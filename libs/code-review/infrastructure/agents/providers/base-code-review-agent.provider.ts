@@ -11,7 +11,10 @@ import { ByokErrorCounter } from '@libs/notifications/application/byok-error-cou
 
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
-import { assignFileTiers, computeFileScores } from '@libs/code-review/infrastructure/agents/engine/file-priority-scorer';
+import {
+    assignFileTiers,
+    computeFileScores,
+} from '@libs/code-review/infrastructure/agents/engine/file-priority-scorer';
 import {
     PROMPT_BUDGET_RATIO,
     assertContextWindowFitsOverhead,
@@ -28,6 +31,7 @@ import {
 import { resolveContextWindow } from '@libs/llm/model-context-window';
 import {
     buildPathMismatchWarning,
+    buildVerifyUnavailableWarning,
     type ReviewWarning,
 } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import { resolveAdaptiveProfile } from '@libs/code-review/infrastructure/agents/engine/adaptive-fit';
@@ -48,11 +52,29 @@ import {
 import {
     resolveReviewAgentModel,
     type AgentModelParams,
+    type ResolvedAgentModel,
 } from '@libs/code-review/infrastructure/agents/collaborators/model-factory';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { providerErrorFromResult } from '@libs/code-review/infrastructure/agents/collaborators/provider-error';
 import { runAgentWithTrace } from '@libs/code-review/infrastructure/agents/collaborators/review-observability';
 import { runChunkedReview } from '@libs/code-review/infrastructure/agents/collaborators/batch-runner';
 import { AgentProgressReporter } from '@libs/code-review/infrastructure/agents/collaborators/agent-progress-reporter';
+import type { AgentTool } from '@libs/agent-harness/domain/contracts/tool.contract';
+import { renderKnowledgeSection } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-prompt';
+import { buildKnowledgeTools } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-tools';
+import { RunToolCache } from '@libs/code-review/infrastructure/agents/adapters/run-tool-cache';
+
+/** Tools an agent adds to its run, and how to release them afterwards. */
+export interface AgentRunToolset {
+    tools: AgentTool[];
+    /** Which of `tools` read the team's own systems (MCP). */
+    teamSystemTools?: string[];
+    /** Tools the agent runs without, reported with the review's warnings. */
+    warnings?: ReviewWarning[];
+    close(): Promise<void>;
+}
+
+const NO_TOOLS: AgentRunToolset = { tools: [], close: async () => {} };
 
 /**
  * Hard cap on execute() → executeChunked() → execute() recursion. Set to
@@ -97,6 +119,22 @@ export abstract class BaseCodeReviewAgentProvider {
 
     protected abstract getIdentity(): ReviewAgentIdentity;
     /**
+     * Whether a run that ended without submitting a result and reported
+     * nothing counts as stopped early. Off for the built-in agents, whose
+     * prose answers prose recovery owns (#2171); a custom agent turns it on.
+     */
+    protected readsMissingResultAsIncomplete(): boolean {
+        return false;
+    }
+
+    /**
+     * How the review warnings name this agent: its run name, unless the
+     * agent has a name people gave it (a custom agent).
+     */
+    protected getWarningName(runName: string): string {
+        return runName;
+    }
+    /**
      * Return the category-specific chunk that gets embedded in the system
      * prompt. Receives `input` so subclasses can include per-request data
      * (e.g. the kody-rules agent renders the current team rules) without
@@ -123,6 +161,68 @@ export abstract class BaseCodeReviewAgentProvider {
         }
 
         return ['bug'];
+    }
+
+    /** Cost-span run name of this agent's model calls (`code-review*` buckets
+     *  to the `review` area). */
+    protected getUsageRunName(): string {
+        return `code-review-${this.getCategoryLabel()}`;
+    }
+
+    /**
+     * The run's model and, when the agent checks its findings on a model of
+     * its own, the check slot (#2172). The built-in agents route `codeReview`
+     * and verify on the same model.
+     */
+    protected async resolveModels(
+        input: ReviewAgentInput,
+    ): Promise<ResolvedAgentModel & { checkByokConfig?: NormalizedModel }> {
+        return resolveReviewAgentModel(input, this.permissionValidationService);
+    }
+
+    /**
+     * Team guides whose findings take the convention second pass (#2172).
+     * Unset for every built-in agent; a custom agent returns its linked
+     * skills and docs (possibly none).
+     */
+    protected getConventionGuides(
+        _input: ReviewAgentInput,
+    ): string[] | undefined {
+        return undefined;
+    }
+
+    /** Unset for every built-in agent; a custom agent returns its
+     *  instructions, so a rule quoted from them can pass the quote check. */
+    protected getTeamInstructions(): string | undefined {
+        return undefined;
+    }
+
+    /**
+     * What this agent is allowed to report, as the verifier reads it: set
+     * only for a custom agent kept to its lane, whose findings outside it are
+     * dropped by the verification they already take. Unset → verification is
+     * exactly as before.
+     */
+    protected getLaneFocus(_input: ReviewAgentInput): string | undefined {
+        return undefined;
+    }
+
+    /**
+     * Where read-only tool results are kept for this review run. Unset by
+     * default, so a provider shared across reviews (every built-in agent)
+     * gets a fresh cache per execute; a provider built per review returns
+     * its own, so the batches of a chunked review share it.
+     */
+    protected getRunToolCache(): RunToolCache | undefined {
+        return undefined;
+    }
+
+    /** Tools of this agent beyond the repository and knowledge tools. Built
+     *  per run and closed when the run ends. */
+    protected async buildAgentTools(
+        _input: ReviewAgentInput,
+    ): Promise<AgentRunToolset> {
+        return NO_TOOLS;
     }
 
     /**
@@ -197,10 +297,11 @@ export abstract class BaseCodeReviewAgentProvider {
 
         // Resolve BYOK config + model (org config → per-repo override → trial
         // default). Scoped locally to prevent cross-review races. → ModelFactory.
-        const { byokConfig, main: mainModel } = await resolveReviewAgentModel(
-            input,
-            this.permissionValidationService,
-        );
+        const {
+            byokConfig,
+            main: mainModel,
+            checkByokConfig,
+        } = await this.resolveModels(input);
         // Preflight (context window + warnings) runs against the resolved model.
         // `effectiveModelName` tracks the model that actually ran (there is one
         // model per run now — no fallback provider swap).
@@ -247,7 +348,7 @@ export abstract class BaseCodeReviewAgentProvider {
                 contextWindowTokens: contextWindow,
                 modelName,
                 detail,
-                agentName: identity.name,
+                agentName: this.getWarningName(identity.name),
             });
         };
         // Fail fast when the configured model's context window cannot
@@ -373,7 +474,7 @@ export abstract class BaseCodeReviewAgentProvider {
                         contextWindowTokens: contextWindow,
                         modelName,
                         detail: `${filesBefore - filteredFiles.length} files dropped (tests/md/css) to fit a large pull request`,
-                        agentName: identity.name,
+                        agentName: this.getWarningName(identity.name),
                     });
                 }
             }
@@ -532,7 +633,25 @@ export abstract class BaseCodeReviewAgentProvider {
         // Emit progress: agent started
         progress.send({ status: 'started' });
 
+        let agentTools: AgentRunToolset = NO_TOOLS;
         try {
+            agentTools = await this.buildAgentTools(input);
+            agentWarnings.push(...(agentTools.warnings ?? []));
+            const knowledgeTools =
+                input.knowledge && input.knowledgeReader
+                    ? buildKnowledgeTools(
+                          input.knowledge,
+                          input.knowledgeReader,
+                          this.getRunToolCache() ?? new RunToolCache(),
+                          input.customAgentTooling?.onSkillRead,
+                      )
+                    : [];
+            // Agent tools before the skill tools: astGrep is the same for
+            // every custom agent without rules, while loadSkill/readSkillFile
+            // enumerate this agent's skills. Tools shared by the custom agents
+            // of a review come first, so their tool blocks stay identical
+            // for as long as possible (the provider prompt cache is a prefix).
+            const extraTools = [...agentTools.tools, ...knowledgeTools];
             // Secrets are passed via closure (not as tracing arg) so that
             // Langfuse span I/O never serialises API keys, tokens, or
             // NestJS service instances (which carry ConfigService with all env vars).
@@ -540,6 +659,7 @@ export abstract class BaseCodeReviewAgentProvider {
             const loopSecrets: AgentLoopSecrets = {
                 remoteCommands: input.remoteCommands,
                 byokConfig,
+                verifyByokConfig: checkByokConfig,
                 gitHubToken: input.gitHubToken,
                 linkedRepoAccess: input.linkedRepoAccess,
                 documentationSearchService: this.documentationSearchService,
@@ -556,6 +676,7 @@ export abstract class BaseCodeReviewAgentProvider {
                           void byokErrorCounter.record(entry);
                       }
                     : undefined,
+                ...(extraTools.length ? { extraTools } : {}),
             };
 
             // The single agent-loop run against the one resolved model. There is
@@ -577,7 +698,7 @@ export abstract class BaseCodeReviewAgentProvider {
                     // LLM.run records the ONE usage span per call under this name;
                     // deriveArea buckets `code-review*` to the `review` area. No
                     // separate aggregate span is emitted (that double-counted).
-                    usageRunName: `code-review-${this.getCategoryLabel()}`,
+                    usageRunName: this.getUsageRunName(),
                     telemetryMetadata: {
                         organizationId:
                             input.organizationAndTeamData?.organizationId,
@@ -605,6 +726,12 @@ export abstract class BaseCodeReviewAgentProvider {
                     // built field-by-field, so without this line the verifier
                     // never sees prior-round decisions.
                     previousDecisions: input.previousDecisions,
+                    conventionGuides: this.getConventionGuides(input),
+                    teamInstructions: this.getTeamInstructions(),
+                    laneFocus: this.getLaneFocus(input),
+                    ...(agentTools.teamSystemTools?.length && {
+                        teamSystemTools: agentTools.teamSystemTools,
+                    }),
                     // HEAVY opt-in (`--heavy`) — forwarded explicitly, same reason
                     // as skipHeavyPasses above: loopParams is built field-by-field,
                     // so without this line the resample passes never run.
@@ -614,7 +741,8 @@ export abstract class BaseCodeReviewAgentProvider {
                     // Context window is sized against the resolved model.
                     contextWindowTokens: contextWindow,
                     reasoningEffort: modelParams.reasoningEffort,
-                    reasoningConfigOverride: modelParams.reasoningConfigOverride,
+                    reasoningConfigOverride:
+                        modelParams.reasoningConfigOverride,
                     byokProvider: modelParams.byokProvider,
                     // Without this the reasoning mapper can't tell an Opus 5
                     // from a Sonnet 4.5 and has to guess the thinking shape —
@@ -622,7 +750,8 @@ export abstract class BaseCodeReviewAgentProvider {
                     modelName: modelParams.modelName,
                     // Drives the BYOK concurrency limiter bucket + wrapper role.
                     byokRole: modelParams.role,
-                    openrouterProviderOrder: modelParams.openrouterProviderOrder,
+                    openrouterProviderOrder:
+                        modelParams.openrouterProviderOrder,
                     openrouterAllowFallbacks:
                         modelParams.openrouterAllowFallbacks,
                     parentSignal: input.parentSignal,
@@ -719,24 +848,46 @@ export abstract class BaseCodeReviewAgentProvider {
                     buildPathMismatchWarning({
                         count: mapped.droppedForPath,
                         modelName,
-                        agentName: this.getIdentity().name,
+                        agentName: this.getWarningName(this.getIdentity().name),
+                    }),
+                );
+            }
+
+            if (mapped.discardedByVerifyError.length > 0) {
+                agentWarnings.push(
+                    buildVerifyUnavailableWarning({
+                        count: mapped.discardedByVerifyError.length,
+                        modelName,
+                        agentName: this.getWarningName(this.getIdentity().name),
                     }),
                 );
             }
 
             // Emit progress: agent completed
-            // Only mark as error if the agent hit a hard limit (timeout or MAX_STEPS with tool-calls finish).
-            // source=empty with finishReason=stop is legitimate (agent investigated and found nothing).
+            // The agent hit a hard limit when its finder ended without
+            // submitting a result: out of steps, or its turn truncated by the
+            // provider. A run that finished with nothing to report is not one.
+            // A per-agent timeout aborts the run and fails the agent above.
+            // A custom agent that ended without submitting a result and
+            // reported nothing stopped early too: its silence is not a clean
+            // check. The generalist's prose answer stays with prose recovery.
+            const endedWithoutResult =
+                this.readsMissingResultAsIncomplete() &&
+                agentResult.incompleteReason === undefined &&
+                agentResult.submittedResult === false &&
+                agentResult.finishReason !== 'error' &&
+                suggestions.length === 0;
             const hitHardLimit =
-                agentResult.finishReason === 'timeout' ||
-                (agentResult.source === 'empty' &&
-                    agentResult.finishReason === 'tool-calls');
+                agentResult.incompleteReason !== undefined ||
+                endedWithoutResult;
             const stopReason: ReviewAgentOutput['finishReason'] =
-                agentResult.finishReason === 'timeout'
-                    ? 'timeout'
-                    : hitHardLimit
-                      ? 'max-steps'
-                      : 'stop';
+                agentResult.incompleteReason === 'truncated'
+                    ? 'truncated'
+                    : endedWithoutResult
+                      ? 'no-result'
+                      : hitHardLimit
+                        ? 'max-steps'
+                        : 'stop';
 
             progress.send({
                 status: hitHardLimit ? 'error' : 'completed',
@@ -805,6 +956,7 @@ export abstract class BaseCodeReviewAgentProvider {
                 suggestions,
                 discardedBySeverity: mapped.discardedBySeverity,
                 discardedByVerify: mapped.discardedByVerify,
+                discardedByVerifyError: mapped.discardedByVerifyError,
                 agentName: identity.name,
                 agentCategory,
                 agentReplicaIndex: input.agentReplicaIndex,
@@ -876,6 +1028,8 @@ export abstract class BaseCodeReviewAgentProvider {
             // orchestrator treated as a fulfilled-with-no-findings result,
             // silently masking real crashes as legitimate "0 suggestions".
             throw error;
+        } finally {
+            await agentTools.close().catch(() => undefined);
         }
     }
 
@@ -912,6 +1066,8 @@ export abstract class BaseCodeReviewAgentProvider {
             categoryLabel: this.getCategoryLabel(),
             allowedLabels: this.getAllowedSuggestionLabels(input),
             supportsMixed: this.supportsMixedLabels(),
+            conventionGuides: this.getConventionGuides(input),
+            knowledgeSection: renderKnowledgeSection(input.knowledge),
         };
     }
 

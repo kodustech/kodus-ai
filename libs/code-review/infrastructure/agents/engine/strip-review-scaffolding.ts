@@ -96,6 +96,21 @@ export function looksLikeReviewScaffolding(content: string): boolean {
 }
 
 /**
+ * A part opening with a plain lower-case word starts with a capital, as the
+ * sentence it now is. The finder writes "HOW: return a - b" and the label was
+ * what made it read as a sentence. Anything that may be an identifier keeps
+ * its case: inline code, a word joined to `.`, `(` or `_`, a mixed-case word,
+ * and a single ASCII letter other than "a", "i" and "o" (`x`, `e`, `n`).
+ */
+const LEADING_WORD = /^(\p{Ll})(\p{Ll}*)(?=[\s,;:!?]|\.(?!\S)|$)/u;
+const capitalizeLead = (part: string): string =>
+    part.replace(LEADING_WORD, (word, first: string, rest: string) =>
+        rest || !/[b-hj-np-z]/.test(first)
+            ? `${first.toUpperCase()}${rest}`
+            : word,
+    );
+
+/**
  * Strip the labels and join what they delimited into a paragraph.
  *
  * The parts are already one sentence each by construction ("one sentence naming
@@ -117,9 +132,9 @@ export function stripReviewScaffolding(content: string): string {
             // A part carrying a code fence keeps its line breaks; a fence
             // flattened onto one line is no longer a fence.
             if (part.includes('```')) {
-                return part;
+                return capitalizeLead(part);
             }
-            const flat = part.replace(/\s+/g, ' ').trim();
+            const flat = capitalizeLead(part.replace(/\s+/g, ' ').trim());
             return /[.!?:;]$/.test(flat) ? flat : `${flat}.`;
         })
         .join(' ')
@@ -155,7 +170,9 @@ export function impactAndActionFallback(content: string): string | undefined {
     const impactSentence = firstSentence(impact);
     const actionSentence = firstSentence(action);
     if (!impactSentence || !actionSentence) return undefined;
-    const stop = (sentence: string): string =>
-        /[.!?]$/.test(sentence) ? sentence : `${sentence}.`;
+    const stop = (sentence: string): string => {
+        const capitalized = capitalizeLead(sentence);
+        return /[.!?]$/.test(capitalized) ? capitalized : `${capitalized}.`;
+    };
     return `${stop(impactSentence)} ${stop(actionSentence)}`;
 }

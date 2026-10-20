@@ -21,6 +21,7 @@ import {
 } from "@components/ui/tooltip";
 import {
     AlertTriangleIcon,
+    BotIcon,
     ChevronsUpDownIcon,
     FileTextIcon,
     GitPullRequestIcon,
@@ -29,7 +30,6 @@ import {
     ShieldCheckIcon,
     type LucideIcon,
 } from "lucide-react";
-
 import { cn } from "src/core/utils/components";
 
 import type { LlmTask } from "../../_types";
@@ -140,10 +140,10 @@ export const ModelCombobox = ({
                         {models.map((model) => {
                             const gate = gateTask
                                 ? capabilityGate(
-                                    gateTask,
-                                    model.capabilities,
-                                    model.label,
-                                )
+                                      gateTask,
+                                      model.capabilities,
+                                      model.label,
+                                  )
                                 : { ok: true as const };
                             const selected = model.id === value;
 
@@ -157,8 +157,8 @@ export const ModelCombobox = ({
                                         !gate.ok
                                             ? "text-text-tertiary"
                                             : selected
-                                                ? "text-primary font-medium"
-                                                : undefined,
+                                              ? "text-primary font-medium"
+                                              : undefined,
                                     )}>
                                     {model.label || model.id}
                                 </span>
@@ -367,6 +367,13 @@ const AGENT_CARDS: AgentCard[] = [
         task: "businessValidation",
         Icon: ShieldCheckIcon,
         title: "Business Rules",
+    },
+    {
+        // Each custom agent can still pin its own model on its page; these
+        // cards are the default every agent without one uses.
+        task: "customAgent",
+        Icon: BotIcon,
+        title: "Custom Agents",
     },
 ];
 

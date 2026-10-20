@@ -33,6 +33,9 @@ export const LLM_TASK = {
     businessValidation: 'businessValidation',
     prSummary: 'prSummary',
     conversation: 'conversation',
+    /** A team-defined custom review agent finding issues (#2172). A per-agent
+     *  `models.run` override wins over this task's routing. */
+    customAgent: 'customAgent',
 } as const;
 
 export type LlmTask = (typeof LLM_TASK)[keyof typeof LLM_TASK];

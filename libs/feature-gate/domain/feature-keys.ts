@@ -10,6 +10,7 @@ export const FEATURE_KEYS = {
     kodusTraceReviewContext: 'kodus-trace-review-context',
     kodusProvider: 'kodus-provider',
     deterministicEvidence: 'deterministic-evidence',
+    customAgents: 'custom-agents',
 } as const;
 
 export type FeatureKey = (typeof FEATURE_KEYS)[keyof typeof FEATURE_KEYS];

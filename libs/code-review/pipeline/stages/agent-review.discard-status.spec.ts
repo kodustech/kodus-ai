@@ -59,16 +59,16 @@ describe('agent-review.stage — discarded suggestions carry a delivery status',
         // suggestion, so it has no `allDiscarded.push` site to guard here.
         // 8: #2097's repeat check discards what an earlier comment raised.
         // 9: the suggestion sanitizer (#1821) discards no-problem suggestions.
-        expect(discardBlocks()).toHaveLength(9);
+        // 10: #2171 keeps findings whose verify run failed apart.
+        // 11: #2172 keeps a custom agent's findings below its own floor apart.
+        expect(discardBlocks()).toHaveLength(11);
     });
 
     it.each(discardBlocks().map((b, i) => [i, b] as const))(
         'discard site %i stamps deliveryStatus, not only priorityStatus',
         (_i, block) => {
             expect(block).toContain('priorityStatus:');
-            expect(block).toContain(
-                'deliveryStatus: DeliveryStatus.NOT_SENT,',
-            );
+            expect(block).toContain('deliveryStatus: DeliveryStatus.NOT_SENT,');
         },
     );
 });

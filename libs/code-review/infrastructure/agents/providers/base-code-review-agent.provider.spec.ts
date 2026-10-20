@@ -114,7 +114,9 @@ const CHANGED_FILE = {
     patchWithLinesStr: '@@ -1,2 +1,3 @@\n+const x = 1;',
 } as any;
 
-function makeInput(overrides: Partial<ReviewAgentInput> = {}): ReviewAgentInput {
+function makeInput(
+    overrides: Partial<ReviewAgentInput> = {},
+): ReviewAgentInput {
     return {
         organizationAndTeamData: {
             organizationId: 'org-1',
@@ -170,7 +172,13 @@ function makeHarnessResult(overrides: any = {}): any {
         },
         text: 'looked at it',
         steps: 5,
-        toolCalls: [{ tool: 'readFile', toolName: 'readFile', args: { path: 'src/a.ts' } }],
+        toolCalls: [
+            {
+                tool: 'readFile',
+                toolName: 'readFile',
+                args: { path: 'src/a.ts' },
+            },
+        ],
         finishReason: 'stop',
         source: 'json-parse',
         usage: {
@@ -246,6 +254,24 @@ function newAgent(byokErrorCounter?: any, docSearch?: any) {
 // A. Output-shape zoo — how the boundary consumes the AgentLoopOutput envelope
 //    and its findings.suggestions payload.
 // ════════════════════════════════════════════════════════════════════════════
+describe('a built-in agent that answered in prose', () => {
+    // Prose recovery owns a built-in agent's run without submitResult (#2171);
+    // only a custom agent reads it as stopped early.
+    it('is not marked as stopped early', async () => {
+        runLoopMock.mockResolvedValue(
+            makeHarnessResult({
+                findings: { reasoning: 'nothing to report', suggestions: [] },
+                submittedResult: false,
+            }),
+        );
+
+        const out = await newAgent().execute(makeInput());
+
+        expect(out.hitHardLimit).toBe(false);
+        expect(out.finishReason).toBe('stop');
+    });
+});
+
 describe('A. output-shape zoo', () => {
     // Row 1 — exact D, happy path. Side effect (mapping) must be exact.
     it('row 1: exact D → maps the suggestion faithfully and returns declared shape', async () => {
@@ -301,7 +327,9 @@ describe('A. output-shape zoo', () => {
     it('row 3: findings.suggestions is a single object → mapper signals (throws), never silent-keeps', () => {
         expect(() =>
             mapAgentFindings(
-                { findings: { suggestions: { suggestionContent: 'x' } } } as any,
+                {
+                    findings: { suggestions: { suggestionContent: 'x' } },
+                } as any,
                 mapperCtx() as any,
             ),
         ).toThrow();
@@ -433,7 +461,10 @@ describe('A. output-shape zoo', () => {
             {
                 findings: {
                     suggestions: [
-                        { suggestionContent: '', relevantFile: 'src/a.ts' } as any,
+                        {
+                            suggestionContent: '',
+                            relevantFile: 'src/a.ts',
+                        } as any,
                         {
                             suggestionContent: '   ',
                             relevantFile: 'src/a.ts',
@@ -605,14 +636,17 @@ describe('C. transport / fail-safe', () => {
         expect(thrown.responseBody).toBe('{"error":"unknown model"}');
     });
 
-    // Row 32 — empty success (content:'' / finish stop) is a legitimate empty
-    // review; a max-steps/tool-calls stop is a cut-short and must be flagged.
+    // Row 32 — empty success (a finder that finished and found nothing) is a
+    // legitimate empty review; a finder that ended without submitting is a
+    // cut-short and must be flagged. The loop result carries the harness
+    // RunStatus, as the adapter emits it — these rows used to mock 'tool-calls'
+    // and 'timeout', values the adapter never produces (#2171).
     it('row 32: empty-success stop → typed-empty, hitHardLimit false, finishReason stop', async () => {
         runLoopMock.mockResolvedValue(
             makeHarnessResult({
                 findings: { suggestions: [] },
                 source: 'empty',
-                finishReason: 'stop',
+                finishReason: 'stopped',
             }),
         );
         const out = await newAgent().execute(makeInput());
@@ -621,12 +655,13 @@ describe('C. transport / fail-safe', () => {
         expect(out.finishReason).toBe('stop');
     });
 
-    it('row 32: empty + tool-calls finish → cut-short flagged (hitHardLimit true, finishReason max-steps)', async () => {
+    it('row 32: empty + out of steps → cut-short flagged (hitHardLimit true, finishReason max-steps)', async () => {
         runLoopMock.mockResolvedValue(
             makeHarnessResult({
                 findings: { suggestions: [] },
                 source: 'empty',
-                finishReason: 'tool-calls',
+                finishReason: 'budget-exhausted',
+                incompleteReason: 'budget-exhausted',
             }),
         );
         const out = await newAgent().execute(makeInput());
@@ -634,17 +669,17 @@ describe('C. transport / fail-safe', () => {
         expect(out.finishReason).toBe('max-steps');
     });
 
-    it('row 32: timeout finish → finishReason timeout, hitHardLimit true', async () => {
+    it('row 32: aborted by the per-agent timeout → the agent fails, it does not read as cut short', async () => {
         runLoopMock.mockResolvedValue(
             makeHarnessResult({
                 findings: { suggestions: [] },
                 source: 'empty',
-                finishReason: 'timeout',
+                finishReason: 'error',
+                errorMessage: 'This operation was aborted',
+                errorName: 'AbortError',
             }),
         );
-        const out = await newAgent().execute(makeInput());
-        expect(out.finishReason).toBe('timeout');
-        expect(out.hitHardLimit).toBe(true);
+        await expect(newAgent().execute(makeInput())).rejects.toBeDefined();
     });
 
     // Row 33 — refusal ("I cannot help…" / content_filter): surfaces at this
@@ -653,7 +688,10 @@ describe('C. transport / fail-safe', () => {
     it('row 33: refusal → empty review, no fabricated suggestions, finishReason stop', async () => {
         runLoopMock.mockResolvedValue(
             makeHarnessResult({
-                findings: { reasoning: 'I cannot help with that.', suggestions: [] },
+                findings: {
+                    reasoning: 'I cannot help with that.',
+                    suggestions: [],
+                },
                 source: 'empty',
                 finishReason: 'stop',
             }),
@@ -694,9 +732,7 @@ describe('D. input variants', () => {
         runLoopMock.mockResolvedValue(
             makeHarnessResult({ findings: { suggestions: [] } }),
         );
-        const out = await newAgent().execute(
-            makeInput({ changedFiles: [] }),
-        );
+        const out = await newAgent().execute(makeInput({ changedFiles: [] }));
         expect(runLoopMock).toHaveBeenCalledTimes(1);
         expect(runChunkedMock).not.toHaveBeenCalled();
         expect(out.suggestions).toEqual([]);
@@ -760,7 +796,10 @@ describe('D. input variants', () => {
             mapAgentFindings(
                 { findings: { suggestions: [] } } as any,
                 mapperCtx({
-                    changedFiles: [{ filename: null }, { filename: 'src/a.ts' }],
+                    changedFiles: [
+                        { filename: null },
+                        { filename: 'src/a.ts' },
+                    ],
                 }) as any,
             ),
         ).not.toThrow();
@@ -950,38 +989,33 @@ describe('E. N-model policy (boundary is model-agnostic)', () => {
     const STRICT = ['openai', 'anthropic', 'google', 'moonshotai'];
     const FALLBACK = ['kimi', 'glm', 'deepseek', 'z-ai'];
 
-    describe.each([...STRICT, ...FALLBACK])(
-        'provider=%s',
-        (provider) => {
-            it('threads the provider byokConfig onto the wire unchanged', async () => {
-                const byokConfig = { provider, model: `${provider}-model` };
-                resolveModelMock.mockResolvedValue(
-                    makeModel({ byokConfig, main: { byokProvider: provider } }),
-                );
-                await newAgent().execute(makeInput());
-                const [loopParams, loopSecrets] = runLoopMock.mock.calls[0];
-                expect(loopSecrets.byokConfig).toBe(byokConfig);
-                expect(loopParams.byokProvider).toBe(provider);
-            });
+    describe.each([...STRICT, ...FALLBACK])('provider=%s', (provider) => {
+        it('threads the provider byokConfig onto the wire unchanged', async () => {
+            const byokConfig = { provider, model: `${provider}-model` };
+            resolveModelMock.mockResolvedValue(
+                makeModel({ byokConfig, main: { byokProvider: provider } }),
+            );
+            await newAgent().execute(makeInput());
+            const [loopParams, loopSecrets] = runLoopMock.mock.calls[0];
+            expect(loopSecrets.byokConfig).toBe(byokConfig);
+            expect(loopParams.byokProvider).toBe(provider);
+        });
 
-            it('an off-schema (single-object) result fails explicitly regardless of provider', async () => {
-                resolveModelMock.mockResolvedValue(
-                    makeModel({
-                        byokConfig: { provider, model: `${provider}-model` },
-                        main: { byokProvider: provider },
-                    }),
-                );
-                runLoopMock.mockResolvedValue(
-                    makeHarnessResult({
-                        findings: { suggestions: { suggestionContent: 'x' } },
-                    }),
-                );
-                await expect(
-                    newAgent().execute(makeInput()),
-                ).rejects.toBeDefined();
-            });
-        },
-    );
+        it('an off-schema (single-object) result fails explicitly regardless of provider', async () => {
+            resolveModelMock.mockResolvedValue(
+                makeModel({
+                    byokConfig: { provider, model: `${provider}-model` },
+                    main: { byokProvider: provider },
+                }),
+            );
+            runLoopMock.mockResolvedValue(
+                makeHarnessResult({
+                    findings: { suggestions: { suggestionContent: 'x' } },
+                }),
+            );
+            await expect(newAgent().execute(makeInput())).rejects.toBeDefined();
+        });
+    });
 });
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1076,5 +1110,82 @@ describe('losses the run records (#2066)', () => {
         const out = await newAgent().execute(makeInput());
 
         expect(out.warnings ?? []).toEqual([]);
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// #2171 — an agent that did not finish its checks reaches the orchestrator as
+// such: incomplete runs carry hitHardLimit, unverified findings are kept apart.
+// The loop result carries the harness RunStatus, as the real adapter emits it.
+// ════════════════════════════════════════════════════════════════════════════
+describe('#2171 incomplete and unverified', () => {
+    it('a finder run that ran out of steps reaches the orchestrator as incomplete', async () => {
+        runLoopMock.mockResolvedValue(
+            makeHarnessResult({
+                findings: { reasoning: '', suggestions: [] },
+                source: 'empty',
+                finishReason: 'budget-exhausted',
+                incompleteReason: 'budget-exhausted',
+            }),
+        );
+
+        const out = await newAgent().execute(makeInput());
+
+        expect(out.hitHardLimit).toBe(true);
+        expect(out.finishReason).toBe('max-steps');
+    });
+
+    it('a finder run the provider truncated reaches the orchestrator as incomplete', async () => {
+        runLoopMock.mockResolvedValue(
+            makeHarnessResult({
+                findings: { reasoning: '', suggestions: [] },
+                source: 'empty',
+                finishReason: 'completed',
+                incompleteReason: 'truncated',
+            }),
+        );
+
+        const out = await newAgent().execute(makeInput());
+
+        expect(out.hitHardLimit).toBe(true);
+        expect(out.finishReason).toBe('truncated');
+    });
+
+    it('a finished run is not incomplete', async () => {
+        runLoopMock.mockResolvedValue(
+            makeHarnessResult({ finishReason: 'stopped' }),
+        );
+
+        const out = await newAgent().execute(makeInput());
+
+        expect(out.hitHardLimit).toBe(false);
+        expect(out.finishReason).toBe('stop');
+    });
+
+    it('unverified findings come out apart, with a VERIFY_UNAVAILABLE warning', async () => {
+        runLoopMock.mockResolvedValue(
+            makeHarnessResult({
+                finishReason: 'stopped',
+                unverifiedByVerify: [
+                    {
+                        suggestionContent: 'Unchecked claim',
+                        relevantFile: 'src/a.ts',
+                        oneSentenceSummary: 'unchecked',
+                        severity: 'high',
+                    },
+                ],
+            }),
+        );
+
+        const out = await newAgent().execute(makeInput());
+
+        expect(out.discardedByVerifyError).toHaveLength(1);
+        expect(out.discardedByVerifyError?.[0].relevantFile).toBe('src/a.ts');
+        expect(out.suggestions.map((s) => s.suggestionContent)).not.toContain(
+            'Unchecked claim',
+        );
+        expect(out.warnings?.map((w) => w.kind)).toContain(
+            'VERIFY_UNAVAILABLE',
+        );
     });
 });
