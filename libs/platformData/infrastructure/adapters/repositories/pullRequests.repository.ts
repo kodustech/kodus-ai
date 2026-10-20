@@ -357,10 +357,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
     private unresolvedSentCond(severity?: string) {
         const conds: Record<string, any>[] = [
             {
-                $eq: [
-                    '$files.suggestions.deliveryStatus',
-                    DeliveryStatus.SENT,
-                ],
+                $eq: ['$files.suggestions.deliveryStatus', DeliveryStatus.SENT],
             },
             {
                 $ne: [
@@ -1404,6 +1401,58 @@ export class PullRequestsRepository implements IPullRequestsRepository {
             .exec();
 
         return result;
+    }
+
+    async findPullRequestsWithoutDeliveredSuggestionsForApproval(
+        organizationId: string,
+        prNumbers: number[],
+        status: string,
+    ): Promise<IPullRequestWithDeliveredSuggestions[]> {
+        const docs = await this.pullRequestsModel
+            .find(
+                {
+                    organizationId,
+                    number: { $in: prNumbers },
+                    status,
+                },
+                {
+                    'number': 1,
+                    'organizationId': 1,
+                    'status': 1,
+                    'provider': 1,
+                    'repository.id': 1,
+                    'repository.name': 1,
+                    'files.suggestions.deliveryStatus': 1,
+                    'files.suggestions.comment.id': 1,
+                },
+            )
+            .lean()
+            .maxTimeMS(MONGO_QUERY_MAX_TIME_MS)
+            .exec();
+        return docs
+            .filter(
+                (doc) =>
+                    !(doc.files ?? []).some((file) =>
+                        (file.suggestions ?? []).some(
+                            (suggestion) =>
+                                [true, 'sent', 'implemented'].includes(
+                                    suggestion.deliveryStatus as any,
+                                ) && suggestion.comment?.id != null,
+                        ),
+                    ),
+            )
+            .map((doc) => ({
+                _id: String(doc._id),
+                number: doc.number,
+                organizationId: doc.organizationId,
+                status: doc.status,
+                provider: doc.provider,
+                repository: {
+                    id: doc.repository.id,
+                    name: doc.repository.name,
+                },
+                suggestions: [],
+            }));
     }
 
     async findByOrganizationAndRepositoryWithStatusAndSyncedFlag(

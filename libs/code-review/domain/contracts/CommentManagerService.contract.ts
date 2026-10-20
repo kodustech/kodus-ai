@@ -19,6 +19,12 @@ export const COMMENT_MANAGER_SERVICE_TOKEN = Symbol.for(
 );
 
 export interface ICommentManagerService {
+    postApprovalHoldReason(
+        organizationAndTeamData: OrganizationAndTeamData,
+        prNumber: number,
+        repository: { name: string; id: string },
+        reason: string,
+    ): Promise<void>;
     createInitialComment(
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
@@ -74,6 +80,7 @@ export interface ICommentManagerService {
         linkedRepositoriesMetadata?: import('@libs/ee/linked-repositories').LinkedRepositoriesReviewMetadata,
         reviewWarnings?: import('@libs/code-review/infrastructure/agents/engine/review-warnings').ReviewWarning[],
         singleAgentRun?: boolean,
+        approvalDecision?: import('@libs/code-review/domain/approval/approval-decision').ApprovalDecision,
     ): Promise<void>;
 
     updateSummarizationInPR(
@@ -153,5 +160,6 @@ export interface ICommentManagerService {
         reviewHasPartialErrors?: boolean,
         reviewErrorCustomMessage?: string,
         reviewWarnings?: import('@libs/code-review/infrastructure/agents/engine/review-warnings').ReviewWarning[],
+        approvalDecision?: import('@libs/code-review/domain/approval/approval-decision').ApprovalDecision,
     ): Promise<void>;
 }

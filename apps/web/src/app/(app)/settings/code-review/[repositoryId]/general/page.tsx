@@ -35,6 +35,7 @@ import {
     useCurrentConfigLevel,
 } from "../../../_hooks";
 import { AutomatedReviewActive } from "./_components/automated-review-active";
+import { ApprovalPolicySettings } from "./_components/approval-policy";
 import { BaseBranches } from "./_components/base-branches";
 import { BYOKModelSelectorSection } from "./_components/byok-model-selector";
 import { CentralizedConfigModal } from "./_components/centralized-config-modal";
@@ -251,6 +252,7 @@ export default function General() {
                 </div>
                 <div data-field-name="pullRequestApprovalActive">
                     <PullRequestApprovalActive />
+                    <ApprovalPolicySettings />
                 </div>
                 <AsyncBoundary errorVariant="minimal">
                     <div data-field-name="isRequestChangesActive">

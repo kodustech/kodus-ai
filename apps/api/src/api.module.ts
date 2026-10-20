@@ -42,6 +42,7 @@ import { ParametersModule } from '@libs/organization/modules/parameters.module';
 import { TeamModule } from '@libs/organization/modules/team.module';
 import { TeamMembersModule } from '@libs/organization/modules/teamMembers.module';
 import { PlatformModule } from '@libs/platform/modules/platform.module';
+import { PlatformDataModule } from '@libs/platformData/platformData.module';
 import { SharedMongoModule } from '@libs/shared/database/shared-mongo.module';
 import { SharedPostgresModule } from '@libs/shared/database/shared-postgres.module';
 import { SharedConfigModule } from '@libs/shared/infrastructure/shared-config.module';
@@ -132,6 +133,7 @@ import { SelfHostedDoctorModule } from './doctor/self-hosted-doctor.module';
         ParametersModule,
         WorkflowModule.register({ type: 'api' }),
         PlatformModule,
+        PlatformDataModule,
         AIEngineModule,
         AgentsModule,
         CodebaseModule,

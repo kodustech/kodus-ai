@@ -700,6 +700,14 @@ export type CodeReviewConfig = {
     kodyMemoryRules?: Partial<IKodyRule>[];
     suggestionControl?: SuggestionControlConfig;
     pullRequestApprovalActive: boolean;
+    /** Optional approval scope. Each list is OR internally; both lists together require both matches. */
+    approvalLabels?: string[];
+    approvalAuthors?: string[];
+    /** When enabled, only a low-risk judgment on the reviewed head can approve. */
+    approvalRiskActive?: boolean;
+    approvalRiskInstructions?: string;
+    /** Explicit team vetoes, independent of the calculated area map. */
+    approvalSensitivePaths?: string[];
     kodusConfigFileOverridesWebPreferences: boolean;
     isRequestChangesActive?: boolean;
     kodyRulesGeneratorEnabled?: boolean;

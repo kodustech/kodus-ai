@@ -110,6 +110,20 @@ export class CommentManagerService implements ICommentManagerService {
         this.llmResponseProcessor = new LLMResponseProcessor();
     }
 
+    async postApprovalHoldReason(
+        organizationAndTeamData: OrganizationAndTeamData,
+        prNumber: number,
+        repository: { name: string; id: string },
+        reason: string,
+    ): Promise<void> {
+        await this.codeManagementService.createIssueComment({
+            organizationAndTeamData,
+            prNumber,
+            repository,
+            body: `**Automatic approval held:** ${reason}`,
+        });
+    }
+
     /**
      * Run a one-shot text prompt for the PR summary through the v5 (Vercel AI
      * SDK) path so the user's BYOK model — including Claude-on-Vertex — is
@@ -1068,6 +1082,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
         reviewWarnings?: ReviewWarning[],
         /** `@kody -v <agent>`: one agent re-checked the pull request. */
         singleAgentRun?: boolean,
+        approvalDecision?: import('@libs/code-review/domain/approval/approval-decision').ApprovalDecision,
     ): Promise<void> {
         try {
             // When the review failed, we cannot honor a customer-configured
@@ -1128,6 +1143,12 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                     commentBody = `${commentBody}${skippedNotice}`;
                 }
                 commentBody = `${commentBody}${formatConfigFileNotice(reviewWarnings)}`;
+            }
+
+            if (approvalDecision?.kind === 'hold') {
+                commentBody = `${commentBody}\n\n**Automatic approval held:** ${approvalDecision.reason}`;
+            } else if (approvalDecision?.kind === 'approve') {
+                commentBody = `${commentBody}\n\n**Automatic approval eligible:** ${approvalDecision.reason}`;
             }
 
             await this.codeManagementService.updateIssueComment(
@@ -2968,6 +2989,7 @@ ${reviewOptions}
         reviewHasPartialErrors?: boolean,
         reviewErrorCustomMessage?: string,
         reviewWarnings?: ReviewWarning[],
+        approvalDecision?: import('@libs/code-review/domain/approval/approval-decision').ApprovalDecision,
     ): Promise<void> {
         let commentBody: string;
 
@@ -3030,6 +3052,12 @@ ${reviewOptions}
                 undefined,
                 reviewWarnings,
             );
+        }
+
+        if (approvalDecision?.kind === 'hold') {
+            commentBody = `${commentBody}\n\n**Automatic approval held:** ${approvalDecision.reason}`;
+        } else if (approvalDecision?.kind === 'approve') {
+            commentBody = `${commentBody}\n\n**Automatic approval eligible:** ${approvalDecision.reason}`;
         }
 
         const comment = await this.codeManagementService.createIssueComment(

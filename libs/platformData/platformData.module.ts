@@ -15,6 +15,18 @@ import { PlatformModule } from '@libs/platform/modules/platform.module';
 import { IntegrationConfigModule } from '@libs/integrations/modules/config.module';
 import { PermissionsModule } from '@libs/identity/modules/permissions.module';
 import { PermissionValidationModule } from '@libs/ee/shared/permission-validation.module';
+import {
+    CodeAreaRiskMapModel,
+    CodeAreaRiskMapSchema,
+} from './infrastructure/adapters/repositories/schemas/code-area-risk-map.model';
+import { CodeAreaRiskMapService } from './infrastructure/adapters/services/code-area-risk-map.service';
+import { RefreshCodeAreaRiskMapService } from './infrastructure/adapters/services/refresh-code-area-risk-map.service';
+import {
+    CodeAreaHistoryPrModel,
+    CodeAreaHistoryPrSchema,
+    CodeAreaHistorySyncModel,
+    CodeAreaHistorySyncSchema,
+} from './infrastructure/adapters/repositories/schemas/code-area-history.model';
 
 @Module({
     imports: [
@@ -22,6 +34,18 @@ import { PermissionValidationModule } from '@libs/ee/shared/permission-validatio
             {
                 name: PullRequestsModel.name,
                 schema: PullRequestsSchema,
+            },
+            {
+                name: CodeAreaRiskMapModel.name,
+                schema: CodeAreaRiskMapSchema,
+            },
+            {
+                name: CodeAreaHistoryPrModel.name,
+                schema: CodeAreaHistoryPrSchema,
+            },
+            {
+                name: CodeAreaHistorySyncModel.name,
+                schema: CodeAreaHistorySyncSchema,
             },
         ]),
         forwardRef(() => PlatformModule),
@@ -40,12 +64,16 @@ import { PermissionValidationModule } from '@libs/ee/shared/permission-validatio
         },
         SavePullRequestUseCase,
         BackfillHistoricalPRsUseCase,
+        CodeAreaRiskMapService,
+        RefreshCodeAreaRiskMapService,
     ],
     exports: [
         PULL_REQUESTS_REPOSITORY_TOKEN,
         PULL_REQUESTS_SERVICE_TOKEN,
         SavePullRequestUseCase,
         BackfillHistoricalPRsUseCase,
+        CodeAreaRiskMapService,
+        RefreshCodeAreaRiskMapService,
     ],
 })
 export class PlatformDataModule {}

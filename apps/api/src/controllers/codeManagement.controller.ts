@@ -62,6 +62,9 @@ import {
     CodeManagementWebhookStatusResponseDto,
 } from '../dtos/code-management.response.dto';
 import { TenantScopeGuard } from '../guards/tenant-scope.guard';
+import { CodeAreaRiskMapService } from '@libs/platformData/infrastructure/adapters/services/code-area-risk-map.service';
+import { RefreshCodeAreaRiskMapService } from '@libs/platformData/infrastructure/adapters/services/refresh-code-area-risk-map.service';
+import { rankCodeAreas } from '@libs/platformData/domain/code-area-risk/build-area-risk-map';
 @ApiTags('Code Management')
 @ApiBearerAuth('jwt')
 @ApiStandardResponses()
@@ -83,10 +86,46 @@ export class CodeManagementController {
         private readonly getWebhookStatusUseCase: GetWebhookStatusUseCase,
         private readonly searchCodeManagementUsersUseCase: SearchCodeManagementUsersUseCase,
         private readonly getCurrentCodeManagementUserUseCase: GetCurrentCodeManagementUserUseCase,
+        private readonly codeAreaRiskMaps: CodeAreaRiskMapService,
+        private readonly codeAreaRiskRefresh: RefreshCodeAreaRiskMapService,
 
         @Inject(REQUEST)
         private readonly request: UserRequest,
     ) {}
+
+    @Get('/area-risk-map')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkRepoPermissions({
+            action: Action.Read,
+            resource: ResourceType.CodeReviewSettings,
+            repo: { key: { query: 'repositoryId' } },
+        }),
+    )
+    @ApiOperation({ summary: 'Read historical code-area risk evidence' })
+    @ApiQuery({ name: 'repositoryId', required: true })
+    public async getAreaRiskMap(@Query('repositoryId') repositoryId: string) {
+        const organizationId = this.request?.user?.organization?.uuid;
+        if (!organizationId || !repositoryId) {
+            throw new BadRequestException(
+                'organizationId and repositoryId required',
+            );
+        }
+        const [map, sync] = await Promise.all([
+            this.codeAreaRiskMaps.read(organizationId, repositoryId),
+            this.codeAreaRiskRefresh.readStatus(organizationId, repositoryId),
+        ]);
+        return {
+            map,
+            sync,
+            topAreas: map
+                ? rankCodeAreas(map.directDirectories).slice(
+                      0,
+                      Math.ceil(map.directDirectories.length * 0.2),
+                  )
+                : [],
+        };
+    }
 
     @Get('/repositories/org')
     @UseGuards(PolicyGuard)

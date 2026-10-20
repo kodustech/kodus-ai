@@ -14,6 +14,8 @@ import { NotificationModule } from '@libs/notifications/modules/notification.mod
 import { UserCoreModule } from '@libs/identity/modules/user-core.module';
 
 import { RequestChangesOrApproveStage } from './stages/finish-process-review.stage';
+import { DecidePrApprovalStage } from './stages/decide-pr-approval.stage';
+import { PlatformDataModule } from '@libs/platformData/platformData.module';
 import { InitialCommentStage } from './stages/initial-comment.stage';
 import { BusinessLogicValidationStage } from './stages/business-logic-validation.stage';
 import { ResolveConfigStage } from './stages/resolve-config.stage';
@@ -107,6 +109,7 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         forwardRef(() => AgentsModule),
         forwardRef(() => AIEngineModule),
         forwardRef(() => PlatformModule),
+        forwardRef(() => PlatformDataModule),
         forwardRef(() => KodyFineTuningContextModule),
         forwardRef(() => AutomationModule),
         forwardRef(() => GithubModule),
@@ -166,6 +169,7 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         CreatePrLevelCommentsStage,
         CreateFileCommentsStage,
         AggregateResultsStage,
+        DecidePrApprovalStage,
         UpdateCommentsAndGenerateSummaryStage,
         RequestChangesOrApproveStage,
         ValidateSuggestionsStage,

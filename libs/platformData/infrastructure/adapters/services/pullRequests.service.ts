@@ -374,6 +374,18 @@ export class PullRequestsService implements IPullRequestsService {
         );
     }
 
+    async findPullRequestsWithoutDeliveredSuggestionsForApproval(
+        organizationId: string,
+        prNumbers: number[],
+        status: string,
+    ): Promise<IPullRequestWithDeliveredSuggestions[]> {
+        return this.pullRequestsRepository.findPullRequestsWithoutDeliveredSuggestionsForApproval(
+            organizationId,
+            prNumbers,
+            status,
+        );
+    }
+
     findFileWithSuggestions(
         prnumber: number,
         repositoryName: string,

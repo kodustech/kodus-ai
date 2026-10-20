@@ -34,6 +34,8 @@ import { SpendLimitAlertCronProvider } from './spendLimitAlert.cron';
 import { SSOTestSessionCleanupCronProvider } from './ssoTestSessionCleanup.cron';
 import { StaleReviewWatchdogCronProvider } from './staleReviewWatchdog.cron';
 import { SSOModule } from '@libs/ee/sso/sso.module';
+import { PlatformDataModule } from '@libs/platformData/platformData.module';
+import { RefreshCodeAreaRiskMapCron } from './refresh-code-area-risk-map.cron';
 
 @Module({
     imports: [
@@ -55,6 +57,7 @@ import { SSOModule } from '@libs/ee/sso/sso.module';
         forwardRef(() => SSOModule),
         SpendLimitModule,
         KodusCreditsModule,
+        PlatformDataModule,
     ],
     providers: [
         CheckIfPRCanBeApprovedCronProvider,
@@ -66,6 +69,7 @@ import { SSOModule } from '@libs/ee/sso/sso.module';
         SpendLimitAlertCronProvider,
         KodusCreditsSweepCronProvider,
         StaleReviewWatchdogCronProvider,
+        RefreshCodeAreaRiskMapCron,
         DistributedLockService,
         // Checks adapters for the stale review watchdog (same registration
         // pattern as code-review-pipeline.module — the factory is not

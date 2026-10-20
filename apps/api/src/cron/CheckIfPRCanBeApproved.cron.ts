@@ -32,6 +32,12 @@ import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 import { CodeReviewConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import {
+    approvalPolicyFromConfig,
+    evaluateApproval,
+    type ApprovalDecision,
+} from '@libs/code-review/domain/approval/approval-decision';
+import { PullRequestReviewState } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { ConfigLevel } from '@libs/core/infrastructure/config/types/general/pullRequestMessages.type';
 import {
@@ -342,12 +348,35 @@ export class CheckIfPRCanBeApprovedCronProvider {
                             return;
                         }
 
-                        const openPullRequests =
+                        const openPullRequestsWithSuggestions =
                             await this.pullRequestService.findPullRequestsWithDeliveredSuggestions(
                                 organizationId,
                                 automationExecutionsPRs,
                                 PullRequestState.OPENED,
                             );
+                        const hasLabelScope = !!(
+                            codeReviewConfig.configs?.approvalLabels?.length ||
+                            codeReviewConfig.repositories.some(
+                                (repo) =>
+                                    repo.configs?.approvalLabels?.length ||
+                                    repo.directories?.some(
+                                        (directory) =>
+                                            directory.configs?.approvalLabels
+                                                ?.length,
+                                    ),
+                            )
+                        );
+                        const noSuggestionPrs = hasLabelScope
+                            ? await this.pullRequestService.findPullRequestsWithoutDeliveredSuggestionsForApproval(
+                                  organizationId,
+                                  automationExecutionsPRs,
+                                  PullRequestState.OPENED,
+                              )
+                            : [];
+                        const openPullRequests = [
+                            ...(openPullRequestsWithSuggestions ?? []),
+                            ...noSuggestionPrs,
+                        ];
 
                         this.logger.log({
                             message: 'Open pull requests found',
@@ -505,9 +534,30 @@ export class CheckIfPRCanBeApprovedCronProvider {
         const lastAnalyzedCommitSha = this.getLastAnalyzedCommitSha(
             lastExecution?.dataExecution?.lastAnalyzedCommit,
         );
+        const policy = codeReviewConfig
+            ? approvalPolicyFromConfig(codeReviewConfig)
+            : undefined;
+        const policyActive = !!(
+            policy?.labels?.length ||
+            policy?.authors?.length ||
+            policy?.assessRisk ||
+            policy?.sensitivePaths?.length
+        );
+        let conditionalDecision: ApprovalDecision | undefined;
+        const allowNoComments =
+            !!policy?.labels?.length && (pr?.suggestions?.length ?? 0) === 0;
+        if (
+            allowNoComments &&
+            !['approve', 'out-of-scope'].includes(
+                lastExecution?.dataExecution?.approvalDecision?.kind,
+            )
+        ) {
+            return false;
+        }
+        let currentPullRequest = null;
 
-        if (lastAnalyzedCommitSha) {
-            const currentPullRequest =
+        if (lastAnalyzedCommitSha || policyActive) {
+            currentPullRequest =
                 await this.codeManagementService.getPullRequest(
                     {
                         organizationAndTeamData,
@@ -542,6 +592,54 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 });
 
                 return false;
+            }
+
+            if (policyActive) {
+                // A conditional approval must have a saved successful review
+                // and a live head. Do not infer either from a missing response.
+                if (
+                    !lastExecution ||
+                    !lastAnalyzedCommitSha ||
+                    !currentHeadSha ||
+                    (policy.labels?.length && !currentPullRequest?.labels)
+                ) {
+                    return false;
+                }
+                let changedPaths: string[] = [];
+                if (policy.sensitivePaths?.length) {
+                    const files =
+                        await this.codeManagementService.getFilesByPullRequestId(
+                            {
+                                ...codeManagementRequestData,
+                                headSha: currentHeadSha,
+                            },
+                            platformType,
+                        );
+                    if (!files) return false;
+                    changedPaths = files
+                        .map((file) => file.filename ?? file.path)
+                        .filter((path): path is string => !!path);
+                }
+                const decision = evaluateApproval({
+                    approvalActive: true,
+                    policy,
+                    author:
+                        currentPullRequest?.user?.login ??
+                        currentPullRequest?.user?.username,
+                    labels: currentPullRequest?.labels,
+                    changedPaths,
+                    reviewClean: true,
+                    risk: lastExecution.dataExecution?.approvalRisk,
+                    currentHeadSha,
+                });
+                conditionalDecision = decision;
+                if (decision.kind !== 'approve') {
+                    this.logger.log({
+                        message: `Holding cron approval for PR#${prNumber}: ${decision.reason}`,
+                        context: CheckIfPRCanBeApprovedCronProvider.name,
+                    });
+                    return false;
+                }
             }
         }
 
@@ -584,9 +682,13 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 );
             }
 
-            if (!reviewComments || reviewComments?.length < 1) {
+            if (
+                (!reviewComments || reviewComments.length < 1) &&
+                !allowNoComments
+            ) {
                 return false;
             }
+            reviewComments ??= [];
 
             if (pr?.suggestions && pr?.suggestions?.length > 0) {
                 const deliveredCommentIds = new Set(
@@ -664,7 +766,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 }
             }
 
-            if (!reviewComments || reviewComments?.length < 1) {
+            if (reviewComments.length < 1 && !allowNoComments) {
                 return false;
             }
 
@@ -712,6 +814,16 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     },
                 });
 
+                if (conditionalDecision) {
+                    const before =
+                        await this.codeManagementService.getReviewStatusByPullRequest(
+                            codeManagementRequestData,
+                        );
+                    if (before === PullRequestReviewState.APPROVED) {
+                        return false;
+                    }
+                }
+
                 await this.codeManagementService.checkIfPullRequestShouldBeApproved(
                     {
                         organizationAndTeamData,
@@ -723,6 +835,22 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     },
                     platformType,
                 );
+                if (conditionalDecision?.kind === 'approve') {
+                    const after =
+                        await this.codeManagementService.getReviewStatusByPullRequest(
+                            codeManagementRequestData,
+                        );
+                    if (after !== PullRequestReviewState.APPROVED) {
+                        return false;
+                    }
+                    await this.codeManagementService.createIssueComment(
+                        {
+                            ...codeManagementRequestData,
+                            body: `**Automatic approval:** ${conditionalDecision.reason}`,
+                        },
+                        platformType,
+                    );
+                }
                 return true;
             }
         } catch (error) {

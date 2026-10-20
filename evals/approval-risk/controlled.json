@@ -1,0 +1,20 @@
+[
+    {
+        "id": "eligible-clean",
+        "checks": "A clean PR in scope with a low-risk model assessment is eligible for approval.",
+        "expect": "approve",
+        "title": "Document a flag",
+        "labels": ["ready"],
+        "files": [{ "filename": "docs/flags.md", "status": "modified", "additions": 1, "deletions": 0, "patch": "@@ -1 +1 @@\n+Updated description" }],
+        "policy": { "approvalLabels": ["ready"], "approvalRiskActive": true }
+    },
+    {
+        "id": "sensitive-path-veto",
+        "checks": "A team-marked sensitive path holds approval even when the model is configured.",
+        "expect": "hold",
+        "title": "Change auth handler",
+        "labels": ["ready"],
+        "files": [{ "filename": "src/auth/session.ts", "status": "modified", "additions": 1, "deletions": 1, "patch": "@@ -1 +1 @@\n-old\n+new" }],
+        "policy": { "approvalLabels": ["ready"], "approvalRiskActive": true, "approvalSensitivePaths": ["src/auth/**"] }
+    }
+]

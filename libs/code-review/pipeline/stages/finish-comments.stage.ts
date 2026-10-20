@@ -63,6 +63,28 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
         super();
     }
 
+    private async postHoldReasonIfNeeded(
+        context: CodeReviewPipelineContext,
+        reviewFailed: boolean,
+        reviewHasPartialErrors: boolean,
+    ): Promise<void> {
+        if (
+            context.approvalDecision?.kind !== 'hold' ||
+            reviewFailed ||
+            reviewHasPartialErrors ||
+            (context.lineComments?.length ?? 0) > 0 ||
+            (context.prLevelCommentResults?.length ?? 0) > 0
+        ) {
+            return;
+        }
+        await this.commentManagerService.postApprovalHoldReason(
+            context.organizationAndTeamData,
+            context.pullRequest.number,
+            context.repository,
+            context.approvalDecision.reason,
+        );
+    }
+
     /**
      * The sticky comment carrying the reasoning behind the change.
      *
@@ -361,6 +383,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 context.linkedRepositoriesMetadata,
                 context.reviewWarnings,
                 !!context.onlyCustomAgent,
+                context.approvalDecision,
             );
             return context;
         }
@@ -369,6 +392,11 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
             endReviewMessage.status === PullRequestMessageStatus.OFF ||
             endReviewMessage.status === PullRequestMessageStatus.INACTIVE
         ) {
+            await this.postHoldReasonIfNeeded(
+                context,
+                reviewFailed,
+                reviewHasPartialErrors,
+            );
             return context;
         }
 
@@ -377,6 +405,11 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 PullRequestMessageStatus.ONLY_WHEN_OPENED &&
             context.lastExecution
         ) {
+            await this.postHoldReasonIfNeeded(
+                context,
+                reviewFailed,
+                reviewHasPartialErrors,
+            );
             return context;
         }
 
@@ -433,6 +466,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 context.linkedRepositoriesMetadata,
                 context.reviewWarnings,
                 !!context.onlyCustomAgent,
+                context.approvalDecision,
             );
             return context;
         }
@@ -471,6 +505,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 reviewHasPartialErrors,
                 reviewErrorCustomMessage,
                 context.reviewWarnings,
+                context.approvalDecision,
             );
         }
 

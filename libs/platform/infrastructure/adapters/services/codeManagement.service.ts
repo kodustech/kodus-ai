@@ -1398,6 +1398,7 @@ export class CodeManagementService implements ICodeManagementService {
                 endDate: string;
                 number?: number;
                 branch?: string;
+                dateField?: 'created' | 'updated';
             };
         },
         type?: PlatformType,

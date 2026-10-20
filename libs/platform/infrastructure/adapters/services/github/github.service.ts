@@ -576,7 +576,9 @@ export class GithubService
                 // the installation token is a live credential and must not be
                 // persisted in clear. Every
                 // reader already decrypt()s authToken.
-                authToken: installationToken ? encrypt(installationToken) : null,
+                authToken: installationToken
+                    ? encrypt(installationToken)
+                    : null,
                 installationId:
                     // @ts-expect-error property not found in type
                     installationAuthentication?.installationId || null,
@@ -3523,7 +3525,9 @@ export class GithubService
                 // the installation token is a live credential and must not be
                 // persisted in clear. Every
                 // reader already decrypt()s authToken.
-                authToken: installationToken ? encrypt(installationToken) : null,
+                authToken: installationToken
+                    ? encrypt(installationToken)
+                    : null,
                 installationId:
                     // @ts-expect-error property not found in type
                     installationAuthentication?.installationId || null,
@@ -4287,9 +4291,10 @@ export class GithubService
             startLine: lineComment?.start_line,
             endLine: lineComment?.line,
             prompt: resolveAgentPrompt(lineComment?.suggestion),
-            improvedCode: this.dedentCode(lineComment?.body?.improvedCode || ''),
-            language:
-                lineComment?.suggestion?.language || repository?.language,
+            improvedCode: this.dedentCode(
+                lineComment?.body?.improvedCode || '',
+            ),
+            language: lineComment?.suggestion?.language || repository?.language,
         });
 
         const experimentalWarning = isCommittableSuggestion
@@ -6966,6 +6971,7 @@ This is an experimental feature that generates committable changes. Review the d
         filters?: {
             startDate: string;
             endDate: string;
+            dateField?: 'created' | 'updated';
         };
     }): Promise<PullRequest[]> {
         try {
@@ -6984,7 +6990,9 @@ This is an experimental feature that generates committable changes. Review the d
                 ? new Date(filters.endDate).getTime()
                 : null;
 
-            // The list comes back sorted by created_at desc, so once we hit a PR
+            const dateField =
+                filters?.dateField === 'updated' ? 'updated_at' : 'created_at';
+            // The list comes back sorted by the selected date desc, so once we hit a PR
             // older than startDate every remaining page is older too — stop
             // paginating instead of pulling the whole repo history into memory
             // (dozens of useless pages on large repos) just to filter by date.
@@ -6994,14 +7002,17 @@ This is an experimental feature that generates committable changes. Review the d
                     owner: githubAuthDetail.org,
                     repo: repository.name,
                     state: 'all',
-                    sort: 'created',
+                    sort:
+                        filters?.dateField === 'updated'
+                            ? 'updated'
+                            : 'created',
                     direction: 'desc',
                     per_page: 100,
                 },
                 (response, done) => {
                     const inWindow: typeof response.data = [];
                     for (const pr of response.data) {
-                        const prTime = new Date(pr.created_at).getTime();
+                        const prTime = new Date(pr[dateField]).getTime();
                         if (startTime !== null && prTime < startTime) {
                             done();
                             break;
@@ -8137,6 +8148,11 @@ This is an experimental feature that generates committable changes. Review the d
             organizationId: organizationAndTeamData?.organizationId ?? '',
             title: pullRequest?.title ?? '',
             body: pullRequest?.body ?? '',
+            labels: (pullRequest?.labels ?? [])
+                .map((label) =>
+                    typeof label === 'string' ? label : label?.name,
+                )
+                .filter((label): label is string => !!label),
             state:
                 this._prStateMap.get(
                     pullRequest?.state as RestEndpointMethodTypes['pulls']['get']['response']['data']['state'],

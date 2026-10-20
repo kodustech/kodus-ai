@@ -130,6 +130,34 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
         expect(notificationService.emit).not.toHaveBeenCalled();
     });
 
+    it('holds a clean PR when the approval policy judged it risky', async () => {
+        await stage.execute(
+            makeContext({
+                approvalDecision: {
+                    kind: 'hold',
+                    reason: 'Authentication change needs a human.',
+                },
+            }),
+        );
+
+        expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
+        expect(notificationService.emit).not.toHaveBeenCalled();
+    });
+
+    it('holds when a configured policy has no decision', async () => {
+        await stage.execute(
+            makeContext({
+                codeReviewConfig: {
+                    pullRequestApprovalActive: true,
+                    isRequestChangesActive: false,
+                    approvalRiskActive: true,
+                } as any,
+            }),
+        );
+
+        expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
+    });
+
     it('does not emit when PR is already in APPROVED state', async () => {
         codeManagement.getReviewStatusByPullRequest.mockResolvedValueOnce(
             PullRequestReviewState.APPROVED,

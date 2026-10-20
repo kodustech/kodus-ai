@@ -12,6 +12,8 @@ import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
 // SeverityLevel no longer used — request changes is driven by level classification
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { SUMMARY_GENERATION_FAILED_REASON } from './finish-comments.stage';
+import type { ApprovalDecision } from '@libs/code-review/domain/approval/approval-decision';
+import { approvalPolicyFromConfig } from '@libs/code-review/domain/approval/approval-decision';
 
 @Injectable()
 export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -84,14 +86,23 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
         // `@kody -v <agent>` runs one custom agent and none of the built-in
         // ones (#2172): finding nothing there says nothing about the PR as a
         // whole, so it never approves.
+        const approvalPolicy = approvalPolicyFromConfig(codeReviewConfig);
+        const requiresConditionalDecision = !!(
+            approvalPolicy.labels?.length ||
+            approvalPolicy.authors?.length ||
+            approvalPolicy.assessRisk ||
+            approvalPolicy.sensitivePaths?.length
+        );
         const approved = await this.approvePullRequest(
             codeReviewConfig.pullRequestApprovalActive &&
                 !context.onlyCustomAgent,
-            lineComments.length,
+            lineComments.length + (context.prLevelCommentResults?.length ?? 0),
             organizationAndTeamData,
             pullRequest.number,
             repository,
             reviewHasFailures,
+            context.approvalDecision,
+            requiresConditionalDecision,
         );
 
         if (approved) {
@@ -170,9 +181,27 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
         prNumber: number,
         repository: { id: string; name: string },
         reviewHasFailures: boolean,
+        approvalDecision?: ApprovalDecision,
+        requiresConditionalDecision = false,
     ): Promise<boolean> {
         try {
             if (!pullRequestApprovalActive || lineCommentsLength > 0) {
+                return false;
+            }
+
+            if (requiresConditionalDecision && !approvalDecision) {
+                this.logger.warn({
+                    message: `Holding auto-approval for PR#${prNumber}: conditional decision is unavailable`,
+                    context: this.stageName,
+                });
+                return false;
+            }
+
+            if (approvalDecision && approvalDecision.kind !== 'approve') {
+                this.logger.log({
+                    message: `Holding auto-approval for PR#${prNumber}: ${approvalDecision.reason}`,
+                    context: this.stageName,
+                });
                 return false;
             }
 

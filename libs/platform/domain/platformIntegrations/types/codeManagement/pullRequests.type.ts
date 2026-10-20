@@ -6,6 +6,8 @@ export type PullRequest = {
     number: number;
     pull_number: number; // TODO: remove, legacy, use number
     body: string;
+    /** Live provider labels; absent when the host does not support them. */
+    labels?: string[];
     title: string;
     message: string;
     state: PullRequestState;

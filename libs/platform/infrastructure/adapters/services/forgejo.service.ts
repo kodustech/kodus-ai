@@ -925,6 +925,9 @@ export class ForgejoService implements Omit<
             organizationId: organizationAndTeamData?.organizationId ?? '',
             title: pr.title ?? '',
             body: pr.body ?? '',
+            labels: ((pr as { labels?: Array<{ name?: string }> }).labels ?? [])
+                .map((label) => label.name)
+                .filter((label): label is string => !!label),
             state,
             prURL: pr.html_url ?? '',
             repository: repositoryFullName,
@@ -3184,7 +3187,6 @@ export class ForgejoService implements Omit<
         const severityShield = lineComment?.suggestion
             ? getSeverityLevelShield(lineComment.suggestion.severity)
             : '';
-
 
         const suggestionContent = `${formatTitleLine(lineComment?.suggestion?.oneSentenceSummary)}${lineComment?.body?.suggestionContent || ''}`;
         const actionStatement = lineComment?.body?.actionStatement

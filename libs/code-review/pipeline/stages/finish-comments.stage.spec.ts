@@ -17,6 +17,7 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
                 .mockResolvedValue('rendered body'),
             updateOverallComment: jest.fn().mockResolvedValue(undefined),
             createComment: jest.fn().mockResolvedValue(undefined),
+            postApprovalHoldReason: jest.fn().mockResolvedValue(undefined),
         } as any;
         const stage = new UpdateCommentsAndGenerateSummaryStage(
             commentManagerService,
@@ -122,7 +123,7 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
             commentManagerService.updateOverallComment,
         ).toHaveBeenCalledTimes(1);
         const args = commentManagerService.updateOverallComment.mock.calls[0];
-        expect(args[args.length - 2]).toEqual(reviewWarnings);
+        expect(args[15]).toEqual(reviewWarnings);
     });
 
     // The stage forwards the warnings from THREE call sites, one per message
@@ -154,7 +155,7 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
         await (stage as any).executeStage(context);
 
         const args = commentManagerService.updateOverallComment.mock.calls[0];
-        expect(args[args.length - 2]).toEqual(reviewWarnings);
+        expect(args[15]).toEqual(reviewWarnings);
     });
 
     it('forwards context.reviewWarnings on the createComment branch (KRC-16)', async () => {
@@ -188,7 +189,46 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
 
         expect(commentManagerService.createComment).toHaveBeenCalledTimes(1);
         const args = commentManagerService.createComment.mock.calls[0];
-        expect(args[args.length - 1]).toEqual(reviewWarnings);
+        expect(args[15]).toEqual(reviewWarnings);
+    });
+
+    it('forwards the human-approval reason to the end-review comment', async () => {
+        const { stage, commentManagerService } = makeStage();
+        const approvalDecision = {
+            kind: 'hold',
+            reason: 'Authentication changes need a person.',
+        };
+        await (stage as any).executeStage(baseContext({ approvalDecision }));
+
+        expect(
+            commentManagerService.updateOverallComment.mock.calls[0][17],
+        ).toEqual(approvalDecision);
+    });
+
+    it('posts a short hold reason when the end-review message is off', async () => {
+        const { stage, commentManagerService } = makeStage();
+        const context = baseContext({
+            lineComments: [],
+            approvalDecision: {
+                kind: 'hold',
+                reason: 'Authentication changes need a person.',
+            },
+            pullRequestMessagesConfig: {
+                endReviewMessage: {
+                    status: PullRequestMessageStatus.OFF,
+                },
+            },
+        });
+        await (stage as any).executeStage(context);
+
+        expect(
+            commentManagerService.postApprovalHoldReason,
+        ).toHaveBeenCalledWith(
+            context.organizationAndTeamData,
+            7,
+            context.repository,
+            'Authentication changes need a person.',
+        );
     });
 });
 
@@ -424,6 +464,7 @@ describe('UpdateCommentsAndGenerateSummaryStage - frozen-context error recording
         } as any;
         const stage = new UpdateCommentsAndGenerateSummaryStage(
             commentManagerService,
+            {} as any,
             {} as any,
         );
 

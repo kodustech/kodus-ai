@@ -2422,7 +2422,9 @@ export class GitlabService implements Omit<
             startLine: lineComment?.start_line,
             endLine: lineComment?.line,
             prompt: resolveAgentPrompt(lineComment?.suggestion),
-            improvedCode: this.dedentCode(lineComment?.body?.improvedCode || ''),
+            improvedCode: this.dedentCode(
+                lineComment?.body?.improvedCode || '',
+            ),
             language: lineComment?.suggestion?.language || repository?.language,
         });
 
@@ -3095,7 +3097,8 @@ export class GitlabService implements Omit<
         const isExecutable = (hook) =>
             (hook?.alert_status ?? 'executable') === 'executable';
         const hasEvents = (hook) =>
-            hook?.note_events !== false && hook?.merge_requests_events !== false;
+            hook?.note_events !== false &&
+            hook?.merge_requests_events !== false;
 
         // Executable first: GitLab never calls a disabled hook, while missing
         // events on an executable one are fixed by the edit below.
@@ -3108,10 +3111,15 @@ export class GitlabService implements Omit<
 
         if (!hasEvents(kept)) {
             try {
-                await gitlabAPI.ProjectHooks.edit(projectId, kept.id, webhookUrl, {
-                    noteEvents: true,
-                    mergeRequestsEvents: true,
-                });
+                await gitlabAPI.ProjectHooks.edit(
+                    projectId,
+                    kept.id,
+                    webhookUrl,
+                    {
+                        noteEvents: true,
+                        mergeRequestsEvents: true,
+                    },
+                );
             } catch (error) {
                 this.logger.warn({
                     message: `Could not enable events on Kodus webhook ${kept.id} in GitLab project ${projectId}`,
@@ -4531,6 +4539,7 @@ export class GitlabService implements Omit<
         filters?: {
             startDate: string;
             endDate: string;
+            dateField?: 'created' | 'updated';
         };
     }): Promise<any[]> {
         try {
@@ -4548,8 +4557,15 @@ export class GitlabService implements Omit<
 
             const mergeRequests = await gitlabAPI.MergeRequests.all({
                 projectId: repository.id,
-                createdAfter: filters?.startDate,
-                createdBefore: filters?.endDate,
+                ...(filters?.dateField === 'updated'
+                    ? {
+                          updatedAfter: filters.startDate,
+                          updatedBefore: filters.endDate,
+                      }
+                    : {
+                          createdAfter: filters?.startDate,
+                          createdBefore: filters?.endDate,
+                      }),
             });
 
             return mergeRequests.map(
@@ -4558,6 +4574,7 @@ export class GitlabService implements Omit<
                     author_id: pr.author?.id.toString(),
                     author_name: pr.author?.name,
                     author_created_at: pr.created_at,
+                    updated_at: pr.updated_at,
                     repository: repository.name,
                     repositoryId: repository.id,
                     message: pr.description,
@@ -5462,6 +5479,9 @@ export class GitlabService implements Omit<
             organizationId: organizationAndTeamData?.organizationId ?? '',
             title: mergeRequest?.title ?? '',
             body: mergeRequest?.description ?? '',
+            labels: (mergeRequest?.labels ?? []).map((label) =>
+                typeof label === 'string' ? label : label.name,
+            ),
             state:
                 this._prStateMap.get(
                     mergeRequest?.state as GitlabPullRequestState,

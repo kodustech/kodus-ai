@@ -47,7 +47,11 @@ const STEP_TIMEOUT_MS = 3 * 60 * 1000;
 function run(cmd, args, env) {
     return new Promise((resolve) => {
         const started = Date.now();
-        const child = spawn(cmd, args, { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
+        const child = spawn(cmd, args, {
+            cwd: ROOT,
+            env,
+            stdio: ['ignore', 'pipe', 'pipe'],
+        });
         let output = '';
         let timedOut = false;
         const timer = setTimeout(() => {
@@ -69,7 +73,9 @@ function run(cmd, args, env) {
 
 function prWorkflowPaths() {
     const yaml = require('js-yaml');
-    const workflow = yaml.load(fs.readFileSync(path.join(ROOT, PR_WORKFLOW), 'utf8'));
+    const workflow = yaml.load(
+        fs.readFileSync(path.join(ROOT, PR_WORKFLOW), 'utf8'),
+    );
     return workflow?.on?.pull_request?.paths || [];
 }
 
@@ -89,23 +95,40 @@ function resultProblem(step, file) {
     const result = readJson(file);
     if (!result) return 'wrote no result';
     const tokens = step.result === 'finder' ? result.usage : result.tokens;
-    const problems = step.result === 'shared' ? resultProblems(result) : tokensProblems(tokens);
-    if (!problems.length && step.model && !(tokens.calls >= 1)) problems.push('recorded no model call');
-    return problems.length ? `result: ${problems.slice(0, 3).join('; ')}` : null;
+    const problems =
+        step.result === 'shared'
+            ? resultProblems(result)
+            : tokensProblems(tokens);
+    if (!problems.length && step.model && !(tokens.calls >= 1))
+        problems.push('recorded no model call');
+    return problems.length
+        ? `result: ${problems.slice(0, 3).join('; ')}`
+        : null;
 }
 
 async function main() {
-    const engineFilesOut = (process.argv.find((a) => a.startsWith('--engine-files=')) || '').split('=')[1];
-    const kodyRulesFilesOut = (process.argv.find((a) => a.startsWith('--kody-rules-files=')) || '').split('=')[1];
-    const evalFilesDir = (process.argv.find((a) => a.startsWith('--eval-files-dir=')) || '').split('=')[1];
-    const resultsOut = (process.argv.find((a) => a.startsWith('--results=')) || '').split('=')[1];
+    const engineFilesOut = (
+        process.argv.find((a) => a.startsWith('--engine-files=')) || ''
+    ).split('=')[1];
+    const kodyRulesFilesOut = (
+        process.argv.find((a) => a.startsWith('--kody-rules-files=')) || ''
+    ).split('=')[1];
+    const evalFilesDir = (
+        process.argv.find((a) => a.startsWith('--eval-files-dir=')) || ''
+    ).split('=')[1];
+    const resultsOut = (
+        process.argv.find((a) => a.startsWith('--results=')) || ''
+    ).split('=')[1];
     const server = await startFakeLlmServer();
     const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'eval-wiring-'));
     const finderOut = path.join(scratch, 'finder-recall-eval-fake.json');
     const managedOut = path.join(scratch, 'finder-recall-managed.json');
     const traceDir = path.join(scratch, 'trace');
     const reviewCasesFile = path.join(scratch, 'review-cases.json');
-    fs.writeFileSync(reviewCasesFile, JSON.stringify({ cases: require('./review-rounds/cases').cases }));
+    fs.writeFileSync(
+        reviewCasesFile,
+        JSON.stringify({ cases: require('./review-rounds/cases').cases }),
+    );
 
     const env = {
         ...process.env,
@@ -122,7 +145,8 @@ async function main() {
         JUDGE_API_KEY: 'fake',
         RECALL_DUMP: '',
         TRACE_LOADED_DIR: traceDir,
-        NODE_OPTIONS: `${process.env.NODE_OPTIONS || ''} --require ${path.join(__dirname, 'shared', 'trace-loaded.js')}`.trim(),
+        NODE_OPTIONS:
+            `${process.env.NODE_OPTIONS || ''} --require ${path.join(__dirname, 'shared', 'trace-loaded.js')}`.trim(),
     };
 
     // `model: true` steps must reach the scripted model at least once — a step
@@ -130,40 +154,132 @@ async function main() {
     // `result` steps write their result (--output, added when not given), and
     // it must carry what resultProblem() asks.
     const steps = [
-        { name: 'preflight', args: ['evals/engine-gate.js', '--profile=harness'] },
+        {
+            name: 'preflight',
+            args: ['evals/engine-gate.js', '--profile=harness'],
+        },
         // Replays recorded model output; only prose recovery reaches the model.
-        { name: 'parse', result: 'shared', model: true, args: ['evals/parse/run.js', '--model=eval-fake', '--gate'] },
+        {
+            name: 'parse',
+            result: 'shared',
+            model: true,
+            args: ['evals/parse/run.js', '--model=eval-fake', '--gate'],
+        },
         { name: 'review-chain', args: ['evals/review-chain/run.js', '--gate'] },
-        { name: 'shape-invariance', args: ['evals/review-chain/shape-invariance.js', '--gate'] },
-        { name: 'verifier-verdict', args: ['evals/verifier-verdict/run.js', '--gate'] },
+        {
+            name: 'shape-invariance',
+            args: ['evals/review-chain/shape-invariance.js', '--gate'],
+        },
+        {
+            name: 'verifier-verdict',
+            args: ['evals/verifier-verdict/run.js', '--gate'],
+        },
         // The scripted model answers nothing usable: this measures the local fallback.
-        { name: 'format', result: 'shared', model: true, args: ['evals/format/run.js', '--model=eval-fake', '--gate'] },
+        {
+            name: 'format',
+            result: 'shared',
+            model: true,
+            args: ['evals/format/run.js', '--model=eval-fake', '--gate'],
+        },
         // The stage, its MCP adapter over HTTP and production's Kodus MCP server.
-        { name: 'business-logic', result: 'shared', model: true, args: ['evals/business-logic/run.js', '--model=eval-fake', '--gate'] },
+        {
+            name: 'business-logic',
+            result: 'shared',
+            model: true,
+            args: [
+                'evals/business-logic/run.js',
+                '--model=eval-fake',
+                '--gate',
+            ],
+        },
+        {
+            name: 'approval-risk',
+            result: 'shared',
+            model: true,
+            args: [
+                'evals/approval-risk/run.js',
+                '--model=eval-fake',
+                '--set=controlled',
+                '--gate',
+            ],
+        },
         // The cases bring their repository: the scripted model reads it through the local sandbox.
-        { name: 'memories', result: 'shared', model: true, args: ['evals/memories/run.js', '--model=eval-fake', '--gate'] },
+        {
+            name: 'memories',
+            result: 'shared',
+            model: true,
+            args: ['evals/memories/run.js', '--model=eval-fake', '--gate'],
+        },
         // Each team's custom agents through production's stage on a repository
         // written for it: the gate holds what the review hands every agent (its
         // globs, an ignored file a glob names, a disabled agent), no model needed.
-        { name: 'custom-agents', result: 'shared', model: true, args: ['evals/custom-agents/run.js', '--model=eval-fake', '--gate'] },
+        {
+            name: 'custom-agents',
+            result: 'shared',
+            model: true,
+            args: ['evals/custom-agents/run.js', '--model=eval-fake', '--gate'],
+        },
         // The steps after the agents (evals/funnel), each through its production
         // method on its control pair: a repository written for it, so no GitHub
         // fetch. Anchoring calls no model. Each name is written out: the specs
         // read them.
-        { name: 'funnel-anchoring', result: 'shared', args: ['evals/funnel/anchoring/run.js', '--gate', '--controls'] },
-        { name: 'funnel-dedup', result: 'shared', model: true, args: ['evals/funnel/dedup/run.js', '--model=eval-fake', '--gate', '--controls'] },
-        { name: 'funnel-severity', result: 'shared', model: true, args: ['evals/funnel/severity/run.js', '--model=eval-fake', '--gate', '--controls'] },
-        { name: 'funnel-verify', result: 'shared', model: true, args: ['evals/funnel/verify/run.js', '--model=eval-fake', '--gate', '--controls'] },
+        {
+            name: 'funnel-anchoring',
+            result: 'shared',
+            args: ['evals/funnel/anchoring/run.js', '--gate', '--controls'],
+        },
+        {
+            name: 'funnel-dedup',
+            result: 'shared',
+            model: true,
+            args: [
+                'evals/funnel/dedup/run.js',
+                '--model=eval-fake',
+                '--gate',
+                '--controls',
+            ],
+        },
+        {
+            name: 'funnel-severity',
+            result: 'shared',
+            model: true,
+            args: [
+                'evals/funnel/severity/run.js',
+                '--model=eval-fake',
+                '--gate',
+                '--controls',
+            ],
+        },
+        {
+            name: 'funnel-verify',
+            result: 'shared',
+            model: true,
+            args: [
+                'evals/funnel/verify/run.js',
+                '--model=eval-fake',
+                '--gate',
+                '--controls',
+            ],
+        },
         {
             name: 'finder-recall',
             model: true,
             result: 'finder',
-            args: ['evals/investigation/run-recall.js', '--model=eval-fake', `--cases=${FINDER_CASE}`, '--concurrency=1', `--output=${finderOut}`],
+            args: [
+                'evals/investigation/run-recall.js',
+                '--model=eval-fake',
+                `--cases=${FINDER_CASE}`,
+                '--concurrency=1',
+                `--output=${finderOut}`,
+            ],
             // The scripted model submits one finding; it must survive to scoring,
             // otherwise a parse/verify break that drops everything would pass.
             check: () => {
-                const findings = readJson(finderOut)?.rows?.[0]?.metadata?.findings;
-                return findings >= 1 ? null : `expected the scripted finding to reach scoring, got findings=${findings}`;
+                const findings =
+                    readJson(finderOut)?.rows?.[0]?.metadata?.findings;
+                return findings >= 1
+                    ? null
+                    : `expected the scripted finding to reach scoring, got findings=${findings}`;
             },
         },
         // An org with no model config: the same review on Kodus's default model and
@@ -175,48 +291,152 @@ async function main() {
             model: true,
             result: 'finder',
             // Production's own variables for the managed default: Kodus's key and Fireworks's endpoint.
-            env: { API_FIREWORKS_API_KEY: 'fake', API_FIREWORKS_BASE_URL: server.url },
-            args: ['evals/investigation/run-recall.js', '--model=kodus-managed', `--cases=${FINDER_CASE}`, '--concurrency=1', `--output=${managedOut}`],
+            env: {
+                API_FIREWORKS_API_KEY: 'fake',
+                API_FIREWORKS_BASE_URL: server.url,
+            },
+            args: [
+                'evals/investigation/run-recall.js',
+                '--model=kodus-managed',
+                `--cases=${FINDER_CASE}`,
+                '--concurrency=1',
+                `--output=${managedOut}`,
+            ],
             check: ({ models }) => {
-                const managed = Object.keys(models).filter((m) => /^accounts\/fireworks\/models\//.test(m));
-                if (!managed.length) return `no call reached Kodus's default model (asked for: ${Object.keys(models).join(', ') || 'nothing'})`;
-                const findings = readJson(managedOut)?.rows?.[0]?.metadata?.findings;
-                return findings >= 1 ? null : `expected the scripted finding to reach scoring on the managed route, got findings=${findings}`;
+                const managed = Object.keys(models).filter((m) =>
+                    /^accounts\/fireworks\/models\//.test(m),
+                );
+                if (!managed.length)
+                    return `no call reached Kodus's default model (asked for: ${Object.keys(models).join(', ') || 'nothing'})`;
+                const findings =
+                    readJson(managedOut)?.rows?.[0]?.metadata?.findings;
+                return findings >= 1
+                    ? null
+                    : `expected the scripted finding to reach scoring on the managed route, got findings=${findings}`;
             },
         },
         // Production's review of one merged PR (a real clone of its head; the
         // smallest repository). The scripted model's compile answer scopes the
         // rule to no file, so this proves the compile, sandbox, fetch and stage
         // path; the judge is reached on real models (nightly, Friday).
-        { name: 'kody-rules', result: 'shared', model: true, args: ['evals/kody-rules/real-agent.js', '--dataset=github-cases', '--model=eval-fake', '--runs=1', '--cases=typeorm/typeorm#12421::no-any-type'] },
-        { name: 'pr-summary', result: 'shared', model: true, args: ['evals/pr-summary/run.js', '--model=eval-fake', '--gate'] },
-        { name: 'reply-addressing', result: 'shared', model: true, args: ['evals/reply-addressing/run.js', '--model=eval-fake', '--limit=2'] },
-        { name: 'conversation', result: 'shared', model: true, args: ['evals/conversation/run.js', '--model=eval-fake', '--gate'] },
-        { name: 'thread-rule', result: 'shared', model: true, args: ['evals/thread-actions/run.js', '--model=eval-fake', '--kind=rule', '--gate'] },
-        { name: 'thread-memory', result: 'shared', model: true, args: ['evals/thread-actions/run.js', '--model=eval-fake', '--kind=memory', '--gate'] },
-        { name: 'review-rounds', result: 'shared', model: true, args: ['evals/review-rounds/run.js', '--model=eval-fake', `--cases-file=${reviewCasesFile}`, '--case=R2,K1', '--reps=1', `--output=${path.join(scratch, 'review-rounds.json')}`] },
-        { name: 'review-lifecycle', result: 'own', model: true, args: ['evals/review-rounds/lifecycle.js', '--model=eval-fake', '--reps=1', '--wiring-smoke', `--output=${path.join(scratch, 'review-lifecycle.json')}`] },
+        {
+            name: 'kody-rules',
+            result: 'shared',
+            model: true,
+            args: [
+                'evals/kody-rules/real-agent.js',
+                '--dataset=github-cases',
+                '--model=eval-fake',
+                '--runs=1',
+                '--cases=typeorm/typeorm#12421::no-any-type',
+            ],
+        },
+        {
+            name: 'pr-summary',
+            result: 'shared',
+            model: true,
+            args: ['evals/pr-summary/run.js', '--model=eval-fake', '--gate'],
+        },
+        {
+            name: 'reply-addressing',
+            result: 'shared',
+            model: true,
+            args: [
+                'evals/reply-addressing/run.js',
+                '--model=eval-fake',
+                '--limit=2',
+            ],
+        },
+        {
+            name: 'conversation',
+            result: 'shared',
+            model: true,
+            args: ['evals/conversation/run.js', '--model=eval-fake', '--gate'],
+        },
+        {
+            name: 'thread-rule',
+            result: 'shared',
+            model: true,
+            args: [
+                'evals/thread-actions/run.js',
+                '--model=eval-fake',
+                '--kind=rule',
+                '--gate',
+            ],
+        },
+        {
+            name: 'thread-memory',
+            result: 'shared',
+            model: true,
+            args: [
+                'evals/thread-actions/run.js',
+                '--model=eval-fake',
+                '--kind=memory',
+                '--gate',
+            ],
+        },
+        {
+            name: 'review-rounds',
+            result: 'shared',
+            model: true,
+            args: [
+                'evals/review-rounds/run.js',
+                '--model=eval-fake',
+                `--cases-file=${reviewCasesFile}`,
+                '--case=R2,K1',
+                '--reps=1',
+                `--output=${path.join(scratch, 'review-rounds.json')}`,
+            ],
+        },
+        {
+            name: 'review-lifecycle',
+            result: 'own',
+            model: true,
+            args: [
+                'evals/review-rounds/lifecycle.js',
+                '--model=eval-fake',
+                '--reps=1',
+                '--wiring-smoke',
+                `--output=${path.join(scratch, 'review-lifecycle.json')}`,
+            ],
+        },
     ];
 
     const results = [];
     for (const step of steps) {
         const given = step.args.find((a) => a.startsWith('--output='));
-        const resultFile = given ? given.slice('--output='.length) : path.join(scratch, `${step.name}-result.json`);
-        const args = step.result && !given ? [...step.args, `--output=${resultFile}`] : step.args;
+        const resultFile = given
+            ? given.slice('--output='.length)
+            : path.join(scratch, `${step.name}-result.json`);
+        const args =
+            step.result && !given
+                ? [...step.args, `--output=${resultFile}`]
+                : step.args;
         const before = server.stats.requests;
         const modelsBefore = { ...server.stats.byModel };
         // eslint-disable-next-line no-await-in-loop
-        const { code, timedOut, output, ms } = await run(process.execPath, args, { ...env, ...(step.env || {}), TRACE_LOADED_LABEL: step.name });
+        const { code, timedOut, output, ms } = await run(
+            process.execPath,
+            args,
+            { ...env, ...(step.env || {}), TRACE_LOADED_LABEL: step.name },
+        );
         const calls = server.stats.requests - before;
-        const models = Object.fromEntries(Object.entries(server.stats.byModel).map(([m, n]) => [m, n - (modelsBefore[m] || 0)]).filter(([, n]) => n > 0));
+        const models = Object.fromEntries(
+            Object.entries(server.stats.byModel)
+                .map(([m, n]) => [m, n - (modelsBefore[m] || 0)])
+                .filter(([, n]) => n > 0),
+        );
         let problem = null;
-        if (timedOut) problem = `did not exit within ${STEP_TIMEOUT_MS / 60000} min`;
+        if (timedOut)
+            problem = `did not exit within ${STEP_TIMEOUT_MS / 60000} min`;
         else if (code !== 0) problem = `exit ${code}`;
         else if (step.model && calls === 0) problem = 'never reached the model';
         else if (step.check) problem = step.check({ models });
         if (!problem && step.result) problem = resultProblem(step, resultFile);
         results.push({ step, problem, calls, ms, output });
-        console.log(`${problem ? '❌' : '✅'} ${step.name.padEnd(17)} ${String(Math.round(ms / 1000)).padStart(3)}s${step.model ? `  model calls=${calls}` : ''}${problem ? `  — ${problem}` : ''}`);
+        console.log(
+            `${problem ? '❌' : '✅'} ${step.name.padEnd(17)} ${String(Math.round(ms / 1000)).padStart(3)}s${step.model ? `  model calls=${calls}` : ''}${problem ? `  — ${problem}` : ''}`,
+        );
     }
 
     await server.close();
@@ -225,39 +445,74 @@ async function main() {
     // lacks its own runner was not recorded properly; trusting it would narrow
     // the filter check and let the nightly skip real changes.
     const loaded = fs.existsSync(traceDir) ? readTrace(traceDir) : [];
-    const untraced = steps.filter((step) => !(fs.existsSync(traceDir) && readTrace(traceDir, step.name).includes(step.args[0])));
+    const untraced = steps.filter(
+        (step) =>
+            !(
+                fs.existsSync(traceDir) &&
+                readTrace(traceDir, step.name).includes(step.args[0])
+            ),
+    );
     const outside = uncovered(loaded, prWorkflowPaths());
     const coverageProblem = untraced.length
         ? `incomplete trace for ${untraced.map((step) => step.name).join(', ')} — its runner is missing from what it loaded`
         : outside.length
           ? `${outside.length} loaded file(s) outside the paths filter of ${PR_WORKFLOW}, e.g. ${outside.slice(0, 5).join(', ')}`
           : null;
-    console.log(`${coverageProblem ? '❌' : '✅'} ${'pr paths filter'.padEnd(17)} ${loaded.length} repo files loaded${coverageProblem ? `  — ${coverageProblem}` : ', all covered'}`);
+    console.log(
+        `${coverageProblem ? '❌' : '✅'} ${'pr paths filter'.padEnd(17)} ${loaded.length} repo files loaded${coverageProblem ? `  — ${coverageProblem}` : ', all covered'}`,
+    );
 
     if (engineFilesOut) {
-        const finderFiles = fs.existsSync(traceDir) ? readTrace(traceDir, 'finder-recall') : [];
+        const finderFiles = fs.existsSync(traceDir)
+            ? readTrace(traceDir, 'finder-recall')
+            : [];
         fs.writeFileSync(engineFilesOut, `${finderFiles.join('\n')}\n`);
-        console.log(`   engine files for the nightly: ${finderFiles.length} → ${engineFilesOut}`);
+        console.log(
+            `   engine files for the nightly: ${finderFiles.length} → ${engineFilesOut}`,
+        );
     }
     if (evalFilesDir) {
         fs.mkdirSync(evalFilesDir, { recursive: true });
         for (const step of steps) {
-            const files = fs.existsSync(traceDir) ? readTrace(traceDir, step.name) : [];
-            fs.writeFileSync(path.join(evalFilesDir, `${step.name}.txt`), `${files.join('\n')}\n`);
+            const files = fs.existsSync(traceDir)
+                ? readTrace(traceDir, step.name)
+                : [];
+            fs.writeFileSync(
+                path.join(evalFilesDir, `${step.name}.txt`),
+                `${files.join('\n')}\n`,
+            );
         }
-        console.log(`   files per step for the nightly: ${steps.length} lists → ${evalFilesDir}`);
+        console.log(
+            `   files per step for the nightly: ${steps.length} lists → ${evalFilesDir}`,
+        );
     }
     if (kodyRulesFilesOut) {
-        const kodyRulesFiles = fs.existsSync(traceDir) ? readTrace(traceDir, 'kody-rules') : [];
+        const kodyRulesFiles = fs.existsSync(traceDir)
+            ? readTrace(traceDir, 'kody-rules')
+            : [];
         fs.writeFileSync(kodyRulesFilesOut, `${kodyRulesFiles.join('\n')}\n`);
-        console.log(`   kody-rules files for the nightly: ${kodyRulesFiles.length} → ${kodyRulesFilesOut}`);
+        console.log(
+            `   kody-rules files for the nightly: ${kodyRulesFiles.length} → ${kodyRulesFilesOut}`,
+        );
     }
     fs.rmSync(scratch, { recursive: true, force: true });
     if (resultsOut) {
-        const entries = results.map((r) => ({ step: r.step.name, ok: !r.problem, problem: r.problem, ms: Math.round(r.ms), calls: r.calls }));
+        const entries = results.map((r) => ({
+            step: r.step.name,
+            ok: !r.problem,
+            problem: r.problem,
+            ms: Math.round(r.ms),
+            calls: r.calls,
+        }));
         // The trace check fails the smoke on its own; recorded as an entry no stage
         // claims, so evals/stage-signals.js reads every stage as untrusted, not green.
-        entries.push({ step: 'pr-paths-filter', ok: !coverageProblem, problem: coverageProblem, ms: 0, calls: 0 });
+        entries.push({
+            step: 'pr-paths-filter',
+            ok: !coverageProblem,
+            problem: coverageProblem,
+            ms: 0,
+            calls: 0,
+        });
         fs.writeFileSync(resultsOut, `${JSON.stringify(entries, null, 2)}\n`);
     }
 
@@ -267,14 +522,26 @@ async function main() {
         return 0;
     }
     if (coverageProblem && !broken.length) {
-        console.log(untraced.length ? '\nThe load trace is incomplete; its file lists cannot be trusted.' : `\nAdd the missing paths to ${PR_WORKFLOW} so the PR check runs when they change.`);
+        console.log(
+            untraced.length
+                ? '\nThe load trace is incomplete; its file lists cannot be trusted.'
+                : `\nAdd the missing paths to ${PR_WORKFLOW} so the PR check runs when they change.`,
+        );
         return 1;
     }
     for (const r of broken) {
-        const tail = r.output.split('\n').filter((line) => line.trim()).slice(-40).join('\n');
-        console.log(`\n──── ${r.step.name}: ${r.problem} ────\n$ node ${r.step.args.join(' ')}\n${tail}`);
+        const tail = r.output
+            .split('\n')
+            .filter((line) => line.trim())
+            .slice(-40)
+            .join('\n');
+        console.log(
+            `\n──── ${r.step.name}: ${r.problem} ────\n$ node ${r.step.args.join(' ')}\n${tail}`,
+        );
     }
-    console.log(`\n${broken.length} eval(s) can no longer drive the engine. Fix the eval in this PR — the nightly would only report it as INFRA.`);
+    console.log(
+        `\n${broken.length} eval(s) can no longer drive the engine. Fix the eval in this PR — the nightly would only report it as INFRA.`,
+    );
     return 1;
 }
 
