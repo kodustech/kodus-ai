@@ -59,6 +59,8 @@ export interface ResolvedSkill {
     folder: string | null;
     body: string;
     bodyTruncated: boolean;
+    /** Body line `readSkillFile` (SKILL.md) continues from when the body was cut. */
+    bodyNextOffset?: number;
     /** Files under the folder other than SKILL.md, relative to the folder. */
     files: string[];
     compatibility?: string;

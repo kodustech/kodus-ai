@@ -1,4 +1,4 @@
-import { parseSkillMarkdown, SKILL_LIMITS } from './skill-validator';
+import { pageText, parseSkillMarkdown, SKILL_LIMITS } from './skill-validator';
 
 const skill = (frontmatter: string, body = '# Rules\n\nUse typed errors.') =>
     `---\n${frontmatter}\n---\n${body}`;
@@ -166,5 +166,33 @@ describe('parseSkillMarkdown', () => {
         expect(result.ok).toBe(true);
         if (!result.ok) return;
         expect(result.skill.body).toBe('Body');
+    });
+});
+
+describe('pageText', () => {
+    it('starts the next page at a line the token budget cut', () => {
+        const text = ['a'.repeat(40), 'b'.repeat(40), 'c'.repeat(40)].join(
+            '\n',
+        );
+
+        const first = pageText(text, 0, { maxLines: 10, maxTokens: 15 });
+
+        expect(first.content.startsWith('a'.repeat(40))).toBe(true);
+        expect(first.nextOffset).toBe(1);
+        const second = pageText(text, first.nextOffset!, {
+            maxLines: 10,
+            maxTokens: 100,
+        });
+        expect(second.content).toBe(`${'b'.repeat(40)}\n${'c'.repeat(40)}`);
+        expect(second.nextOffset).toBeUndefined();
+    });
+
+    it('moves past a single line longer than the budget', () => {
+        const page = pageText(`${'x'.repeat(400)}\nnext`, 0, {
+            maxLines: 10,
+            maxTokens: 10,
+        });
+
+        expect(page.nextOffset).toBe(1);
     });
 });

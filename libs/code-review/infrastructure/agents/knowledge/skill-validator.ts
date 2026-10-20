@@ -14,7 +14,8 @@ import {
  *   folder name is used and a note says so.
  * - `description`: 1-1024 chars, required.
  * - body: kept under 500 lines and ~5k tokens; longer bodies are cut and
- *   flagged so the review says it read a partial skill.
+ *   flagged so the review says it read a partial skill. The rest is read in
+ *   pages of the same size with `readSkillFile` (`SKILL.md`, `offset`).
  * - `allowed-tools` is ignored: a skill never widens what a reviewer may run.
  * - `compatibility` is surfaced as a note, since the reviewer may lack what
  *   the skill expects.
@@ -37,6 +38,8 @@ export interface ParsedSkill {
     description: string;
     body: string;
     bodyTruncated: boolean;
+    /** Body line the next page starts at, when the body was cut. */
+    bodyNextOffset?: number;
     compatibility?: string;
 }
 
@@ -46,11 +49,51 @@ export type SkillParseResult =
 
 const FRONTMATTER = /^---[ \t]*\n([\s\S]*?)\n---[ \t]*(?:\n|$)([\s\S]*)$/;
 
+/** The body of a SKILL.md, as the skill shows it; null without frontmatter. */
+export function skillBodyOf(markdown: string): string | null {
+    const match = FRONTMATTER.exec(normalizeSkillText(markdown));
+    return match ? match[2].trim() : null;
+}
+
+function normalizeSkillText(markdown: string): string {
+    return (markdown ?? '').replace(/\r\n?/g, '\n').replace(/^\uFEFF/, '');
+}
+
+/**
+ * One page of a text, from line `offset` (0-based), within a line and a
+ * token budget. `nextOffset` is where the next page starts when text is
+ * left; a line cut by the token budget starts the next page again.
+ */
+export function pageText(
+    text: string,
+    offset: number,
+    limits: { maxLines: number; maxTokens: number },
+): { content: string; nextOffset?: number; totalLines: number } {
+    const lines = text.split('\n');
+    const start = Math.max(0, Math.min(Math.floor(offset) || 0, lines.length));
+    const window = lines.slice(start, start + limits.maxLines);
+    let content = window.join('\n');
+    let shownLines = window.length;
+    if (estimateTokens(content) > limits.maxTokens) {
+        content = content.slice(0, tokensToChars(limits.maxTokens));
+        const complete = content.split('\n').length - 1;
+        // A single line longer than the budget is skipped past, so paging
+        // always moves forward.
+        shownLines = Math.max(1, complete);
+    }
+    const next = start + shownLines;
+    return {
+        content,
+        totalLines: lines.length,
+        ...(next < lines.length ? { nextOffset: next } : {}),
+    };
+}
+
 export function parseSkillMarkdown(
     markdown: string,
     options: { expectedName?: string } = {},
 ): SkillParseResult {
-    const text = (markdown ?? '').replace(/\r\n?/g, '\n').replace(/^﻿/, '');
+    const text = normalizeSkillText(markdown);
     const match = FRONTMATTER.exec(text);
     if (!match) {
         return {
@@ -120,7 +163,7 @@ export function parseSkillMarkdown(
             `name "${renamedFrom}" differs from its folder "${options.expectedName}"; using the folder name`,
         );
     }
-    const { body, truncated } = capBody(match[2].trim());
+    const { body, truncated, nextOffset } = capBody(match[2].trim());
     if (truncated) {
         notes.push(
             `SKILL.md body truncated to ${SKILL_LIMITS.bodyMaxLines} lines / ~${SKILL_LIMITS.bodyMaxTokens} tokens`,
@@ -142,6 +185,7 @@ export function parseSkillMarkdown(
             description,
             body,
             bodyTruncated: truncated,
+            ...(nextOffset !== undefined ? { bodyNextOffset: nextOffset } : {}),
             ...(compatibility ? { compatibility } : {}),
         },
         notes,
@@ -149,24 +193,22 @@ export function parseSkillMarkdown(
     };
 }
 
-function capBody(body: string): { body: string; truncated: boolean } {
-    let capped = body;
-    let truncated = false;
-
-    const lines = capped.split('\n');
-    if (lines.length > SKILL_LIMITS.bodyMaxLines) {
-        capped = lines.slice(0, SKILL_LIMITS.bodyMaxLines).join('\n');
-        truncated = true;
-    }
-
-    if (estimateTokens(capped) > SKILL_LIMITS.bodyMaxTokens) {
-        capped = capped.slice(0, tokensToChars(SKILL_LIMITS.bodyMaxTokens));
-        truncated = true;
-    }
-
-    return truncated
-        ? { body: `${capped}\n\n${SKILL_BODY_TRUNCATED_MARKER}`, truncated }
-        : { body: capped, truncated };
+function capBody(body: string): {
+    body: string;
+    truncated: boolean;
+    nextOffset?: number;
+} {
+    const page = pageText(body, 0, {
+        maxLines: SKILL_LIMITS.bodyMaxLines,
+        maxTokens: SKILL_LIMITS.bodyMaxTokens,
+    });
+    return page.nextOffset !== undefined
+        ? {
+              body: `${page.content}\n\n${SKILL_BODY_TRUNCATED_MARKER}`,
+              truncated: true,
+              nextOffset: page.nextOffset,
+          }
+        : { body: page.content, truncated: false };
 }
 
 function firstLine(error: unknown): string {
