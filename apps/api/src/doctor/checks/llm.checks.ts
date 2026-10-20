@@ -5,6 +5,7 @@ import { resolveContextWindow } from '@libs/llm/model-context-window';
 import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
 import { redactSecrets } from '@libs/llm/review-error-diagnostics';
 import type { BYOKConfig, NormalizedModel } from '@libs/llm/byok-config';
+import { getClaudeSdkExecutors, type SdkProbeResult } from '@libs/llm/sdk-executor-registry';
 
 import {
     DoctorCheck,
@@ -27,6 +28,76 @@ export interface LlmDeps {
         organizationId?: string;
         timeoutMs: number;
     }): Promise<void>;
+    /** The Claude Agent SDK path, hop by hop, for a slot that runs on it;
+     *  null for any other slot (#2113). */
+    sdkProbe?(params: {
+        slot?: NormalizedModel;
+        organizationId?: string;
+        timeoutMs: number;
+    }): Promise<SdkProbeResult | null>;
+}
+
+/** The registered SDK executors' probe, when they take this slot. */
+export const liveSdkProbe: NonNullable<LlmDeps['sdkProbe']> = async ({
+    slot,
+    organizationId,
+    timeoutMs,
+}) => {
+    const executors = getClaudeSdkExecutors();
+    if (!executors?.probe || !executors.eligible(slot)) return null;
+    return executors.probe({
+        slot: slot ? { ...slot, fallback: undefined } : undefined,
+        organizationId,
+        timeoutMs,
+    });
+};
+
+/** One line per hop of the SDK path, so a broken binary is not read as a bad key. */
+function sdkProbeResults(
+    probe: SdkProbeResult,
+    label: string,
+    scope: string | undefined,
+): DoctorResult[] {
+    const results: DoctorResult[] = [];
+    results.push(
+        probe.spawn.ok
+            ? { check: 'llm.sdk_spawn', status: 'ok', scope, title: `The Claude Agent SDK started for the review model (${label}).` }
+            : {
+                  check: 'llm.sdk_spawn',
+                  status: 'fail',
+                  scope,
+                  title: `The Claude Agent SDK did not start for the review model (${label}).`,
+                  impact: 'Claude reviews fall back to the standard runtime and lose the Agent SDK loop.',
+                  fix: `Check that the worker image contains the Claude Agent SDK binary for this platform. Error: ${redactSecrets(probe.spawn.error ?? '').slice(0, 200)}`,
+              },
+    );
+    if (!probe.spawn.ok) return results;
+    results.push(
+        probe.gateway.ok
+            ? { check: 'llm.sdk_gateway', status: 'ok', scope, title: `The local model gateway took the Agent SDK's request (${label}).` }
+            : {
+                  check: 'llm.sdk_gateway',
+                  status: 'fail',
+                  scope,
+                  title: `The local model gateway did not take the Agent SDK's request (${label}).`,
+                  impact: 'Claude reviews fall back to the standard runtime.',
+                  fix: `Restart the service; if it persists, report it with this error: ${redactSecrets(probe.gateway.error ?? '').slice(0, 200)}`,
+              },
+    );
+    if (!probe.gateway.ok) return results;
+    results.push(
+        probe.upstream.ok
+            ? { check: 'llm.sdk_upstream', status: 'ok', scope, title: `The provider answered the Agent SDK's request (${label}).` }
+            : {
+                  check: 'llm.sdk_upstream',
+                  status: 'fail',
+                  scope,
+                  title: `The provider refused the Agent SDK's request (${label})${probe.upstream.status ? ` with HTTP ${probe.upstream.status}` : ''}.`,
+                  impact: 'Reviews fail when they call the model.',
+                  fix: `Check the API key, model name and base URL in the BYOK page (user menu > BYOK). Provider said: ${redactSecrets(probe.upstream.error ?? '').slice(0, 200)}`,
+              },
+    );
+    return results;
 }
 
 export const liveLlmComplete: LlmDeps['complete'] = async ({
@@ -75,6 +146,7 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
                 : undefined;
             const tested = new Map<string, DoctorResult | null>();
             const reported = new Set<DoctorResult>();
+            const sdkTested = new Set<string>();
             /** Orgs whose reviews run on the server model, not their own. */
             const envOrgs: string[] = [];
             const now = deps.now ?? Date.now;
@@ -170,6 +242,30 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
                             fix: slot
                                 ? `Check the API key, model name and base URL in the BYOK page (user menu > BYOK). Provider said: ${errorText(error)}`
                                 : `Check API_LLM_PROVIDER_MODEL, its API key and API_OPENAI_FORCE_BASE_URL. Provider said: ${errorText(error)}`,
+                        });
+                    }
+                }
+                // The SDK path, hop by hop, once per model (#2113).
+                if (deps.sdkProbe && !sdkTested.has(key) && deadline - now() >= PROBE_TIMEOUT_MS) {
+                    sdkTested.add(key);
+                    try {
+                        const probe = await deps.sdkProbe({
+                            slot,
+                            organizationId: organizationId || undefined,
+                            timeoutMs: PROBE_TIMEOUT_MS,
+                        });
+                        if (probe) {
+                            results.push(
+                                ...sdkProbeResults(probe, label, slot ? scope : undefined),
+                            );
+                        }
+                    } catch (error) {
+                        results.push({
+                            check: 'llm.sdk_spawn',
+                            status: 'unknown',
+                            scope: slot ? scope : undefined,
+                            title: `Could not test the Claude Agent SDK path (${label}).`,
+                            fix: `Run the doctor again. Error: ${errorText(error)}`,
                         });
                     }
                 }

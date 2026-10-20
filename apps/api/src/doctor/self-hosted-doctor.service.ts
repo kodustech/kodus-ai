@@ -34,7 +34,7 @@ import {
     WEBHOOK_EVENTS_CAP,
     webhookUrlCheck,
 } from './checks/git.checks';
-import { liveLlmComplete, llmCheck } from './checks/llm.checks';
+import { liveLlmComplete, liveSdkProbe, llmCheck } from './checks/llm.checks';
 import {
     FeedbackCounts,
     recentReviewsCheck,
@@ -164,6 +164,7 @@ export class SelfHostedDoctorService {
                         organizationId,
                     }),
                 complete: liveLlmComplete,
+                sdkProbe: liveSdkProbe,
             }),
             webhookUrlCheck({
                 reach: reachUrl,

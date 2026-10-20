@@ -330,6 +330,36 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             ).toBe('fail');
         });
 
+        it('LLM on the Claude Agent SDK: each hop reported on its own line, and nothing for a model that does not run there (#2113)', async () => {
+            const hops = (probe: any) =>
+                llmCheck({ ...llmDeps(), sdkProbe: jest.fn(async () => probe) })
+                    .run(ctx())
+                    .then((rs) => rs.filter((r) => r.check.startsWith('llm.sdk_')).map((r) => [r.check, r.status]));
+            const ok = { ok: true };
+            const no = { ok: false, error: 'not reached' };
+            expect(await hops({ spawn: ok, gateway: ok, upstream: { ok: true, status: 200 } })).toEqual([
+                ['llm.sdk_spawn', 'ok'],
+                ['llm.sdk_gateway', 'ok'],
+                ['llm.sdk_upstream', 'ok'],
+            ]);
+            expect(await hops({ spawn: { ok: false, error: 'ENOENT claude' }, gateway: no, upstream: no })).toEqual([['llm.sdk_spawn', 'fail']]);
+            expect(await hops({ spawn: ok, gateway: { ok: false, error: 'queue timeout' }, upstream: no })).toEqual([
+                ['llm.sdk_spawn', 'ok'],
+                ['llm.sdk_gateway', 'fail'],
+            ]);
+            expect(await hops({ spawn: ok, gateway: ok, upstream: { ok: false, status: 401, error: 'invalid x-api-key' } })).toEqual([
+                ['llm.sdk_spawn', 'ok'],
+                ['llm.sdk_gateway', 'ok'],
+                ['llm.sdk_upstream', 'fail'],
+            ]);
+            expect(await hops(null)).toEqual([]);
+            const upstream = (await llmCheck({ ...llmDeps(), sdkProbe: jest.fn(async () => ({ spawn: ok, gateway: ok, upstream: { ok: false, status: 401, error: 'invalid x-api-key' } })) }).run(ctx())).find(
+                (r) => r.check === 'llm.sdk_upstream',
+            );
+            expect(upstream?.title).toContain('HTTP 401');
+            expect(upstream?.fix).toContain('invalid x-api-key');
+        });
+
         it('LLM completion fails (env model)', async () => {
             const results = await llmCheck(
                 llmDeps({ fail: new Error('401 invalid key') }),
