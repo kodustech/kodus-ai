@@ -1,10 +1,14 @@
 import { Module, forwardRef } from '@nestjs/common';
+import { MongooseModule } from '@nestjs/mongoose';
 
 import {
     CUSTOM_AGENT_KNOWLEDGE_READER_TOKEN,
     CUSTOM_AGENT_TOOL_CATALOG_TOKEN,
     CUSTOM_AGENT_TRY_RUNNER_TOKEN,
+    CUSTOM_AGENT_TRY_RUN_STORE_TOKEN,
 } from '@libs/code-review/domain/custom-agents/contracts';
+import { CustomAgentTryRunRepository } from '@libs/code-review/infrastructure/adapters/repositories/custom-agent-try-run.repository';
+import { CustomAgentTryRunModelInstance } from '@libs/code-review/infrastructure/adapters/repositories/schemas/mongoose/customAgentTryRun.model';
 import {
     CustomAgentKnowledgeReaderService,
     CustomAgentToolCatalogService,
@@ -26,6 +30,8 @@ import { ReviewKnowledgeModule } from './review-knowledge.module';
  */
 @Module({
     imports: [
+        // Try it runs are stored while the settings page polls for them.
+        MongooseModule.forFeature([CustomAgentTryRunModelInstance]),
         forwardRef(() => PlatformModule),
         forwardRef(() => ParametersModule),
         forwardRef(() => PermissionValidationModule),
@@ -40,6 +46,7 @@ import { ReviewKnowledgeModule } from './review-knowledge.module';
         CustomAgentKnowledgeReaderService,
         CustomAgentToolCatalogService,
         CustomAgentTryRunnerService,
+        CustomAgentTryRunRepository,
         {
             provide: CUSTOM_AGENT_KNOWLEDGE_READER_TOKEN,
             useExisting: CustomAgentKnowledgeReaderService,
@@ -52,11 +59,16 @@ import { ReviewKnowledgeModule } from './review-knowledge.module';
             provide: CUSTOM_AGENT_TRY_RUNNER_TOKEN,
             useExisting: CustomAgentTryRunnerService,
         },
+        {
+            provide: CUSTOM_AGENT_TRY_RUN_STORE_TOKEN,
+            useExisting: CustomAgentTryRunRepository,
+        },
     ],
     exports: [
         CUSTOM_AGENT_KNOWLEDGE_READER_TOKEN,
         CUSTOM_AGENT_TOOL_CATALOG_TOKEN,
         CUSTOM_AGENT_TRY_RUNNER_TOKEN,
+        CUSTOM_AGENT_TRY_RUN_STORE_TOKEN,
     ],
 })
 export class CustomAgentsEngineModule {}

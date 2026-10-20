@@ -539,6 +539,17 @@
     }
   },
   {
+    "key": "customAgents.controller.ts#tryRun",
+    "httpMethod": "GET",
+    "urlPath": "/code-review/custom-agents/try/:runId",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "github.controller.ts#getOrganizationName",
     "httpMethod": "GET",
     "urlPath": "/github/organization-name",

@@ -116,8 +116,11 @@ export type CustomAgentTryFinding = {
 };
 
 export type CustomAgentTryTrace = {
-    status: 'completed' | 'skipped' | 'failed';
-    /** Why the agent was skipped (no file matched) or failed. */
+    /** `incomplete`: the agent stopped before it finished looking (out of
+     *  steps, its turn cut, or no result submitted); its findings are what it
+     *  had by then, and none found does not mean the code is clean. */
+    status: 'completed' | 'incomplete' | 'skipped' | 'failed';
+    /** Why the agent was skipped (no file matched), stopped early or failed. */
     reason?: string;
     models?: { run?: string };
     skillsOpened: Array<{ path: string; files?: string[] }>;
@@ -149,4 +152,32 @@ export interface ICustomAgentTryRunner {
         agent: CustomAgentConfig;
         knowledge: KnowledgeItem[];
     }): Promise<CustomAgentTryTrace>;
+}
+
+/**
+ * A Try it run on a large pull request outlives a proxied request (the
+ * gateway answers 504 at ~300s and the result is lost), so the run is
+ * started, stored and polled. The stored run is keyed by id and scoped to
+ * the organization, team and repository that started it.
+ */
+export type CustomAgentTryRun = {
+    id: string;
+    organizationId: string;
+    teamId: string;
+    repositoryId: string;
+    status: 'running' | 'done';
+    /** Set once the run is done. */
+    result?: CustomAgentTryTrace;
+    startedAt: Date;
+    finishedAt?: Date;
+};
+
+export const CUSTOM_AGENT_TRY_RUN_STORE_TOKEN = Symbol.for(
+    'CustomAgentTryRunStore',
+);
+
+export interface ICustomAgentTryRunStore {
+    create(run: Omit<CustomAgentTryRun, 'id'>): Promise<string>;
+    finish(id: string, result: CustomAgentTryTrace): Promise<void>;
+    find(id: string): Promise<CustomAgentTryRun | null>;
 }

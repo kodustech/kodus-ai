@@ -37,11 +37,18 @@ describe('resolveInsideFolder', () => {
         );
     });
 
+    it('joins a reference more than one level deep inside the folder', () => {
+        expect(
+            resolveInsideFolder(folder, 'references/deep/nested/file.md'),
+        ).toBe('.claude/skills/invoice-errors/references/deep/nested/file.md');
+    });
+
     it.each([
         '../other-skill/SKILL.md',
         'references/../../other-skill/SKILL.md',
         '/etc/passwd',
-        'references/deep/nested/file.md',
+        'references/deep/../../../other-skill/SKILL.md',
+        'references/.git/config',
         '',
     ])('refuses %j', (relative) => {
         expect(resolveInsideFolder(folder, relative)).toBeNull();

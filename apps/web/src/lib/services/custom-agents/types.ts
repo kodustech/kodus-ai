@@ -159,7 +159,8 @@ export type CustomAgentTryFinding = {
 };
 
 export type CustomAgentTryTrace = {
-    status: "completed" | "skipped" | "failed";
+    /** "incomplete": the agent stopped before it finished looking. */
+    status: "completed" | "incomplete" | "skipped" | "failed";
     reason?: string;
     models?: { run?: string };
     skillsOpened: Array<{ path: string; files?: string[] }>;

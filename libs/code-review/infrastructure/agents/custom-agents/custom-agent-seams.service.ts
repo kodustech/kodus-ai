@@ -1,3 +1,4 @@
+import { normalizeSuggestionSeverity } from '@libs/code-review/infrastructure/agents/engine/normalize-severity';
 import {
     BadRequestException,
     Inject,
@@ -366,6 +367,9 @@ export function buildTryTrace(params: {
     skillReads?: SkillRead[];
     /** What each runCli call returned, in the order the calls ran. */
     cliRuns?: CustomAgentCliRun[];
+    /** The team's "Minimum severity to post", from the review config: the
+     *  floor when the agent sets none ("Team minimum"), as in the review. */
+    teamMinSeverity?: string;
 }): CustomAgentTryTrace {
     const { agent, output, events } = params;
     const toolCalls = events.flatMap((event) => event.toolCalls ?? []);
@@ -397,13 +401,20 @@ export function buildTryTrace(params: {
         }
     }
 
-    const minRank = agent.presentation?.minSeverity
-        ? rankOf(agent.presentation.minSeverity)
-        : Infinity;
+    // The agent's own floor, else the team's, as the review applies them.
+    const floor = agent.presentation?.minSeverity || params.teamMinSeverity;
+    const minRank = floor ? rankOf(floor) : Infinity;
+    // Severities on the review's scale before anything ranks them: an answer
+    // outside it ("major") ranked below low, passed any floor unset and lost
+    // the repeat check to a weaker copy.
+    const onScale = <T extends Partial<CodeSuggestion>>(s: T): T => ({
+        ...s,
+        severity: normalizeSuggestionSeverity(s.severity),
+    });
     // The review's order: the agent's severity floor and comment limit, then
     // the dedup. Deduping first let a finding under the floor mark a severe
     // one on the same lines as its repeat, so neither read "would post".
-    const suggestions = output.suggestions ?? [];
+    const suggestions = (output.suggestions ?? []).map(onScale);
     const eligible = suggestions
         .map((s, i) => ({ s, i }))
         .filter(({ s }) => rankOf(s.severity) <= minRank)
@@ -440,7 +451,9 @@ export function buildTryTrace(params: {
     });
 
     return {
-        status: 'completed',
+        ...(output.hitHardLimit
+            ? { status: 'incomplete' as const, reason: stoppedEarly(output) }
+            : { status: 'completed' as const }),
         models: { run: agent.models?.run },
         skillsOpened: [...skillsOpened.values()].map(({ path, files }) => ({
             path,
@@ -464,22 +477,38 @@ export function buildTryTrace(params: {
             ...[...repeats].map((s) =>
                 finding(s, 'dropped', 'repeats a finding on the same lines'),
             ),
-            ...(output.discardedByVerify ?? []).map((s) =>
-                finding(
-                    s,
-                    'dropped',
-                    s.discardReason ?? 'refuted by the check',
+            ...(output.discardedByVerify ?? [])
+                .map(onScale)
+                .map((s) =>
+                    finding(
+                        s,
+                        'dropped',
+                        s.discardReason ?? 'refuted by the check',
+                    ),
                 ),
-            ),
-            ...(output.discardedBySeverity ?? []).map((s) =>
-                finding(s, 'dropped', 'below the severity floor'),
-            ),
-            ...(output.discardedByVerifyError ?? []).map((s) =>
-                finding(s, 'unverified', 'the check could not run'),
-            ),
+            ...(output.discardedBySeverity ?? [])
+                .map(onScale)
+                .map((s) => finding(s, 'dropped', 'below the severity floor')),
+            ...(output.discardedByVerifyError ?? [])
+                .map(onScale)
+                .map((s) =>
+                    finding(s, 'unverified', 'the check could not run'),
+                ),
         ],
         durationMs: Date.now() - params.startedAt,
     };
+}
+
+/** Why a run stopped before it finished, as Try it says it. */
+function stoppedEarly(output: ReviewAgentOutput): string {
+    switch (output.finishReason) {
+        case 'no-result':
+            return 'The agent stopped without submitting a result, so no findings does not mean the code is clean';
+        case 'truncated':
+            return "The model provider cut the agent's turn before it finished";
+        default:
+            return 'The agent ran out of steps before it finished';
+    }
 }
 
 /**
@@ -813,6 +842,8 @@ export class CustomAgentTryRunnerService implements ICustomAgentTryRunner {
                     skillReads,
                     startedAt,
                     skills: knowledge.byTarget?.get(agent.id)?.skills,
+                    teamMinSeverity:
+                        config?.suggestionControl?.severityLevelFilter,
                 }),
                 warnings: runWarnings,
             };

@@ -75,6 +75,7 @@ import {
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { analyzerFindingsToSuggestions } from '@libs/code-review/infrastructure/analyzers/analyzer-findings-to-suggestions';
 import { preferAnalyzerKeep } from '@libs/code-review/infrastructure/agents/engine/prefer-analyzer-keep';
+import { normalizeSuggestionSeverity } from '@libs/code-review/infrastructure/agents/engine/normalize-severity';
 import {
     capCustomAgentComments,
     collectSingleComments,
@@ -348,21 +349,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     }
 
     private normalizeSeverity(severity?: string): string {
-        switch ((severity || '').toLowerCase()) {
-            case 'critical':
-            case SeverityLevel.CRITICAL:
-                return SeverityLevel.CRITICAL;
-            case 'high':
-            case SeverityLevel.HIGH:
-                return SeverityLevel.HIGH;
-            case 'medium':
-                return SeverityLevel.MEDIUM;
-            case 'low':
-            case SeverityLevel.LOW:
-                return SeverityLevel.LOW;
-            default:
-                return SeverityLevel.MEDIUM;
-        }
+        return normalizeSuggestionSeverity(severity);
     }
 
     constructor(
@@ -1025,7 +1012,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         error: new Error(
                             cut.finishReason === 'truncated'
                                 ? `Agent "${cut.agentName}" had its turn truncated by the model provider after ${cut.durationMs}ms — the review did not complete`
-                                : `Agent "${cut.agentName}" ran out of steps after ${cut.durationMs}ms — the review did not complete`,
+                                : cut.finishReason === 'no-result'
+                                  ? `Agent "${cut.agentName}" ended after ${cut.durationMs}ms without submitting a result — the review did not complete`
+                                  : `Agent "${cut.agentName}" ran out of steps after ${cut.durationMs}ms — the review did not complete`,
                         ),
                         severity: 'partial',
                         metadata: {
@@ -3220,6 +3209,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 }
                 if (event.finishReason === 'max-steps') {
                     return `${title}${replicaSuffix}${batchSuffix} — hit step limit (${event.step ?? 0} steps, no findings)`;
+                }
+                if (event.finishReason === 'no-result') {
+                    return `${title}${replicaSuffix}${batchSuffix} — stopped without submitting a result (${event.step ?? 0} steps)`;
                 }
                 // Prefer the classified sentence ("The configured model is not
                 // available on the provider…") over the raw provider string,

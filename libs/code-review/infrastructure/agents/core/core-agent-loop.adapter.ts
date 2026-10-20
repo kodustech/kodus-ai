@@ -536,6 +536,7 @@ export async function runAgentLoopViaCore(
         toolCalls,
         finishReason: r.finderState.status,
         ...(incompleteReason && { incompleteReason }),
+        submittedResult: submitted,
         ...(errorEvent && {
             errorMessage: (errorEvent.detail?.message as string) || undefined,
             errorName: (errorEvent.detail?.name as string) || undefined,

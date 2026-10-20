@@ -4,6 +4,7 @@ import {
     Controller,
     Get,
     Inject,
+    Param,
     Post,
     Query,
     UseGuards,
@@ -28,6 +29,7 @@ import { checkRepoPermissions } from '@libs/identity/infrastructure/adapters/ser
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
 import {
     CustomAgentsStatusQueryDto,
+    CustomAgentTryRunQueryDto,
     ResolveCustomAgentDto,
     TryCustomAgentDto,
 } from '../dtos/custom-agents.dto';
@@ -47,6 +49,14 @@ const canEditSettings = checkRepoPermissions({
     action: Action.Update,
     resource: ResourceType.CodeReviewSettings,
     repo: { key: { body: 'repositoryId' } },
+});
+
+// Reading a try's result is scoped like starting it: the result carries the
+// pull request's code and the agent's findings.
+const canReadTryRun = checkRepoPermissions({
+    action: Action.Update,
+    resource: ResourceType.CodeReviewSettings,
+    repo: { key: { query: 'repositoryId' } },
 });
 
 /** What the custom agent settings pages read and test (#2172). */
@@ -99,12 +109,12 @@ export class CustomAgentsController {
     @ApiOperation({
         summary: 'Try an agent on a pull request',
         description:
-            'Runs one agent, saved or not, on a pull request without posting, and returns the skills it opened, its tool calls, and each finding with the verdict and the reason.',
+            'Starts one agent, saved or not, on a pull request without posting, and returns the run id. Poll GET try/:runId for the skills it opened, its tool calls, and each finding with the verdict and the reason.',
     })
     @UseGuards(PolicyGuard)
     @CheckPolicies(canEditSettings)
     async try(@Body() body: TryCustomAgentDto) {
-        return this.tryCustomAgent.execute({
+        return this.tryCustomAgent.start({
             organizationAndTeamData: {
                 organizationId: this.organizationId(),
                 teamId: body.teamId,
@@ -114,6 +124,28 @@ export class CustomAgentsController {
             prUrl: body.prUrl,
             agent: body.agent,
             knowledge: body.knowledge,
+        });
+    }
+
+    @Get('try/:runId')
+    @ApiOperation({
+        summary: 'Read a Try it run',
+        description:
+            'Returns `running` until the run ends, then `done` with the skills it opened, its tool calls and each finding with the verdict and the reason.',
+    })
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(canReadTryRun)
+    async tryRun(
+        @Param('runId') runId: string,
+        @Query() query: CustomAgentTryRunQueryDto,
+    ) {
+        return this.tryCustomAgent.getRun({
+            organizationAndTeamData: {
+                organizationId: this.organizationId(),
+                teamId: query.teamId,
+            },
+            repositoryId: query.repositoryId,
+            runId,
         });
     }
 

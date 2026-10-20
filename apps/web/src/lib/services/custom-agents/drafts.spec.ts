@@ -1,9 +1,10 @@
 import {
+    agentChips,
     agentFromSkill,
     agentNameError,
     agentSlug,
-    agentChips,
     agentStatusLine,
+    agentsUsingSkill,
     agentUsageLine,
     cliIssues,
     createAgentFromTemplate,
@@ -20,9 +21,9 @@ import {
     prepareAgentsForSave,
     prepareKnowledgeForSave,
     reviewerName,
+    scopeLabel,
     setAgentKnowledge,
     setKnowledgeLink,
-    scopeLabel,
     TAG_COLORS,
     withoutAgent,
     withoutSecretValues,
@@ -81,7 +82,10 @@ describe("custom agent drafts", () => {
         const second = createAgentFromTemplate("blank", [first]);
 
         expect(first.id).toBe("new-agent");
-        expect(second).toMatchObject({ id: "new-agent-2", name: "New agent 2" });
+        expect(second).toMatchObject({
+            id: "new-agent-2",
+            name: "New agent 2",
+        });
     });
 
     it("imports a repository skill as an agent linked to it", () => {
@@ -122,9 +126,7 @@ describe("custom agent drafts", () => {
     });
 
     it("summarizes the last window of findings", () => {
-        expect(agentUsageLine(undefined, 30)).toBe(
-            "No findings in 30 days",
-        );
+        expect(agentUsageLine(undefined, 30)).toBe("No findings in 30 days");
         expect(
             agentUsageLine(
                 {
@@ -305,7 +307,9 @@ describe("custom agent drafts", () => {
         expect(cliIssues(cli())).toEqual([]);
         const secrets = [{ env: "LEDGER_TOKEN", value: "x" }];
         expect(
-            cliIssues(cli({ allowedPrefixes: ["ledgerctl printenv"], secrets })),
+            cliIssues(
+                cli({ allowedPrefixes: ["ledgerctl printenv"], secrets }),
+            ),
         ).toContain(
             "A CLI with secrets cannot allow env listings or token-printing commands",
         );
@@ -317,9 +321,9 @@ describe("custom agent drafts", () => {
         expect(cliIssues(cli({ binary: "bash", secrets }))).toContain(
             "A CLI with secrets cannot be a shell or interpreter: name its own binary",
         );
-        expect(cliIssues(cli({ allowedPrefixes: ["ledgerctl printenv"] }))).toEqual(
-            [],
-        );
+        expect(
+            cliIssues(cli({ allowedPrefixes: ["ledgerctl printenv"] })),
+        ).toEqual([]);
         expect(cliIssues(cli({ install: "npm i -g ledgerctl" }))).toContain(
             "Pin the install to a version, e.g. tool@1.2.3",
         );
@@ -618,10 +622,7 @@ describe("custom agent drafts", () => {
     });
 
     it("removes an agent and only its links to skills and docs", () => {
-        const agents = [
-            { id: "a" } as CustomAgent,
-            { id: "b" } as CustomAgent,
-        ];
+        const agents = [{ id: "a" } as CustomAgent, { id: "b" } as CustomAgent];
         const knowledge: KnowledgeItem[] = [
             {
                 path: ".claude/skills/money",
@@ -676,6 +677,7 @@ describe("custom agent drafts", () => {
         const base = (): CustomAgent => ({
             ...createAgentFromTemplate("blank", []),
             name: "E2E tests reviewer",
+            enabled: true,
         });
         const knowledge: KnowledgeItem[] = [
             {
@@ -723,6 +725,14 @@ describe("custom agent drafts", () => {
             );
             expect(agentStatusLine(base(), undefined, 30, true)).toBe(
                 "Runs on all files",
+            );
+        });
+
+        it("says an agent that is off does not run in reviews", () => {
+            expect(
+                agentStatusLine({ ...base(), enabled: false }, undefined, 30),
+            ).toBe(
+                "Off: reviews don't run it · would run on all files · no findings in 30 days",
             );
         });
 
@@ -818,5 +828,55 @@ describe("ast-grep rules field", () => {
         const hint = astGrepHint(undefined);
         expect(hint).toContain("Rule YAML");
         expect(hint).toContain("path");
+    });
+});
+
+describe("agentsUsingSkill", () => {
+    const agents = [
+        { id: "ledger-reviewer", name: "Ledger reviewer" },
+        { id: "refund-reviewer", name: "Refund reviewer" },
+    ];
+
+    it("names the agents a skill was already imported as", () => {
+        const knowledge: KnowledgeItem[] = [
+            {
+                path: ".claude/skills/ledger",
+                kind: "skill",
+                linkedTo: [{ agentId: "ledger-reviewer" }, "main-review"],
+            },
+        ];
+
+        expect(
+            agentsUsingSkill(
+                { path: ".claude/skills/ledger/" },
+                knowledge,
+                agents,
+            ),
+        ).toEqual([{ id: "ledger-reviewer", name: "Ledger reviewer" }]);
+    });
+
+    it("offers a skill no agent uses, or one only the main review uses", () => {
+        const knowledge: KnowledgeItem[] = [
+            {
+                path: ".claude/skills/ledger",
+                kind: "skill",
+                linkedTo: ["main-review"],
+            },
+        ];
+
+        expect(
+            agentsUsingSkill(
+                { path: ".claude/skills/ledger" },
+                knowledge,
+                agents,
+            ),
+        ).toEqual([]);
+        expect(
+            agentsUsingSkill(
+                { path: ".claude/skills/refunds" },
+                knowledge,
+                agents,
+            ),
+        ).toEqual([]);
     });
 });

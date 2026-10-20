@@ -99,7 +99,8 @@ export interface AgentProgressEvent {
      *  errorMessage for anything a user reads. */
     errorFriendlyMessage?: string;
     /** How the agent finished — helps surface timeouts and max-steps in the UI */
-    finishReason?: 'stop' | 'timeout' | 'max-steps' | 'truncated' | 'error';
+    finishReason?:
+        'stop' | 'timeout' | 'max-steps' | 'truncated' | 'no-result' | 'error';
     /** How findings were obtained — 'json-parse' (normal), 'second-chance', 'generate-object' (fallback LLM), 'empty' */
     source?: string;
     suggestionsPreview?: Array<{
@@ -393,10 +394,12 @@ export interface ReviewAgentOutput {
     hitHardLimit?: boolean;
     /** Why the agent loop stopped — 'max-steps' (ran out of steps without
      *  submitting), 'truncated' (the provider cut its turn, so the requested
-     *  tools never ran), or 'stop' (ran to completion). A per-agent timeout is
-     *  an abort, which fails the agent instead. Carried alongside hitHardLimit
-     *  for telemetry and for the "review was cut short" notice. */
-    finishReason?: 'max-steps' | 'truncated' | 'stop';
+     *  tools never ran), 'no-result' (a custom agent's run ended without
+     *  submitting a result, so its silence says nothing), or 'stop' (ran to
+     *  completion). A per-agent timeout is an abort, which fails the agent
+     *  instead. Carried alongside hitHardLimit for telemetry and for the
+     *  "review was cut short" notice. */
+    finishReason?: 'max-steps' | 'truncated' | 'no-result' | 'stop';
 }
 
 // ─── Agent-loop contracts (the low-level harness/agent boundary) ─────────────
@@ -585,6 +588,10 @@ export interface AgentLoopOutput {
      *  requested tools never ran (`truncated`). Absent for a run that finished,
      *  including one that answered in prose. */
     incompleteReason?: 'budget-exhausted' | 'truncated';
+    /** Whether the finder published a whole submitResult. A run that answered
+     *  in prose has none; prose recovery owns it for the generalist, while a
+     *  custom agent reads it as stopped early. */
+    submittedResult?: boolean;
     /** Present only when finishReason === 'error': the underlying provider/model
      *  error surfaced by the harness. Used to classify the failure and surface a
      *  friendly reason in the end-review comment. */

@@ -276,7 +276,10 @@ describe('ReviewOrchestratorService — custom agents', () => {
     describe('ignored files', () => {
         const ignoredChangedFiles = [
             { filename: 'package.json', patch: '@@ -1 +1 @@\n-a\n+b' },
-            { filename: 'infra/envs/prod/main.tf', patch: '@@ -1 +1 @@\n-a\n+b' },
+            {
+                filename: 'infra/envs/prod/main.tf',
+                patch: '@@ -1 +1 @@\n-a\n+b',
+            },
         ];
 
         it('gives an agent the ignored files its globs name, and no one else', async () => {
@@ -316,9 +319,9 @@ describe('ReviewOrchestratorService — custom agents', () => {
             expect(seen('agent-3')).toEqual(files.map((f) => f.filename));
             for (const builtIn of [generalist, kodyRules]) {
                 const call = (builtIn.execute.mock.calls[0] as any[])[0];
-                expect(
-                    call.changedFiles.map((f: any) => f.filename),
-                ).toEqual(files.map((f) => f.filename));
+                expect(call.changedFiles.map((f: any) => f.filename)).toEqual(
+                    files.map((f) => f.filename),
+                );
                 expect(call.ignoredChangedFiles).toBeUndefined();
             }
         });
@@ -524,7 +527,9 @@ describe('ReviewOrchestratorService — custom agents', () => {
             throw new Error('provider down');
         });
         const logger = (service as any).logger;
-        const log = jest.spyOn(logger, 'log').mockImplementation(() => undefined);
+        const log = jest
+            .spyOn(logger, 'log')
+            .mockImplementation(() => undefined);
         const error = jest
             .spyOn(logger, 'error')
             .mockImplementation(() => undefined);
@@ -537,7 +542,10 @@ describe('ReviewOrchestratorService — custom agents', () => {
 
         await service.execute(
             inputFor({
-                organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
                 repositoryId: 'repo-1',
                 customAgents: [
                     agentConfig(),
@@ -588,6 +596,25 @@ describe('ReviewOrchestratorService — custom agents', () => {
             expect.objectContaining({
                 customAgent: { id: 'agent-1' },
             }),
+        ]);
+        expect(out.customAgentRuns?.[0].status).toBe('incomplete');
+    });
+
+    it('reports an agent that never submitted a result as incomplete, with why', async () => {
+        const { service } = setup((config) => ({
+            suggestions: [],
+            durationMs: 1,
+            agentName: config.name,
+            hitHardLimit: true,
+            finishReason: 'no-result',
+        }));
+
+        const out = await service.execute(
+            inputFor({ customAgents: [agentConfig()] }),
+        );
+
+        expect(out.incomplete).toEqual([
+            expect.objectContaining({ finishReason: 'no-result' }),
         ]);
         expect(out.customAgentRuns?.[0].status).toBe('incomplete');
     });

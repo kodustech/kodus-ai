@@ -75,6 +75,12 @@ export function renderLoadedSkill(skill: ResolvedSkill, ref: string): string {
         '',
         skill.body,
     ];
+    if (skill.bodyTruncated && skill.bodyNextOffset !== undefined) {
+        parts.push(
+            '',
+            `SKILL.md continues past this point. Read the next part with \`readSkillFile\` (skill "${skill.name}", path "SKILL.md", offset ${skill.bodyNextOffset}).`,
+        );
+    }
     if (references.length) {
         parts.push(
             '',

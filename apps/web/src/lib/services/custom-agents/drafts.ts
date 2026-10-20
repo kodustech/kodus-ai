@@ -362,6 +362,34 @@ export const agentFromSkill = (
     };
 };
 
+/**
+ * The agents a repository skill is already linked to, so the import list can
+ * say it was imported instead of offering it as new.
+ */
+export const agentsUsingSkill = (
+    candidate: Pick<KnowledgeCandidate, "path">,
+    knowledge: KnowledgeItem[],
+    agents: Pick<CustomAgent, "id" | "name">[],
+): Pick<CustomAgent, "id" | "name">[] => {
+    const key = (path: string) =>
+        normalizeKnowledgePath(path)
+            .replace(/\/SKILL\.md$/, "")
+            .replace(/\/+$/, "");
+    const ids = new Set(
+        knowledge
+            .filter(
+                (item) =>
+                    item.kind === "skill" &&
+                    key(item.path) === key(candidate.path),
+            )
+            .flatMap((item) => item.linkedTo)
+            .flatMap((target) =>
+                typeof target === "object" ? [target.agentId] : [],
+            ),
+    );
+    return agents.filter((agent) => ids.has(agent.id));
+};
+
 /** The native review categories a custom agent's name can be mistaken for. */
 const NATIVE_CATEGORIES = ["Bug", "Performance", "Security", "Business Logic"];
 
@@ -579,12 +607,16 @@ export const scopeLabel = (agent: Pick<CustomAgent, "scope">): string => {
  * "Runs on src/payments/** · 9 PRs · 15 posted in 30 days".
  */
 export const agentStatusLine = (
-    agent: Pick<CustomAgent, "scope">,
+    agent: Pick<CustomAgent, "scope" | "enabled">,
     status: CustomAgentStatus | undefined,
     windowDays: number,
     isGlobal = false,
 ): string => {
-    const where = `Runs on ${scopeLabel(agent)}`;
+    // An agent starts off: say reviews skip it, not where it runs.
+    const where =
+        agent.enabled === false
+            ? `Off: reviews don't run it · would run on ${scopeLabel(agent)}`
+            : `Runs on ${scopeLabel(agent)}`;
     // Usage is counted per repository.
     if (isGlobal) return where;
     if (!status || status.pullRequests === 0) {

@@ -232,6 +232,24 @@ describe('knowledge tools', () => {
         expect(result.output).toContain('loadSkill');
     });
 
+    it('readSkillFile reads a reference more than one level deep in the skill', async () => {
+        const deep = `${SKILL_DIR}/references/api/errors.md`;
+        files[deep] = 'LEDGER-404 account not found';
+        try {
+            const { tool } = await setup();
+
+            const result = await tool('readSkillFile').execute(
+                { skill: 'ledger-errors', path: 'references/api/errors.md' },
+                ctx,
+            );
+
+            expect(result.isError).toBeFalsy();
+            expect(result.output).toContain('LEDGER-404');
+        } finally {
+            delete files[deep];
+        }
+    });
+
     it('readSkillFile shows a script as text and never runs it', async () => {
         const { tool } = await setup();
 
@@ -335,5 +353,112 @@ describe('knowledge tools — repeated reads in one review run (#2172)', () => {
 
         expect(ok.output).toBe('LEDGER-001 insufficient funds');
         expect(flaky.readFile).toHaveBeenCalledTimes(2);
+    });
+});
+
+describe('knowledge tools — a SKILL.md over the size cap (#2172)', () => {
+    const LONG_DIR = '.claude/skills/ledger-handbook';
+    // 1200 lines: the review loads 500, the rest is read in pages.
+    const longBody = Array.from(
+        { length: 1200 },
+        (_, i) => `- rule ${i + 1}: cents`,
+    ).join('\n');
+    const longFiles: Record<string, string> = {
+        [`${LONG_DIR}/SKILL.md`]: skillMarkdown(
+            'ledger-handbook',
+            'The ledger handbook.',
+            longBody,
+        ),
+        [`${LONG_DIR}/references/codes.md`]: Array.from(
+            { length: 700 },
+            (_, i) => `LEDGER-${i + 1}`,
+        ).join('\n'),
+    };
+
+    async function setupLong() {
+        const reader = new InMemoryBaseBranchReader(longFiles);
+        reader.listFiles = async (dir) =>
+            Object.keys(longFiles).filter((f) => f.startsWith(`${dir}/`));
+        const knowledge = await new KnowledgeResolver(reader).resolve({
+            target: 'main-review',
+            items: [
+                { path: LONG_DIR, kind: 'skill', linkedTo: ['main-review'] },
+            ],
+        });
+        const tools = buildKnowledgeTools(knowledge, reader);
+        return {
+            tool: (name: string) => tools.find((t) => t.name === name)!,
+        };
+    }
+
+    it('says in the truncated skill how to read the rest', async () => {
+        const { tool } = await setupLong();
+
+        const loaded = await tool('loadSkill').execute(
+            { name: 'ledger-handbook' },
+            ctx,
+        );
+
+        expect(loaded.output).toContain('- rule 500:');
+        expect(loaded.output).not.toContain('- rule 501:');
+        expect(loaded.output).toContain(
+            'readSkillFile` (skill "ledger-handbook", path "SKILL.md", offset 500)',
+        );
+    });
+
+    it('reads every remaining section of SKILL.md in pages', async () => {
+        const { tool } = await setupLong();
+
+        const second = await tool('readSkillFile').execute(
+            { skill: 'ledger-handbook', path: 'SKILL.md', offset: 500 },
+            ctx,
+        );
+        expect(second.isError).toBeFalsy();
+        expect(second.output).toContain('- rule 501:');
+        expect(second.output).toContain('- rule 1000:');
+        expect(second.output).not.toContain('- rule 1001:');
+        expect(second.output).toContain('path "SKILL.md", offset 1000');
+
+        const last = await tool('readSkillFile').execute(
+            { skill: 'ledger-handbook', path: 'SKILL.md', offset: 1000 },
+            ctx,
+        );
+        expect(last.output).toContain('- rule 1200:');
+        expect(last.output).not.toContain('truncated');
+    });
+
+    it('pages a long reference file the same way', async () => {
+        const { tool } = await setupLong();
+
+        const first = await tool('readSkillFile').execute(
+            { skill: 'ledger-handbook', path: 'references/codes.md' },
+            ctx,
+        );
+        expect(first.output).toContain('LEDGER-500');
+        expect(first.output).not.toContain('LEDGER-501\n');
+        expect(first.output).toContain(
+            'path "references/codes.md", offset 500',
+        );
+
+        const rest = await tool('readSkillFile').execute(
+            {
+                skill: 'ledger-handbook',
+                path: 'references/codes.md',
+                offset: 500,
+            },
+            ctx,
+        );
+        expect(rest.output).toContain('LEDGER-700');
+    });
+
+    it('refuses an offset past the end', async () => {
+        const { tool } = await setupLong();
+
+        const result = await tool('readSkillFile').execute(
+            { skill: 'ledger-handbook', path: 'SKILL.md', offset: 5000 },
+            ctx,
+        );
+
+        expect(result.isError).toBe(true);
     });
 });

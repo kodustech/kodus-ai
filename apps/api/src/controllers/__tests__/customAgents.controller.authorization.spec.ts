@@ -35,7 +35,7 @@ async function abilityFor(role: Role) {
 }
 
 async function allowed(
-    handlerName: 'resolve' | 'try' | 'status',
+    handlerName: 'resolve' | 'try' | 'tryRun' | 'status',
     role: Role,
     repositoryId: string,
 ): Promise<boolean> {
@@ -52,8 +52,14 @@ async function allowed(
             organization: { uuid: 'org-1' },
         },
         params: {},
-        query: handlerName === 'status' ? { repositoryId } : {},
-        body: handlerName === 'status' ? {} : { repositoryId },
+        query:
+            handlerName === 'status' || handlerName === 'tryRun'
+                ? { repositoryId }
+                : {},
+        body:
+            handlerName === 'status' || handlerName === 'tryRun'
+                ? {}
+                : { repositoryId },
     };
     return handlers.every((handler) => handler(ability, request));
 }
@@ -65,6 +71,18 @@ describe('CustomAgentsController repository scope', () => {
 
     it('keeps a repository admin from trying an agent on another repository', async () => {
         expect(await allowed('try', Role.REPO_ADMIN, OTHER_REPO)).toBe(false);
+    });
+
+    it("scopes reading a try's result like starting it", async () => {
+        expect(await allowed('tryRun', Role.REPO_ADMIN, ASSIGNED_REPO)).toBe(
+            true,
+        );
+        expect(await allowed('tryRun', Role.REPO_ADMIN, OTHER_REPO)).toBe(
+            false,
+        );
+        expect(await allowed('tryRun', Role.CONTRIBUTOR, ASSIGNED_REPO)).toBe(
+            false,
+        );
     });
 
     it('lets an owner try an agent on any repository', async () => {

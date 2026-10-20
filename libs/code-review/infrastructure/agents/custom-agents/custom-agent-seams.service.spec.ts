@@ -231,6 +231,25 @@ describe('CustomAgentTryRunnerService', () => {
             ...over,
         });
 
+    it("holds a finding under the team's minimum severity when the agent sets none", async () => {
+        const { runner, codeBaseConfig } = setup();
+        codeBaseConfig.getConfig.mockResolvedValue({
+            languageResultPrompt: 'pt-BR',
+            reviewMode: 'normal',
+            byokModelId: 'repo-model',
+            customAgents: [],
+            knowledge: [],
+            suggestionControl: { severityLevelFilter: 'critical' },
+        } as any);
+
+        const trace = await run(runner);
+
+        const refund = trace.findings.find(
+            (f) => f.summary === 'One-sided refund',
+        );
+        expect(refund).toMatchObject({ verdict: 'kept', wouldPost: false });
+    });
+
     it('refuses a pull request URL of another repository', async () => {
         const { runner, orchestrator, createSandboxStage } = setup();
 
@@ -430,6 +449,48 @@ describe('buildTryTrace', () => {
         ]);
     });
 
+    it("uses the team's minimum severity when the agent has none, and the agent's own over it", () => {
+        const output = {
+            suggestions: [
+                { oneSentenceSummary: 'medium one', severity: 'medium' },
+                { oneSentenceSummary: 'high one', severity: 'high' },
+            ],
+            agentName: 'x',
+            turnsUsed: 1,
+            durationMs: 1,
+        } as any;
+        const posting = (trace: ReturnType<typeof buildTryTrace>) =>
+            trace.findings.filter((f) => f.wouldPost).map((f) => f.summary);
+
+        expect(
+            posting(
+                buildTryTrace({
+                    agent: agent(),
+                    output,
+                    events: [],
+                    startedAt: Date.now(),
+                    teamMinSeverity: 'high',
+                }),
+            ),
+        ).toEqual(['high one']);
+        expect(
+            posting(
+                buildTryTrace({
+                    agent: agent({
+                        presentation: {
+                            ...agent().presentation,
+                            minSeverity: 'medium' as any,
+                        },
+                    }),
+                    output,
+                    events: [],
+                    startedAt: Date.now(),
+                    teamMinSeverity: 'high',
+                }),
+            ),
+        ).toEqual(['medium one', 'high one']);
+    });
+
     it('lists the skill files the run read, not the whole folder', () => {
         const trace = buildTryTrace({
             agent: agent(),
@@ -494,7 +555,79 @@ describe('buildTryTrace', () => {
     });
 });
 
+describe('buildTryTrace — a run that stopped early', () => {
+    const empty = (over: Record<string, unknown>) =>
+        buildTryTrace({
+            agent: agent(),
+            output: {
+                suggestions: [],
+                agentName: 'x',
+                turnsUsed: 1,
+                durationMs: 1,
+                ...over,
+            } as any,
+            events: [],
+            startedAt: Date.now(),
+        });
+
+    it('says a run that never submitted a result stopped early, not completed', () => {
+        const trace = empty({ hitHardLimit: true, finishReason: 'no-result' });
+
+        expect(trace.status).toBe('incomplete');
+        expect(trace.reason).toMatch(/without submitting a result/);
+    });
+
+    it('says a run out of steps stopped early', () => {
+        const trace = empty({ hitHardLimit: true, finishReason: 'max-steps' });
+
+        expect(trace.status).toBe('incomplete');
+        expect(trace.reason).toMatch(/ran out of steps/);
+    });
+
+    it('keeps a run that finished as completed', () => {
+        expect(empty({ finishReason: 'stop' }).status).toBe('completed');
+    });
+});
+
 describe('buildTryTrace — repeated findings', () => {
+    it('keeps the more severe copy, reading a severity off the scale as the review does', () => {
+        const copy = (severity: string, summary: string) => ({
+            relevantFile: 'src/trace.ts',
+            relevantLinesStart: 2,
+            relevantLinesEnd: 2,
+            severity,
+            oneSentenceSummary: summary,
+            suggestionContent: summary,
+        });
+        const trace = buildTryTrace({
+            agent: agent(),
+            output: {
+                suggestions: [
+                    copy(
+                        'low',
+                        'Use the shared logger instead of console.log in trace',
+                    ),
+                    copy(
+                        'major',
+                        'Use the shared logger instead of console.log here',
+                    ),
+                ],
+                agentName: 'x',
+                turnsUsed: 1,
+                durationMs: 1,
+            } as any,
+            events: [],
+            startedAt: Date.now(),
+        });
+
+        expect(
+            trace.findings.map((f) => [f.severity, f.verdict, f.wouldPost]),
+        ).toEqual([
+            ['medium', 'kept', true],
+            ['low', 'dropped', false],
+        ]);
+    });
+
     it('shows a second finding on the same lines as a repeat, not as another post', () => {
         // Try it skips the review's dedup: two near-identical findings on one
         // line both read "would post", while the review would post one.
