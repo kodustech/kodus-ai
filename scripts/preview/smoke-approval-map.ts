@@ -31,7 +31,10 @@ async function main() {
         }),
     });
     if (!login.ok) throw new Error(`Preview login returned ${login.status}`);
-    const loginBody = await login.json();
+    const loginBody = (await login.json()) as {
+        data?: { accessToken?: string };
+        accessToken?: string;
+    };
     const token = loginBody?.data?.accessToken ?? loginBody?.accessToken;
     if (typeof token !== 'string')
         throw new Error('Preview login has no token');
@@ -76,7 +79,26 @@ async function main() {
                 `Authenticated area-map read returned ${response.status}`,
             );
         }
-        const body = await response.json();
+        const body = (await response.json()) as {
+            data?: {
+                map?: {
+                    coverage?: { scannedPrs?: number };
+                    directDirectories?: {
+                        path: string;
+                        linkedBugFixPrs: number;
+                    }[];
+                };
+                topAreas?: { path: string }[];
+            };
+            map?: {
+                coverage?: { scannedPrs?: number };
+                directDirectories?: {
+                    path: string;
+                    linkedBugFixPrs: number;
+                }[];
+            };
+            topAreas?: { path: string }[];
+        };
         const result = body?.data ?? body;
         const directArea = result?.map?.directDirectories?.find(
             (area: { path: string }) => area.path === 'src/auth',
