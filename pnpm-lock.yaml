@@ -60,6 +60,9 @@ importers:
       '@ai-sdk/openai-compatible':
         specifier: ^3.0.39
         version: 3.0.39(zod@4.4.3)
+      '@anthropic-ai/claude-agent-sdk':
+        specifier: 0.3.296
+        version: 0.3.296(@anthropic-ai/sdk@0.122.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(zod@4.4.3)
       '@casl/ability':
         specifier: ^7.0.1
         version: 7.0.1
@@ -201,6 +204,9 @@ importers:
       archiver:
         specifier: ^8.0.0
         version: 8.0.0
+      aws4fetch:
+        specifier: 1.0.20
+        version: 1.0.20
       axios:
         specifier: '>=1.17.0'
         version: 1.17.0(supports-color@5.5.0)
@@ -255,6 +261,9 @@ importers:
       fast-xml-parser:
         specifier: ^5.11.1
         version: 5.11.1
+      google-auth-library:
+        specifier: 9.15.1
+        version: 9.15.1
       helmet:
         specifier: ^8.3.0
         version: 8.3.0
@@ -679,6 +688,58 @@ packages:
   '@angular-devkit/schematics@19.2.27':
     resolution: {integrity: sha512-/PZmyAlb2NGWPikRRuiWLdfHQd8Wrx6lX4HqvTcaDhlU43M3T0ud4PH2T3QDp7BzHYY92xtD8iPxX2asg67G1A==}
     engines: {node: ^18.19.1 || ^20.11.1 || >=22.0.0, npm: ^6.11.0 || ^7.5.6 || >=8.0.0, yarn: '>= 1.13.0'}
+
+  '@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.296':
+    resolution: {integrity: sha512-Wrhy7rxQVUNowQRDpSZD+3MFSBAlN4TINZSpKD8PKpEValCG6x05N855MuITvwgkH0EeoyNLRCsowJaIHa8V9Q==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@anthropic-ai/claude-agent-sdk-darwin-x64@0.3.296':
+    resolution: {integrity: sha512-klMOQ1TdA7u6sWZJYw9l5byWYxMiWzbuPhzCgVVY+LJOs4FlhsS3qLXn2RZmIFhQv1u65zwX+2CRSWEJddqfVQ==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@anthropic-ai/claude-agent-sdk-linux-arm64-musl@0.3.296':
+    resolution: {integrity: sha512-8DEazoBU4I8HsPrXgSJ1Vq30nCBF7PaKjHz1o/igCz+HZu3qepHztWpoKJKQee5Mt4XsvZLwtKuxQo1F+SC6yQ==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [musl]
+
+  '@anthropic-ai/claude-agent-sdk-linux-arm64@0.3.296':
+    resolution: {integrity: sha512-+tC1KlUlp/3BQS+EfG8RBrmru4xKwF6hNEm15gNct8k9tNVRLYOftbkNCGJPTKkoBoq0sQ+Omojzwr/W2Dg60A==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@anthropic-ai/claude-agent-sdk-linux-x64-musl@0.3.296':
+    resolution: {integrity: sha512-lMquemenM5CDNZv6g1+xBSfQpat2xiwOQUnY2mwSQKjT+IfE5/F8CgRd38ZBljwGnedPIuKs/DAZMt4YslLF5w==}
+    cpu: [x64]
+    os: [linux]
+    libc: [musl]
+
+  '@anthropic-ai/claude-agent-sdk-linux-x64@0.3.296':
+    resolution: {integrity: sha512-TStCnbg2iBtWJBQeMdO7Xwpx5IYWICmdcf7J9eXhIi4JbahWD+VLRaH5sxB+LLZjdBXekp8piKv6Ne2+arag0w==}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@anthropic-ai/claude-agent-sdk-win32-arm64@0.3.296':
+    resolution: {integrity: sha512-/epluPyoLm1NQAcHV0LUierKog7c9yyU8BgpZOtGWiM54nqTZKKBuCwANraV3ROfXYFfJdMV4Vehk/8fqxoOqQ==}
+    cpu: [arm64]
+    os: [win32]
+
+  '@anthropic-ai/claude-agent-sdk-win32-x64@0.3.296':
+    resolution: {integrity: sha512-T71Y/hp0v7VtRzTOoxAsIkPa68JpB1d/VvCKTTE9GzTkbjQZHjs3S1DM06LDxSpwjITF7OCVJq14+XjN8M9t/g==}
+    cpu: [x64]
+    os: [win32]
+
+  '@anthropic-ai/claude-agent-sdk@0.3.296':
+    resolution: {integrity: sha512-Y+cZ2BT8X94mQ9GJOVyIqhjC/nWGvwozUVLjdkzX7aSt+zuo5tgk7Hdv9V7tEUQ9fKnEuiL6moYNWDeHqCD4Lw==}
+    engines: {node: '>=18.0.0'}
+    peerDependencies:
+      '@anthropic-ai/sdk': '>=0.93.0'
+      '@modelcontextprotocol/sdk': ^1.29.0
+      zod: ^4.0.0
 
   '@anthropic-ai/sdk@0.122.0':
     resolution: {integrity: sha512-GGPNftt0caaz9MDlmNQGHX8855Ojaduyy5pm9Sm1h7HalCn0cWNb5/bweadJF+4yzbal+QL6ztBa09WAAOzLmQ==}
@@ -9889,6 +9950,45 @@ snapshots:
     transitivePeerDependencies:
       - chokidar
 
+  '@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.296':
+    optional: true
+
+  '@anthropic-ai/claude-agent-sdk-darwin-x64@0.3.296':
+    optional: true
+
+  '@anthropic-ai/claude-agent-sdk-linux-arm64-musl@0.3.296':
+    optional: true
+
+  '@anthropic-ai/claude-agent-sdk-linux-arm64@0.3.296':
+    optional: true
+
+  '@anthropic-ai/claude-agent-sdk-linux-x64-musl@0.3.296':
+    optional: true
+
+  '@anthropic-ai/claude-agent-sdk-linux-x64@0.3.296':
+    optional: true
+
+  '@anthropic-ai/claude-agent-sdk-win32-arm64@0.3.296':
+    optional: true
+
+  '@anthropic-ai/claude-agent-sdk-win32-x64@0.3.296':
+    optional: true
+
+  '@anthropic-ai/claude-agent-sdk@0.3.296(@anthropic-ai/sdk@0.122.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(zod@4.4.3)':
+    dependencies:
+      '@anthropic-ai/sdk': 0.122.0(zod@4.4.3)
+      '@modelcontextprotocol/sdk': 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
+      zod: 4.4.3
+    optionalDependencies:
+      '@anthropic-ai/claude-agent-sdk-darwin-arm64': 0.3.296
+      '@anthropic-ai/claude-agent-sdk-darwin-x64': 0.3.296
+      '@anthropic-ai/claude-agent-sdk-linux-arm64': 0.3.296
+      '@anthropic-ai/claude-agent-sdk-linux-arm64-musl': 0.3.296
+      '@anthropic-ai/claude-agent-sdk-linux-x64': 0.3.296
+      '@anthropic-ai/claude-agent-sdk-linux-x64-musl': 0.3.296
+      '@anthropic-ai/claude-agent-sdk-win32-arm64': 0.3.296
+      '@anthropic-ai/claude-agent-sdk-win32-x64': 0.3.296
+
   '@anthropic-ai/sdk@0.122.0(zod@4.4.3)':
     dependencies:
       json-schema-to-ts: 3.1.1
@@ -16179,6 +16279,17 @@ snapshots:
 
   functions-have-names@1.2.3: {}
 
+  gaxios@6.7.1:
+    dependencies:
+      extend: 3.0.2
+      https-proxy-agent: 7.0.6
+      is-stream: 2.0.1
+      node-fetch: 2.7.0
+      uuid: 14.0.1
+    transitivePeerDependencies:
+      - encoding
+      - supports-color
+
   gaxios@6.7.1(supports-color@10.2.2):
     dependencies:
       extend: 3.0.2
@@ -16196,6 +16307,15 @@ snapshots:
       https-proxy-agent: 7.0.6
       node-fetch: 3.3.2
     transitivePeerDependencies:
+      - supports-color
+
+  gcp-metadata@6.1.1:
+    dependencies:
+      gaxios: 6.7.1
+      google-logging-utils: 0.0.2
+      json-bigint: 1.0.0
+    transitivePeerDependencies:
+      - encoding
       - supports-color
 
   gcp-metadata@6.1.1(supports-color@10.2.2):
@@ -16326,6 +16446,18 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  google-auth-library@9.15.1:
+    dependencies:
+      base64-js: 1.5.1
+      ecdsa-sig-formatter: 1.0.11
+      gaxios: 6.7.1
+      gcp-metadata: 6.1.1
+      gtoken: 7.1.0
+      jws: 4.0.1
+    transitivePeerDependencies:
+      - encoding
+      - supports-color
+
   google-auth-library@9.15.1(supports-color@10.2.2):
     dependencies:
       base64-js: 1.5.1
@@ -16378,6 +16510,14 @@ snapshots:
       type-fest: 4.41.0
 
   graceful-fs@4.2.11: {}
+
+  gtoken@7.1.0:
+    dependencies:
+      gaxios: 6.7.1
+      jws: 4.0.1
+    transitivePeerDependencies:
+      - encoding
+      - supports-color
 
   gtoken@7.1.0(supports-color@10.2.2):
     dependencies:

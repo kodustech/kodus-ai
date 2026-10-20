@@ -5,7 +5,7 @@ export default {
     preset: 'ts-jest',
     testEnvironment: 'node',
     setupFiles: ['<rootDir>/test/jest.setup.ts'],
-    moduleFileExtensions: ['ts', 'tsx', 'js', 'json'],
+    moduleFileExtensions: ['ts', 'tsx', 'js', 'mjs', 'json'],
     // Web app deps (e.g. tiny-invariant, @radix-ui/*, class-variance-authority)
     // live in apps/web/node_modules, not at the root — pnpm only hoists a
     // workspace member's direct deps into ITS OWN node_modules, not
@@ -44,6 +44,9 @@ export default {
                 },
             },
         ],
+        // The Claude Agent SDK ships only `.mjs` (#2113); swc compiles it to
+        // CommonJS like the other ESM-only packages below.
+        '^.+\\.mjs$': ['@swc/jest', { module: { type: 'commonjs' } }],
     },
     moduleNameMapper: {
         // e2b SDK mock — the real package depends on chalk v5+ (ESM-only)
@@ -248,7 +251,7 @@ export default {
         // The `(?:.*/)?` prefix lets these ESM-only packages be transformed even
         // when NESTED (e.g. typeorm/node_modules/uuid — uuid@14 is ESM-only and
         // ships inside typeorm after the dep bump), not just at the top level.
-        'node_modules/(?!(?:.*/)?(@octokit|universal-user-agent|p-limit|uuid|universal-github-app-jwt|before-after-hook|yocto-queue|jose|@ai-sdk|ai|@workflow|archiver|zip-stream|compress-commons|crc32-stream|readdir-glob|is-stream|lazystream|normalize-path)/)',
+        'node_modules/(?!(?:.*/)?(@anthropic-ai/claude-agent-sdk|@octokit|universal-user-agent|p-limit|uuid|universal-github-app-jwt|before-after-hook|yocto-queue|jose|@ai-sdk|ai|@workflow|archiver|zip-stream|compress-commons|crc32-stream|readdir-glob|is-stream|lazystream|normalize-path)/)',
     ],
     modulePathIgnorePatterns: [
         '<rootDir>/dist',

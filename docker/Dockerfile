@@ -178,6 +178,14 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=private \
 COPY --from=bun-source /usr/local/bin/bun /usr/local/bin/bun
 
 COPY --chown=1000:1000 --from=prod-deps /usr/src/app/node_modules ./node_modules
+# Claude slots run on the Claude Agent SDK (#2113), which spawns its platform
+# binary from node_modules. Fail the build if this platform's binary is
+# missing or does not run (optional deps skipped, wrong libc).
+RUN set -e; \
+    bin="$(ls node_modules/@anthropic-ai/claude-agent-sdk-linux-*/claude | grep -v musl | head -n 1)"; \
+    test -n "$bin"; \
+    CLAUDE_CONFIG_DIR=/tmp/claude-version HOME=/tmp/claude-version "$bin" --version; \
+    rm -rf /tmp/claude-version
 COPY --chown=1000:1000 --from=build /usr/src/app/dist ./dist
 COPY --chown=1000:1000 --from=build /usr/src/app/libs/agents/skills ./libs/agents/skills
 COPY --chown=1000:1000 --from=build /usr/src/app/package.json ./package.json

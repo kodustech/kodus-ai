@@ -4,6 +4,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 
 
 import { AnalyticsWarehouseModule } from '@libs/ee/analytics-warehouse';
+import { ClaudeSdkModule } from '@libs/ee/claude-agent-sdk/claude-sdk.module';
 import { AutomationModule } from '@libs/automation/modules/automation.module';
 import { CockpitModule } from '@libs/cockpit/modules/cockpit.module';
 import { CodebaseModule } from '@libs/code-review/modules/codebase.module';
@@ -68,6 +69,8 @@ export class WorkerModule {
             // Both roles read Mongo: code-review writes PR state; analytics
             // reads `pullRequests` for ingestion.
             SharedMongoModule.forRoot(),
+            // Both roles call models: Claude slots run on the Agent SDK (#2113).
+            ClaudeSdkModule,
         ];
 
         if (role === 'code-review') {
