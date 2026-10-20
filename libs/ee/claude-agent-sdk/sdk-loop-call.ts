@@ -159,6 +159,9 @@ async function runInSession(deps: ClaudeSdkDeps, runtime: SdkRuntime, call: SdkL
     const toolResultOf = (id: string, fallback?: unknown) => toolResults.get(id)?.output ?? fallback;
 
     const onToolBatch = async (calls: ToolBatchCall[]) => {
+        // The hook and the message stream share the CLI's stdout; let the
+        // stream deliver the turn's text before it is read here.
+        await new Promise((r) => setImmediate(r));
         const ids = new Set(calls.map((c) => c.tool_use_id));
         const owners = order.filter((id) => turns.get(id)!.toolUses.some((t) => ids.has(t.id)));
         owners.forEach((id) => (turns.get(id)!.emitted = true));

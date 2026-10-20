@@ -128,8 +128,16 @@ const TIER0 = {
     // Scripted local model (evals/shared/fake-llm-server.js) for the wiring
     // smoke: an org's BYOK openai_compatible endpoint at 127.0.0.1.
     // Measures nothing — it proves the harness still drives the engine.
+    // EVAL_FAKE_AS_CLAUDE=1 (wiring smoke --claude-sdk) presents the same route
+    // as an org's Claude slot, so every eval's floors and recordings for
+    // eval-fake apply while its calls run on the Claude Agent SDK (#2113).
     'eval-fake': {
-        provider: 'openai_compatible',
+        get provider() {
+            return process.env.EVAL_FAKE_AS_CLAUDE === '1' ? 'anthropic' : 'openai_compatible';
+        },
+        get doModel() {
+            return process.env.EVAL_FAKE_AS_CLAUDE === '1' ? 'claude-sonnet-5-5' : undefined;
+        },
         keyEnvs: ['EVAL_FAKE_LLM_KEY'],
         get baseURL() {
             return process.env.EVAL_FAKE_LLM_URL;

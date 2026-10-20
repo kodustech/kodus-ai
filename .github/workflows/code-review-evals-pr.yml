@@ -95,6 +95,10 @@ jobs:
                   EOF
             - name: Run wiring smoke
               run: node evals/wiring-smoke.js --eval-files-dir=eval-files
+            # The same evals on an org's Claude slot: every model call must go
+            # through the Claude Agent SDK and its local gateway (#2113).
+            - name: Run wiring smoke on the Claude Agent SDK path
+              run: node evals/wiring-smoke.js --claude-sdk
 
             # The steps whose production files this PR changed: the experiments to run.
             - name: Steps this PR changes

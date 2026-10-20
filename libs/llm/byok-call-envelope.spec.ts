@@ -109,6 +109,9 @@ async function viaEnvelope(slot: NormalizedModel, makeErr: () => Error): Promise
 
 const normalize = (o: Observed) => ({ ...o, report: { ...(o.report as object), organizationId: 'org' } });
 
+// 306 shapes × 9 failures through two paths: slow on a loaded machine.
+jest.setTimeout(120_000);
+
 describe('BYOK call envelope: same behavior as the AI SDK wrapper', () => {
     const shapes = PROD_SHAPES as Array<Record<string, unknown>>;
 

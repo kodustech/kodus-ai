@@ -232,6 +232,11 @@ describe('fake llm — Anthropic Messages, Vertex, Bedrock', () => {
         expect((await req()).stop_reason).toBe('end_turn');
     });
 
+    it('answers a schema written into the system prompt (reroute-json) with an instance of it', () => {
+        const system = [{ type: 'text', text: 'Classify.\n\nReturn ONLY a JSON object that conforms EXACTLY to this JSON Schema (same property names, no extra keys):\n{"type":"object","properties":{"addressed":{"type":"boolean"}}}' }];
+        expect(JSON.parse(decideAnthropic({ system, messages: [{ role: 'user', content: 'x' }] }).text)).toEqual({ addressed: true });
+    });
+
     it('answers count_tokens and HEAD /api/hello, and 404s an unknown Anthropic path', async () => {
         const count = await client.messages.countTokens({ model: 'claude-sonnet-5-5', messages: [{ role: 'user', content: 'x' }] });
         expect(count.input_tokens).toBe(100);

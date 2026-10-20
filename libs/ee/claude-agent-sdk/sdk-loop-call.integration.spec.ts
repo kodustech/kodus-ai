@@ -142,8 +142,9 @@ describe('Claude loop on the Agent SDK (real binary)', () => {
         script = (b) => ({ tool: b.tools.find((t: any) => t.name === 'mcp__kodus__readFile') });
         const state = await run(spec({ maxSteps: 3 }));
         expect(state.status).toBe('budget-exhausted');
-        expect(state.steps.length).toBeGreaterThanOrEqual(3);
-        expect(modelCalls().length).toBeLessThanOrEqual(4);
+        // maxSteps turns plus the one a finalize block may take: the CLI asks 4 times.
+        expect(modelCalls()).toHaveLength(4);
+        expect(state.steps).toHaveLength(4);
     });
 
     it('a provider error surfaces as today: the runner’s error state with the status, nothing retried on another runtime', async () => {

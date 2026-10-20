@@ -972,7 +972,7 @@ export async function runTextReviewCall(
  * TypeValidationError when the object has the wrong shape), so the caller's
  * recovery treats both runtimes alike.
  */
-async function validatedSdkOutput(r: SdkOneShotResult, validatingSchema: unknown): Promise<unknown> {
+export async function validatedSdkOutput(r: SdkOneShotResult, validatingSchema: unknown): Promise<unknown> {
     const fail = (message: string, cause: Error) =>
         new NoObjectGeneratedError({
             message,

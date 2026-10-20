@@ -22,6 +22,12 @@
 // each one only when one of its files changed.
 //
 //   node evals/wiring-smoke.js [--engine-files=<file>] [--kody-rules-files=<file>] [--eval-files-dir=<dir>] [--results=<file>]
+//   node evals/wiring-smoke.js --claude-sdk
+//
+// --claude-sdk runs every model-backed step on an org's Claude slot instead
+// (#2113): each one must reach the scripted model through the Claude Agent SDK
+// (the CLI and the local gateway), so every caller that goes through LLM.run is
+// proven on that runtime, and one that bypasses it fails.
 //
 // --results writes one entry per step ({ step, ok, problem, ms, calls }), which
 // evals/stage-signals.js turns into one quality signal per review stage.
@@ -99,6 +105,7 @@ async function main() {
     const kodyRulesFilesOut = (process.argv.find((a) => a.startsWith('--kody-rules-files=')) || '').split('=')[1];
     const evalFilesDir = (process.argv.find((a) => a.startsWith('--eval-files-dir=')) || '').split('=')[1];
     const resultsOut = (process.argv.find((a) => a.startsWith('--results=')) || '').split('=')[1];
+    const claudeSdk = process.argv.includes('--claude-sdk');
     const server = await startFakeLlmServer();
     const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'eval-wiring-'));
     const finderOut = path.join(scratch, 'finder-recall-eval-fake.json');
@@ -213,12 +220,31 @@ async function main() {
         { name: 'review-lifecycle', result: 'own', model: true, args: ['evals/review-rounds/lifecycle.js', '--model=eval-fake', '--reps=1', '--wiring-smoke', `--output=${path.join(scratch, 'review-lifecycle.json')}`] },
     ];
 
+    // On --claude-sdk every model step asks for the Claude slot; the managed route
+    // has no slot (Kodus's default model is not Claude) and is left out.
+    const runSteps = claudeSdk
+        ? steps
+              .filter((step) => step.name !== 'managed-route' && step.name !== 'claude-sdk')
+              .map((step) =>
+                  step.model
+                      ? {
+                            ...step,
+                            env: { ...(step.env || {}), EVAL_FAKE_AS_CLAUDE: '1' },
+                            check: undefined,
+                            viaSdk: true,
+                        }
+                      : step,
+              )
+        : steps;
+    const sdkCalls = () => server.calls.filter((c) => /\/v1\/messages$/.test(c.path) && String(c.headers['anthropic-beta'] || '').includes('claude-code')).length;
+
     const results = [];
-    for (const step of steps) {
+    for (const step of runSteps) {
         const given = step.args.find((a) => a.startsWith('--output='));
         const resultFile = given ? given.slice('--output='.length) : path.join(scratch, `${step.name}-result.json`);
         const args = step.result && !given ? [...step.args, `--output=${resultFile}`] : step.args;
         const before = server.stats.requests;
+        const sdkBefore = sdkCalls();
         const modelsBefore = { ...server.stats.byModel };
         // eslint-disable-next-line no-await-in-loop
         const { code, timedOut, output, ms } = await run(process.execPath, args, { ...env, ...(step.env || {}), TRACE_LOADED_LABEL: step.name });
@@ -228,6 +254,7 @@ async function main() {
         if (timedOut) problem = `did not exit within ${STEP_TIMEOUT_MS / 60000} min`;
         else if (code !== 0) problem = `exit ${code}`;
         else if (step.model && calls === 0) problem = 'never reached the model';
+        else if (step.viaSdk && sdkCalls() === sdkBefore) problem = 'no model call went through the Claude Agent SDK';
         else if (step.check) problem = step.check({ models });
         if (!problem && step.result) problem = resultProblem(step, resultFile);
         results.push({ step, problem, calls, ms, output });
@@ -240,7 +267,7 @@ async function main() {
     // lacks its own runner was not recorded properly; trusting it would narrow
     // the filter check and let the nightly skip real changes.
     const loaded = fs.existsSync(traceDir) ? readTrace(traceDir) : [];
-    const untraced = steps.filter((step) => !(fs.existsSync(traceDir) && readTrace(traceDir, step.name).includes(step.args[0])));
+    const untraced = runSteps.filter((step) => !(fs.existsSync(traceDir) && readTrace(traceDir, step.name).includes(step.args[0])));
     const outside = uncovered(loaded, prWorkflowPaths());
     const coverageProblem = untraced.length
         ? `incomplete trace for ${untraced.map((step) => step.name).join(', ')} — its runner is missing from what it loaded`

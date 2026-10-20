@@ -194,8 +194,9 @@ describe('SdkGateway', () => {
             try {
                 const s = await slow.openSession({ route: anthropicRoute(), envelope: { slot: sl, organizationId: 'org-q' } });
                 const a = ask(s.baseUrl);
+                for (let i = 0; i < 100 && !order.length; i++) await new Promise((r) => setTimeout(r, 10));
                 const b = ask(s.baseUrl);
-                await new Promise((r) => setTimeout(r, 50));
+                await new Promise((r) => setTimeout(r, 300));
                 expect(order).toEqual(['start0']);
                 release();
                 await Promise.all([a, b]);
@@ -236,8 +237,10 @@ describe('SdkGateway', () => {
                     const a = await slow.openSession({ route: anthropicRoute(), envelope: { slot: slot({ provider: 'kodus', model: 'anthropic/claude-sonnet-5-5' } as any), organizationId: 'org-a' } });
                     const b = await slow.openSession({ route: anthropicRoute(), envelope: { slot: slot({ provider: 'kodus', model: 'anthropic/claude-sonnet-5-5' } as any), organizationId: 'org-b' } });
                     const pa = ask(a.baseUrl);
+                    for (let i = 0; i < 100 && !started.length; i++) await new Promise((r) => setTimeout(r, 10));
                     const pb = ask(b.baseUrl);
-                    await new Promise((r) => setTimeout(r, 50));
+                    // Long enough for the second request to start if nothing held it.
+                    await new Promise((r) => setTimeout(r, 300));
                     expect(started).toEqual(['0']);
                     release();
                     await Promise.all([pa, pb]);

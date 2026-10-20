@@ -53,7 +53,11 @@ describe('ClaudeSdkModule', () => {
         const live = parts.pool
             .withSession(
                 { resolved: { model: 'claude-sonnet-5-5', route: { format: 'anthropic', baseUrl: 'http://127.0.0.1:9', apiKey: 'k', auth: 'x-api-key', firstParty: true } }, envelope: {} },
-                (s) => new Promise((_r, reject) => s.abortController.signal.addEventListener('abort', () => reject(new Error('aborted')))),
+                (s) =>
+                    new Promise((_r, reject) => {
+                        if (s.abortController.signal.aborted) return reject(new Error('aborted'));
+                        s.abortController.signal.addEventListener('abort', () => reject(new Error('aborted')));
+                    }),
             )
             .catch((e: Error) => e.message);
         await new Promise((r) => setTimeout(r, 20));

@@ -224,9 +224,28 @@ function decideAnthropic(body) {
         if (done) return { tool: done };
         if (choice?.type === 'any') return { tool: exploration[0] };
     }
-    const schema = anthropicJsonSchema(body);
+    const schema = anthropicJsonSchema(body) || promptJsonSchema(body);
     if (schema) return { text: JSON.stringify(instanceOf(schema)) };
     return { text: '{}' };
+}
+
+// The reroute-json plan (libs/llm/structured-review-call.ts withJsonContract)
+// writes the schema into the system prompt and reads JSON text back; answer it
+// with an instance of that schema, as a model following the prompt would.
+const PROMPT_SCHEMA_MARKER = 'conforms EXACTLY to this JSON Schema (same property names, no extra keys):\n';
+function promptJsonSchema(body) {
+    const system = Array.isArray(body.system) ? body.system.map((b) => b?.text || '').join('\n') : String(body.system || '');
+    const at = system.indexOf(PROMPT_SCHEMA_MARKER);
+    if (at < 0) return null;
+    const rest = system.slice(at + PROMPT_SCHEMA_MARKER.length);
+    for (let end = rest.lastIndexOf('}'); end > 0; end = rest.lastIndexOf('}', end - 1)) {
+        try {
+            return JSON.parse(rest.slice(0, end + 1));
+        } catch {
+            /* shorter candidate */
+        }
+    }
+    return null;
 }
 
 const ANTHROPIC_USAGE = { input_tokens: 100, output_tokens: 10, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };

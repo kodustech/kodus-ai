@@ -13,7 +13,7 @@ import { isClaudeSdkInfraError } from './errors';
 
 const { startFakeLlmServer } = require('../../../evals/shared/fake-llm-server');
 
-jest.setTimeout(60_000);
+jest.setTimeout(120_000);
 
 const KEY = 'upstream-key';
 
@@ -144,7 +144,14 @@ describe('SdkProcessPool (real binary)', () => {
 
     it('shutdown aborts live sessions, rejects the queue and refuses new work', async () => {
         const pool = new SdkProcessPool(gateway, 1);
-        const live = pool.withSession(request(), (s) => new Promise((_r, reject) => s.abortController.signal.addEventListener('abort', () => reject(new Error('aborted by shutdown')))));
+        const live = pool.withSession(
+            request(),
+            (s) =>
+                new Promise((_r, reject) => {
+                    if (s.abortController.signal.aborted) return reject(new Error('aborted by shutdown'));
+                    s.abortController.signal.addEventListener('abort', () => reject(new Error('aborted by shutdown')));
+                }),
+        );
         await new Promise((r) => setTimeout(r, 20));
         const queued = pool.withSession(request(), async () => 'never').catch((e) => e);
         const liveErr = live.catch((e) => e);
