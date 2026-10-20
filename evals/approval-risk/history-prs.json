@@ -356,7 +356,9 @@
         "docs/changes/coordinates/15612.bugfix.rst"
       ],
       "filesComplete": true,
-      "linkedBugIssues": []
+      "linkedBugIssues": [
+        "https://github.com/astropy/astropy/issues/15611"
+      ]
     },
     {
       "id": "astropy/astropy#15723",
@@ -486,7 +488,9 @@
         "docs/whatsnew/index.rst"
       ],
       "filesComplete": true,
-      "linkedBugIssues": []
+      "linkedBugIssues": [
+        "https://github.com/astropy/astropy/issues/17258"
+      ]
     },
     {
       "id": "astropy/astropy#17461",
@@ -500,7 +504,9 @@
         "docs/changes/config/17461.perf.rst"
       ],
       "filesComplete": true,
-      "linkedBugIssues": []
+      "linkedBugIssues": [
+        "https://github.com/astropy/astropy/issues/12504"
+      ]
     },
     {
       "id": "astropy/astropy#17800",
@@ -515,7 +521,9 @@
         "docs/changes/stats/17800.bugfix.rst"
       ],
       "filesComplete": true,
-      "linkedBugIssues": []
+      "linkedBugIssues": [
+        "https://github.com/astropy/astropy/issues/17786"
+      ]
     },
     {
       "id": "astropy/astropy#17961",
@@ -529,7 +537,9 @@
         ".github/workflows/codeql-analysis.yml"
       ],
       "filesComplete": true,
-      "linkedBugIssues": []
+      "linkedBugIssues": [
+        "https://github.com/astropy/astropy/issues/17959"
+      ]
     },
     {
       "id": "django/django#14697",
@@ -583,7 +593,9 @@
         "src/_macosx.m"
       ],
       "filesComplete": true,
-      "linkedBugIssues": []
+      "linkedBugIssues": [
+        "https://github.com/matplotlib/matplotlib/issues/16498"
+      ]
     },
     {
       "id": "matplotlib/matplotlib#17068",
@@ -760,7 +772,9 @@
         "lib/matplotlib/tests/test_legend.py"
       ],
       "filesComplete": true,
-      "linkedBugIssues": []
+      "linkedBugIssues": [
+        "https://github.com/matplotlib/matplotlib/issues/20258"
+      ]
     },
     {
       "id": "matplotlib/matplotlib#21039",
@@ -1023,7 +1037,9 @@
         "seaborn/axisgrid.py"
       ],
       "filesComplete": true,
-      "linkedBugIssues": []
+      "linkedBugIssues": [
+        "https://github.com/mwaskom/seaborn/issues/2346"
+      ]
     },
     {
       "id": "mwaskom/seaborn#2359",
@@ -1051,7 +1067,9 @@
         "seaborn/tests/test_core.py"
       ],
       "filesComplete": true,
-      "linkedBugIssues": []
+      "linkedBugIssues": [
+        "https://github.com/mwaskom/seaborn/issues/2295"
+      ]
     },
     {
       "id": "mwaskom/seaborn#3447",
@@ -1380,7 +1398,9 @@
         "xarray/tests/test_computation.py"
       ],
       "filesComplete": true,
-      "linkedBugIssues": []
+      "linkedBugIssues": [
+        "https://github.com/pydata/xarray/issues/6444"
+      ]
     },
     {
       "id": "pydata/xarray#6592",
@@ -1395,7 +1415,9 @@
         "xarray/tests/test_dataset.py"
       ],
       "filesComplete": true,
-      "linkedBugIssues": []
+      "linkedBugIssues": [
+        "https://github.com/pydata/xarray/issues/6505"
+      ]
     },
     {
       "id": "pydata/xarray#6710",
@@ -1410,7 +1432,9 @@
         "xarray/backends/rasterio_.py"
       ],
       "filesComplete": true,
-      "linkedBugIssues": []
+      "linkedBugIssues": [
+        "https://github.com/pydata/xarray/issues/6707"
+      ]
     },
     {
       "id": "pydata/xarray#6823",
@@ -1425,7 +1449,9 @@
         "xarray/tests/test_formatting.py"
       ],
       "filesComplete": true,
-      "linkedBugIssues": []
+      "linkedBugIssues": [
+        "https://github.com/pydata/xarray/issues/6822"
+      ]
     },
     {
       "id": "pydata/xarray#6939",
@@ -1469,7 +1495,9 @@
         "xarray/tests/test_groupby.py"
       ],
       "filesComplete": true,
-      "linkedBugIssues": []
+      "linkedBugIssues": [
+        "https://github.com/pydata/xarray/issues/7012"
+      ]
     },
     {
       "id": "pydata/xarray#7114",
@@ -1517,7 +1545,9 @@
         "xarray/tests/__init__.py"
       ],
       "filesComplete": true,
-      "linkedBugIssues": []
+      "linkedBugIssues": [
+        "https://github.com/pydata/xarray/issues/7483"
+      ]
     },
     {
       "id": "pydata/xarray#7798",
@@ -1532,7 +1562,9 @@
         "xarray/tests/test_groupby.py"
       ],
       "filesComplete": true,
-      "linkedBugIssues": []
+      "linkedBugIssues": [
+        "https://github.com/pydata/xarray/issues/7797"
+      ]
     },
     {
       "id": "pydata/xarray#7876",
@@ -1735,7 +1767,9 @@
         "tox.ini"
       ],
       "filesComplete": true,
-      "linkedBugIssues": []
+      "linkedBugIssues": [
+        "https://github.com/pylint-dev/pylint/issues/3895"
+      ]
     },
     {
       "id": "pylint-dev/pylint#4105",
@@ -1767,7 +1801,9 @@
         "tests/test_self.py"
       ],
       "filesComplete": true,
-      "linkedBugIssues": []
+      "linkedBugIssues": [
+        "https://github.com/pylint-dev/pylint/issues/3636"
+      ]
     },
     {
       "id": "pylint-dev/pylint#4423",
@@ -1800,7 +1836,9 @@
         "tests/functional/u/use/used_before_assignment_issue626.txt"
       ],
       "filesComplete": true,
-      "linkedBugIssues": []
+      "linkedBugIssues": [
+        "https://github.com/pylint-dev/pylint/issues/626"
+      ]
     },
     {
       "id": "pylint-dev/pylint#5077",
@@ -1994,7 +2032,9 @@
         "tests/functional/ext/docparams/return/missing_return_doc_required.py"
       ],
       "filesComplete": true,
-      "linkedBugIssues": []
+      "linkedBugIssues": [
+        "https://github.com/pylint-dev/pylint/issues/4743"
+      ]
     },
     {
       "id": "pylint-dev/pylint#7537",
@@ -2036,7 +2076,9 @@
         "requirements_test_pre_commit.txt"
       ],
       "filesComplete": true,
-      "linkedBugIssues": []
+      "linkedBugIssues": [
+        "https://github.com/pylint-dev/pylint/issues/7916"
+      ]
     },
     {
       "id": "pylint-dev/pylint#7921",
@@ -2051,7 +2093,9 @@
         "tests/functional/u/used/used_before_assignment.py"
       ],
       "filesComplete": true,
-      "linkedBugIssues": []
+      "linkedBugIssues": [
+        "https://github.com/pylint-dev/pylint/issues/7873"
+      ]
     },
     {
       "id": "pylint-dev/pylint#8085",
@@ -2144,7 +2188,9 @@
         "tests/pyreverse/functional/class_diagrams/annotations/attributes_annotation.py"
       ],
       "filesComplete": true,
-      "linkedBugIssues": []
+      "linkedBugIssues": [
+        "https://github.com/pylint-dev/pylint/issues/9014"
+      ]
     },
     {
       "id": "pylint-dev/pylint#9195",
@@ -2272,7 +2318,9 @@
         "towncrier.toml"
       ],
       "filesComplete": true,
-      "linkedBugIssues": []
+      "linkedBugIssues": [
+        "https://github.com/pylint-dev/pylint/issues/9764"
+      ]
     },
     {
       "id": "pylint-dev/pylint#9978",
@@ -2560,7 +2608,10 @@
         "sklearn/decomposition/tests/test_pca.py"
       ],
       "filesComplete": true,
-      "linkedBugIssues": []
+      "linkedBugIssues": [
+        "https://github.com/scikit-learn/scikit-learn/issues/16546",
+        "https://github.com/scikit-learn/scikit-learn/issues/16730"
+      ]
     },
     {
       "id": "scikit-learn/scikit-learn#17078",
@@ -2669,7 +2720,9 @@
         "sklearn/utils/validation.py"
       ],
       "filesComplete": true,
-      "linkedBugIssues": []
+      "linkedBugIssues": [
+        "https://github.com/scikit-learn/scikit-learn/issues/18146"
+      ]
     },
     {
       "id": "scikit-learn/scikit-learn#18278",
@@ -2737,7 +2790,9 @@
         "doc/developers/maintainer.rst"
       ],
       "filesComplete": true,
-      "linkedBugIssues": []
+      "linkedBugIssues": [
+        "https://github.com/scikit-learn/scikit-learn/issues/18918"
+      ]
     },
     {
       "id": "scikit-learn/scikit-learn#19325",
@@ -3812,7 +3867,9 @@
         "sklearn/tests/test_calibration.py"
       ],
       "filesComplete": true,
-      "linkedBugIssues": []
+      "linkedBugIssues": [
+        "https://github.com/scikit-learn/scikit-learn/issues/28841"
+      ]
     },
     {
       "id": "scikit-learn/scikit-learn#29228",
@@ -4230,7 +4287,9 @@
         "sphinx/util/display.py"
       ],
       "filesComplete": true,
-      "linkedBugIssues": []
+      "linkedBugIssues": [
+        "https://github.com/sphinx-doc/sphinx/issues/11675"
+      ]
     },
     {
       "id": "sphinx-doc/sphinx#12131",

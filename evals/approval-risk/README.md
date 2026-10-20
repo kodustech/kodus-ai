@@ -21,9 +21,14 @@ Generate the manifest from a local copy of that file:
 ```bash
 node evals/approval-risk/seed-candidates.js /path/to/swr_datasets_d5c5.jsonl
 python3 evals/approval-risk/materialize-snapshots.py /path/to/swr_datasets_d5c5.jsonl
+python3 evals/approval-risk/materialize-area-history.py
+python3 evals/approval-risk/enrich-history-links.py
+node evals/approval-risk/attach-area-maps.js
 ```
 
 The selection keeps PRs from 2020 onward with either a SWRench functional finding or no recorded finding, then sorts by creation time and PR identity. This yields 356 candidates across 12 repositories (124 with a functional finding, 232 without a recorded finding). Those source groups are **sampling strata**, never approval ground truth. Do not infer that a PR without recorded findings is safe, or that an unmerged PR was unsafe.
+
+The attached area maps use only earlier merged PRs from this sampled pool. `enrich-history-links.py` fetches their closing issues and records links with a bug, defect or regression label; 29 of 339 historical PRs have one. Within the first 200 scored snapshots, 188 have a map and 100 have a prior linked-bug signal. This is sparse history, not a complete repository scan. GitHub's current issue labels stand in for the labels at historical merge time; that time mismatch is a limitation of this offline eval.
 
 All 356 snapshots have an `ahead` base-to-head comparison. In 146 cases the recorded base had diverged; the materializer used the first PR commit's parent as a conservative base and recorded `baseSource: first-commit-parent`. Mark a case `uncertain` if that diff omits context needed to judge it. Some PR titles may have changed after the snapshot; check the linked PR timeline before using the title as evidence.
 
