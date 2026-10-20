@@ -174,6 +174,53 @@ describe('knowledge tools', () => {
         expect(reader.reads).toContain(`${SKILL_DIR}/references/codes.md`);
     });
 
+    it('reports only the skills opened and files read that returned content', async () => {
+        const reader = new InMemoryBaseBranchReader(files);
+        reader.listFiles = async (dir) =>
+            Object.keys(files).filter((f) => f.startsWith(`${dir}/`));
+        const knowledge = await new KnowledgeResolver(reader).resolve({
+            target: 'main-review',
+            items: [
+                { path: SKILL_DIR, kind: 'skill', linkedTo: ['main-review'] },
+            ],
+        });
+        const reads: Array<{ skill: string; path?: string }> = [];
+        const tools = buildKnowledgeTools(
+            knowledge,
+            reader,
+            new RunToolCache(),
+            (read) => reads.push(read),
+        );
+        const tool = (name: string) => tools.find((t) => t.name === name)!;
+        // Listed in the skill folder, gone when the agent reads it.
+        const readFile = reader.readFile.bind(reader);
+        reader.readFile = async (path) =>
+            path.endsWith('references/leak.md')
+                ? { status: 'missing' }
+                : readFile(path);
+
+        await tool('loadSkill').execute({ name: 'ledger-errors' }, ctx);
+        await tool('loadSkill').execute({ name: 'other-skill' }, ctx);
+        await tool('readSkillFile').execute(
+            { skill: 'ledger-errors', path: 'references/codes.md' },
+            ctx,
+        );
+        const failed = await tool('readSkillFile').execute(
+            { skill: 'ledger-errors', path: 'references/leak.md' },
+            ctx,
+        );
+        await tool('readSkillFile').execute(
+            { skill: 'ledger-errors', path: 'not-a-file.md' },
+            ctx,
+        );
+
+        expect(failed.isError).toBe(true);
+        expect(reads).toEqual([
+            { skill: 'ledger-errors' },
+            { skill: 'ledger-errors', path: 'references/codes.md' },
+        ]);
+    });
+
     it('readSkillFile points SKILL.md back to loadSkill', async () => {
         const { tool } = await setup();
 

@@ -31,10 +31,19 @@ export const READ_SKILL_FILE_TOOL = 'readSkillFile';
 
 const MAX_SKILL_FILE_TOKENS = 5000;
 
+/** A skill the agent opened, or one of its files it read, that returned content. */
+export interface SkillRead {
+    skill: string;
+    /** The file read from the skill folder; absent for loadSkill. */
+    path?: string;
+}
+
 export function buildKnowledgeTools(
     knowledge: ResolvedKnowledge | undefined,
     reader: BaseBranchReader,
     cache: RunToolCache = new RunToolCache(),
+    /** Told of each skill opened and file read that returned content. */
+    onRead?: (read: SkillRead) => void,
 ): AgentTool[] {
     const skills = knowledge?.skills ?? [];
     if (!skills.length) return [];
@@ -65,6 +74,7 @@ export function buildKnowledgeTools(
                     isError: true,
                 };
             }
+            onRead?.({ skill: skill.name });
             return {
                 output: renderLoadedSkill(skill, knowledge!.ref),
                 meta: { skill: skill.name, truncated: skill.bodyTruncated },
@@ -117,10 +127,13 @@ export function buildKnowledgeTools(
                 };
             }
 
-            return cache.getOrRun(
+            const result = await cache.getOrRun(
                 ['skill-file', reader.ref, skill.name, relative],
                 () => readSkillFileContent(skill.name, full, relative),
             );
+            if (!result.isError)
+                onRead?.({ skill: skill.name, path: relative });
+            return result;
         },
     };
 

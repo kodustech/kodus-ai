@@ -622,6 +622,7 @@ export abstract class BaseCodeReviewAgentProvider {
                           input.knowledge,
                           input.knowledgeReader,
                           this.getRunToolCache() ?? new RunToolCache(),
+                          input.customAgentTooling?.onSkillRead,
                       )
                     : [];
             // Agent tools before the skill tools: astGrep is the same for

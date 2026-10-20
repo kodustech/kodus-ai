@@ -302,6 +302,7 @@ describe('CustomAgentTryRunnerService', () => {
             sandbox,
             installedClis: { 'ledger-agent': installed },
             onCliRun: expect.any(Function),
+            onSkillRead: expect.any(Function),
         });
         // The repository's config, as the review reads it.
         expect(input.languageResultPrompt).toBe('pt-BR');
@@ -430,11 +431,6 @@ describe('buildTryTrace', () => {
     });
 
     it('lists the skill files the run read, not the whole folder', () => {
-        const call = (tool: string, args: object) => ({
-            tool,
-            args: JSON.stringify(args),
-            durationMs: 1,
-        });
         const trace = buildTryTrace({
             agent: agent(),
             output: {
@@ -443,23 +439,43 @@ describe('buildTryTrace', () => {
                 turnsUsed: 1,
                 durationMs: 1,
             } as any,
+            events: [{ status: 'completed', toolCalls: [] } as any],
+            startedAt: Date.now(),
+            skills: [{ name: 'audit', path: '.skills/audit/SKILL.md' }],
+            // What the skill tools reported as read; a failed read is absent.
+            skillReads: [
+                { skill: 'audit' },
+                { skill: 'audit', path: 'references/sqli.md' },
+                { skill: 'audit', path: 'references/sqli.md' },
+            ],
+        });
+
+        expect(trace.skillsOpened).toEqual([
+            { path: '.skills/audit/SKILL.md', files: ['references/sqli.md'] },
+        ]);
+    });
+
+    it('does not list a skill file whose read failed', () => {
+        const trace = buildTryTrace({
+            agent: agent(),
+            output: {
+                suggestions: [],
+                agentName: 'x',
+                turnsUsed: 1,
+                durationMs: 1,
+            } as any,
+            // The call was made, but the read returned an error.
             events: [
                 {
                     status: 'completed',
                     toolCalls: [
-                        call('loadSkill', { name: 'audit' }),
-                        call('readSkillFile', {
-                            skill: 'audit',
-                            path: 'references/sqli.md',
-                        }),
-                        call('readSkillFile', {
-                            skill: 'audit',
-                            path: 'references/sqli.md',
-                        }),
-                        call('readSkillFile', {
-                            skill: 'audit',
-                            path: 'not-a-file.md',
-                        }),
+                        {
+                            tool: 'readSkillFile',
+                            args: JSON.stringify({
+                                skill: 'audit',
+                                path: 'references/sqli.md',
+                            }),
+                        },
                     ],
                 } as any,
             ],
@@ -468,14 +484,13 @@ describe('buildTryTrace', () => {
                 {
                     name: 'audit',
                     path: '.skills/audit/SKILL.md',
-                    files: ['LICENSE', 'NOTICE', 'references/sqli.md'],
-                },
+                    files: ['references/sqli.md'],
+                } as any,
             ],
+            skillReads: [],
         });
 
-        expect(trace.skillsOpened).toEqual([
-            { path: '.skills/audit/SKILL.md', files: ['references/sqli.md'] },
-        ]);
+        expect(trace.skillsOpened).toEqual([]);
     });
 });
 
