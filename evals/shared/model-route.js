@@ -21,7 +21,17 @@ let claudeSdkRegistered = false;
 function registerClaudeSdkOnce() {
     if (claudeSdkRegistered) return;
     claudeSdkRegistered = true;
-    require('../../libs/ee/claude-agent-sdk/register').registerClaudeSdk({ cloud: true, licensed: async () => true });
+    // Optional on purpose: an experiment runs these same eval files on a base
+    // commit that has no SDK module (evals/README.md, "What it compares"), and
+    // there the Claude slot runs today's path.
+    let register;
+    try {
+        register = require('../../libs/ee/claude-agent-sdk/register').registerClaudeSdk;
+    } catch (error) {
+        if (error && error.code === 'MODULE_NOT_FOUND' && String(error.message).includes('claude-agent-sdk/register')) return;
+        throw error;
+    }
+    register({ cloud: true, licensed: async () => true });
 }
 
 // ── The model, routed as production routes it ──────────────────────────────
