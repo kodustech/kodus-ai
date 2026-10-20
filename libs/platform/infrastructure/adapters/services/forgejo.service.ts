@@ -4562,15 +4562,10 @@ export class ForgejoService implements Omit<
                                         comment.pull_request_review_id,
                                 },
                                 pullRequest: {
-                                    // The reaction use-case builds the pr as
-                                    // { pull_number, repository } without a PR
-                                    // id, so derive a stable identifier from
-                                    // the repository id the caller does pass
-                                    // rather than emitting an undefined id that
-                                    // the downstream forwards unchanged.
-                                    id:
-                                        params.pr.id ??
-                                        params.pr.repository.id,
+                                    // A repository id is not a provider PR id.
+                                    // Match the other adapters: leave it absent
+                                    // when the shared caller does not supply it.
+                                    id: params.pr.id,
                                     number: params.pr.pull_number,
                                     repository: {
                                         id: params.pr.repository.id,

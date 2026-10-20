@@ -10,6 +10,7 @@ import { IPullRequestWithDeliveredSuggestions } from '@libs/platformData/domain/
 import { ReactionSyncAbortedError } from '@libs/code-review/domain/codeReviewFeedback/errors/reaction-sync-aborted.error';
 import { ICollectedReaction } from '@libs/code-review/domain/codeReviewFeedback/interfaces/codeReviewFeedback.interface';
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { isRateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
@@ -171,21 +172,23 @@ export class GetReactionsUseCase implements IUseCase {
                         }
                     };
 
+                    const usesAzureThreadIds =
+                        pr.provider === PlatformType.AZURE_REPOS;
                     const commentsLinkedToSuggestions = (comments ?? []).filter(
                         (comment) => {
-                            // Adapters disagree on which identifier comes back
-                            // on the reaction: GitLab echoes notes[0].id, Azure
-                            // the threadId, GitHub the comment id, and Forgejo
-                            // carries the review id in threadId with the
-                            // comment's own id beside it. Every candidate is
-                            // tried: keying on the first one present drops the
-                            // comment — and its reactions — whenever that first
-                            // id is not the one the suggestion was stored under.
-                            const suggestion = [
-                                comment?.threadId,
-                                comment?.notes?.[0]?.id,
-                                comment?.id,
-                            ]
+                            // Azure stores the created thread id on suggestions
+                            // and returns that id on reactions. Note ids belong
+                            // to a separate namespace: trying or registering one
+                            // can steal another thread's suggestion by collision.
+                            // Other providers retain the existing candidate lookup.
+                            const candidateIds = usesAzureThreadIds
+                                ? [comment?.threadId]
+                                : [
+                                      comment?.threadId,
+                                      comment?.notes?.[0]?.id,
+                                      comment?.id,
+                                  ];
+                            const suggestion = candidateIds
                                 .filter(
                                     (id) => id !== undefined && id !== null,
                                 )
@@ -196,23 +199,17 @@ export class GetReactionsUseCase implements IUseCase {
                                 return false;
                             }
 
-                            // Adapters disagree on which identifier comes back
-                            // on the reaction: GitLab echoes notes[0].id,
-                            // Azure the threadId, GitHub the comment id. A
-                            // comment can carry all three with different
-                            // values, so registering only one of them drops
-                            // the reaction later, silently — Azure reactions
-                            // were being counted and then discarded here.
-                            //
-                            // Notes go first: they are the identifiers that
-                            // already resolved correctly, and `linkSuggestion`
-                            // never overwrites, so the aliases added after
-                            // cannot displace a working mapping.
-                            comment.notes?.forEach((note) =>
-                                linkSuggestion(note.id, suggestion),
-                            );
-                            linkSuggestion(comment.threadId, suggestion);
-                            linkSuggestion(comment.id, suggestion);
+                            if (usesAzureThreadIds) {
+                                linkSuggestion(comment.threadId, suggestion);
+                            } else {
+                                // GitLab returns note ids on reactions; keep
+                                // the existing aliases for other providers.
+                                comment.notes?.forEach((note) =>
+                                    linkSuggestion(note.id, suggestion),
+                                );
+                                linkSuggestion(comment.threadId, suggestion);
+                                linkSuggestion(comment.id, suggestion);
+                            }
 
                             return true;
                         },

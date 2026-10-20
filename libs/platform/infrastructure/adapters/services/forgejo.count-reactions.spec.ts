@@ -48,7 +48,7 @@ describe('ForgejoService — countReactions aligns with the shared reaction cont
                 pull_number: 7,
                 repository: { id: 'repo-1', name: 'acme/widget-api' },
             },
-        }) as never;
+        });
 
     beforeEach(() => {
         issueGetCommentReactions.mockReset();
@@ -70,9 +70,8 @@ describe('ForgejoService — countReactions aligns with the shared reaction cont
                 reactions: { thumbsUp: 2, thumbsDown: 1 },
                 comment: { id: 2, pull_request_review_id: 9 },
                 pullRequest: {
-                    // The caller omits pr.id, so the stable identifier is
-                    // derived from the repository id — not an undefined id.
-                    id: 'repo-1',
+                    // The caller has no provider PR id; never substitute a repo id.
+                    id: undefined,
                     number: 7,
                     repository: { id: 'repo-1', fullName: 'acme/widget-api' },
                 },
@@ -81,6 +80,20 @@ describe('ForgejoService — countReactions aligns with the shared reaction cont
         expect(issueGetCommentReactions).toHaveBeenCalledWith({
             client: {},
             path: { owner: 'acme', repo: 'widget-api', id: 2 },
+        });
+    });
+
+    it('preserves a supplied provider PR id separately from the repository id', async () => {
+        issueGetCommentReactions.mockResolvedValue({ data: [{ content: '+1' }] });
+        const input = params();
+        const out = await makeService().countReactions({
+            ...input,
+            pr: { ...input.pr, id: 123 },
+        });
+        expect(out[0].pullRequest).toEqual({
+            id: 123,
+            number: 7,
+            repository: { id: 'repo-1', fullName: 'acme/widget-api' },
         });
     });
 
@@ -122,8 +135,8 @@ describe('ForgejoService — countReactions aligns with the shared reaction cont
 
         // The degradation must stay traceable to the tenant: the warn carries
         // the org/PR/comment metadata, not only the error.
-        const warnCall = (service.logger as unknown as { warn: jest.Mock })
-            .warn.mock.calls.find((c) =>
+        const warnCall = (service as unknown as { logger: { warn: jest.Mock } })
+            .logger.warn.mock.calls.find((c) =>
                 String(c[0]?.message).includes(
                     'Failed to fetch reactions for comment',
                 ),
