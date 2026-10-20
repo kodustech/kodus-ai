@@ -132,6 +132,7 @@ const TIER0 = {
     'gpt-6.1-sol@api': { provider: 'openai', byokNative: true, doModel: 'gpt-6.1-sol', keyEnvs: ['MATRIX_OPENAI_API_KEY', 'API_OPEN_AI_API_KEY', 'BYOK_OPENAI_API_KEY'] },
     'gpt-6-luna@api': { provider: 'openai', byokNative: true, doModel: 'gpt-6-luna', keyEnvs: ['MATRIX_OPENAI_API_KEY'] },
     'claude-sonnet-5.5@api': { provider: 'anthropic', byokNative: true, doModel: 'claude-sonnet-5-5', keyEnvs: ['API_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY'] },
+    'claude-opus-5.5@api': { provider: 'anthropic', byokNative: true, doModel: 'claude-opus-5-5', keyEnvs: ['API_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY'] },
     'gpt-5.6-luna@sub': { provider: 'codex_subscription', codexModel: 'gpt-5.6-luna', keyEnvs: [] },
     'gpt-5.6-terra@sub': { provider: 'codex_subscription', codexModel: 'gpt-5.6-terra', keyEnvs: [] },
     // GPT-6 and Sonnet 5.5 through the same OpenRouter account as the tier-0

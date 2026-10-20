@@ -782,6 +782,14 @@ class ReplayRemoteCommands {
     }
 }
 
+function prodMaxSteps(caseData) {
+    const files = Array.isArray(caseData.prFiles)
+        ? caseData.prFiles.length
+        : (parseMaybeJson(caseData.changedFiles) || []).length;
+    if (files <= 8) return 20;
+    return Math.min(20 + Math.round((files - 8) * 0.5), 100);
+}
+
 function buildCurrentPrompts(caseData) {
     const { GeneralistAgentProvider } = require(
         path.join(
@@ -834,7 +842,16 @@ function buildCurrentPrompts(caseData) {
         // synthesis-pressure note FROM it: encourageFrom = maxSteps - 9, so at
         // 12 the agent is told "avoid new reads" from step 3 onward. Raising
         // the cap is how you move that note later.
-        maxSteps: Number(process.env.RECALL_MAX_STEPS) || caseData.maxSteps || 12,
+        // RECALL_PROD_STEPS=1: production's step budget instead of the 12 cap —
+        // review-orchestrator.service.ts getMaxStepsForAgent, normal mode:
+        // 20 for the generalist, +0.5 per changed file above 8, capped at 100.
+        // On 20/10/26 the 12 cap cut Kimi and DeepSeek to half of the steps the
+        // production finder took; keep this in sync with that method on merge.
+        maxSteps:
+            Number(process.env.RECALL_MAX_STEPS) ||
+            (process.env.RECALL_PROD_STEPS === '1'
+                ? prodMaxSteps(caseData)
+                : caseData.maxSteps || 12),
         // RECALL_CATEGORIES: the datasets pin this to ["bug"] in 51 of 53 cases,
         // while production defaults to bug+security+performance. That gap is
         // not cosmetic: prompt-builder renders "run an explicit pass for each
