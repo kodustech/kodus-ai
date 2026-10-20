@@ -255,12 +255,14 @@ export class KodyIssuesTools {
                 // `repository.name`. Passing args straight through matched
                 // nothing and forced a collection scan on every call.
                 const { repositoryName, ...rest } = args;
-                const issues = await this.issuesService.findByFilters({
-                    ...rest,
-                    ...(repositoryName && {
-                        'repository.name': repositoryName,
-                    }),
-                } as Partial<IIssue>);
+                // The repository mapper returns null, not [], for no matches.
+                const issues =
+                    (await this.issuesService.findByFilters({
+                        ...rest,
+                        ...(repositoryName && {
+                            'repository.name': repositoryName,
+                        }),
+                    } as Partial<IIssue>)) ?? [];
                 return {
                     success: true,
                     count: issues.length,
