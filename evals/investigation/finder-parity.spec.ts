@@ -273,4 +273,22 @@ describe('finder control cases and sets', () => {
             fsx.rmSync(dir, { recursive: true, force: true });
         }
     });
+
+    it('holds out exactly the 20 datasets outside the light set, so a change picked on the light set is confirmed on PRs it was not tuned on', () => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { CASE_SETS } = require('./recall-tests');
+        const datasets = px.join(__dirname, 'datasets');
+        const all = fsx
+            .readdirSync(datasets)
+            .filter((f: string) => f.endsWith('.json') && f !== 'smoke.json')
+            .map((f: string) => {
+                const raw = JSON.parse(fsx.readFileSync(px.join(datasets, f), 'utf8'));
+                const c = Array.isArray(raw) ? raw[0] : raw;
+                return c?.vars?.caseId || px.basename(f, '.json');
+            });
+        expect(CASE_SETS.light).toHaveLength(30);
+        expect(CASE_SETS.holdout).toHaveLength(20);
+        expect(CASE_SETS.holdout.filter((id: string) => CASE_SETS.light.includes(id))).toEqual([]);
+        expect([...CASE_SETS.light, ...CASE_SETS.holdout].sort()).toEqual([...all].sort());
+    });
 });

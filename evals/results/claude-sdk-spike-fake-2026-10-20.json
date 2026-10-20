@@ -1,0 +1,275 @@
+{
+  "date": "2026-10-20T12:55:01.534Z",
+  "sdkVersion": "0.3.296",
+  "upstream": "fake",
+  "experimentalBetas": "on",
+  "model": "claude-sonnet-5-5",
+  "platform": "darwin-arm64",
+  "node": "v22.19.0",
+  "spawnToInitMs": {
+    "p50": 154,
+    "p95": 767,
+    "n": 11
+  },
+  "maxRssMb": {
+    "p50": 150,
+    "max": 211,
+    "n": 11
+  },
+  "scenarios": {
+    "toolLoop": {
+      "ms": 895,
+      "spawnToInitMs": 767,
+      "maxRssMb": 201,
+      "exitCode": 0,
+      "resultSubtype": "success",
+      "resultIsError": false,
+      "numTurns": 3,
+      "assistantErrors": [],
+      "assistantTexts": [
+        "{}"
+      ],
+      "toolUses": [
+        "mcp__kodus__readFile",
+        "mcp__kodus__submitResult"
+      ],
+      "pathsHit": [
+        "POST /v1/messages"
+      ],
+      "toolsOffered": [
+        "mcp__kodus__readFile",
+        "mcp__kodus__submitResult"
+      ],
+      "firstRequestKeys": [
+        "context_management",
+        "max_tokens",
+        "messages",
+        "metadata",
+        "model",
+        "output_config",
+        "safeguards",
+        "stream",
+        "system",
+        "thinking",
+        "tools"
+      ],
+      "firstRequestFields": {
+        "thinking": {
+          "type": "adaptive",
+          "display": "updates"
+        },
+        "output_config": {
+          "effort": "medium"
+        },
+        "context_management": {
+          "edits": [
+            {
+              "type": "clear_thinking_20251015",
+              "keep": "all"
+            }
+          ]
+        },
+        "max_tokens": 128000
+      },
+      "anthropicBeta": "claude-code-20250219,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,effort-2025-11-24,dangerous-tool-use-2026-09-03,thinking-display-updates-2026-08-18,afk-mode-2026-01-31",
+      "modelRequests": 3
+    },
+    "postToolBatchNote": {
+      "ms": 267,
+      "spawnToInitMs": 170,
+      "maxRssMb": 210,
+      "exitCode": 0,
+      "resultSubtype": "success",
+      "resultIsError": false,
+      "numTurns": 3,
+      "assistantErrors": [],
+      "assistantTexts": [
+        "{}"
+      ],
+      "toolUses": [
+        "mcp__kodus__readFile",
+        "mcp__kodus__submitResult"
+      ],
+      "noteLocation": [
+        "messages[4].system.content[0].text"
+      ],
+      "lastUserContent": [
+        {
+          "tool_use_id": "toolu_fake_4",
+          "type": "tool_result",
+          "content": [
+            {
+              "type": "text",
+              "text": "contents of fake"
+            }
+          ]
+        }
+      ]
+    },
+    "stopBlockMaxTurns1": {
+      "ms": 193,
+      "spawnToInitMs": 158,
+      "maxRssMb": 150,
+      "exitCode": 1,
+      "thrown": "Claude Code returned an error result: Reached maximum number of turns (1)",
+      "resultSubtype": "error_max_turns",
+      "resultIsError": true,
+      "numTurns": 2,
+      "assistantErrors": [],
+      "assistantTexts": [
+        "I found a bug in a.ts."
+      ],
+      "toolUses": [],
+      "stopHookCalls": 1,
+      "modelRequests": 1,
+      "finalizeNoteLocation": []
+    },
+    "stopBlockMaxTurns2": {
+      "ms": 237,
+      "spawnToInitMs": 163,
+      "maxRssMb": 211,
+      "exitCode": 0,
+      "resultSubtype": "success",
+      "resultIsError": false,
+      "numTurns": 2,
+      "assistantErrors": [],
+      "assistantTexts": [
+        "I found a bug in a.ts.",
+        "I found a bug in a.ts."
+      ],
+      "toolUses": [],
+      "stopHookCalls": 2,
+      "modelRequests": 2,
+      "finalizeNoteLocation": [
+        "messages[3].user.content[0].text",
+        "messages[4].system.content[0].text"
+      ]
+    },
+    "preToolUseDeny": {
+      "ms": 209,
+      "spawnToInitMs": 151,
+      "maxRssMb": 150,
+      "exitCode": 0,
+      "resultSubtype": "success",
+      "resultIsError": false,
+      "numTurns": 3,
+      "assistantErrors": [],
+      "assistantTexts": [
+        "{}"
+      ],
+      "toolUses": [
+        "mcp__kodus__readFile",
+        "mcp__kodus__submitResult"
+      ],
+      "denyLocation": [
+        "messages[3].user.content[0].tool_result"
+      ]
+    },
+    "continueFalse": {
+      "ms": 192,
+      "spawnToInitMs": 152,
+      "maxRssMb": 149,
+      "exitCode": 0,
+      "resultSubtype": "success",
+      "resultIsError": false,
+      "numTurns": 2,
+      "assistantErrors": [],
+      "assistantTexts": [],
+      "toolUses": [
+        "mcp__kodus__readFile"
+      ]
+    },
+    "maxTurns": {
+      "ms": 199,
+      "spawnToInitMs": 154,
+      "maxRssMb": 150,
+      "exitCode": 1,
+      "thrown": "Claude Code returned an error result: Reached maximum number of turns (2)",
+      "resultSubtype": "error_max_turns",
+      "resultIsError": true,
+      "numTurns": 3,
+      "assistantErrors": [],
+      "assistantTexts": [],
+      "toolUses": [
+        "mcp__kodus__readFile",
+        "mcp__kodus__readFile"
+      ]
+    },
+    "outputFormat": {
+      "ms": 192,
+      "spawnToInitMs": 155,
+      "maxRssMb": 149,
+      "exitCode": 0,
+      "resultSubtype": "success",
+      "resultIsError": false,
+      "numTurns": 2,
+      "structuredOutput": {
+        "severity": "low"
+      },
+      "assistantErrors": [],
+      "assistantTexts": [],
+      "toolUses": [
+        "StructuredOutput"
+      ],
+      "toolsOffered": [
+        "StructuredOutput"
+      ],
+      "outputConfig": {
+        "effort": "medium"
+      },
+      "anthropicBeta": "claude-code-20250219,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,effort-2025-11-24,dangerous-tool-use-2026-09-03,thinking-display-updates-2026-08-18,afk-mode-2026-01-31",
+      "modelRequests": 1
+    },
+    "upstream401": {
+      "ms": 181,
+      "spawnToInitMs": 151,
+      "maxRssMb": 150,
+      "exitCode": 1,
+      "thrown": "Claude Code returned an error result: Failed to authenticate. API Error: 401 fake llm: scripted 401",
+      "resultSubtype": "success",
+      "resultIsError": true,
+      "numTurns": 1,
+      "assistantErrors": [
+        "authentication_failed"
+      ],
+      "assistantTexts": [
+        "Failed to authenticate. API Error: 401 fake llm: scripted 401"
+      ],
+      "toolUses": []
+    },
+    "upstream429": {
+      "ms": 184,
+      "spawnToInitMs": 153,
+      "maxRssMb": 150,
+      "exitCode": 1,
+      "thrown": "Claude Code returned an error result: API Error: Request rejected (429) · fake llm: scripted 429",
+      "resultSubtype": "success",
+      "resultIsError": true,
+      "numTurns": 1,
+      "assistantErrors": [
+        "rate_limit"
+      ],
+      "assistantTexts": [
+        "API Error: Request rejected (429) · fake llm: scripted 429"
+      ],
+      "toolUses": []
+    },
+    "upstream529": {
+      "ms": 180,
+      "spawnToInitMs": 150,
+      "maxRssMb": 150,
+      "exitCode": 1,
+      "thrown": "Claude Code returned an error result: API Error: 529 fake llm: scripted 529. This is a server-side issue, usually temporary — try again in a moment. If it persists, check your inference gateway (127.0.0.1:52269).",
+      "resultSubtype": "success",
+      "resultIsError": true,
+      "numTurns": 1,
+      "assistantErrors": [
+        "server_error"
+      ],
+      "assistantTexts": [
+        "API Error: 529 fake llm: scripted 529. This is a server-side issue, usually temporary — try again in a moment. If it persists, check your inference gateway (127.0.0.1:52269)."
+      ],
+      "toolUses": []
+    }
+  }
+}

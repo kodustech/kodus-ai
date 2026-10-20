@@ -33,6 +33,7 @@ const TIER0 = {
     'claude-sonnet-4-6': { provider: 'anthropic', keyEnvs: ['API_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY', 'BYOK_ANTHROPIC_API_KEY'] },
     'claude-sonnet-5-5': { tier0: true, provider: 'anthropic', keyEnvs: ['API_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY', 'BYOK_ANTHROPIC_API_KEY'] },
     'claude-opus-4-7': { provider: 'anthropic', keyEnvs: ['API_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY', 'BYOK_ANTHROPIC_API_KEY'] },
+    'claude-opus-5-5': { provider: 'anthropic', keyEnvs: ['API_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY', 'BYOK_ANTHROPIC_API_KEY'] },
     'gemini-3.1-pro-preview-customtools': { provider: 'google', keyEnvs: ['BYOK_GOOGLE_API_KEY', 'API_GOOGLE_AI_API_KEY'] },
     'gemini-3-flash-preview': { provider: 'google', keyEnvs: ['BYOK_GOOGLE_API_KEY', 'API_GOOGLE_AI_API_KEY'] },
     // NOTA: as chaves novas do AI Studio (prefixo `AQ.`, "auth keys") levam 401
@@ -134,6 +135,17 @@ const TIER0 = {
             return process.env.EVAL_FAKE_LLM_URL;
         },
     },
+    // The same scripted model as an org's Claude slot, so the wiring smoke drives
+    // the Claude Agent SDK path (#2113): the CLI talks to the scripted server in
+    // the Anthropic Messages format through the gateway.
+    'eval-fake-claude': {
+        provider: 'anthropic',
+        doModel: 'claude-sonnet-5-5',
+        keyEnvs: ['EVAL_FAKE_LLM_KEY'],
+        get baseURL() {
+            return process.env.EVAL_FAKE_LLM_URL;
+        },
+    },
 };
 
 // Models the benchmark excludes from the default full run (cost). Opt in with
@@ -142,7 +154,7 @@ const EXCLUDED_BY_DEFAULT = new Set(['claude-opus-4-7']);
 
 // Routes that only answer inside the wiring smoke (its local server is up only
 // while it runs): never offered as a runnable model.
-const LOCAL_ONLY = new Set(['eval-fake']);
+const LOCAL_ONLY = new Set(['eval-fake', 'eval-fake-claude']);
 
 // The push-to-main gate matrix. Small on purpose: TIER0 is 23 routes and the
 // suite cannot run on all of them per merge. Adding a model here costs money on

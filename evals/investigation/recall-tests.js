@@ -9,6 +9,8 @@
  *   RECALL_SET=smoke                   → 5 high-signal cases / 25 goldens
  *   RECALL_SET=pr                      → 8 PR-gate cases / 38 goldens
  *   RECALL_SET=controlled              → the nightly and every model's weekly run: 15 PRs
+ *   RECALL_SET=holdout                 → the 20 PRs outside the light set (#1821): a change
+ *                                        chosen on the light set is confirmed here
  *   RECALL_SET=full                    → on demand: every per-PR case
  *   RECALL_ALL=1                       → every per-PR case
  *   RECALL_CASES=caseId1,caseId2,...   → an explicit subset
@@ -106,6 +108,32 @@ const CONTROLLED_CASES = [
     'github-oauth-security-enhancement-sentry',
 ];
 
+// The 20 per-PR datasets outside the light set (#1821's holdout). A change picked
+// by comparing variants on the light set is confirmed here, on PRs it was not
+// tuned on, before it ships.
+const HOLDOUT_CASES = [
+    'add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak',
+    'add-comprehensive-email-validation-for-blocked-users-discourse-cursor',
+    'add-groups-resource-type-and-scopes-to-authorization-schema-keycloak',
+    'add-rolling-updates-feature-flag-and-compatibility-framework-keycloak',
+    'advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com',
+    'advanced-query-processing-architecture-grafana-codex',
+    'advanced-sql-analytics-framework-grafana-codex',
+    'async-import-of-the-appstore-packages-cal-com',
+    'authzservice-improve-authz-caching-grafana-codex',
+    'comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com',
+    'database-performance-optimizations-grafana-codex',
+    'enhanced-pagination-performance-for-high-volume-audit-logs-sentry',
+    'feat-add-calendar-cache-status-and-actions-22532-cal-com',
+    'feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry',
+    'feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry',
+    'feature-per-topic-unsubscribe-option-in-emails-discourse-cursor',
+    'implement-recovery-key-support-for-user-storage-providers-keycloak',
+    'optimize-spans-buffer-insertion-with-eviction-during-insert-sentry',
+    'scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor',
+    'ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor',
+];
+
 // Every per-PR dataset (`full`, run on demand), listed by its file.
 const FULL_CASES = null;
 
@@ -114,6 +142,7 @@ const CASE_SETS = {
     pr: PR_CASES,
     light: LIGHT_CASES,
     controlled: CONTROLLED_CASES,
+    holdout: HOLDOUT_CASES,
     full: FULL_CASES,
 };
 
