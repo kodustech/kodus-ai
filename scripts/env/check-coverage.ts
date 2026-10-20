@@ -33,6 +33,13 @@ const KODUS_PREFIX_RE =
 // the right next step.
 const ALLOWLIST: Array<{ pattern: RegExp; reason: string }> = [
     {
+        // Keys of the env the Claude Agent SDK subprocess gets (#2113,
+        // libs/ee/claude-agent-sdk/sdk-env.ts): set by us, never read from
+        // the worker's own environment.
+        pattern: /^API_TIMEOUT_MS$/,
+        reason: 'Claude Agent SDK subprocess env (built in sdk-env.ts)',
+    },
+    {
         // apps/cli is a standalone CLI tool with its own config story —
         // not part of the api/worker/web/webhooks/mcp-manager runtime.
         // KODUS_LICENSE_KEY is the one exception (real EE feature flag).
