@@ -2,7 +2,8 @@
     "__doc": [
         "Two floors per model, as ratios (run.js --gate): `floor` for the requirements a PR does that the stage does not call a gap, `gapsFloor` for the requirements it leaves out that it calls one.",
         "eval-fake (the wiring smoke, every PR): deterministic. The scripted judge's answer reads as a task too thin to judge, so nothing is called a gap: 42/42 done work not flagged, 0/25 gaps caught. floor = observed; a stage that judged nothing would score the same, which is why the real models carry the gaps floor.",
-        "2026-10-20, 29 cases (42 done, 25 gaps): deepseek-v4-flash@fireworks 38/43, 38/43, 37/43 done work not flagged and 23/25 in all three runs; gpt-6-sol 29/42, 30/42, 29/42 and 24/25, 22/25, 24/25. floor and gapsFloor = the lowest of the runs.",
+        "2026-10-20, 29 cases (42 done, 25 gaps; a requirement the verdict invents and calls done adds one to the done side), two runs each on the final cases: deepseek-v4-flash@fireworks 37/43 and 38/42 done work not flagged, 23/25 and 24/25 gaps caught; gpt-6-sol 28/42 and 30/42, 23/25 and 24/25. floor and gapsFloor = the lower run, observed = their mean.",
+        "Deliberate break (rule 7): settleVerdict made to call every requirement met scores 0 gaps caught on deepseek, exit 1 under --gate.",
         "Where the false gaps come from (the runs' verdicts, read case by case): the judge reads only the diff, and the second look at the repository runs on MISSING alone, so a requirement done in a function the PR calls but does not change (validateEmail, assertRenewable, toAppointmentDto) comes back partial or check_manually; and gpt-6-sol calls a requirement partial when the diff does not show it wired end to end (a queued job that sends, a serializer the route uses).",
         "RATCHET: a PR that moves the value on purpose (the judge, the second look, the cases) recalibrates here in the same PR, with its runs as evidence."
     ],
@@ -15,15 +16,15 @@
         },
         "deepseek-v4-flash@fireworks": {
             "floor": 0.86,
-            "observed": 0.876,
+            "observed": 0.883,
             "gapsFloor": 0.92,
-            "gapsObserved": 0.92
+            "gapsObserved": 0.94
         },
         "gpt-6-sol": {
-            "floor": 0.69,
-            "observed": 0.698,
-            "gapsFloor": 0.88,
-            "gapsObserved": 0.933
+            "floor": 0.667,
+            "observed": 0.69,
+            "gapsFloor": 0.92,
+            "gapsObserved": 0.94
         }
     }
 }

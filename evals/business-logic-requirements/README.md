@@ -26,7 +26,7 @@ scored right or wrong in its case but counts in neither number.
 
 ## Cases
 
-`cases.json`, written by hand from three axes the known false gaps came from:
+`cases.json` and `files/`, written by `build-cases.py` (edit the cases there and run it), from three axes the known false gaps came from:
 where the code that does the requirement is (in the diff, under another name,
 in a file the PR does not touch, a look-alike, half of it, nowhere), what kind
 of requirement it is (a rule, a validation and its message, an API or stored

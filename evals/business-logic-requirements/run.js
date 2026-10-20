@@ -49,9 +49,16 @@ function goldClass(gold) {
 function score(c, decided) {
     const requirements = decided?.kind === 'validated' ? decided.checks.flatMap((check) => check.verdict.requirements || []) : [];
     const used = new Set();
-    const items = c.gold.map((gold) => {
-        const pattern = new RegExp(gold.match, 'i');
-        const found = requirements.find((r, i) => !used.has(i) && pattern.test(r.requirement) && used.add(i));
+    const patterns = c.gold.map((gold) => new RegExp(gold.match, 'i'));
+    const items = c.gold.map((gold, g) => {
+        // The requirement this gold names: of the ones its pattern matches, the
+        // one the fewest other golds match, so the verdict's order never decides.
+        const candidates = requirements
+            .map((r, i) => ({ r, i, others: patterns.filter((p, j) => j !== g && p.test(r.requirement)).length }))
+            .filter(({ r, i }) => !used.has(i) && patterns[g].test(r.requirement))
+            .sort((x, y) => x.others - y.others);
+        const found = candidates[0]?.r;
+        if (candidates[0]) used.add(candidates[0].i);
         const state = found ? found.state : 'not listed';
         return {
             gold: goldClass(gold),

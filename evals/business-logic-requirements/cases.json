@@ -671,13 +671,13 @@
     "diff": "rounding-no-tests.diff",
     "gold": [
       {
-        "match": "half|round|decimal",
+        "match": "half-up|2 decimals",
         "accept": [
           "met"
         ]
       },
       {
-        "match": "test",
+        "match": "unit tests|0[.,]005",
         "accept": [
           "missing",
           "partial"
@@ -701,7 +701,7 @@
     "diff": "cancel-log-pt.diff",
     "gold": [
       {
-        "match": "log",
+        "match": "grava|motivo|reason|id da consulta",
         "accept": [
           "met"
         ]
@@ -730,7 +730,7 @@
     "diff": "cancel-log-pt-no-reason.diff",
     "gold": [
       {
-        "match": "log",
+        "match": "grava|motivo|reason|id da consulta",
         "accept": [
           "missing",
           "partial"

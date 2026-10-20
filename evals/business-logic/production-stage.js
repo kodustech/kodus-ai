@@ -290,7 +290,6 @@ async function reviewCase(world, c, opts = {}) {
     world.current = {
         pr: c.pr,
         diff: fs.readFileSync(path.join(dir, c.diff), 'utf8'),
-
         // The ticket the PR closes, and the ones it links to (parent, sub-tasks).
         tickets: [c.ticket, ...(c.related || [])].map((t) => ({
             ...t,
