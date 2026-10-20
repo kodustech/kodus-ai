@@ -150,3 +150,31 @@ export interface ICustomAgentTryRunner {
         knowledge: KnowledgeItem[];
     }): Promise<CustomAgentTryTrace>;
 }
+
+/**
+ * A Try it run on a large pull request outlives a proxied request (the
+ * gateway answers 504 at ~300s and the result is lost), so the run is
+ * started, stored and polled. The stored run is keyed by id and scoped to
+ * the organization, team and repository that started it.
+ */
+export type CustomAgentTryRun = {
+    id: string;
+    organizationId: string;
+    teamId: string;
+    repositoryId: string;
+    status: 'running' | 'done';
+    /** Set once the run is done. */
+    result?: CustomAgentTryTrace;
+    startedAt: Date;
+    finishedAt?: Date;
+};
+
+export const CUSTOM_AGENT_TRY_RUN_STORE_TOKEN = Symbol.for(
+    'CustomAgentTryRunStore',
+);
+
+export interface ICustomAgentTryRunStore {
+    create(run: Omit<CustomAgentTryRun, 'id'>): Promise<string>;
+    finish(id: string, result: CustomAgentTryTrace): Promise<void>;
+    find(id: string): Promise<CustomAgentTryRun | null>;
+}

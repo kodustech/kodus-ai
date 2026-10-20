@@ -72,3 +72,6 @@ export class TryCustomAgentDto extends CustomAgentScopeDto {
 
 /** Query of `GET /code-review/custom-agents/status` (#2172). */
 export class CustomAgentsStatusQueryDto extends CustomAgentScopeDto {}
+
+/** Query of `GET /code-review/custom-agents/try/:runId` (#2172). */
+export class CustomAgentTryRunQueryDto extends CustomAgentScopeDto {}

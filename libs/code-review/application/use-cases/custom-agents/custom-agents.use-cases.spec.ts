@@ -14,7 +14,10 @@ import {
     summarizeCustomAgentSuggestions,
 } from './get-custom-agents-status.use-case';
 import { ResolveCustomAgentUseCase } from './resolve-custom-agent.use-case';
-import { TryCustomAgentUseCase } from './try-custom-agent.use-case';
+import {
+    TRY_RUN_STALE_MS,
+    TryCustomAgentUseCase,
+} from './try-custom-agent.use-case';
 
 const organizationAndTeamData = { organizationId: 'org-1', teamId: 'team-1' };
 
@@ -684,6 +687,179 @@ describe('TryCustomAgentUseCase', () => {
                 agent: ledgerAgent(),
             }),
         ).resolves.toEqual(trace);
+    });
+});
+
+describe('TryCustomAgentUseCase as a polled run', () => {
+    const trace = {
+        status: 'completed',
+        skillsOpened: [],
+        toolCalls: [],
+        findings: [],
+    };
+    /** An in-memory store shaped like the Mongo one. */
+    const memoryStore = () => {
+        const runs = new Map<string, any>();
+        let next = 0;
+        return {
+            runs,
+            create: jest.fn(async (run: any) => {
+                const id = `run-${++next}`;
+                runs.set(id, { ...run, id });
+                return id;
+            }),
+            finish: jest.fn(async (id: string, result: any) => {
+                runs.set(id, { ...runs.get(id), status: 'done', result });
+            }),
+            find: jest.fn(async (id: string) => runs.get(id) ?? null),
+        };
+    };
+    const flush = () => new Promise((resolve) => setImmediate(resolve));
+    const params = {
+        organizationAndTeamData,
+        repositoryId: 'repo-1',
+        prUrl: 'https://git.example.test/ledger/pull/7',
+    };
+
+    it('answers with a run id before a long run ends, and stores its trace for the poll', async () => {
+        let finishRun: (value: unknown) => void = () => undefined;
+        const runner = {
+            runCustomAgentOnPullRequest: jest.fn(
+                () => new Promise((resolve) => (finishRun = resolve)),
+            ),
+        };
+        const store = memoryStore();
+        const useCase = new TryCustomAgentUseCase(
+            parametersService(storedConfig()) as any,
+            licenseService(TEAMS) as any,
+            runner as any,
+            store,
+        );
+
+        const started = await useCase.start({
+            ...params,
+            agent: ledgerAgent(),
+        });
+
+        expect(started).toEqual({ runId: 'run-1', status: 'running' });
+        await expect(
+            useCase.getRun({ ...params, runId: started.runId }),
+        ).resolves.toEqual({ runId: 'run-1', status: 'running' });
+
+        finishRun(trace);
+        await flush();
+
+        await expect(
+            useCase.getRun({ ...params, runId: started.runId }),
+        ).resolves.toEqual({ runId: 'run-1', status: 'done', result: trace });
+    });
+
+    it('stores a run that throws as failed instead of losing it', async () => {
+        const store = memoryStore();
+        const useCase = new TryCustomAgentUseCase(
+            parametersService(storedConfig()) as any,
+            licenseService(TEAMS) as any,
+            {
+                runCustomAgentOnPullRequest: jest
+                    .fn()
+                    .mockRejectedValue(new Error('sandbox gone')),
+            },
+            store,
+        );
+
+        const { runId } = await useCase.start({
+            ...params,
+            agent: ledgerAgent(),
+        });
+        await flush();
+
+        const run = await useCase.getRun({ ...params, runId });
+        expect(run.status).toBe('done');
+        expect(run.result).toMatchObject({
+            status: 'failed',
+            reason: 'sandbox gone',
+        });
+    });
+
+    it("reads another team's or repository's run as missing", async () => {
+        const store = memoryStore();
+        const useCase = new TryCustomAgentUseCase(
+            parametersService(storedConfig()) as any,
+            licenseService(TEAMS) as any,
+            { runCustomAgentOnPullRequest: jest.fn().mockResolvedValue(trace) },
+            store,
+        );
+        const { runId } = await useCase.start({
+            ...params,
+            agent: ledgerAgent(),
+        });
+
+        await expect(
+            useCase.getRun({ ...params, repositoryId: 'repo-2', runId }),
+        ).rejects.toBeInstanceOf(NotFoundException);
+        await expect(
+            useCase.getRun({
+                ...params,
+                organizationAndTeamData: {
+                    organizationId: 'org-2',
+                    teamId: 'team-1',
+                },
+                runId,
+            }),
+        ).rejects.toBeInstanceOf(NotFoundException);
+        await expect(
+            useCase.getRun({ ...params, runId: 'run-unknown' }),
+        ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('reports a run whose process died as failed, not running forever', async () => {
+        const store = memoryStore();
+        const useCase = new TryCustomAgentUseCase(
+            parametersService(storedConfig()) as any,
+            licenseService(TEAMS) as any,
+            {
+                runCustomAgentOnPullRequest: jest.fn(
+                    () => new Promise(() => undefined),
+                ),
+            },
+            store,
+        );
+        const { runId } = await useCase.start({
+            ...params,
+            agent: ledgerAgent(),
+        });
+        const startedAt = store.runs.get(runId).startedAt as Date;
+
+        const run = await useCase.getRun({
+            ...params,
+            runId,
+            now: new Date(startedAt.getTime() + TRY_RUN_STALE_MS + 1),
+        });
+        expect(run).toMatchObject({
+            status: 'done',
+            result: { status: 'failed' },
+        });
+    });
+
+    it('keeps the plan gate on the poll', async () => {
+        const store = memoryStore();
+        const useCase = new TryCustomAgentUseCase(
+            parametersService(storedConfig()) as any,
+            {
+                validateOrganizationLicense: jest.fn().mockResolvedValue({
+                    valid: true,
+                    subscriptionStatus: 'active',
+                    planType: 'free_byok',
+                }),
+            } as any,
+            { runCustomAgentOnPullRequest: jest.fn() },
+            store,
+        );
+
+        await expect(
+            useCase.getRun({ ...params, runId: 'run-1' }),
+        ).rejects.toBeInstanceOf(ForbiddenException);
+        expect(store.find).not.toHaveBeenCalled();
     });
 });
 
