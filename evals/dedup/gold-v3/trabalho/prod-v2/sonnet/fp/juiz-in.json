@@ -1,0 +1,749 @@
+{
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "79d11c4890cc4792e3dc3535af59e4e5f7a2739d",
+  "base": "10aca5552314d6e5c9226f3c6d0107861c38c693",
+  "sugestoes": [
+   {
+    "id": "V2",
+    "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+    "lines": [
+     133,
+     135
+    ],
+    "texto": "WHAT: readLength returns -1 for indefinite-length encoding, and readInteger and readNext pass it to read(length) without checking. WHY: A malformed signature makes new byte[-1] throw NegativeArraySizeException, not the declared IOException, so callers that catch IOException miss it. HOW: Throw an IOException in readLength (or in the callers) when the length is negative."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#01",
+    "descricao": "Claims getBouncyCastleProvider returns the JDK keystore provider instead of BouncyCastle; that is the intended fallback for the BC-free authz client.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#03",
+    "descricao": "Claims readLength's -1 for indefinite-length encoding breaks length arithmetic or array allocation; the decoder only parses locally generated DER and the sequence path already rejects it.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#06",
+    "descricao": "Claims the lenient sequence parser allows malformed or trailing DER and signature malleability in verification; the parser never sees external signatures.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#08",
+    "descricao": "Claims integerToBytes can silently truncate oversized INTEGER values; inputs come from local signing and always fit the component width.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#09",
+    "descricao": "Claims createECParams/getKeyFactory throwing UnsupportedOperationException breaks EC JWK parsing in the authz client; the client does not use that path.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-01",
+    "descricao": "ASN1Decoder.readInteger passes the -1 returned by readLength for indefinite-length encoding to read(int), which allocates new byte[-1] and throws an unchecked NegativeArraySizeException instead of an IOException on malformed DER input.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-03",
+    "descricao": "integerToBytes silently truncates r/s values longer than the curve size, so non-canonical DER signatures are accepted as different values (signature malleability).",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#prod-01",
+    "descricao": "AuthzClient.create eagerly initializes CryptoIntegration, so a shaded/repackaged client that lost its ServiceLoader file fails at construction instead of only when ECDSA is used.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#musep-01",
+    "descricao": "Calling CryptoIntegration.init from AuthzClient.create is claimed to lock the global crypto provider to the minimal AuthzClientCryptoProvider so a later server init is ignored and unsupported operations fail.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#kimi-02",
+    "descricao": "The ignored-providers message is passed to logger.debugf as a format string instead of using logger.debug, and keeps a trailing comma.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "7355f05e6aafe2a7acc6434fb40c686665416606",
+  "base": "7ea067aae9be56cb2622bce6563864817c3dfeaf",
+  "sugestoes": [
+   {
+    "id": "V3",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+    "lines": [
+     172,
+     175
+    ],
+    "texto": "WHAT: `GroupPermissionsV2.setPermissionsEnabled` throws `UnsupportedOperationException`, and `MgmtPermissionsV2.groups()` now returns this class. The `GroupRemovedEvent` handler in `AdminPermissions.registerListener` calls `management(...).groups().setPermissionsEnabled(group, false)`. WHY: When `ADMIN_FINE_GRAINED_AUTHZ` and `ADMIN_FINE_GRAINED_AUTHZ_V2` are both enabled, the listener is registered and `management()` returns `MgmtPermissionsV2`. Every group deletion then fails with an exception inside the event listener. Before this PR `groups()` fell back to the V1 implementation, so this is a regression for groups. HOW: Make `setPermissionsEnabled` a no-op in V2, or have the listener skip V2, for example by cleaning up V2 group resources instead."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#05",
+    "descricao": "Claims removing the canView filter from searchForUser lets admins see users they are not allowed to view.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#08",
+    "descricao": "getGroupIdsWithViewPermission scans group resources and evaluates permissions for each on every user search or count request.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#09",
+    "descricao": "Claims deleting a group under V2 triggers the removal listener, which calls GroupPermissionsV2.setPermissionsEnabled and throws UnsupportedOperationException.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#10",
+    "descricao": "Claims testManageGroupMembership never exercises the group-level manage-membership permission.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-01",
+    "descricao": "searchForUser no longer filters results with usersEvaluator::canView, so an admin with query access but no view permission and no group grants gets an unrestricted user list.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#oph-01",
+    "descricao": "GroupPermissionsV2.canView(group) does not fall back to canView(), and the PR dropped the canViewGlobal short-circuit, so an admin with an all-groups VIEW permission is denied (and the group filtered out of listings) for any group that has its own permission resource lacking VIEW.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#oph-02",
+    "descricao": "Claims GroupResource management-permissions endpoints call GroupPermissionsV2 methods that throw UnsupportedOperationException, causing 500s when V2 is active.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#prod-01",
+    "descricao": "GroupPermissionsV2.hasPermission does not restrict evaluated permissions to the evaluated resource, so when falling back to the all-groups resource a permission granted on one specific group can satisfy the check for any group.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#prod-02",
+    "descricao": "GroupsResource.getGroups no longer hoists the global canView() check, so in FGAP V2 each listed group triggers its own resource lookup and policy evaluation even when an all-groups grant would cover them all.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#muse13-01",
+    "descricao": "UserPermissionsV2 canView/canManage dropped AdminRoles.ADMIN from the role check, claimed to deny admins view/manage access unlike V1.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "4f8aed295a29954023b2849c060ef4fb299d1b5d",
+  "base": "62db063e1e1abe691313ab42682a68f796d63769",
+  "sugestoes": [
+   {
+    "id": "V6",
+    "file": "app/controllers/embed_controller.rb",
+    "lines": [
+     19,
+     19
+    ],
+    "texto": "WHAT: `discourse_expires_in` stores the response in `AnonymousCache`. That cache is keyed by host plus URI only and is served by middleware before the controller runs. WHY: the `ensure_embeddable` referer check is skipped for 1 minute after any valid request. Cached responses also replay `X-Frame-Options: ALLOWALL`, so other origins can frame the page. HOW: skip the anon cache for this controller or include the referer host in the cache key."
+   },
+   {
+    "id": "V9",
+    "file": "app/models/topic_embed.rb",
+    "lines": [
+     23,
+     25
+    ],
+    "texto": "WHAT: `post.present?` is true for any ActiveRecord object, including an unsaved post whose creation failed, because `PostCreator#create` always returns `@post`. WHY: `TopicEmbed.create!` then runs with nil `post_id` and `topic_id`, which raises a DB NOT NULL violation (`ActiveRecord::StatementInvalid`). That exception aborts the whole `PollFeed` import loop and fails the `RetrieveTopic` job. HOW: Check `post.persisted?` (or `creator.errors.blank?`) before creating the embed, and return nil on failure."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#02",
+    "descricao": "Claims embed.js throws a TypeError when the page lacks the #discourse-comments element because comments.appendChild is called on null.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#03",
+    "descricao": "Claims the embed controller spec fails because EmbedController#best only enqueues a Sidekiq job and never constructs TopicRetriever during the request.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#05",
+    "descricao": "The hourly PollFeed job always fetches and processes the full feed without a conditional GET; the feed_key helper meant for that is defined but never used.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#07",
+    "descricao": "States that the link fallback in PollFeed is correct; no problem is reported.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#10",
+    "descricao": "States the raw_html cook_method comparison in Post#cook is safe; no problem is reported.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#11",
+    "descricao": "States the cook_method assignment in PostCreator is correct; no problem is reported.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#12",
+    "descricao": "States the `if topic_id` check in EmbedController is safe; no problem is reported.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#13",
+    "descricao": "Describes the host checks in ensure_embeddable without reporting a problem.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#14",
+    "descricao": "States content_sha1 and absolutize_urls in TopicEmbed are correct; no problem is reported.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#15",
+    "descricao": "States the TopicRetriever throttle uses setnx and an explicit no_throttle check; no problem is reported.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#20",
+    "descricao": "Claims import_remote passes an unvalidated user-supplied URL to Kernel#open, allowing command execution with '|' or local file reads.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#21",
+    "descricao": "Claims PollFeed fetches SiteSetting.feed_polling_url without validation, letting whoever controls that setting make the server request arbitrary internal or external URLs.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#23",
+    "descricao": "Claims the embed best.html.erb template closes its if block with `end if`, which is invalid Ruby, so every render raises a SyntaxError.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#25",
+    "descricao": "The embed layout interpolates request.referer into an inline JavaScript string with only HTML escaping, so a referer containing a quote can break out of the string and run script.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#26",
+    "descricao": "Claims postMessage drops the resize message because targetOrigin is the full referer URL rather than just the origin, breaking iframe auto-resize.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#27",
+    "descricao": "Claims setting X-Frame-Options: ALLOWALL on the embed endpoint disables clickjacking protection and that the referer check can be spoofed.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#28",
+    "descricao": "Claims the cook_method migration default of 1 equals raw_html, so every post would skip cooking and sanitization.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#31",
+    "descricao": "Claims the 'not a url' TopicRetriever spec passes regardless of the InvalidURIError rescue because embeddable_host is blank.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-01",
+    "descricao": "`<%- end if %>` in embed/best.html.erb is not valid Ruby, so the template raises a SyntaxError and the embed page fails to render.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-02",
+    "descricao": "Claims `<%- end if %>` leaves a dangling if modifier that makes the logo output the condition, so the logo renders before the header button.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-03",
+    "descricao": "Claims the embed best action builds the view for current_user and then marks it publicly cacheable, so a staff member's view could be served to anonymous visitors.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-01",
+    "descricao": "fetch_http calls SiteSetting.embed_by_username.downcase without a presence check, raising NoMethodError when the setting is blank.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-02",
+    "descricao": "poll_feed opens the feed URL without a timeout and imports every item without a cap, so a slow or huge feed can tie up a worker.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-03",
+    "descricao": "The TopicRetriever specs mock perform_retrieve, so a bug in invalid_host? would not make them fail.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-04",
+    "descricao": "The EmbedController success tests only assert that mocks are called and would pass even if the controller logic were removed.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-05",
+    "descricao": "poll_feed has no test of feed parsing or TopicEmbed.import; the specs only check the execute guards.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "4def149a50c4b9b2c24fbb753ac60fe4f4df0cac",
+  "base": "c834e7473c02f11451216b3fbf355f953cfd95e9",
+  "sugestoes": [
+   {
+    "id": "V1",
+    "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+    "lines": [
+     271,
+     276
+    ],
+    "texto": "WHAT: Only getSubGroupsCount is made null-safe, while the three getSubGroupsStream overloads (lines 256, 262, 268) still dereference modelSupplier.get() without a null check. WHY: A group deleted concurrently makes modelSupplier.get() return null, so these methods throw the same NPE this PR fixes for the count. HOW: Handle a null model in those overloads, for example by returning Stream.empty()."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#snloop-01",
+    "descricao": "GroupAdapter's NPE guard is applied only to getSubGroupsCount; the getSubGroupsStream overloads still dereference modelSupplier.get(), which is null when the group is deleted concurrently.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#muse13-01",
+    "descricao": "The concurrency test's reader thread busy-loops full group listings with maxResults=Integer.MAX_VALUE and no throttle, claimed to overload the server and destabilise the suite.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#kimi-01",
+    "descricao": "The reader thread catches only Exception, so Errors thrown during concurrent reads are swallowed and the test passes anyway.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "fix-proper-handling-of-group-memberships-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "060cda77729cb1c4a827560e09e89a7b22078ba9",
+  "base": "4975fc28903a84418f546b2809370f19abf10e08",
+  "sugestoes": [
+   {
+    "id": "V4",
+    "file": "app/assets/javascripts/discourse/models/group.js",
+    "lines": [
+     40,
+     49
+    ],
+    "texto": "WHAT: `removeMember` reloads with `findMembers()` at the old offset. WHY: removing the only member on the last page (e.g. 51 members, offset 50) makes the new offset equal to the new total, so the server returns an empty page and the UI shows an empty list on a page that no longer exists. HOW: after the reload, if offset >= total and offset > 0, step back one page and reload."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#02",
+    "descricao": "Claims the now-unawaited findMembers() call creates a race where the controller has no member data available when it needs it.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#05",
+    "descricao": "Claims the public group members template iterates a bare members property that resolves to undefined because the controller's model is now the Group object.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#08",
+    "descricao": "Claims add_members/remove_member read params[:group_id] while the route supplies the group id as params[:id], so the actions always fail with ParameterMissing.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#09",
+    "descricao": "Claims add_members does not strip whitespace around comma-separated usernames, so entries like 'alice, bob' silently fail to add members.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#11",
+    "descricao": "Claims the public members endpoint accepts an unbounded or negative limit/offset, letting a caller force loading and serializing the whole membership of a large group.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#kimi-01",
+    "descricao": "params[:alias_level].present? is false for 0, so choosing the 'nobody' alias level is ignored.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "ce2dcc537b4b1f98a335e88cfe8e0b804483252a",
+  "base": "85737f52b59aa2e3403c9b8e48acf71ccc5bfae3",
+  "sugestoes": [
+   {
+    "id": "V1",
+    "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+    "lines": [
+     231,
+     235
+    ],
+    "texto": "WHAT: `getCredentials` dereferences `myUser.recoveryCodes` and `myUser.otp` without a null check. WHY: `getMyUser` returns null when the user is absent from the in-memory map, so every federated-credential lookup (now routed through `getFederatedCredentialsStream`) throws a NullPointerException. The other methods in this class (`isValid`, `isConfiguredFor`, `getDisableableCredentialTypesStream`) guard against null. HOW: return `Stream.empty()` when `myUser` is null."
+   },
+   {
+    "id": "V2",
+    "file": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+    "lines": [
+     117,
+     125
+    ],
+    "texto": "WHAT: `createRecoveryCodesCredential` serializes the raw recovery codes to JSON and passes them to the user-storage updater, whereas the local path stores only hashed codes. WHY: a federated provider that accepts the type receives and may persist the codes in plaintext, and the user label is dropped. HOW: document that user-storage providers are responsible for protecting the codes, or pass hashed values if the provider contract allows it."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#03",
+    "descricao": "Claims the recovery-code validator uses non-constant-time String.equals, leaking timing information about stored codes.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#04",
+    "descricao": "Claims raw recovery codes are serialized and persisted in cleartext in user storage instead of hashed.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#07",
+    "descricao": "Claims Optional.get() on RecoveryAuthnCodesUtils.getCredential(user) without isPresent() can throw NoSuchElementException.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#sncc-01",
+    "descricao": "Plaintext recovery codes are serialized and sent to user storage providers via updateCredential, while the local path stores only hashed codes.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-02",
+    "descricao": "Recovery codes are sent to user storage providers in plaintext instead of hashed, so a provider may persist working second-factor codes.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-04",
+    "descricao": "The test user storage accepts any of the user's recovery codes rather than the specific requested code number, unlike the local provider.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#prod-01",
+    "descricao": "BackwardsCompatibilityUserStorage.getCredentials dereferences getMyUser(user) without a null check, so it throws NullPointerException for a user missing from the provider's map.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#kimi-01",
+    "descricao": "Claims recovery code verification compares hashes with String.equals, enabling timing attacks.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "eb9623b4e787303a3bd15e10bbbdb78d59875ac6",
+  "base": "28e3db2520d4ea28c57b08da57b83917ba7b2e15",
+  "sugestoes": [
+   {
+    "id": "V2",
+    "file": "src/sentry/spans/consumers/process/factory.py",
+    "lines": [
+     141,
+     141
+    ],
+    "texto": "WHAT: `val[\"end_timestamp_precise\"]` is read with a hard key lookup, and `cast` provides no runtime validation. WHY: A span message without this field raises KeyError inside `process_batch`, which fails the whole batch and can crash-loop the consumer on a poison message. HOW: Use `.get()` with a fallback, or skip and log invalid spans."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#01",
+    "descricao": "Claims the redirect-resolution limit was silently cut from 10000 to 1000, so segment trees deeper than 1000 are no longer joined, and the comment still mentions 10k.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#02",
+    "descricao": "Claims a non-root span whose key equals the resolved set key unions the key with itself and then unlinks it, deleting the buffered segment.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#07",
+    "descricao": "Claims a span message missing end_timestamp_precise raises KeyError and aborts the whole batch.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#09",
+    "descricao": "Claims OptimizedCursorPaginator's negative-offset branch passes cursor.offset directly into queryset slicing when advanced features are enabled.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#10",
+    "descricao": "Claims BasePaginator.get_result sets start_offset to an unclamped offset for previous-page cursors, allowing negative slicing.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#11",
+    "descricao": "Claims OptimizedCursorPaginator.get_item_key applies floor/ceil to a datetime key, raising TypeError.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#12",
+    "descricao": "Claims accessing organization_context.member.has_global_access raises AttributeError when organization_context is None.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-02",
+    "descricao": "process_batch indexes end_timestamp_precise directly, so a span without the field raises KeyError and fails the whole consumer batch.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#prod-01",
+    "descricao": "Claims span_count counts pre-existing spans in set_key, so zpopmin evicts far more than the overflow above 1000 and discards valid spans.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#muse13-01",
+    "descricao": "SDK-supplied end_timestamp_precise is used as the ZSET eviction score, so an attacker sending far-future timestamps could keep their spans and force eviction of legitimate ones.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#muse13-02",
+    "descricao": "Each span insert runs up to two ZUNIONSTORE copies of the segment set plus ZCARD/ZPOPMIN, making segment building O(N^2) on the ingest hot path.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#kimi-01",
+    "descricao": "Claims end_timestamp_precise is not validated as finite before being used as a ZADD score.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#kimi-03",
+    "descricao": "Claims test_backpressure uses identical end_timestamp_precise values and so cannot catch timestamp-ordering or eviction regressions.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "replays-self-serve-bulk-delete-system-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "ea188e2d736fd6ed27c1dba8aae63b7268e2a7a9",
+  "base": "49a275847631e231672d01b5dcd66558c069d25b",
+  "sugestoes": [
+   {
+    "id": "V4",
+    "file": "src/sentry/integrations/source_code_management/commit_context.py",
+    "lines": [
+     584,
+     597
+    ],
+    "texto": "WHAT: `get_environment_info` calls `issue.get_recommended_event()` (a Snuba/nodestore lookup) once per issue inside the comment-body list comprehension. WHY: this adds up to one extra query per issue (up to 5) to every PR comment task, and failures are swallowed at info level. HOW: batch the recommended-event lookups, or fetch the environment from data already loaded for the top issues."
+   },
+   {
+    "id": "V5",
+    "file": "src/sentry/preprod/api/endpoints/organization_preprod_artifact_assemble.py",
+    "lines": [
+     81,
+     91
+    ],
+    "texto": "WHAT: `analytics.record` runs before the `organizations:preprod-artifact-assemble` feature check. WHY: requests that get a 404 'Feature not enabled' are still recorded as assemble events, which inflates the metric. HOW: move the `analytics.record` call after the feature gate."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#03",
+    "descricao": "Claims the unauthenticated endpoint iterates an unbounded array of reports, allowing CPU/metric-spam DoS.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#04",
+    "descricao": "Claims BrowserReportingCollectorEndpoint returns Django HttpResponse objects although its Endpoint base expects DRF Response objects.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#05",
+    "descricao": "The assemble analytics event is recorded before the feature-flag check, so requests rejected with 404 are still counted as assemble events, skewing analytics.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#08",
+    "descricao": "BaseDetectorTypeValidator.update() reads validated_data.get('detector_type') instead of 'type', so detector type changes are silently ignored.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#09",
+    "descricao": "Claims get_condition_query_groups indexes dcg_to_slow_conditions[dcg.id] and may KeyError for a DCG missing from the precomputed map.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#10",
+    "descricao": "Claims the triggered_actions log now writes the full event payload with user data because event_data was switched to workflow_event_data.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#11",
+    "descricao": "Claims the success path dereferences data.summary without guarding undefined data when the query is disabled or errored.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#14",
+    "descricao": "Claims the column fallback crashes when tableData is defined but meta is missing.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#15",
+    "descricao": "Claims ExploreParams still reads visualize.yAxes after the Visualize class switched to yAxis, producing undefined saved-query params.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#16",
+    "descricao": "Asks to verify that no caller passes Visualize instances instead of BaseVisualize to updateLocationWithAggregateFields.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#17",
+    "descricao": "Claims the number-type test's mock matches query.query instead of substringMatch, so its not-called assertion can never fail.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#18",
+    "descricao": "Claims the attribute key is interpolated into the request path without encodeURIComponent, enabling path confusion.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#21",
+    "descricao": "get_environment_info fetches the recommended event per issue while building the merged-PR comment, an N+1 lookup on the comment path.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#sncc-02",
+    "descricao": "The number-type test mock matches on query.query while the hook sends substringMatch, so the mock can never match and the not-called assertion cannot fail.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#prod-01",
+    "descricao": "Claims _truncate_title is defined on CommitContextIntegration, so PRCommentWorkflow._truncate_title raises AttributeError.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#snapi-01",
+    "descricao": "Claims the hook now returns undefined attributes before the first fetch instead of {}, which can crash consumers that access keys on the TagCollection.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#snapi-02",
+    "descricao": "Claims the default of sentry:autofix_automation_tuning changed from low to off, silently disabling automatic autofix for projects that never set it, unrelated to the replays bulk delete feature.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#kimi-01",
+    "descricao": "get_request_data sorts the caller's error_events list in place, mutating its argument as a side effect.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#kimi-02",
+    "descricao": "Claims get_environment_info swallows all exceptions with an info log, hiding real failures.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#kimi-03",
+    "descricao": "_truncate_title appends an ellipsis after slicing to max_length, so truncated titles exceed ISSUE_TITLE_MAX_LENGTH by three characters.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ }
+}

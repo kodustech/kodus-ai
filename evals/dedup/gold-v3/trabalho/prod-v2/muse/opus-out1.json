@@ -1,0 +1,584 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "id": "V1",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Fallback lookup by absent externalCalendarId never matches in update/delete."
+  },
+  {
+   "id": "V2",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "mainHostDestinationCalendar.integration accessed without optional chaining in Meet fallback."
+  },
+  {
+   "id": "V3",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#04",
+   "newGroup": null,
+   "reason": "Inverted IS_TEAM_BILLING_ENABLED condition for org slug."
+  },
+  {
+   "id": "V4",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "newGroup": null,
+   "reason": "Null organizer destinationCalendar makes optional push drop team hosts calendars."
+  },
+  {
+   "id": "V5",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05",
+   "newGroup": null,
+   "reason": "Lark/Office365 createEvent ignore credentialId and use first destination calendar."
+  },
+  {
+   "id": "V6",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#12",
+   "newGroup": null,
+   "reason": "updateLocation stores externalId missing from updateEvent result."
+  }
+ ],
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+  {
+   "id": "V1",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "Strategy close shuts down the factory-owned shared queue pool."
+  },
+  {
+   "id": "V2",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10",
+   "newGroup": null,
+   "reason": "Worker shutdown flag stops workers before queued items drain."
+  },
+  {
+   "id": "V3",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03",
+   "newGroup": null,
+   "reason": "Offset completed in finally even when processing raised."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "O(gap) rescan and unbounded offset set when head is stuck; not covered by golden issues."
+  },
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "wait_until_empty ignores in-flight item being processed; no golden issue."
+  }
+ ],
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": [
+  {
+   "id": "V1",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "newGroup": null,
+   "reason": "Google persists safeParse wrapper instead of data."
+  },
+  {
+   "id": "V2",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "Sync mode returns raw fetch Response to callers expecting provider shapes."
+  },
+  {
+   "id": "V3",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "newGroup": null,
+   "reason": "Zoho Bigin passes credentialId instead of userId."
+  },
+  {
+   "id": "V4",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#16",
+   "newGroup": null,
+   "reason": "Salesforce checks statusText instead of response.ok."
+  },
+  {
+   "id": "V5",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#17",
+   "newGroup": null,
+   "reason": "jsforce.Connection built with stale tokens after refresh."
+  },
+  {
+   "id": "V6",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01",
+   "newGroup": null,
+   "reason": "Webhook secret compared with non-constant-time !==."
+  },
+  {
+   "id": "V7",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#03",
+   "newGroup": null,
+   "reason": "Non-atomic findFirst-then-create allows duplicate credentials."
+  },
+  {
+   "id": "V8",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+   "newGroup": null,
+   "reason": "Computed keys from z.string().toString() produce a literal key."
+  },
+  {
+   "id": "V9",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#13",
+   "newGroup": null,
+   "reason": "Salesforce refreshes token on every construction."
+  }
+ ],
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
+  {
+   "id": "V1",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "Hung spawn-context processes not killed due to isinstance gate."
+  },
+  {
+   "id": "V2",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "newGroup": null,
+   "reason": "join() breaks on deadline and skips remaining processes."
+  },
+  {
+   "id": "V3",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08",
+   "newGroup": null,
+   "reason": "get_memory_info called once per buffer on each submit."
+  },
+  {
+   "id": "V4",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#07",
+   "newGroup": null,
+   "reason": "Negative --flusher-processes not validated, KeyError."
+  },
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Per-process flush budget scaling with process count; no golden issue."
+  }
+ ],
+ "notification-rule-processing-engine-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "notification-rule-processing-engine-grafana-codex#07",
+   "newGroup": null,
+   "reason": "GrafanaRuleListItem rendered without key."
+  },
+  {
+   "id": "V2",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "Silence drawer gated on ruler rule never renders for prom-only rules."
+  },
+  {
+   "id": "V3",
+   "match": "notification-rule-processing-engine-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Duplicate allowed via Grafana create permission for non-Grafana rules."
+  },
+  {
+   "id": "V4",
+   "match": "notification-rule-processing-engine-grafana-codex#04",
+   "newGroup": null,
+   "reason": "isFederated hardcoded false drops federated check."
+  }
+ ],
+ "feat-2fa-backup-codes-cal-com": [
+  {
+   "id": "V1",
+   "match": "feat-2fa-backup-codes-cal-com#01",
+   "newGroup": null,
+   "reason": "Backup code plus dummy totpCode skips password check."
+  },
+  {
+   "id": "V2",
+   "match": "feat-2fa-backup-codes-cal-com#16",
+   "newGroup": null,
+   "reason": "replaceAll on non-string backupCode throws 500."
+  }
+ ],
+ "github-oauth-security-enhancement-sentry": [
+  {
+   "id": "V1",
+   "match": "github-oauth-security-enhancement-sentry#06",
+   "newGroup": null,
+   "reason": "No Integration yet: pipeline advances without user comparison."
+  },
+  {
+   "id": "V2",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "metadata sender login indexed without check, KeyError."
+  },
+  {
+   "id": "V3",
+   "match": "github-oauth-security-enhancement-sentry#05",
+   "newGroup": null,
+   "reason": "Token exchange and user lookup not wrapped in error handling."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Missing redirect_uri in token exchange; no golden issue."
+  }
+ ],
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": [
+  {
+   "id": "V1",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "newGroup": null,
+   "reason": "Dayjs objects compared with ===."
+  },
+  {
+   "id": "V2",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "Working-hours end computed from slotStartTime."
+  },
+  {
+   "id": "V3",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-03",
+   "newGroup": null,
+   "reason": "Multiple same-day overrides: rejected when outside any one."
+  },
+  {
+   "id": "V4",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#06",
+   "newGroup": null,
+   "reason": "Override conversion keeps only hour/minute, crossing midnight lands on wrong day."
+  }
+ ],
+ "feature-automatically-downsize-large-images-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "downsize defined twice, ResizeEmoji ArgumentError."
+  },
+  {
+   "id": "V2",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Loop ignores false return and retries failing convert."
+  },
+  {
+   "id": "V3",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Client check hardcodes 10MB instead of per-type setting."
+  },
+  {
+   "id": "V4",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Up to five synchronous ImageMagick runs per upload, DoS."
+  }
+ ],
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "V1",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "newGroup": null,
+   "reason": "Uses resource id instead of name (group id)."
+  },
+  {
+   "id": "V2",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "newGroup": null,
+   "reason": "canManage accepts VIEW scope."
+  },
+  {
+   "id": "V3",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01",
+   "newGroup": null,
+   "reason": "Removed canViewGlobal short-circuit causes per-group evaluation."
+  }
+ ],
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+  {
+   "id": "V1",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+   "newGroup": null,
+   "reason": "Empty data object in updateMany does not refresh updatedAt."
+  },
+  {
+   "id": "V2",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#03",
+   "newGroup": null,
+   "reason": "connectedCalendars not invalidated after cache delete."
+  },
+  {
+   "id": "V3",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#muse13-01",
+   "newGroup": null,
+   "reason": "CalendarCacheRepository instantiated directly bypassing feature flag."
+  },
+  {
+   "id": "V4",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#07",
+   "newGroup": null,
+   "reason": "macOS-only sed -i syntax."
+  }
+ ],
+ "fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "totalPages floor+1 off by one."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Template iterates bare members; no golden issue."
+  },
+  {
+   "id": "V3",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#10",
+   "newGroup": null,
+   "reason": "users.delete skips primary_group_id clearing (fix via group.remove)."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Members routes param :id vs :group_id; no golden issue."
+  },
+  {
+   "id": "V5",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02",
+   "newGroup": null,
+   "reason": "Unbounded limit param on public members endpoint."
+  }
+ ],
+ "sms-workflow-reminder-retry-count-tracking-cal-com": [
+  {
+   "id": "V1",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "retryCount>1 branch lacks SMS method filter."
+  },
+  {
+   "id": "V2",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "No increment when message or sendTo missing."
+  },
+  {
+   "id": "V3",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#01",
+   "newGroup": null,
+   "reason": "Stale reminder.retryCount+1 instead of atomic increment (also unguarded catch)."
+  }
+ ],
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+  {
+   "id": "V1",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#11",
+   "newGroup": null,
+   "reason": "immediateDelete branch does not delete the reminder."
+  },
+  {
+   "id": "V2",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+   "newGroup": null,
+   "reason": "One failing SendGrid cancel aborts the loop."
+  },
+  {
+   "id": "V3",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+   "newGroup": null,
+   "reason": "Async cancel helpers called without await in forEach."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Cancelled query lacks method EMAIL filter; no golden issue."
+  },
+  {
+   "id": "V5",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#06",
+   "newGroup": null,
+   "reason": "Sequential SendGrid cancels."
+  }
+ ],
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "TopicUser.find_by nil causes NoMethodError."
+  },
+  {
+   "id": "V2",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "State-changing GET without CSRF protection."
+  }
+ ],
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "should_block? updates stats in validator, double count and lost increments."
+  },
+  {
+   "id": "V2",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Domain regex not end-anchored."
+  },
+  {
+   "id": "V3",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Case-sensitive blocked email lookup."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "rejectedEmails.@each on strings does not revalidate; different from stale cache issue."
+  },
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Stats skipped when whitelist error present; no golden issue."
+  }
+ ],
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Org link/unlink not invalidating login cache; not the update/disabled-org case."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "getConfig null NPE in login predicate; no golden issue."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Login entry map grows per org; no golden issue."
+  }
+ ],
+ "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": [
+  {
+   "id": "V1",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "MetricAlertDetectorHandler lacks abstract methods, TypeError."
+  }
+ ],
+ "authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "List skips outdated-cache requery; no golden issue."
+  },
+  {
+   "id": "V2",
+   "match": "authzservice-improve-authz-caching-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Denial cache key collision via underscore join."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Denial never cleared on later grant; no golden issue."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Denial cache entries per resource grow memory; no golden issue."
+  }
+ ],
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
+  {
+   "id": "V1",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "timezone.now() evaluated at class definition."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Raw datetime in task kwargs not serializable; no golden issue."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "ExampleIntegration override lacks assignment_source param; no golden issue."
+  }
+ ],
+ "advanced-query-processing-architecture-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "advanced-query-processing-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Double interpolation applies ad hoc filters twice."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "applyTemplateVariables vs interpolateVariablesInQueries changes sharding checks; not the empty-expr filter issue."
+  }
+ ],
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Exit code renumbering; no golden issue."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "picocli.exit no-op in test mode; no golden issue."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "UpgradeTest null strategy without feature; no golden issue."
+  }
+ ],
+ "frontend-asset-optimization-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "frontend-asset-optimization-grafana-codex#01",
+   "newGroup": null,
+   "reason": "No cache re-check after acquiring write lock."
+  }
+ ],
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#03",
+   "newGroup": null,
+   "reason": "FromContext returns fresh TestLogger."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Nil req dereference in contextual logger middleware; no golden issue."
+  }
+ ]
+}

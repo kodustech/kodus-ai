@@ -1,0 +1,296 @@
+{
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "V1",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: readLength -1 for indefinite length reaches new byte[-1], NegativeArraySizeException instead of IOException."
+  },
+  {
+   "id": "V2",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#06",
+   "newGroup": null,
+   "reason": "Same claim: lenient readSequence accepts malformed/trailing DER enabling signature malleability."
+  },
+  {
+   "id": "V3",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-03",
+   "newGroup": null,
+   "reason": "Same claim: integerToBytes truncates/normalizes out-of-range r/s so non-canonical signatures verify (malleability)."
+  },
+  {
+   "id": "V5",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#musep-01",
+   "newGroup": null,
+   "reason": "Same claim: CryptoIntegration.init in AuthzClient.create locks global provider to the minimal one, later server init ignored."
+  }
+ ],
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "V1",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#04",
+   "newGroup": null,
+   "reason": "Same claim: org link/unlink does not invalidate getForLogin caches."
+  },
+  {
+   "id": "V2",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#10",
+   "newGroup": null,
+   "reason": "Same claim: login predicate NPE on null IDP config."
+  },
+  {
+   "id": "V3",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#opa-02",
+   "newGroup": null,
+   "reason": "Same place and cause: single per-realm/mode login entry merges every organization, rebuilt/copied per new org."
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "V2",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02",
+   "newGroup": null,
+   "reason": "Same claim: removal listener calls V2 setPermissionsEnabled which throws, aborting deletion."
+  },
+  {
+   "id": "V4",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#14",
+   "newGroup": null,
+   "reason": "Same claim: getClientsWithPermission runs one policy evaluation per client resource."
+  }
+ ],
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "V4",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Same claim: rejectedEmails.@each does not observe pushed plain strings, no revalidation."
+  },
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "No rejected issue about should_block? stats update being skipped when whitelist/blacklist error already present."
+  }
+ ],
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": [
+  {
+   "id": "V1",
+   "match": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Same claim: RECREATE_UPGRADE_EXIT_CODE renumbered 4->3 and 4 reused for feature disabled, breaking automation."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Different cause from #05: claims picocli.exit is a no-op in test launch mode so exit code is lost (exit 0), not that System.exit is called directly."
+  },
+  {
+   "id": "V3",
+   "match": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Same claim: null strategy path in UpgradeTest does not enable rolling-updates feature."
+  }
+ ],
+ "advanced-query-processing-architecture-grafana-codex": [
+  {
+   "id": "V2",
+   "match": "advanced-query-processing-architecture-grafana-codex#prod-01",
+   "newGroup": null,
+   "reason": "Same claim: switch to applyTemplateVariables leaves __auto/__range scoped vars uninterpolated in shard splitting."
+  }
+ ],
+ "anonymous-add-configurable-device-limit-grafana-codex": [
+  {
+   "id": "V4",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Same claim: ProvideAnonDBStore int64 param still registered in wire.go breaks Wire."
+  }
+ ],
+ "authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "authzservice-improve-authz-caching-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Same claim: List serves stale cached permissions (no refresh) so new resources stay invisible until TTL."
+  },
+  {
+   "id": "V3",
+   "match": "authzservice-improve-authz-caching-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Same claim: cached denial blocks access granted within the TTL window."
+  },
+  {
+   "id": "V4",
+   "match": "authzservice-improve-authz-caching-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Same claim: per-resource denial cache entries cause unbounded cache memory growth."
+  }
+ ],
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Different cause from pf-ds-C2 (null referenceId): cancelled SMS rows lacking a method filter are sent as SendGrid batch_id."
+  }
+ ],
+ "dual-storage-architecture-grafana-codex": [
+  {
+   "id": "V5",
+   "match": "dual-storage-architecture-grafana-codex#12",
+   "newGroup": null,
+   "reason": "Same claim: async legacy write goroutine races with caller on shared obj returned to caller."
+  }
+ ],
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "V2",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#27",
+   "newGroup": null,
+   "reason": "Same claim: Referer check is spoofable and X-Frame-Options ALLOWALL removes framing protection."
+  },
+  {
+   "id": "V4",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#26",
+   "newGroup": null,
+   "reason": "Same claim: postMessage targetOrigin is the full referer URL, so resize messages are dropped."
+  }
+ ],
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
+  {
+   "id": "V2",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#04",
+   "newGroup": null,
+   "reason": "Same claim: to_dict embeds raw datetime in task kwargs, not JSON-serializable."
+  },
+  {
+   "id": "V3",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#muse13-01",
+   "newGroup": null,
+   "reason": "Same claim: ExampleIntegration.sync_status_outbound override lacks assignment_source/**kwargs, TypeError."
+  }
+ ],
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+  {
+   "id": "V4",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#prod-01",
+   "newGroup": null,
+   "reason": "Same claim: committable-offset loop scans full numeric range every commit tick, CPU on large gaps."
+  },
+  {
+   "id": "V5",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#09",
+   "newGroup": null,
+   "reason": "Same claim: wait_until_empty reports empty while a dequeued item is still in flight."
+  }
+ ],
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "V5",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#12",
+   "newGroup": null,
+   "reason": "Same claim: plural *_ids hydration calls .map without null/array guard, crashing."
+  }
+ ],
+ "feature-localization-fallbacks-server-side-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Same claim: nil default_locale makes to_sym raise NoMethodError in fallback list (also overlaps #03 normalization)."
+  },
+  {
+   "id": "V2",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Same claim: user-influenced locale reaches Regexp.new in load_locale without escaping."
+  }
+ ],
+ "fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "V2",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Same claim: template iterates bare members while model is the Group object, renders empty."
+  },
+  {
+   "id": "V4",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Same claim: routes supply :id while actions require :group_id, ParameterMissing."
+  }
+ ],
+ "github-oauth-security-enhancement-sentry": [
+  {
+   "id": "V4",
+   "match": "github-oauth-security-enhancement-sentry#prod-01",
+   "newGroup": null,
+   "reason": "Same defect: token exchange omits redirect_uri sent in authorize."
+  }
+ ],
+ "implement-access-token-context-encoding-framework-keycloak": [
+  {
+   "id": "V4",
+   "match": "implement-access-token-context-encoding-framework-keycloak#07",
+   "newGroup": null,
+   "reason": "Same claim: setFormParams does not refresh cached grantType, stale grant."
+  }
+ ],
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "No rejected issue about federated-first lookup plus local write fallback creating split-brain recovery credentials."
+  },
+  {
+   "id": "V3",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: plaintext recovery codes sent to user storage providers while local path hashes."
+  }
+ ],
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Same claim: box-ordinal-group values off by one versus order in the mixin."
+  }
+ ],
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "id": "V3",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-02",
+   "newGroup": null,
+   "reason": "Same claim: direct end_timestamp_precise indexing raises KeyError and fails the batch."
+  }
+ ],
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+  {
+   "id": "V2",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Same claim: ContextualLoggerMiddleware dereferences req without nil guard and panics."
+  }
+ ],
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
+  {
+   "id": "V5",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#09",
+   "newGroup": null,
+   "reason": "Same claim: per-process flush budget makes total flushed segments scale with process count."
+  }
+ ],
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": [
+  {
+   "id": "V3",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#muse13-02",
+   "newGroup": null,
+   "reason": "Same claim: same-domain website label keeps only host+path, dropping query and fragment."
+  }
+ ]
+}

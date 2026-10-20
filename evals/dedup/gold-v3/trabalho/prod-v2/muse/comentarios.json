@@ -1,0 +1,2178 @@
+{
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+   "lines": [
+    133,
+    135
+   ],
+   "texto": "WHAT: `readLength` returns -1 for `0x80` indefinite length which flows into `new byte[length]` as `NegativeArraySizeException`. WHY: Declared `throws IOException` callers (`readInteger`, `readNext`) leak an unchecked crash on attacker-controlled DER instead of a checked failure. HOW: Reject `0x80` with `IOException` since DER requires definite lengths."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+   "lines": [
+    55,
+    62
+   ],
+   "texto": "WHAT: `readSequence` subtracts full TLV sizes from content length without checking for negative overshoot or trailing bytes. WHY: Malformed ECDSA DER with extra/truncated elements passes the `size==2` check and is normalized to a different valid signature, enabling signature malleability. HOW: Fail when `length` goes negative, is nonzero at exit, or bytes remain after the sequence."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+   "lines": [
+    151,
+    156
+   ],
+   "texto": "WHAT: `integerToBytes` zero-pads negative `BigInteger` values and truncates oversized ones instead of rejecting them. WHY: Attacker-crafted DER with negative r/s is converted to a different positive fixed-length value that then verifies, breaking strict DER validation. HOW: Reject `signum()<0` and `bitLength` overflow with `IOException`."
+  },
+  {
+   "id": "V4",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+   "lines": [
+    55,
+    58
+   ],
+   "texto": "WHAT: Removing the multiple-provider error and sorting only by `order()` leaves ties (Default 200 vs FIPS 200) to arbitrary `ServiceLoader` order. WHY: A server requiring FIPS can silently run with the non-FIPS provider with only a debug log, a security downgrade. HOW: Keep fail-fast when the top two providers share the same `order()`."
+  },
+  {
+   "id": "V5",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "authz/client/src/main/java/org/keycloak/authorization/client/AuthzClient.java",
+   "lines": [
+    94,
+    96
+   ],
+   "texto": "WHAT: `create()` initializes the process-wide once-only `CryptoIntegration` with the authz-client classloader whose service file sees only the weak `AuthzClientCryptoProvider`. WHY: If called first in a shared JVM, later server init becomes a no-op and all server crypto calls hit `UnsupportedOperationException` stubs. HOW: Init with the thread-context classloader that sees all providers instead of the narrow classloader."
+  },
+  {
+   "id": "V6",
+   "origem": "synthesis-rescue",
+   "agente": "kodus-generalist-review-agent",
+   "file": "common/src/main/java/org/keycloak/common/crypto/CryptoProvider.java",
+   "lines": [
+    39,
+    44
+   ],
+   "texto": "WHAT: New abstract `order()` breaks every existing out-of-tree `CryptoProvider` implementation. WHY: Binary/source incompatibility throws `AbstractMethodError` at runtime for providers not updated in this PR. HOW: Declare it as `default` with a sensible fallback value."
+  },
+  {
+   "id": "V7",
+   "origem": "synthesis-rescue",
+   "agente": "kodus-generalist-review-agent",
+   "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+   "lines": [
+    114,
+    115
+   ],
+   "texto": "WHAT: Two `ASN1Encoder.create().write()` results are built then discarded. WHY: Dead computation wastes allocation and signals incomplete refactoring that hides the real encoding below. HOW: Delete the two discarded statements."
+  }
+ ],
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+   "lines": [
+    403,
+    417
+   ],
+   "texto": "WHAT: Organization link/unlink does not invalidate the getForLogin cache even though login eligibility depends on organizationId. WHY: Leaves stale REALM_ONLY/ORG_ONLY/ALL login lists showing realm brokers that became org-private or hiding newly linked brokers after OrganizationProvider membership changes."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "server-spi/src/main/java/org/keycloak/models/IdentityProviderStorageProvider.java",
+   "lines": [
+    252,
+    255
+   ],
+   "texto": "WHAT: New login predicate dereferences idp.getConfig() without null-check. WHY: Throws NPE during create/remove/update invalidation when a transient IdentityProviderModel has null config, breaking IDP writes."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+   "lines": [
+    233,
+    240
+   ],
+   "texto": "WHAT: Single revisioned login entry accumulates one map entry per distinct organizationId and copies the whole map on each new org. WHY: Causes unbounded cluster object growth and O(orgs) copy cost on every first query per org."
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+   "lines": [
+    214,
+    222
+   ],
+   "texto": "WHAT: Global all-clients grant is ignored once a per-client resource exists because fallback runs only when the lookup returns null. WHY: Denies authorized callers with MANAGE/CONFIGURE/MAP_* on all clients and breaks the documented all-clients contract."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java",
+   "lines": [
+    89,
+    91
+   ],
+   "texto": "WHAT: The removal listener invokes V2 setPermissionsEnabled which unconditionally throws UnsupportedOperationException. WHY: Any client/role/group deletion while V2 is active aborts with an exception from the event listener."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+   "lines": [
+    217,
+    221
+   ],
+   "texto": "WHAT: Fallback dereferences a possibly-null type resource without a guard. WHY: Triggers a null dereference during permission evaluation when the Clients type resource has not been created yet."
+  },
+  {
+   "id": "V4",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+   "lines": [
+    138,
+    142
+   ],
+   "texto": "WHAT: getClientsWithPermission runs a separate policy evaluation for every Clients resource. WHY: Listing/filtering cost grows linearly with client count and each evaluation is expensive."
+  },
+  {
+   "id": "V5",
+   "origem": "synthesis-rescue",
+   "agente": "kodus-generalist-review-agent",
+   "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+   "lines": [
+    86,
+    88
+   ],
+   "texto": "WHAT: Global `canView()` checks only the `view` scope and ignores the `manage` scope. WHY: A caller granted only manage-all fails `requireList`/`canList` and cannot list clients even though manage implies view and per-client checks succeed. HOW: Also grant view when global `manage` is granted, matching `canView(ClientScopeModel)`."
+  }
+ ],
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/models/blocked_email.rb",
+   "lines": [
+    11,
+    17
+   ],
+   "texto": "WHAT: `should_block?` mutates stats with read-modify-write `match_count += 1` plus `save` inside a validator. WHY: Concurrent signups lose increments and `UsersController.create` calls `valid?` then `save`, validating twice so one attempt counts twice."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "lib/validators/email_validator.rb",
+   "lines": [
+    18,
+    21
+   ],
+   "texto": "WHAT: `email_in_restriction_setting?` anchors only `@` with no end anchor. WHY: A whitelist entry `allowed.com` matches `user@allowed.com.evil.com`, letting an attacker bypass the whitelist with a subdomain-suffix domain."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/models/blocked_email.rb",
+   "lines": [
+    11,
+    12
+   ],
+   "texto": "WHAT: `should_block?` looks up the raw email with an exact case-sensitive match and no normalization. WHY: `User@Spam.com` bypasses a block for `user@spam.com`, defeating the signup block."
+  },
+  {
+   "id": "V4",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/assets/javascripts/discourse/controllers/create_account_controller.js",
+   "lines": [
+    93,
+    96
+   ],
+   "texto": "WHAT: `emailValidation` depends on `rejectedEmails.@each` but the array holds plain strings. WHY: `pushObject` of a string does not trigger `@each`, so the email field does not re-validate after a server rejection."
+  },
+  {
+   "id": "V5",
+   "origem": "synthesis-rescue",
+   "agente": "kodus-generalist-review-agent",
+   "file": "lib/validators/email_validator.rb",
+   "lines": [
+    13,
+    15
+   ],
+   "texto": "WHAT: `should_block?` is never called when a whitelist/blacklist error is already present, so its `match_count`/`last_match_at` update is skipped. WHY: Match statistics undercount and `last_match_at` goes stale for blocked addresses that also violate domain lists. HOW: Separate the stats increment from the error-adding guard so the lookup always runs."
+  }
+ ],
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+   "lines": [
+    121,
+    124
+   ],
+   "texto": "WHAT: `getGroupIdsWithViewPermission` adds `groupResource.getId()` and looks up by it while `hasPermission` resolves via `findByName`, where the name holds the group ID. WHY: The lookup misses and the returned set contains authz resource UUIDs instead of group IDs, so user search/count filtering by `UserModel.GROUPS` breaks. HOW: Use `groupResource.getName()` for both the permission check and the granted set."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+   "lines": [
+    64,
+    71
+   ],
+   "texto": "WHAT: `GroupPermissionsV2.canManage()` grants manage when the caller holds only `VIEW` on groups. WHY: A view-only group admin passes the global manage check and can perform management operations reserved for `MANAGE`. HOW: Check only `AdminPermissionsSchema.MANAGE` in `canManage()`."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "services/src/main/java/org/keycloak/services/resources/admin/GroupResource.java",
+   "lines": [
+    177,
+    179
+   ],
+   "texto": "WHAT: `getSubGroups` removed the `canViewGlobal` short circuit and evaluates `canView` per subgroup. WHY: Each per-group check does resource lookup plus policy evaluation, so listing subgroups costs N evaluations even for globally authorized callers. HOW: Restore the global check to bypass per-group evaluation when `canView()` is true."
+  }
+ ],
+ "add-guest-management-functionality-to-existing-bookings-cal-com": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+   "lines": [
+    46,
+    48
+   ],
+   "texto": "WHAT: `isTeamAdminOrOwner` requires both `isTeamAdmin` and `isTeamOwner` to be true when `isTeamAdmin` already covers OWNER. WHY: Team admins who are not owners always fail the check and get FORBIDDEN, breaking the intended admin path. HOW: Change `&&` to `||`."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+   "lines": [
+    74,
+    78
+   ],
+   "texto": "WHAT: Filter only excludes exact-case matches against existing attendees and never dedupes within `guests` itself. WHY: Requesting `[\"a@x.com\",\"a@x.com\"]` or `\"A@x.com\"` creates duplicate attendee rows via `createMany`. HOW: Normalize to lowercase and dedupe with `Set` before comparing."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+   "lines": [
+    167,
+    168
+   ],
+   "texto": "WHAT: `sendAddGuestsEmails` receives original `guests` instead of filtered `uniqueGuests`. WHY: Pre-existing attendees re-sent in the request match `newGuests.includes` and get new-guest `AttendeeScheduledEmail` instead of the added-guests notice. HOW: Pass `uniqueGuests`."
+  },
+  {
+   "id": "V4",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+   "lines": [
+    35,
+    41
+   ],
+   "texto": "WHAT: `isInvalidEmail` is set true on validation failure but never reset on success or successful retry. WHY: Error banner persists across retries and on next dialog open after `multiEmailValue` was reset. HOW: Reset `setIsInvalidEmail(false)` in `onSuccess` and when validation succeeds."
+  },
+  {
+   "id": "V5",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+   "lines": [
+    70,
+    72
+   ],
+   "texto": "WHAT: Blocklist is lowercased but `guest` is compared raw via `includes(guest)`. WHY: Attacker adds `User@Blocked.com` to bypass a `user@blocked.com` entry and receive invites/calendar updates. HOW: Lowercase and trim `guest` before the blocklist check."
+  },
+  {
+   "id": "V6",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts",
+   "lines": [
+    3,
+    6
+   ],
+   "texto": "WHAT: `guests` array has no length cap, uniqueness, or normalization. WHY: One authed request can trigger unbounded `createMany` inserts plus per-attendee `getTranslation` and per-attendee emails in `sendAddGuestsEmails`, enabling spam and resource exhaustion. HOW: Cap length with `.max()`, enforce uniqueness, and normalize emails."
+  },
+  {
+   "id": "V7",
+   "origem": "synthesis-rescue",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+   "lines": [
+    158,
+    163
+   ],
+   "texto": "WHAT: Calendar sync is built from `ctx.user` credentials even when the caller is an attendee. WHY: An attendee-invoked request updates the wrong calendars or silently fails while the database write already succeeded, leaving DB and calendars diverged. HOW: Load credentials for the booking owner (`booking.userId`) like the organizer path instead of the requesting user."
+  },
+  {
+   "id": "V8",
+   "origem": "synthesis-rescue",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+   "lines": [
+    92,
+    106
+   ],
+   "texto": "WHAT: New attendees are written to the database before `updateCalendarAttendees` runs and the calendar call is outside any rollback. WHY: A calendar failure leaves persisted guests that were never propagated, and the sibling editLocation flow does calendar-first then DB for this reason. HOW: Update calendars first and only persist attendees on success, or add compensation on failure."
+  }
+ ],
+ "add-html-sanitizer-for-translated-message-resources-keycloak": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+   "lines": [
+    73,
+    80
+   ],
+   "texto": "WHAT: Missing English counterpart throws unchecked RuntimeException that escapes verify() instead of a MojoExecutionException. WHY: Crashes the Maven build on community-only or default bundles instead of reporting a violation. HOW: Return early with a message or throw MojoExecutionException when the English file cannot be read."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+   "lines": [
+    102,
+    111
+   ],
+   "texto": "WHAT: Common prefix/suffix trimming does not cap overlap, so substring() throws when start+end exceeds the string length. WHY: Crashes the verifier while reporting illegal HTML instead of reporting the violation. HOW: Bound end by remaining length and clamp substring indices with Math.max(start, length-end)."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+   "lines": [
+    124,
+    127
+   ],
+   "texto": "WHAT: The whole {N,choice,...} block is replaced with '...' before OWASP sanitizing. WHY: Allows a translator to hide script or event-handler markup inside choice options that passes verification yet renders via MessageFormat. HOW: Keep option text for sanitizing and only neutralize the choice syntax itself."
+  },
+  {
+   "id": "V4",
+   "origem": "synthesis-rescue",
+   "agente": "kodus-generalist-review-agent",
+   "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+   "lines": [
+    145,
+    145
+   ],
+   "texto": "WHAT: ANCHOR_PATTERN </?a[^>]*> also matches non-anchor tags starting with a such as abbr or article, which are then stripped before the OWASP check. WHY: Lets disallowed a-prefix tags with arbitrary attributes bypass Illegal HTML detection when the translation copies the English tag exactly, including English self-checks. HOW: Constrain the tag name with a word boundary such as </?a\\b[^>]*>."
+  }
+ ],
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/compatibility/CompatibilityResult.java",
+   "lines": [
+    30,
+    35
+   ],
+   "texto": "WHAT: RECREATE_UPGRADE_EXIT_CODE was renumbered from 4 to 3 while FEATURE_DISABLED reuses 4. WHY: The guide tells automation to rely only on the check exit code, so existing scripts polling for 4 as recreate now misclassify recreate as feature-disabled. HOW: Keep RECREATE_UPGRADE_EXIT_CODE at 4 and assign a fresh code to FEATURE_DISABLED."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/UpdateCompatibilityCheck.java",
+   "lines": [
+    46,
+    50
+   ],
+   "texto": "WHAT: Feature-disabled path calls picocli.exit(4) then returns without setting a Quarkus exit code. WHY: Picocli.exit() is a no-op in test launch mode (Picocli.java:203-208), so embedded and test runs report exit 0 success despite the error. HOW: Throw a mapped exception or set the exit code via the command spec instead of relying on System.exit side effect."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "operator/src/test/java/org/keycloak/operator/testsuite/integration/UpgradeTest.java",
+   "lines": [
+    102,
+    116
+   ],
+   "texto": "WHAT: createInitialDeployment returns early for null strategy without enabling rolling-updates. WHY: The null-strategy parametrized runs then test a different CR shape than documented required config, hiding operator failure or upgrade-decision divergence. HOW: Enable the ROLLING_UPDATES feature before the null early-return or document why null is exempt."
+  }
+ ],
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/trpc/server/routers/viewer/slots.ts",
+   "lines": [
+    114,
+    115
+   ],
+   "texto": "WHAT: Full-day unavailable override check uses === on two Dayjs objects which never matches by reference. WHY: The all-day blocked branch is dead so those days fall through to partial-interval checks and can leak availability. HOW: Compare with `isSame()` or `valueOf()` instead of `===`."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/trpc/server/routers/viewer/slots.ts",
+   "lines": [
+    141,
+    142
+   ],
+   "texto": "WHAT: Working-hours overflow check computes `end` from `slotStartTime` instead of `slotEndTime`. WHY: Slots starting inside working hours but ending outside are wrongly kept available, allowing overrunning bookings. HOW: Compute `end` from `slotEndTime` (start plus `eventLength`)."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/trpc/server/routers/viewer/slots.ts",
+   "lines": [
+    106,
+    127
+   ],
+   "texto": "WHAT: `find` returns true on the first same-day override the slot falls outside of, ignoring later overrides. WHY: A slot inside a second split override on the same day is still marked unavailable, breaking split-day overrides. HOW: Check slot-inside-any-override first instead of short-circuiting on the first outside match."
+  },
+  {
+   "id": "V4",
+   "origem": "synthesis-rescue",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/lib/slots.ts",
+   "lines": [
+    211,
+    224
+   ],
+   "texto": "WHAT: The invitee-offset shift wraps with `.hour()*60+.minute()` and the day filter still uses the unshifted UTC instant, so overrides crossing midnight land on the wrong invitee day. WHY: A late-day override (e.g. 20:00 organizer wall viewed from +6) is attributed to the next invitee day with a wrapped minute value, hiding real availability and showing slots on the wrong date."
+  }
+ ],
+ "advanced-query-processing-architecture-grafana-codex": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "public/app/plugins/datasource/loki/querySplitting.ts",
+   "lines": [
+    296,
+    299
+   ],
+   "texto": "WHAT: Queries interpolated with ad-hoc filters at split time are interpolated again in `runQuery`/`super.query`. WHY: `addAdHocFilters` appends labels on every call with no dedup, so split sub-requests carry duplicated matchers and return wrong results."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "public/app/plugins/datasource/loki/shardQuerySplitting.ts",
+   "lines": [
+    49,
+    52
+   ],
+   "texto": "WHAT: Shard entry switched from `interpolateVariablesInQueries` (full replace) to `applyTemplateVariables` (strips `__auto/__range/__interval` for backend). WHY: Split-time sharding checks and shard-selector extraction now operate on uninterpolated variables, changing which queries shard and what selector is sent to `fetchLabelValues`."
+  }
+ ],
+ "advanced-sql-analytics-framework-grafana-codex": [],
+ "anonymous-add-configurable-device-limit-grafana-codex": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/services/anonymous/anonimpl/impl.go",
+   "lines": [
+    34,
+    46
+   ],
+   "texto": "WHAT: Failed limit check is cached as if it succeeded, so a retry bypasses denial. WHY: tagDeviceUI calls SetDefault before CreateOrUpdateDevice, and the new TagDevice return-err plus Authenticate deny makes the first rejection cacheable; the second request hits localCache and authenticates."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+   "lines": [
+    105,
+    118
+   ],
+   "texto": "WHAT: Count-then-insert check races under concurrency and exceeds the configured limit. WHY: CreateOrUpdateDevice counts devices then inserts outside any lock or unique guard, so concurrent anonymous logins both pass the check."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/services/anonymous/anonimpl/client.go",
+   "lines": [
+    41,
+    50
+   ],
+   "texto": "WHAT: Anonymous authentication now blocks on synchronous device tagging with extra count query. WHY: Moving TagDevice from background goroutine to request-context call adds CountDevices plus insert/update latency to every anonymous login when a limit is configured."
+  },
+  {
+   "id": "V4",
+   "origem": "synthesis-rescue",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+   "lines": [
+    52,
+    53
+   ],
+   "texto": "WHAT: `ProvideAnonDBStore` now requires a bare `int64` deviceLimit that Wire cannot inject, while `pkg/server/wire.go:374` still lists it as a provider. WHY: Breaks Wire generation/resolution and leaves a second orphan `AnonStore` instance divergent from the manually built one in `impl.go:43`. HOW: Remove the stale `anonstore.ProvideAnonDBStore` entry from the Wire set."
+  }
+ ],
+ "async-import-of-the-appstore-packages-cal-com": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/app-store/vital/lib/reschedule.ts",
+   "lines": [
+    125,
+    131
+   ],
+   "texto": "WHAT: `forEach` with an async callback never awaits the `await getCalendar`/`deleteEvent` promises. WHY: Reschedule returns and sends emails before deletions finish and async rejections escape the surrounding try/catch, leaving orphan calendar/video events."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/app-store/wipemycalother/lib/reschedule.ts",
+   "lines": [
+    125,
+    131
+   ],
+   "texto": "WHAT: `forEach` with an async callback discards the promises from `await getCalendar` and `deleteEvent`. WHY: The reschedule flow proceeds without waiting for old-event cleanup and failures become unhandled rejections, leaving stale bookings on providers."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/trpc/server/routers/viewer/bookings.tsx",
+   "lines": [
+    553,
+    559
+   ],
+   "texto": "WHAT: `forEach(async)` return values are discarded so calendar/video `deleteEvent` promises are never awaited. WHY: The handler sends reschedule emails and continues before old events are removed, causing orphan events and silent failures with no error propagation."
+  },
+  {
+   "id": "V4",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+   "lines": [
+    458,
+    464
+   ],
+   "texto": "WHAT: Outer `forEach(async)` populates `apiDeletes` asynchronously after the surrounding flow consumes it. WHY: Recurring-booking calendar deletions are missed by the later `Promise.all(apiDeletes)` and recurring errors escape handling, leaving events undeleted."
+  }
+ ],
+ "authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/services/authz/rbac/service.go",
+   "lines": [
+    180,
+    192
+   ],
+   "texto": "WHAT: `List` returns directly from `getCachedIdentityPermissions` on cache hit without the outdated-cache requery that `Check` added. WHY: Newly created dashboards/folders stay invisible in list results until `permCache` TTL expires, defeating the PR goal."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/services/authz/rbac/cache.go",
+   "lines": [
+    30,
+    32
+   ],
+   "texto": "WHAT: Denial key concatenates with `_` without escaping and omits `IdentityType` used by `getCachedIdentityPermissions`. WHY: `name=a_b/parent=c` collides with `name=a/parent=b_c` and `user:123` collides with `service-account:123`, causing incorrect cached denies."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/services/authz/rbac/service.go",
+   "lines": [
+    116,
+    121
+   ],
+   "texto": "WHAT: `Check` short-circuits on `permDenialCache` hit and only sets denial on DB deny, never deleting it on later allow. WHY: A grant within the TTL window stays denied for the full TTL because the fresh-permission path is never reached."
+  },
+  {
+   "id": "V4",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/services/authz/rbac/service.go",
+   "lines": [
+    56,
+    58
+   ],
+   "texto": "WHAT: Denial entries are keyed per `(user, action, name, parent)` while `permCache` is per `(user, action)`. WHY: Enumeration or high deny traffic creates O(users x resources) entries in the shared local cache, evicting useful entries and growing memory every 30s window."
+  }
+ ],
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+   "lines": [
+    213,
+    223
+   ],
+   "texto": "WHAT: The `immediateDelete` branch POSTs SendGrid cancel then returns without deleting or updating the `workflowReminder` row. WHY: Leaves orphan scheduled rows that are never cleaned since the cron only handles `cancelled:true` rows, causing repeat cancels and stale data. HOW: Delete the reminder row after successful SendGrid cancel."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+   "lines": [
+    53,
+    77
+   ],
+   "texto": "WHAT: A single `client.request` failure throws out of the `for` loop before `Promise.all` flushes queued deletes. WHY: Prior successful SendGrid cancels lose their DB deletes and remaining reminders are never attempted, so cancelled emails can still send. HOW: Wrap per-reminder SendGrid call in try/catch and always flush deletes."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+   "lines": [
+    484,
+    493
+   ],
+   "texto": "WHAT: `forEach` invokes async `deleteScheduledEmailReminder`/`deleteScheduledSMSReminder` without awaiting the promises. WHY: Handler returns and `Promise.all` completes before `cancelled:true` flags persist, so the cron can miss cancellations and unhandled rejections escape the try/catch. HOW: Collect promises and await them with `Promise.all`."
+  },
+  {
+   "id": "V4",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+   "lines": [
+    43,
+    51
+   ],
+   "texto": "WHAT: `remindersToCancel` queries all `cancelled:true` rows without filtering `method: EMAIL`. WHY: Any cancelled SMS row would be submitted as SendGrid `batch_id`, failing the request and tripping the batch-abort above. HOW: Add `method: WorkflowMethods.EMAIL` to the where clause."
+  },
+  {
+   "id": "V5",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+   "lines": [
+    44,
+    64
+   ],
+   "texto": "WHAT: Cron loads unbounded `remindersToCancel` then awaits each SendGrid cancel sequentially in a `for` loop. WHY: Bulk cancellations serialize N network round-trips and hold the cron, delaying all 72h scheduling work behind it. HOW: Bound with `take` and issue SendGrid cancels concurrently via `Promise.allSettled`."
+  }
+ ],
+ "database-performance-optimizations-grafana-codex": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/services/cleanup/cleanup.go",
+   "lines": [
+    77,
+    77
+   ],
+   "texto": "WHAT: Global cleanup ticker was changed from 10 minutes to 1 minute without justification. WHY: Runs all 8 cleanup jobs 10x more often, multiplying DB load and unrelated job pressure. HOW: Restore `time.Minute * 10` unless the interval change is intentional and documented."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+   "lines": [
+    534,
+    537
+   ],
+   "texto": "WHAT: Normal cleanup progress is logged at Error level with the full ID slice on every batch. WHY: Turns routine deletes into error alerts and writes tens of thousands of IDs per batch to logs, spamming disk and masking real errors. HOW: Demote to `r.log.Debug` and stop logging the full `ids` slice and nil `err`."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+   "lines": [
+    609,
+    612
+   ],
+   "texto": "WHAT: SQLite IN-list is built with repeated `fmt.Sprintf` appends in a loop. WHY: Copies the growing string on every ID, giving O(N^2) time for large batches up to 32767 IDs. HOW: Build with `strings.Builder` instead of repeated `Sprintf`."
+  }
+ ],
+ "dual-storage-architecture-grafana-codex": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+   "lines": [
+    50,
+    57
+   ],
+   "texto": "WHAT: Background legacy Create/Delete/Update/DeleteCollection derive timeout context from the request ctx that is cancelled when the handler returns. WHY: Parent cancellation propagates immediately so the async legacy write is aborted and legacy drifts from unified storage. HOW: Derive from `context.WithoutCancel(ctx)` (plus timeout) and propagate only needed values."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+   "lines": [
+    161,
+    167
+   ],
+   "texto": "WHAT: DeleteCollection legacy branch (and Create:45 / Update:129 error branches symmetrically) record on the wrong histogram. WHY: Storage and legacy dashboards/alerts get inverted durations and error rates, hiding legacy slowness. HOW: Call `recordLegacyDuration` for legacy timings and `recordStorageDuration` for storage timings."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+   "lines": [
+    106,
+    106
+   ],
+   "texto": "WHAT: Delete success path passes object `name` where every other call passes `options.Kind` for the `kind` label. WHY: Unbounded per-object cardinality explodes the HistogramVec series and memory/scrape cost. HOW: Pass `options.Kind` like the other branches."
+  },
+  {
+   "id": "V4",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+   "lines": [
+    94,
+    97
+   ],
+   "texto": "WHAT: Delete builds an enriched `log` then puts `d.Log` into the context instead. WHY: Downstream storage/logs lose name/kind/method fields, breaking trace correlation added by this PR. HOW: Use `klog.NewContext(ctx, log)`."
+  },
+  {
+   "id": "V5",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+   "lines": [
+    50,
+    57
+   ],
+   "texto": "WHAT: Async legacy Create/Update/DeleteCollection capture live `obj`/`objInfo`/`options` pointers also returned to the caller. WHY: Concurrent serialization/mutation of the returned object races with the background legacy write. HOW: Deep-copy the object/options before capturing in the goroutine."
+  },
+  {
+   "id": "V6",
+   "origem": "synthesis-rescue",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+   "lines": [
+    99,
+    104
+   ],
+   "texto": "WHAT: Delete now returns immediately on any Storage error including NotFound without attempting Legacy.Delete. WHY: Diverged objects that exist only in legacy are never cleaned up and the legacy safety copy drifts permanently from unified storage."
+  }
+ ],
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/models/post.rb",
+   "lines": [
+    130,
+    133
+   ],
+   "texto": "WHAT: Post#cook returns raw verbatim for cook_method raw_html with no sanitization. WHY: RSS/readability HTML imported via TopicEmbed is stored unsanitized and rendered with raw post.cooked, allowing script execution for every viewer of the topic."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/controllers/embed_controller.rb",
+   "lines": [
+    24,
+    28
+   ],
+   "texto": "WHAT: ensure_embeddable authorizes solely on spoofable Referer header then sets X-Frame-Options ALLOWALL. WHY: Any client can forge Referer with curl to render embeds off-host and frame the forum anywhere, defeating the embeddable_host restriction."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/assets/javascripts/embed.js",
+   "lines": [
+    15,
+    17
+   ],
+   "texto": "WHAT: Origin check uses discourseUrl.indexOf(e.origin) substring test instead of equality. WHY: Any origin that is a substring of discourseUrl (e.g. http://localhost vs http://localhost:3000/) passes, letting an attacker page drive iframe resizing."
+  },
+  {
+   "id": "V4",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/views/layouts/embed.html.erb",
+   "lines": [
+    11,
+    11
+   ],
+   "texto": "WHAT: parent.postMessage targetOrigin is interpolated full request.referer URL instead of origin. WHY: Full URL with path never equals parent origin so resize messages are dropped and height sync breaks."
+  },
+  {
+   "id": "V5",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/jobs/scheduled/poll_feed.rb",
+   "lines": [
+    31,
+    36
+   ],
+   "texto": "WHAT: poll_feed calls i.content.scrub without nil guard. WHY: Feeds with link-only items raise NoMethodError and abort the whole poll, losing all imports."
+  },
+  {
+   "id": "V6",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/models/topic_embed.rb",
+   "lines": [
+    32,
+    37
+   ],
+   "texto": "WHAT: Update path assumes embed.post exists then revises it unconditionally. WHY: Deleted or missing post causes nil dereference in PostRevisor and failed sha update leaves content out of sync."
+  },
+  {
+   "id": "V7",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "lib/topic_retriever.rb",
+   "lines": [
+    40,
+    43
+   ],
+   "texto": "WHAT: perform_retrieve synchronously runs full PollFeed import on every embed cache miss. WHY: One cheap iframe hit triggers feed fetch plus import of all items, amplifying load and allowing queue flooding with distinct URLs."
+  },
+  {
+   "id": "V8",
+   "origem": "synthesis-rescue",
+   "agente": "kodus-generalist-review-agent",
+   "file": "lib/topic_retriever.rb",
+   "lines": [
+    26,
+    29
+   ],
+   "texto": "WHAT: Throttle uses separate `setnx` then `expire` instead of an atomic set-with-expiry. WHY: A crash or exception between the two calls leaves `retrieved:<url>` with no TTL, permanently suppressing future retrieves for that URL. HOW: Use atomic `SET key 1 NX EX 60`."
+  },
+  {
+   "id": "V9",
+   "origem": "synthesis-rescue",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/models/topic_embed.rb",
+   "lines": [
+    44,
+    50
+   ],
+   "texto": "WHAT: `import_remote` calls `open(url).read` with no rescue and Disqus importer calls it per-thread in a loop. WHY: One dead link, timeout, or invalid URL raises and aborts the whole `parser.threads.each` batch, losing all remaining threads where the old code created a placeholder post without fetching. HOW: Rescue fetch errors in `import_remote` or around the per-thread call and skip/placeholder that thread."
+  }
+ ],
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/api/paginator.py",
+   "lines": [
+    838,
+    843
+   ],
+   "texto": "WHAT: OptimizedCursorPaginator copies integer key logic for a datetime-ordered queryset. WHY: getattr datetime passed to math.floor raises TypeError and raw int cursor value filters a datetime column, crashing or mis-filtering every optimized request. HOW: Reuse DateTimePaginator key/value conversion (strftime multiplier and fromtimestamp)."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/api/paginator.py",
+   "lines": [
+    877,
+    882
+   ],
+   "texto": "WHAT: Attacker-controlled negative cursor offset is passed directly to queryset slicing. WHY: Enables crafted cursor like 0:-5:0 to trigger AssertionError 500 or return out-of-bounds rows, reachable by any org:write member via optimized_pagination=true since has_global_access defaults True. HOW: Reject negative offsets with BadPaginationError like OffsetPaginator instead of allowing them."
+  }
+ ],
+ "feat-2fa-backup-codes-cal-com": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/features/auth/lib/next-auth-options.ts",
+   "lines": [
+    131,
+    144
+   ],
+   "texto": "WHAT: Backup-code branch authenticates without a password when a dummy totpCode is also supplied. WHY: Reduces login to a single long-lived backup code, bypassing the password factor via direct credentials callback. HOW: Verify password unconditionally before the backup-code branch instead of gating it on `!credentials.totpCode`."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "apps/web/pages/api/auth/two-factor/totp/disable.ts",
+   "lines": [
+    61,
+    64
+   ],
+   "texto": "WHAT: `req.body.backupCode.replaceAll` throws on non-string JSON input. WHY: Unhandled TypeError returns 500 instead of a validation error and breaks the disable flow. HOW: Coerce and validate with `String(req.body.backupCode ?? \"\")` before calling `replaceAll`."
+  }
+ ],
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+   "lines": [
+    1023,
+    1024
+   ],
+   "texto": "The touch passes `{}` so no explicit column changes and depends entirely on implicit `@updatedAt` behavior, risking a no-op or validation error on some Prisma versions. It also writes `SelectedCalendar.updatedAt` while the UI reads `CalendarCache._max.updatedAt`, so the displayed timestamp never reflects this write."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+   "lines": [
+    42,
+    50
+   ],
+   "texto": "After deletion the `connectedCalendars` query still holds the old `cacheUpdatedAt`, so the dropdown keeps showing stale status and the delete action. Mirror the disconnect mutation by invalidating `connectedCalendars` on settled/success in `deleteCacheMutation`."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/trpc/server/routers/viewer/calendars/connectedCalendars.handler.ts",
+   "lines": [
+    27,
+    29
+   ],
+   "texto": "Direct construction skips `CalendarCache.init` which returns a no-op mock when the flag is off, forcing a `groupBy` on every settings fetch even with caching disabled. Resolve the repository through `CalendarCache.init(null)` or guard with the feature flag before querying."
+  },
+  {
+   "id": "V4",
+   "origem": "synthesis-rescue",
+   "agente": "kodus-generalist-review-agent",
+   "file": "scripts/test-gcal-webhooks.sh",
+   "lines": [
+    67,
+    68
+   ],
+   "texto": "WHAT: The update uses BSD/macOS-only sed -i '' syntax that GNU sed rejects. WHY: The script aborts on Linux dev containers/CI before GOOGLE_WEBHOOK_URL is updated. HOW: Branch on OSTYPE or use a portable backup-suffix invocation."
+  }
+ ],
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": [],
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/integrations/services/assignment_source.py",
+   "lines": [
+    14,
+    18
+   ],
+   "texto": "WHAT: `queued: datetime = timezone.now()` is evaluated once at class-definition time so every instance shares one timestamp. WHY: The queued time can never order or distinguish rapid re-assignments the loop guard is meant to debug. HOW: Use `field(default_factory=timezone.now)` from `dataclasses`."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/integrations/utils/sync.py",
+   "lines": [
+    135,
+    144
+   ],
+   "texto": "WHAT: `assignment_source.to_dict()` embeds a raw `datetime` into `apply_async` kwargs. WHY: The task payload must be JSON-serializable and `from_dict` rehydrates without type checks, so enqueue fails or `queued` round-trips as a str. HOW: Serialize `queued` to ISO string in `to_dict` and parse it back in `from_dict`."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/integrations/mixins/issues.py",
+   "lines": [
+    410,
+    418
+   ],
+   "texto": "WHAT: The new `assignment_source` base parameter has no matching parameter on `ExampleIntegration.sync_status_outbound`. WHY: Calling the override through the new base contract raises TypeError for an unexpected keyword. HOW: Add `assignment_source`/`**kwargs` to the override signatures (Jira, JiraServer, VSTS already accept **kwargs)."
+  }
+ ],
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/api/helpers/error_upsampling.py",
+   "lines": [
+    95,
+    105
+   ],
+   "texto": "WHAT: Substring check treats negated or mixed queries as error-focused. WHY: A discover query like `!event.type:error` contains the substring and gets inflated by sum(sample_weight) even though it queries non-errors."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/api/endpoints/organization_events_stats.py",
+   "lines": [
+    218,
+    223
+   ],
+   "texto": "WHAT: Upsample decision uses the outer dataset and request query instead of the actual split query. WHY: Dashboard-split error queries like `(q) AND !event.type:transaction` on discover miss upsampling and return raw counts while allowlisted."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/api/helpers/error_upsampling.py",
+   "lines": [
+    55,
+    64
+   ],
+   "texto": "WHAT: Only exact `count()` is rewritten, leaving eps(), epm(), count_unique() and aliased counts raw. WHY: Those axes return unweighted values while the request was judged upsampled, mixing scaled and unscaled series."
+  },
+  {
+   "id": "V4",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/testutils/factories.py",
+   "lines": [
+    344,
+    357
+   ],
+   "texto": "WHAT: Test helper sets sample_rate without the production allowlist and range gates. WHY: Test events diverge from ingestion (`_derive_client_error_sampling_rate` requires allowlist and 0<rate<=1), masking real behavior in upsampling tests."
+  }
+ ],
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+   "lines": [
+    335,
+    342
+   ],
+   "texto": "WHAT: `SimpleQueueProcessingStrategy.close/terminate` shuts down the factory-owned shared `FixedQueuePool`. WHY: Arroyo re-creates strategies on rebalance sharing the same pool, so closing one strategy kills workers for the replacement strategy and double-shutdowns on `factory.shutdown`. HOW: Stop shutting down `queue_pool` in the strategy; only stop/join the commit thread and let `ResultsStrategyFactory.shutdown` own the pool."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+   "lines": [
+    127,
+    133
+   ],
+   "texto": "WHAT: `OrderedQueueWorker.run` exits on `self.shutdown` after one item while `FixedQueuePool.shutdown` uses `q.shutdown(immediate=False)` to drain. WHY: Queued items are abandoned with offsets left outstanding forever, stalling commits and forcing reprocessing on restart. HOW: Remove the `shutdown` flag check and loop until `queue.ShutDown`, letting the queue drain fully."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+   "lines": [
+    144,
+    149
+   ],
+   "texto": "WHAT: `finally` calls `complete_offset` even when `result_processor` raises. WHY: Failed results are skipped yet become committable, contradicting the only-commit-after-success guarantee and losing failed check results. HOW: Only complete on success, or track failures separately so `get_committable_offsets` blocks past them."
+  },
+  {
+   "id": "V4",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+   "lines": [
+    83,
+    93
+   ],
+   "texto": "WHAT: `get_committable_offsets` scans `range(start, max+1)` every second while `all_offsets` grows without bound when the head is stuck. WHY: One slow/poison offset makes each commit tick O(gap) CPU plus unbounded set memory, stalling all partition commits. HOW: Track contiguous completion incrementally instead of rescanning the full range, and cap or expire stuck heads."
+  },
+  {
+   "id": "V5",
+   "origem": "synthesis-rescue",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+   "lines": [
+    222,
+    229
+   ],
+   "texto": "WHAT: `wait_until_empty` returns True when `qsize()` is zero even though a dequeued item is still being processed. WHY: `OrderedQueueWorker.run` calls `get()` before `result_processor` and `complete_offset`, so any waiter observes an empty queue during the whole processing window and proceeds prematurely. HOW: also require no outstanding offsets (or track in-flight count / `unfinished_tasks`) before reporting empty."
+  }
+ ],
+ "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/incidents/grouptype.py",
+   "lines": [
+    11,
+    12
+   ],
+   "texto": "WHAT: MetricAlertDetectorHandler inherits StatefulDetectorHandler but implements none of its abstract methods. WHY: Any Detector with type metric_alert_fire fails at detector_handler instantiation with TypeError instead of evaluating."
+  }
+ ],
+ "feature-automatically-downsize-large-images-discourse-cursor": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/models/optimized_image.rb",
+   "lines": [
+    145,
+    151
+   ],
+   "texto": "WHAT: File defines `self.downsize` twice with incompatible signatures so the second definition silently overwrites the first. WHY: The surviving 3-arg `(from,to,dimensions)` method breaks the existing 4-arg caller `ResizeEmoji` (`downsize(path,path,100,100,opts)`) with ArgumentError, disabling emoji resizing."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/controllers/uploads_controller.rb",
+   "lines": [
+    64,
+    70
+   ],
+   "texto": "WHAT: Downsize loop discards the boolean result of `OptimizedImage.downsize` and loops only on `tempfile.size`. WHY: Failed `convert` (bad image, SVG, missing delegate, same-path truncation) retries 5 expensive converts then proceeds with oversized or corrupted tempfile into `Upload.create_for`."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/assets/javascripts/discourse/lib/utilities.js",
+   "lines": [
+    180,
+    185
+   ],
+   "texto": "WHAT: Client size check hardcodes `10*1024` for every `type`, ignoring `max_image_size_kb`/`max_attachment_size_kb`. WHY: Attachments over the server limit pass client validation then fail server-side, and the error message advertises a 10MB limit the server does not enforce."
+  },
+  {
+   "id": "V4",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/controllers/uploads_controller.rb",
+   "lines": [
+    63,
+    70
+   ],
+   "texto": "WHAT: Each image upload can run up to 5 synchronous ImageMagick `downsize` passes on files up to 10MB in the request path. WHY: Combined with the raised download/client caps this blocks workers and amplifies CPU/bandwidth cost per upload, enabling DoS via large images."
+  }
+ ],
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+   "lines": [
+    9,
+    12
+   ],
+   "texto": "WHAT: Migration dereferences [0]['id'] with no empty-result guard. WHY: Fresh installs have no embed_category row so migrate crashes with NoMethodError and deploy is blocked."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+   "lines": [
+    24,
+    26
+   ],
+   "texto": "WHAT: Host value interpolated directly into INSERT SQL without quoting. WHY: A host containing a single quote breaks the statement and enables SQL injection via the migrated setting value."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/controllers/admin/embeddable_hosts_controller.rb",
+   "lines": [
+    9,
+    12
+   ],
+   "texto": "WHAT: update and destroy call methods on nil when the id is not found. WHY: Triggers NoMethodError 500 instead of 404 and destroy crashes on nil.destroy."
+  },
+  {
+   "id": "V4",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/models/embeddable_host.rb",
+   "lines": [
+    5,
+    8
+   ],
+   "texto": "WHAT: before_validation calls self.host.sub! with no nil guard. WHY: Blank/missing host raises NoMethodError and bypasses the intended validation-error response."
+  },
+  {
+   "id": "V5",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/assets/javascripts/discourse/models/store.js.es6",
+   "lines": [
+    196,
+    200
+   ],
+   "texto": "WHAT: Plural *_ids branch calls obj[k].map without null/array guard. WHY: A null or missing ids payload throws TypeError and breaks hydration of the whole record."
+  },
+  {
+   "id": "V6",
+   "origem": "synthesis-rescue",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/models/embeddable_host.rb",
+   "lines": [
+    10,
+    18
+   ],
+   "texto": "WHAT: record_for_host compares lower(host) to a non-downcased param while validation/storage preserve case. WHY: Mixed-case stored or requested hostnames never match so allowed embeds are rejected. HOW: Downcase the param (or normalize host to lowercase before validation)."
+  }
+ ],
+ "feature-localization-fallbacks-server-side-discourse-cursor": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "config/initializers/i18n.rb",
+   "lines": [
+    13,
+    17
+   ],
+   "texto": "WHAT: `SiteSetting.default_locale.to_sym` raises NoMethodError when the setting is nil and `locale` passes through un-normalized so string/symbol duplicates are not deduped. WHY: The fallback chain is evaluated on every translate and `ensure_loaded!` runs on every request, so a nil or mistyped locale breaks all rendering. HOW: Normalize with presence-safe `to_sym` on both values before `compact.uniq`."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "lib/freedom_patches/translate_accelerator.rb",
+   "lines": [
+    62,
+    64
+   ],
+   "texto": "WHAT: The new `ensure_loaded!` forwards `I18n.locale`/`default_locale` into `load_locale` which interpolates it into `Regexp.new`. WHY: The new per-request preload in `set_locale` makes attacker-influenced locale hit the regex sink without escaping, enabling regex injection and over-broad translation file loading. HOW: Escape with `Regexp.escape(locale.to_s)` in `load_locale` and validate locale against supported locales before loading."
+  }
+ ],
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/controllers/topics_controller.rb",
+   "lines": [
+    105,
+    108
+   ],
+   "texto": "WHAT: TopicUser.find_by returns nil for users with no row, then tu.notification_level raises NoMethodError. WHY: Clicking the email unsubscribe link before ever visiting the topic returns 500 instead of unsubscribing. HOW: Use find_or_initialize_by and handle nil notification_level."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/controllers/topics_controller.rb",
+   "lines": [
+    98,
+    113
+   ],
+   "texto": "WHAT: The GET /t/:slug/:id/unsubscribe action downgrades notification_level and saves on every hit. WHY: Any third-party <img> or link visited by a logged-in user silently mutes/regulars the topic with no confirmation or CSRF token. HOW: Make GET render confirmation only and move the TopicUser change to POST/PUT."
+  }
+ ],
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+   "lines": [
+    271,
+    276
+   ],
+   "texto": "WHAT: Changed `getSubGroupsCount` returns `null` when the delegate group was concurrently deleted. WHY: `GroupModel.getSubGroupsCount` documents `Never returns null`, so callers may unbox or assume non-null and NPE, and `null` conflates deleted group with count-not-requested. HOW: Return `0L` for the deleted-group path or update the interface contract to permit `null`."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+   "lines": [
+    136,
+    157
+   ],
+   "texto": "WHAT: Reader thread is started but never joined before `assertThat(caughtExceptions, empty())`. WHY: Exceptions thrown after `deletedAll` is set but before the reader exits are missed, making the regression test flaky with false passes. HOW: Keep the `Thread` reference and `join()` it with a timeout before asserting."
+  }
+ ],
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+   "lines": [
+    254,
+    256
+   ],
+   "texto": "WHAT: Fallback `find(cal => cal.externalId === externalCalendarId)` only runs when `externalCalendarId` is falsy so it never matches. WHY: `updateEvent` then calls API with undefined `calendarId` and `deleteEvent` falls back to primary instead of the destination calendar. HOW: Fall back to first destination entry when no external id is given."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/core/EventManager.ts",
+   "lines": [
+    118,
+    119
+   ],
+   "texto": "WHAT: `mainHostDestinationCalendar.integration` is accessed without optional chaining after destructuring from possibly empty/null array. WHY: Events with `destinationCalendar` null or `[]` throw TypeError instead of falling back to Cal Video. HOW: Use `mainHostDestinationCalendar?.integration`."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/trpc/server/routers/viewer/organizations/create.handler.ts",
+   "lines": [
+    148,
+    153
+   ],
+   "texto": "WHAT: `...(!IS_TEAM_BILLING_ENABLED && {slug})` was rewritten to `...(IS_TEAM_BILLING_ENABLED ? {slug} : {})` which inverts when `slug` is set. WHY: Organizations get wrong slug/requestedSlug assignment, breaking org creation under both billing modes. HOW: Restore negated condition for `slug`."
+  },
+  {
+   "id": "V4",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/features/bookings/lib/handleNewBooking.ts",
+   "lines": [
+    1063,
+    1079
+   ],
+   "texto": "WHAT: `evt.destinationCalendar` is `null` when organizer has none so `evt.destinationCalendar?.push(...teamDestinationCalendars)` silently no-ops. WHY: Collective hosts lose their destination calendars and events fall back to first connected calendar. HOW: Initialize to empty array before pushing team calendars."
+  },
+  {
+   "id": "V5",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/app-store/larkcalendar/lib/CalendarService.ts",
+   "lines": [
+    128,
+    129
+   ],
+   "texto": "WHAT: Lark/Office365 `createEvent` always uses `destinationCalendar[0]` and ignores the per-host `credentialId`/`externalId` that `EventManager` iterates. WHY: Second collective host creates the event on the first host calendar or with a mismatched credential, causing wrong-target or 404 failures. HOW: Select the destination entry matching the current credential like Google service does."
+  },
+  {
+   "id": "V6",
+   "origem": "synthesis-rescue",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/core/EventManager.ts",
+   "lines": [
+    205,
+    210
+   ],
+   "texto": "WHAT: `updateLocation` now reads `result.externalId` but `updateEvent` never returns `externalId`. WHY: Location-change updates persist `undefined` externalCalendarId, breaking later update/delete targeting. HOW: Fall back to the event destination calendar or thread `externalCalendarId` through `updateEvent`."
+  }
+ ],
+ "fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+   "lines": [
+    11,
+    14
+   ],
+   "texto": "WHAT: totalPages uses floor(count/limit)+1 which returns one extra page when count is an exact multiple. WHY: An extra empty page and enabled next button appear for e.g. 100/50. HOW: Use Math.ceil(count/limit)."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/assets/javascripts/discourse/templates/group/members.hbs",
+   "lines": [
+    6,
+    6
+   ],
+   "texto": "WHAT: Template iterates bare members while route sets model to the Group object. WHY: Without a controller alias the list renders empty and member rows never appear. HOW: Iterate model.members or add a controller alias."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/controllers/admin/groups_controller.rb",
+   "lines": [
+    90,
+    91
+   ],
+   "texto": "WHAT: Removal uses users.delete(user_id) instead of Group#remove(user). WHY: It skips destroy callbacks and primary_group_id nullification, leaving stale state. HOW: Load the user and call group.remove(user)."
+  },
+  {
+   "id": "V4",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "config/routes.rb",
+   "lines": [
+    49,
+    50
+   ],
+   "texto": "WHAT: Bare members routes under resources provide :id while actions require :group_id. WHY: Real requests raise missing-param errors though specs calling actions directly pass. HOW: Use a member block or read params[:id]."
+  },
+  {
+   "id": "V5",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/controllers/groups_controller.rb",
+   "lines": [
+    22,
+    23
+   ],
+   "texto": "WHAT: limit comes straight from params with no maximum. WHY: A huge limit forces full member serialization and DB load per request. HOW: Clamp limit to a sane maximum."
+  }
+ ],
+ "fixing-re-authentication-with-passkeys-keycloak": [],
+ "frontend-asset-optimization-grafana-codex": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/api/webassets/webassets.go",
+   "lines": [
+    48,
+    50
+   ],
+   "texto": "WHAT: Exclusive lock is held across manifest file/CDN I/O with no second cache check after acquiring it. WHY: Concurrent misses duplicate file reads and block RLock cache hits, and in Dev every request serializes on file I/O. HOW: Re-check entryPointAssetsCache after Lock and only hold the lock for publish, doing I/O outside it."
+  }
+ ],
+ "github-oauth-security-enhancement-sentry": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/integrations/github/integration.py",
+   "lines": [
+    481,
+    482
+   ],
+   "texto": "WHAT: New-install path returns pipeline.next_step() when Integration does not exist without comparing github_authenticated_user to the installer. WHY: An attacker can complete the pipeline before the installation webhook creates the Integration row and bypass the user-match security check entirely. HOW: Fail closed on missing Integration by returning error instead of advancing."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/integrations/github/integration.py",
+   "lines": [
+    500,
+    505
+   ],
+   "texto": "WHAT: Code indexes integration.metadata[\"sender\"][\"login\"] directly though build_integration only sets sender conditionally. WHY: Legacy or sender-less integrations raise KeyError and crash the install with a 500 instead of showing the failure page. HOW: Use nested .get() and treat missing sender as verification failure."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/integrations/github/integration.py",
+   "lines": [
+    422,
+    436
+   ],
+   "texto": "WHAT: safe_urlopen and get_user_info can raise outside the parse-only try block and are unhandled. WHY: Any GitHub token-exchange or /user failure raises raise_for_status or connection errors into a 500 and breaks installation. HOW: Wrap exchange and user-info fetch in try/except and return error on failure."
+  },
+  {
+   "id": "V4",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/integrations/github/integration.py",
+   "lines": [
+    415,
+    420
+   ],
+   "texto": "WHAT: OAuth authorize includes redirect_uri but the code-for-token exchange omits it. WHY: GitHub cannot bind the code to the expected redirect, weakening code-redemption validation against code interception or redirect mismatch. HOW: Include the same absolute redirect_uri in the token-exchange data."
+  }
+ ],
+ "implement-access-token-context-encoding-framework-keycloak": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+   "lines": [
+    69,
+    74
+   ],
+   "texto": "WHAT: Constructor checks `grantType` twice and never checks `rawTokenId` for null. WHY: A null `rawTokenId` bypasses validation and later produces a corrupt `null` token ID in `encodeTokenId`. HOW: Change the second check to `Objects.requireNonNull(rawTokenId, ...)`."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+   "lines": [
+    476,
+    485
+   ],
+   "texto": "WHAT: Matcher returns false when the grant shortcut matches and reads chars 3-5 instead of 4-6. WHY: Every correct token ID fails matching while wrong-grant IDs can pass, inverting code-to-token/refresh/device/CIBA assertions. HOW: Negate the equality and use `substring(4, 6)` for the 2-char grant shortcut."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java",
+   "lines": [
+    29,
+    34
+   ],
+   "texto": "WHAT: `getShortcut()` added to the factory interface with no default. WHY: Any existing third-party `OAuth2GrantTypeFactory` fails to compile or throws `AbstractMethodError`, and a null return later NPEs `ConcurrentHashMap` in `postInit`. HOW: Provide a `default` returning `UNKNOWN` and null-guard shortcut registration."
+  },
+  {
+   "id": "V4",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantType.java",
+   "lines": [
+    99,
+    107
+   ],
+   "texto": "WHAT: `grantType` is snapshotted in the constructor but `setFormParams` never refreshes it. WHY: Any caller replacing form params leaves a stale grant that is then persisted via `createTokenResponse` into the encoded token ID. HOW: Re-derive `grantType` inside `setFormParams`."
+  },
+  {
+   "id": "V5",
+   "origem": "synthesis-rescue",
+   "agente": "kodus-generalist-review-agent",
+   "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java",
+   "lines": [
+    57,
+    60
+   ],
+   "texto": "WHAT: Client-credentials flow never sets `Constants.GRANT_TYPE`, so its tokens always encode with grant `na` even though a `cc` shortcut was registered. WHY: The silent `UNKNOWN` fallback hides the missing propagation and defeats the PR's goal of grant context for those tokens (same gap in `AbstractTokenExchangeProvider` vs the fixed `StandardTokenExchangeProvider`). HOW: Set `clientSessionCtx.setAttribute(Constants.GRANT_TYPE, OAuth2Constants.CLIENT_CREDENTIALS)` in `ClientCredentialsGrantType.process` before `generateAccessToken`, and equivalent for the legacy exchange path."
+  }
+ ],
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "server-spi/src/main/java/org/keycloak/models/utils/RecoveryAuthnCodesUtils.java",
+   "lines": [
+    56,
+    61
+   ],
+   "texto": "WHAT: Federated-first lookup combined with write-fallback creates split-brain credentials with no cleanup of the losing copy. WHY: Regenerating codes for a federated user that does not support the type creates a local credential that `getCredential` then ignores in favor of the old federated one, so new codes never validate and old codes stay live."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java",
+   "lines": [
+    79,
+    87
+   ],
+   "texto": "WHAT: Exhausted-credential cleanup calls `removeStoredCredentialById` with an id sourced from a federated credential. WHY: Federated models carry null or provider-local ids and live outside `UserCredentialStore`, so the delete misses and exhausted federated codes are never cleared while the required-action trigger misfires."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+   "lines": [
+    115,
+    125
+   ],
+   "texto": "WHAT: The federated write path hands JSON of raw recovery codes as `challengeResponse` for external storage. WHY: External providers persist that value verbatim as retrievable secrets while the local path hashes codes, exposing plaintext recoverable credentials in third-party storage."
+  }
+ ],
+ "notification-rule-processing-engine-grafana-codex": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "public/app/features/alerting/unified/rule-list/FilterView.tsx",
+   "lines": [
+    157,
+    162
+   ],
+   "texto": "WHAT: The `grafana` branch renders `GrafanaRuleListItem` without `key={key}` while sibling branches pass it. WHY: Breaks React list reconciliation, causing state reuse, wrong row updates, and key warnings in filtered search results. HOW: Add `key={key}` to the `GrafanaRuleListItem` element."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx",
+   "lines": [
+    35,
+    48
+   ],
+   "texto": "WHAT: `GrafanaRuleListItem` passes only `promRule`, leaving `rule` undefined, but `RuleActionsButtons.V2` gates the silence drawer on `rulerRuleType.grafana.alertingRule(rule)`. WHY: Clicking Silence via `AlertRuleMenu` sets drawer state yet the drawer never renders, so the prom-only Silence action is dead. HOW: Gate the drawer on the prom rule too or pass through a prom-aware silence component."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx",
+   "lines": [
+    67,
+    92
+   ],
+   "texto": "WHAT: `skipToken` (undefined rule) still yields `Duplicate=[supported, allowed]` from global Grafana create permission, then OR-ed with the ruler ability. WHY: A cloud/Mimir rule can show Duplicate based solely on Grafana create rights, bypassing the external-write check. HOW: Only OR the Grafana abilities when a Grafana prom rule is present; otherwise require the ruler ability alone."
+  },
+  {
+   "id": "V4",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+   "lines": [
+    241,
+    245
+   ],
+   "texto": "WHAT: `useAllAlertRuleAbilities` now delegates to `useAllRulerRuleAbilities` with hardcoded `isFederated=false`, dropping the prior `isFederatedRuleGroup(rule.group)` check. WHY: Federated (Mimir) rule groups become reported as editable/removable, exposing Edit/Delete/Pause actions that should be blocked. HOW: Thread the group through and restore the federated check instead of hardcoding false."
+  }
+ ],
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+   "lines": [
+    94,
+    101
+   ],
+   "texto": "WHAT: `parseRefreshTokenResponse` returns the `safeParse` wrapper `{ success, data }` but the caller persists that wrapper as `key`. WHY: The next `googleCredentialSchema.parse(credential.key)` fails because the shape is nested under `data`, breaking all Google calendars after one refresh. HOW: Persist `parsed.data` and unwrap before the `prisma.credential.update` call."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+   "lines": [
+    8,
+    15
+   ],
+   "texto": "WHAT: `refreshOAuthTokens` returns a raw `fetch` Response when syncing, but Google expects `{ data }`, Hubspot expects a token object, and Zoho callers expect an axios `{ data }` shape. WHY: Those callers dereference `.data.access_token` or `.expiresIn` on the wrong type and crash or persist `NaN` expiry when sharing is enabled. HOW: Normalize the sync response to the shape each caller previously received before returning."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+   "lines": [
+    85,
+    94
+   ],
+   "texto": "WHAT: `refreshAccessToken(credentialId, ...)` forwards `credentialId` where `refreshOAuthTokens` expects `userId`. WHY: The external sync endpoint receives a credential row ID as `calcomUserId`, refreshing or leaking the wrong user's tokens. HOW: Thread `credential.userId` through instead of `credentialId`."
+  },
+  {
+   "id": "V4",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+   "lines": [
+    75,
+    86
+   ],
+   "texto": "WHAT: Token refresh failure is detected via `response.statusText !== \"OK\"`, which is empty under HTTP/2 and implementation-defined. WHY: Valid refreshes throw and invalid refreshes with a custom reason phrase can slip through, breaking Salesforce connections. HOW: Check `response.ok` or status code instead of `statusText`."
+  },
+  {
+   "id": "V5",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+   "lines": [
+    101,
+    108
+   ],
+   "texto": "WHAT: After refreshing and persisting `accessTokenParsed.data`, the new `jsforce.Connection` is built from the old `credentialKey` tokens. WHY: The just-fetched access token is never used, so calls fail until the next process restart reloads the credential. HOW: Construct the connection from `accessTokenParsed.data`."
+  },
+  {
+   "id": "V6",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "apps/web/pages/api/webhook/app-credential.ts",
+   "lines": [
+    24,
+    29
+   ],
+   "texto": "WHAT: The webhook secret is compared with `!==` direct string equality. WHY: String comparison short-circuits and leaks timing that enables secret guessing over many requests. HOW: Compare with `crypto.timingSafeEqual` over equal-length buffers."
+  },
+  {
+   "id": "V7",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "apps/web/pages/api/webhook/app-credential.ts",
+   "lines": [
+    62,
+    92
+   ],
+   "texto": "WHAT: The handler does `findFirst` then `update` or `create` without a unique guard. WHY: Two concurrent sync webhooks both observe no row and both `create`, leaving duplicate credentials per user and app. HOW: Use an atomic `upsert` on a unique `(userId, appId)` key."
+  },
+  {
+   "id": "V8",
+   "origem": "synthesis-rescue",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+   "lines": [
+    5,
+    11
+   ],
+   "texto": "WHAT: `minimumTokenResponseSchema` uses `[z.string().toString()]` as computed object keys, which collapses to a single static string key instead of a wildcard. WHY: The sync-path parse strips/ignores `expiry_date`, `expires_in` and `refresh_token`, so callers persist incomplete tokens and the dummy `refresh_token` fallback always triggers. HOW: Replace dynamic keys with `.passthrough()` or `.catchall()`/`z.record()` for extra properties."
+  },
+  {
+   "id": "V9",
+   "origem": "synthesis-rescue",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+   "lines": [
+    75,
+    86
+   ],
+   "texto": "WHAT: `getClient` unconditionally POSTs to the Salesforce token endpoint from the constructor path before returning the connection. WHY: Every `SalesforceCalendarService` instantiation pays a blocking token-refresh round trip even when the stored token is still valid, adding latency and provider load. HOW: Only refresh when the stored token is expired/invalid and otherwise reuse `credentialKey` directly."
+  }
+ ],
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/assets/stylesheets/common/foundation/mixins.scss",
+   "lines": [
+    125,
+    131
+   ],
+   "texto": "WHAT: -webkit-box-ordinal-group and -moz-box-ordinal-group are 1-based while order is 0-based but the mixin copies $val verbatim. WHY: Legacy WebKit/Firefox render .panel order(3) and .extra-info-wrapper order(2) shifted by one, misordering header items. HOW: Emit $val + 1 for the ordinal-group properties while keeping order/$val for the modern properties."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/assets/stylesheets/common/base/topic-post.scss",
+   "lines": [
+    263,
+    269
+   ],
+   "texto": "WHAT: Making .small-action a flex container blockifies children so button{float:right} is ignored. WHY: The dismiss/expand button collapses next to .small-action-desc instead of docking right, unlike header .panel which was compensated with margin-left:auto. HOW: Give the button margin-left:auto (and flex:1 to the description) instead of relying on float."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/assets/stylesheets/common/foundation/mixins.scss",
+   "lines": [
+    117,
+    123
+   ],
+   "texto": "WHAT: -ms-align-items was never an IE10/11 property so the declaration is dead. WHY: Leaves a false impression of IE coverage and the used baseline/center values only apply via -ms-flex-align. HOW: Drop the -ms-align-items line and keep -ms-flex-align."
+  },
+  {
+   "id": "V4",
+   "origem": "synthesis-rescue",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/assets/stylesheets/common/foundation/mixins.scss",
+   "lines": [
+    117,
+    123
+   ],
+   "texto": "WHAT: align-items() emits -webkit-box-align but no -moz-box-align while sibling mixins keep -moz- box prefixes. WHY: Legacy Firefox using -moz-box gets flex display without vertical alignment, so header and small-action centering fails there. HOW: Add -moz-box-align and drop the invalid -ms-align-items line."
+  }
+ ],
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/spans/buffer.py",
+   "lines": [
+    197,
+    199
+   ],
+   "texto": "WHAT: New ZADD/ZCARD/ZUNIONSTORE/ZSCAN ops run against keys still stored as SETs from before the deploy. WHY: Redis raises WRONGTYPE when the type differs, failing process and flush for all buffered traces until TTL expiry. HOW: Use new key names or delete/convert legacy SET keys on first ZSET access."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/scripts/spans/add-buffer.lua",
+   "lines": [
+    46,
+    47
+   ],
+   "texto": "WHAT: Merges use default AGGREGATE SUM so duplicate members get summed end timestamps. WHY: Inflated scores make duplicates look newest and skew zpopmin eviction order. HOW: Pass AGGREGATE MIN (or MAX) to preserve the original end timestamp."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/spans/consumers/process/factory.py",
+   "lines": [
+    141,
+    141
+   ],
+   "texto": "WHAT: Direct dict access raises KeyError when the field is absent. WHY: One malformed span poisons the whole batch and blocks offset commit/retries. HOW: Fall back to the message timestamp or a default via val.get."
+  },
+  {
+   "id": "V4",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/scripts/spans/add-buffer.lua",
+   "lines": [
+    62,
+    63
+   ],
+   "texto": "WHAT: Eviction caps at literal 1000 while SpansBuffer.max_segment_spans (default 1001) is no longer checked on load. WHY: Tuning the Python option has no effect and the cap is off-by-one from the old guard. HOW: Thread the limit through as a script argument."
+  }
+ ],
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/plugins/log/fake.go",
+   "lines": [
+    46,
+    48
+   ],
+   "texto": "WHAT: TestLogger.FromContext returns a fresh NewTestLogger ignoring the receiver. WHY: LoggerMiddleware now logs via m.logger.FromContext(ctx).Info so assertions on the original test logger see zero calls and logs are lost. HOW: Return the receiver to preserve recording."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/services/pluginsintegration/clientmiddleware/contextual_logger_middleware.go",
+   "lines": [
+    39,
+    42
+   ],
+   "texto": "WHAT: QueryData/CallResource/CheckHealth/CollectMetrics dereference req without nil check. WHY: A nil request panics at req.PluginContext while sibling LoggerMiddleware explicitly handles nil, showing nil reaches this layer. HOW: Add the same nil guard delegating to next."
+  }
+ ],
+ "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/monitors/logic/incident_occurrence.py",
+   "lines": [
+    159,
+    171
+   ],
+   "texto": "WHAT: The humanized `config` copy with `schedule_type` display value is never used since the return uses `monitor.config` original. WHY: Monitor context sent to Kafka keeps the raw `schedule_type` code instead of the display string, producing wrong output. HOW: Return the local `config` variable in the `config` field."
+  }
+ ],
+ "replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent batch 1/2",
+   "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+   "lines": [
+    110,
+    119
+   ],
+   "texto": "WHAT: `zip(error_ids, events.values())` pairs IDs with values by dict order instead of by node ID. WHY: Missing keys or different ordering attaches the wrong title/message/timestamp to the wrong error and corrupts chronological interleaving."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent batch 1/2",
+   "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+   "lines": [
+    50,
+    60
+   ],
+   "texto": "WHAT: Mutual-exclusion checks use truthiness (`get(\"age\")`/`get(\"timestamp\")`) so `0` bypasses, and neither field is required so both-absent passes. WHY: Invalid reports from either Reporting spec version are accepted and counted in metrics instead of rejected with 422."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent batch 1/2",
+   "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+   "lines": [
+    164,
+    174
+   ],
+   "texto": "WHAT: The `use-table-widget-visualization` branch hardcodes empty `columns` and `tableData` instead of the query `result`. WHY: Every dashboard table behind the flag renders an empty table with no headers or rows, losing all query output."
+  },
+  {
+   "id": "V4",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent batch 1/2",
+   "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+   "lines": [
+    104,
+    108
+   ],
+   "texto": "WHAT: All `error_ids` from the replay instance query are fanned out to a single blocking `nodestore.get_multi` with no cap. WHY: Replays with many linked errors inflate Snuba payload and KV fetch size/latency on every paginated summarize request."
+  },
+  {
+   "id": "V5",
+   "origem": "synthesis-rescue",
+   "agente": "kodus-generalist-review-agent batch 1/2",
+   "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+   "lines": [
+    110,
+    120
+   ],
+   "texto": "WHAT: `zip(error_ids, events.values())` pairs IDs by dict order instead of by node ID. WHY: Missing keys shift alignment and attach wrong title/message to wrong error ID. HOW: Look up each `node_id` in `events` dict via `events.get(node_id)`."
+  },
+  {
+   "id": "V6",
+   "origem": "synthesis-rescue",
+   "agente": "kodus-generalist-review-agent batch 1/2",
+   "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+   "lines": [
+    50,
+    60
+   ],
+   "texto": "WHAT: Exclusivity checks use truthiness `get(\"age\")`/`get(\"timestamp\")` and both fields are optional. WHY: `0` bypasses the check and reports with neither field pass validation. HOW: Test membership `\"age\" in initial_data` and require exactly one present."
+  },
+  {
+   "id": "V7",
+   "origem": "synthesis-rescue",
+   "agente": "kodus-generalist-review-agent batch 1/2",
+   "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+   "lines": [
+    164,
+    174
+   ],
+   "texto": "WHAT: Flag branch passes empty `columns` and `tableData` instead of query `result`. WHY: Enabling `use-table-widget-visualization` renders an empty table and discards fetched data."
+  }
+ ],
+ "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/assets/stylesheets/desktop/topic-post.scss",
+   "lines": [
+    289,
+    292
+   ],
+   "texto": "WHAT: Light-theme branch was changed from scale-color($primary, $lightness: 30%) to 70% while adding the dark branch. WHY: Light theme renders a different (lighter) color than before, a visual regression contrary to PR intent to preserve light output. HOW: Restore first arg to $lightness: 30% with dark arg $lightness: 70%."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/assets/stylesheets/desktop/user.scss",
+   "lines": [
+    519,
+    523
+   ],
+   "texto": "WHAT: .group-member-info .name light branch changed from 30% to 50% lightness. WHY: Alters light-theme text color versus pre-PR value, breaking intent to only add a dark-theme branch. HOW: Restore first arg to $lightness: 30% and second to $lightness: 70%."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/assets/stylesheets/mobile/user.scss",
+   "lines": [
+    494,
+    498
+   ],
+   "texto": "WHAT: .group-member-info .name light branch changed from 30% to 50% lightness. WHY: Alters light-theme text color versus pre-PR value, same regression as desktop counterpart. HOW: Restore first arg to $lightness: 30% and second to $lightness: 70%."
+  },
+  {
+   "id": "V4",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/assets/stylesheets/mobile/topic-post.scss",
+   "lines": [
+    179,
+    183
+   ],
+   "texto": "WHAT: a.star h3 light branch changed from scale-color($primary, $lightness: 20%) to 50%. WHY: Light theme renders a much lighter heading than before instead of preserving the original dark-gray tone. HOW: Restore first arg to $lightness: 20% with dark arg $lightness: 80%."
+  },
+  {
+   "id": "V5",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/assets/stylesheets/mobile/modal.scss",
+   "lines": [
+    100,
+    103
+   ],
+   "texto": "WHAT: Light branch uses 30% where the removed code used 70% (args swapped vs desktop). WHY: Light-theme hint text becomes darker than intended while dark theme gets the wrong complement, diverging from desktop/modal behavior. HOW: Swap args to $primary 70% / $secondary 30% to match desktop/modal.scss."
+  }
+ ],
+ "sms-workflow-reminder-retry-count-tracking-cal-com": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+   "lines": [
+    31,
+    43
+   ],
+   "texto": "WHAT: The second OR branch filters only on `retryCount: { gt: 1 }` with no `method` constraint. WHY: It deletes EMAIL/WHATSAPP or future scheduled reminders sharing the table once they ever reach retryCount 2, far beyond the intended SMS cleanup. HOW: Add `method: WorkflowMethods.SMS` to the retryCount branch."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+   "lines": [
+    178,
+    187
+   ],
+   "texto": "WHAT: The retry increment only runs in the `else` of `if (scheduledSMS)` inside `if (message?.length && sendTo)`. WHY: Reminders with empty message or missing/invalid `sendTo` skip both branches and are refetched every cron run until scheduledDate passes, defeating the two-retry limit. HOW: Handle the outer-guard false path with the same retryCount increment or deletion."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+   "lines": [
+    189,
+    198
+   ],
+   "texto": "WHAT: Both updates use stale `reminder.retryCount + 1` and the `catch` update is unguarded. WHY: Overlapping cron runs lose increments and a single DB failure in `catch` throws out of the loop, skipping remaining reminders and the final response. HOW: Use atomic `retryCount: { increment: 1 }` and guard the catch-path update with its own try/catch."
+  }
+ ],
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/spans/consumers/process/flusher.py",
+   "lines": [
+    253,
+    257
+   ],
+   "texto": "WHAT: The hang/death restart path skips `process.kill()` for spawn-context processes because they are not instances of `multiprocessing.Process`. WHY: The hung flusher keeps running alongside its replacement, flushing the same shards twice and leaking processes. HOW: Kill unconditionally like the old code and join the old process instead of gating on `isinstance`."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/spans/consumers/process/flusher.py",
+   "lines": [
+    337,
+    347
+   ],
+   "texto": "WHAT: `join()` breaks out of the process loop once the deadline expires without waiting on or terminating later processes. WHY: A hung first process leaves all remaining flushers running past shutdown and never reaps them. HOW: Always iterate all processes and terminate/join each regardless of deadline expiry."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/spans/consumers/process/flusher.py",
+   "lines": [
+    299,
+    301
+   ],
+   "texto": "WHAT: `submit()` calls cluster-wide `get_memory_info()` once per shard-buffer instead of once total. WHY: Each call fans out Redis INFO across the cluster, multiplying cost by process count on every submit. HOW: Query memory info once via a single client instead of looping over `self.buffers`."
+  },
+  {
+   "id": "V4",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/spans/consumers/process/flusher.py",
+   "lines": [
+    51,
+    60
+   ],
+   "texto": "WHAT: Negative `--flusher-processes` passes `min()` into an empty shard map then indexes it via modulo. WHY: Consumer startup crashes with `KeyError` instead of rejecting bad config, and `or` conflates explicit 0 with unset. HOW: Validate `max_processes >= 1` and use an explicit `is None` check."
+  },
+  {
+   "id": "V5",
+   "origem": "synthesis-rescue",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/spans/consumers/process/flusher.py",
+   "lines": [
+    92,
+    93
+   ],
+   "texto": "Aggregate flush capacity grows linearly with process count because each subprocess divides the global limit by its subset size instead of the global shard count. Scale the per-process budget by the global shard count so total flushed segments stay bounded."
+  }
+ ],
+ "unified-storage-performance-optimizations-grafana-codex": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/storage/unified/search/bleve.go",
+   "lines": [
+    137,
+    140
+   ],
+   "texto": "WHAT: Removing the function-wide `cacheMu` lock lets `GetIndex` return nil while a `BuildIndex` for the same key is in flight, so concurrent callers both build. WHY: Duplicate builds waste work and race `bleve.New(dir)` on the same file directory, causing errors or a leaked index with last-write-wins. HOW: Deduplicate same-key builds with singleflight or a per-key lock around the check-then-build."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/storage/unified/resource/server.go",
+   "lines": [
+    258,
+    262
+   ],
+   "texto": "WHAT: The `NewResourceServer` failure path returns without calling the watcher context `cancel` stored in `s`. WHY: The `WithCancel` context resources leak on every failed startup since the server is discarded. HOW: Call `s.cancel()` before returning the init error."
+  }
+ ],
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/serializers/user_serializer.rb",
+   "lines": [
+    153,
+    155
+   ],
+   "texto": "WHAT: The method is named `include_website_name` without `?` so ActiveModel::Serializers never calls it as an inclusion gate. WHY: `website_name` is then always serialized (as null when no website), breaking the intended `website.present?` contract. HOW: Rename to `include_website_name?` to match every other gate in this file."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/serializers/user_serializer.rb",
+   "lines": [
+    40,
+    46
+   ],
+   "texto": "WHAT: New `:website_name` attribute is exposed without the `restrict_user_fields?` check that suppresses `website` for TL0 users seen by anonymous. WHY: Anonymous viewers learn a TL0 user's website host and path even when `website` itself is hidden. HOW: Add `:website_name` to `untrusted_attributes` or check `restrict_user_fields?` in its include gate."
+  },
+  {
+   "id": "V3",
+   "origem": "synthesis-rescue",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/serializers/user_serializer.rb",
+   "lines": [
+    141,
+    149
+   ],
+   "texto": "WHAT: Same-domain branch builds display as host plus URI path only, discarding query string and fragment. WHY: A same-domain website like example.com/user?ref=1 displays as example.com/user, losing distinguishing URL information. HOW: Append query and fragment from the parsed URI when building website_name."
+  }
+ ]
+}

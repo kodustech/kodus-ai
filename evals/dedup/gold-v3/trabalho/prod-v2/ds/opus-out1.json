@@ -1,0 +1,512 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "id": "V1",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Meet fallback reads mainHostDestinationCalendar.integration without optional chaining and throws on empty destinationCalendar."
+  },
+  {
+   "id": "V2",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "newGroup": null,
+   "reason": "Null destinationCalendar makes the optional push drop team members' destination calendars for collective events."
+  },
+  {
+   "id": "V3",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "updateEvent looks up a destination calendar by the absent externalCalendarId, so the lookup never matches."
+  },
+  {
+   "id": "V4",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "deleteEvent looks up a destination calendar by the absent externalCalendarId, so the lookup never matches (same issue covers update/delete)."
+  },
+  {
+   "id": "V5",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#10",
+   "newGroup": null,
+   "reason": "Per-host credential findUnique inside the create/update loops instead of one batched query."
+  },
+  {
+   "id": "V6",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#12",
+   "newGroup": null,
+   "reason": "updateLocation stores externalId/credentialId from updateEvent results that never carry them."
+  }
+ ],
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "submit's exception handler completes the offset of a message that failed to decode/route; the golden issues cover the worker finally block (#03) and the dead shared pool (#11), different code."
+  },
+  {
+   "id": "V2",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10",
+   "newGroup": null,
+   "reason": "FixedQueuePool.shutdown sets the worker shutdown flag before draining, so queued items are not processed."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "join() ignores its timeout and closes without waiting for queued work to drain; no golden issue covers join."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "mark_committed never prunes outstanding, so it grows without bound; not in the golden set."
+  },
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Same as V1: submit's broad except completes an offset that was never enqueued."
+  },
+  {
+   "id": "V6",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10",
+   "newGroup": null,
+   "reason": "Same as V2: worker shutdown flag set before queue drain."
+  },
+  {
+   "id": "V7",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Same as V3: join ignores timeout and delegates to close."
+  },
+  {
+   "id": "V8",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Same as V4: outstanding is not trimmed in mark_committed."
+  }
+ ],
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "before_validation calls host.sub! on a nil host, raising NoMethodError."
+  },
+  {
+   "id": "V2",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "update/destroy use where(id:).first without nil check, 500 on unknown id."
+  },
+  {
+   "id": "V3",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Migration dereferences execute(...)[0] without checking for empty result (also mentions the interpolation of #06); broader comment includes #07."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "store.js plural-id hydration leaves undefined entries for missing ids; not in the golden set."
+  },
+  {
+   "id": "V5",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "record_for_host lowercases only the DB side; mixed-case referer hosts fail to match."
+  }
+ ],
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
+  {
+   "id": "V1",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "isinstance(process, multiprocessing.Process) never matches SpawnProcess, so hung flushers are never killed."
+  },
+  {
+   "id": "V2",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "newGroup": null,
+   "reason": "join breaks out on deadline and skips terminating remaining processes."
+  },
+  {
+   "id": "V3",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08",
+   "newGroup": null,
+   "reason": "submit queries cluster-wide Redis INFO once per sub-buffer."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Per-shard max_segments computation lets the global max-flush-segments cap scale with process count; not in the golden set."
+  }
+ ],
+ "feat-2fa-backup-codes-cal-com": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "No rate limiting on backup-code check in the disable endpoint; not in the golden set."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Login authorize picks the backup-code branch whenever backupCode is set, rejecting a valid TOTP; not in the golden set (#01 is the password bypass)."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "DisableTwoFactorModal keeps a stale backupCode when toggling back to TOTP, so the disable API rejects a valid TOTP; different code from V2."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "Disable via backup code without password check for non-CAL/no-password users; not in the golden set."
+  },
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N5",
+   "reason": "Download button defaults to type=submit and re-submits the enable form; not in the golden set."
+  }
+ ],
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": [
+  {
+   "id": "V1",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#14",
+   "newGroup": null,
+   "reason": "Only bare count() is rewritten; aliased count stays un-upsampled."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "upsampled_count registered only in discover dataset converter while errors dataset is enabled; not in the golden set."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Decision uses the original request query while the split path runs derived transaction-only queries; differs from #04 (substring parsing of negated/OR queries) and #03 (dataset vs scoped_dataset)."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Test factory stores the sample rate rather than the weight summed by upsampled_count; #06 is about missing validation, a different problem."
+  }
+ ],
+ "github-oauth-security-enhancement-sentry": [
+  {
+   "id": "V1",
+   "match": "github-oauth-security-enhancement-sentry#06",
+   "newGroup": null,
+   "reason": "Integration.DoesNotExist path advances the pipeline without the user-match check."
+  },
+  {
+   "id": "V2",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "metadata[\"sender\"][\"login\"] indexed without checking sender exists, KeyError."
+  },
+  {
+   "id": "V3",
+   "match": "github-oauth-security-enhancement-sentry#03",
+   "newGroup": null,
+   "reason": "OAuth state is pipeline.signature, a static md5, giving no CSRF protection."
+  }
+ ],
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "V1",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "newGroup": null,
+   "reason": "getGroupIdsWithViewPermission returns resource ids instead of group ids."
+  },
+  {
+   "id": "V2",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+   "newGroup": null,
+   "reason": "Per-group resources are created without the Groups type, so findByType never sees them."
+  },
+  {
+   "id": "V3",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02",
+   "newGroup": null,
+   "reason": "Full permission evaluation per group resource on each user search/count."
+  },
+  {
+   "id": "V4",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01",
+   "newGroup": null,
+   "reason": "Removal of the canViewGlobal short-circuit in subgroup listing; restoring it fixes the per-group evaluation issue at the same place."
+  }
+ ],
+ "add-html-sanitizer-for-translated-message-resources-keycloak": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "santizeAnchors compares anchors pairwise by position, flagging valid reordered translations; not in the golden set."
+  },
+  {
+   "id": "V2",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+   "newGroup": null,
+   "reason": "Prefix/suffix diff computed independently can overlap and substring throws StringIndexOutOfBoundsException."
+  }
+ ],
+ "fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Negative offset param passed to .offset() raises a 500; opa-02 covers only the limit param."
+  },
+  {
+   "id": "V2",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02",
+   "newGroup": null,
+   "reason": "Public members endpoint takes limit with no upper bound."
+  },
+  {
+   "id": "V3",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "totalPages = floor(user_count/limit)+1 adds an empty extra page on exact multiples."
+  },
+  {
+   "id": "V4",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Group create ignores the selected alias_level."
+  }
+ ],
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+  {
+   "id": "V1",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+   "newGroup": null,
+   "reason": "updateManyByCredentialId with empty data does not touch @updatedAt."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "The UI reads CalendarCache.updatedAt, so writing SelectedCalendar.updatedAt never feeds the displayed timestamp; distinct from #01 (empty update payload)."
+  },
+  {
+   "id": "V3",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#03",
+   "newGroup": null,
+   "reason": "Delete-cache mutation does not invalidate connectedCalendars, leaving stale status."
+  }
+ ],
+ "sms-workflow-reminder-retry-count-tracking-cal-com": [
+  {
+   "id": "V1",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "retryCount > 1 OR arm has no SMS method filter, deleting other methods' reminders."
+  },
+  {
+   "id": "V2",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "retryCount not incremented when message or sendTo missing; reminders reprocessed forever."
+  },
+  {
+   "id": "V3",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#e2b-01",
+   "newGroup": null,
+   "reason": "SMS lock returns undefined, retryCount increments and cleanup deletes future reminders."
+  }
+ ],
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+  {
+   "id": "V1",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+   "newGroup": null,
+   "reason": "Reminder cancel helpers called without await inside forEach in handleCancelBooking."
+  },
+  {
+   "id": "V2",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#11",
+   "newGroup": null,
+   "reason": "immediateDelete branch of deleteScheduledEmailReminder does not delete the row; the reschedule caller leaves it orphaned."
+  },
+  {
+   "id": "V3",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#11",
+   "newGroup": null,
+   "reason": "deleteScheduledEmailReminder immediateDelete branch never deletes or marks the reminder."
+  }
+ ],
+ "anonymous-add-configurable-device-limit-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#07",
+   "newGroup": null,
+   "reason": "tagDeviceUI caches the device before CreateOrUpdateDevice, bypassing the limit on the next request."
+  },
+  {
+   "id": "V2",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Non-atomic count-then-insert lets concurrent requests exceed the device limit."
+  }
+ ],
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "TopicUser.find_by nil not handled in unsubscribe, NoMethodError/500."
+  },
+  {
+   "id": "V2",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "State-changing unsubscribe on a GET route without CSRF protection."
+  }
+ ],
+ "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": [
+  {
+   "id": "V1",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "MetricAlertDetectorHandler subclasses StatefulDetectorHandler without implementing abstract methods, TypeError on instantiation."
+  },
+  {
+   "id": "V2",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "Same: abstract methods unimplemented, instantiation raises TypeError."
+  }
+ ],
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "should_block? increments match_count during validation, which runs twice per signup."
+  },
+  {
+   "id": "V2",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Non-atomic read-modify-write on match_count loses concurrent increments, part of #05."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "rejectedEmails defined on the controller prototype is shared across instances; prod-01 is about never clearing the list, which per-instance init does not fix."
+  }
+ ],
+ "unified-storage-performance-optimizations-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "unified-storage-performance-optimizations-grafana-codex#01",
+   "newGroup": null,
+   "reason": "BuildIndex no longer holds the lock across the build, so concurrent callers build the same index and last writer wins."
+  }
+ ],
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": [
+  {
+   "id": "V1",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#01",
+   "newGroup": null,
+   "reason": "getSubGroupsCount returns null when the group was deleted, violating the never-null contract."
+  }
+ ],
+ "feature-localization-fallbacks-server-side-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "I18n.fallbacks chain memoized and never reset on default_locale change; #06 is about the translation cache key, a different cache."
+  },
+  {
+   "id": "V2",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Fallback catalogs loaded only in set_locale; jobs/mailers miss fallbacks."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "ensure_loaded! on every request defeats lazy loading; not in the golden set."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Claim that load_locale exceptions leave the mutex held; not in the golden set."
+  },
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "effective_locale not validated against supported locales; not in the golden set."
+  }
+ ],
+ "fixing-re-authentication-with-passkeys-keycloak": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "configuredFor treats passkey-only users as configured for the password step; not in the golden set."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "PasswordForm.authenticate never sets USER_SET_BEFORE_USERNAME_PASSWORD_AUTH, breaking re-auth error rendering; not in the golden set."
+  },
+  {
+   "id": "V3",
+   "match": "fixing-re-authentication-with-passkeys-keycloak#03",
+   "newGroup": null,
+   "reason": "Passkey conditional UI added only to keycloak.v2 template, not the base login-password.ftl."
+  }
+ ],
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
+  {
+   "id": "V1",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "queued defaults to timezone.now() evaluated once at import."
+  }
+ ],
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "createInitialDeployment returns early for null updateStrategy before enabling rolling-updates; not in the golden set."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Same as V1: early return skips enabling the feature flag."
+  }
+ ],
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "ContextualLoggerMiddleware dereferences req.PluginContext without nil check; not in the golden set."
+  }
+ ]
+}

@@ -1,0 +1,84 @@
+{
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "V2",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: readLength's -1 reaches read(length) and new byte[-1] throws NegativeArraySizeException instead of IOException."
+  }
+ ],
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "V3",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#09",
+   "newGroup": null,
+   "reason": "Same claim: group removal listener calls GroupPermissionsV2.setPermissionsEnabled, which throws UnsupportedOperationException."
+  }
+ ],
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "V6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "AnonymousCache serving cached responses before ensure_embeddable runs (referer check bypass) is not among the rejected claims; opa-03 is about staff view leakage and #27 about ALLOWALL/spoofable referer itself."
+  },
+  {
+   "id": "V9",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Failed PostCreator returning an unsaved post that passes post.present? and breaks TopicEmbed.create! is not among the rejected claims."
+  }
+ ],
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": [
+  {
+   "id": "V1",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#snloop-01",
+   "newGroup": null,
+   "reason": "Same claim: only getSubGroupsCount is null-safe; getSubGroupsStream overloads still dereference a null model."
+  }
+ ],
+ "fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Empty last page after removing a member at the old offset is not among the rejected claims; #02 is about an unawaited reload race."
+  }
+ ],
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "V1",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#prod-01",
+   "newGroup": null,
+   "reason": "Same claim: getCredentials dereferences getMyUser result without null check, throwing NPE for missing users."
+  },
+  {
+   "id": "V2",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: plaintext recovery codes are serialized and sent to user storage providers while the local path stores hashes."
+  }
+ ],
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "id": "V2",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-02",
+   "newGroup": null,
+   "reason": "Same claim: hard lookup of end_timestamp_precise raises KeyError and fails the whole batch."
+  }
+ ],
+ "replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "V4",
+   "match": "replays-self-serve-bulk-delete-system-sentry#21",
+   "newGroup": null,
+   "reason": "Same claim: get_environment_info fetches the recommended event per issue, an N+1 on the PR comment path."
+  },
+  {
+   "id": "V5",
+   "match": "replays-self-serve-bulk-delete-system-sentry#05",
+   "newGroup": null,
+   "reason": "Same claim: analytics.record runs before the feature check, counting 404-rejected requests."
+  }
+ ]
+}

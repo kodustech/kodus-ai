@@ -1,0 +1,462 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "id": "V1",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Google Meet fallback dereferences mainHostDestinationCalendar.integration without optional chaining."
+  },
+  {
+   "id": "V2",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Fallback lookup matches externalId against the absent externalCalendarId, so it never finds a calendar."
+  },
+  {
+   "id": "V3",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "newGroup": null,
+   "reason": "destinationCalendar null makes ?.push drop team hosts' destination calendars."
+  },
+  {
+   "id": "V4",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#09",
+   "newGroup": null,
+   "reason": "Video references saved without credentialId, so later delete/update cannot find the credential."
+  },
+  {
+   "id": "V5",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#04",
+   "newGroup": null,
+   "reason": "Inverted IS_TEAM_BILLING_ENABLED condition for organization slug."
+  },
+  {
+   "id": "V6",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "Recurring-series deletion runs once per calendar reference, duplicating delete calls."
+  }
+ ],
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+  {
+   "id": "V1",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "Strategy close() shuts down the factory-owned shared pool, reused dead after rebalance; offsets committed unprocessed."
+  },
+  {
+   "id": "V2",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#01",
+   "newGroup": null,
+   "reason": "Offset gaps make contiguity check stall commits for the partition."
+  },
+  {
+   "id": "V3",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#12",
+   "newGroup": null,
+   "reason": "Arroyo commit callback invoked from background thread instead of consumer thread."
+  },
+  {
+   "id": "V4",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "newGroup": null,
+   "reason": "Unbounded worker queues, no backpressure, unbounded memory."
+  }
+ ],
+ "add-guest-management-functionality-to-existing-bookings-cal-com": [
+  {
+   "id": "V1",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "newGroup": null,
+   "reason": "isTeamAdmin && isTeamOwner wrongly rejects team admins."
+  },
+  {
+   "id": "V2",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#08",
+   "newGroup": null,
+   "reason": "EventManager built from requesting user's credentials, organizer's calendar not updated."
+  },
+  {
+   "id": "V3",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "newGroup": null,
+   "reason": "Unfiltered guests passed to sendAddGuestsEmails; existing attendees get new-booking confirmation."
+  },
+  {
+   "id": "V4",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "newGroup": null,
+   "reason": "Blacklist lowercased but guest input not, case variants bypass blacklist (also mentions size limit #11)."
+  },
+  {
+   "id": "V5",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#16",
+   "newGroup": null,
+   "reason": "sendAddGuestsEmails ignores disableStandardEmails settings."
+  },
+  {
+   "id": "V6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "teamMember not passed to organizer add-guests email template; no golden issue covers it."
+  }
+ ],
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
+  {
+   "id": "V1",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "isinstance(process, multiprocessing.Process) false for SpawnProcess, hung flusher never killed."
+  },
+  {
+   "id": "V2",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "newGroup": null,
+   "reason": "join() breaks on deadline skipping termination of remaining processes."
+  },
+  {
+   "id": "V3",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#02",
+   "newGroup": null,
+   "reason": "time.sleep(0.1) is a no-op because time.sleep is monkeypatched."
+  }
+ ],
+ "feat-2fa-backup-codes-cal-com": [
+  {
+   "id": "V1",
+   "match": "feat-2fa-backup-codes-cal-com#07",
+   "newGroup": null,
+   "reason": "Non-atomic read-modify-write of backup codes allows reuse under concurrent logins."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Backup-code login blocked by totpCode guards for non-CAL/totpEmail users; different from password-bypass issue #01."
+  },
+  {
+   "id": "V3",
+   "match": "feat-2fa-backup-codes-cal-com#02",
+   "newGroup": null,
+   "reason": "Closing dialog by Escape/overlay never calls onEnable, page shows 2FA disabled."
+  }
+ ],
+ "github-oauth-security-enhancement-sentry": [
+  {
+   "id": "V1",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "Indexing metadata['sender'] raises KeyError for integrations without sender."
+  },
+  {
+   "id": "V2",
+   "match": "github-oauth-security-enhancement-sentry#06",
+   "newGroup": null,
+   "reason": "No Integration row means installer ownership check is skipped."
+  },
+  {
+   "id": "V3",
+   "match": "github-oauth-security-enhancement-sentry#05",
+   "newGroup": null,
+   "reason": "Token exchange/user lookup not wrapped, failures become 500s."
+  },
+  {
+   "id": "V4",
+   "match": "github-oauth-security-enhancement-sentry#10",
+   "newGroup": null,
+   "reason": "test_installation_not_found uses wrong state, never reaches 404 path."
+  }
+ ],
+ "add-html-sanitizer-for-translated-message-resources-keycloak": [
+  {
+   "id": "V1",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#10",
+   "newGroup": null,
+   "reason": "Account UI bundle uses MessageFormat placeholders, i18next shows literal {0}/choice."
+  },
+  {
+   "id": "V2",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#10",
+   "newGroup": null,
+   "reason": "Admin UI bundle uses MessageFormat placeholders, i18next shows literal text."
+  },
+  {
+   "id": "V3",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Lithuanian TOTP step replaced with Italian text."
+  },
+  {
+   "id": "V4",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Lithuanian login TOTP step replaced with Italian text."
+  },
+  {
+   "id": "V5",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+   "newGroup": null,
+   "reason": "zh_CN totpStep1 written in Traditional Chinese."
+  },
+  {
+   "id": "V6",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+   "newGroup": null,
+   "reason": "Common prefix/suffix overlap makes substring throw StringIndexOutOfBoundsException."
+  }
+ ],
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": [
+  {
+   "id": "V1",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04",
+   "newGroup": null,
+   "reason": "Substring match for event.type:error treats negated/compound queries as error-only."
+  },
+  {
+   "id": "V2",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#03",
+   "newGroup": null,
+   "reason": "Upsampling decision uses request dataset instead of scoped_dataset."
+  }
+ ],
+ "feature-automatically-downsize-large-images-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Second downsize definition overrides the first, ResizeEmoji callers get ArgumentError."
+  },
+  {
+   "id": "V2",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Retry loop ignores false return of failed conversion and repeats it."
+  },
+  {
+   "id": "V3",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Up to five synchronous ImageMagick passes per oversized upload enable CPU DoS."
+  },
+  {
+   "id": "V4",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Client-side size check hardcodes 10MB instead of per-type max size setting."
+  }
+ ],
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "V1",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#05",
+   "newGroup": null,
+   "reason": "Ties at order 200 resolved by classpath order instead of failing; FIPS can run non-FIPS provider."
+  },
+  {
+   "id": "V2",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#04",
+   "newGroup": null,
+   "reason": "Abstract order() on CryptoProvider breaks source/binary compatibility."
+  }
+ ],
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": [
+  {
+   "id": "V1",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+   "newGroup": null,
+   "reason": "math.floor/ceil on datetime cursor values raise TypeError in build_cursor."
+  },
+  {
+   "id": "V2",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Negative cursor offsets passed into Django queryset slicing raise errors."
+  },
+  {
+   "id": "V3",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#07",
+   "newGroup": null,
+   "reason": "organization_context.member may be None, has_global_access raises AttributeError."
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "V1",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#04",
+   "newGroup": null,
+   "reason": "getResourceTypeResource may return null leading to NPE in findByResource."
+  },
+  {
+   "id": "V2",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+   "newGroup": null,
+   "reason": "getClientsWithPermission returns the 'Clients' type resource name instead of client ids."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "With V1 and V2 enabled, removal cleanup calls V2 setPermissionsEnabled which throws; opposite of #01's orphaned-permission claim."
+  }
+ ],
+ "sms-workflow-reminder-retry-count-tracking-cal-com": [
+  {
+   "id": "V1",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#e2b-01",
+   "newGroup": null,
+   "reason": "SMS locks (and transient errors) counted as failed attempts, so retryCount cleanup deletes valid reminders."
+  },
+  {
+   "id": "V2",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
+   "newGroup": null,
+   "reason": "Unguarded retry-count update in catch escapes the loop and fails the cron run."
+  },
+  {
+   "id": "V3",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "retryCount OR branch lacks SMS method filter, deleting non-SMS reminders."
+  }
+ ],
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "id": "V1",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#04",
+   "newGroup": null,
+   "reason": "Old SET keys cause WRONGTYPE errors on sorted-set commands during rollout."
+  },
+  {
+   "id": "V2",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+   "newGroup": null,
+   "reason": "max_segment_spans ignored; cap hardcoded 1000 in Lua."
+  },
+  {
+   "id": "V3",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#03",
+   "newGroup": null,
+   "reason": "ZUNIONSTORE default SUM doubles scores of duplicated payloads."
+  },
+  {
+   "id": "V4",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "Redirect-walk limit cut from 10000 to 1000."
+  },
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Performance cost of ZUNIONSTORE rebuilding destination per span; no golden issue covers it."
+  }
+ ],
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "website_name not untrusted, exposes restricted TL0 user's website host/path (also mentions missing '?' of #07)."
+  }
+ ],
+ "database-performance-optimizations-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "database-performance-optimizations-grafana-codex#08",
+   "newGroup": null,
+   "reason": "Cleanup ticker changed from 10 minutes to 1 minute."
+  },
+  {
+   "id": "V2",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Leftover Error-level debug logs with full ID list flood logs."
+  },
+  {
+   "id": "V3",
+   "match": "database-performance-optimizations-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Quadratic fmt.Sprintf concatenation for SQLite ID list."
+  },
+  {
+   "id": "V4",
+   "match": "database-performance-optimizations-grafana-codex#06",
+   "newGroup": null,
+   "reason": "One placeholder per ID exceeds 65535 limit on MySQL/Postgres."
+  }
+ ],
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "V1",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#08",
+   "newGroup": null,
+   "reason": "Invalidation check uses org-aware isEnabled, so updates while org disabled skip invalidation."
+  },
+  {
+   "id": "V2",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Test cleanup uses literal alias 'alias', created IDPs never removed."
+  }
+ ],
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "should_block? updates match_count during repeated validation, inflated and racy increments."
+  },
+  {
+   "id": "V2",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Case-sensitive exact lookup lets case-changed blocked email bypass block list."
+  }
+ ],
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": [
+  {
+   "id": "V1",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "Test asserts without joining the reader thread, can pass despite NPE regression."
+  }
+ ],
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
+  {
+   "id": "V1",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "queued default timezone.now() evaluated at class definition."
+  }
+ ],
+ "advanced-query-processing-architecture-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "advanced-query-processing-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Ad hoc filters applied multiple times through repeated applyTemplateVariables."
+  }
+ ],
+ "feature-localization-fallbacks-server-side-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Fallback locales only loaded in set_locale, jobs/mailers miss fallbacks."
+  },
+  {
+   "id": "V2",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Translation cache key lacks default locale, stale fallback results."
+  }
+ ],
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#03",
+   "newGroup": null,
+   "reason": "TestLogger.FromContext returns a fresh instance, logs lost to assertions."
+  }
+ ]
+}

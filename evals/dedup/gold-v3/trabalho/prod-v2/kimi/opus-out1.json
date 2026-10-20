@@ -1,0 +1,752 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Making credentialId required on the Calendar interface is a typing/adapter concern, not Office365 ignoring it (#05)."
+  },
+  {
+   "id": "V2",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "updateEvent looks up destination calendar by absent externalCalendarId."
+  },
+  {
+   "id": "V3",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Same absent-externalCalendarId lookup in deleteEvent; issue covers update/delete."
+  },
+  {
+   "id": "V4",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Meet fallback reads mainHostDestinationCalendar.integration without optional chaining."
+  },
+  {
+   "id": "V5",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#15",
+   "newGroup": null,
+   "reason": "createEvent called without externalId for credential-less destination calendars."
+  },
+  {
+   "id": "V6",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "requestReschedule missing user destinationCalendar fallback; no golden issue covers it."
+  },
+  {
+   "id": "V7",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "newGroup": null,
+   "reason": "Null destinationCalendar makes optional push drop team hosts calendars."
+  },
+  {
+   "id": "V8",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#04",
+   "newGroup": null,
+   "reason": "Inverted billing condition for org slug."
+  },
+  {
+   "id": "V9",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#06",
+   "newGroup": null,
+   "reason": "updateEvent pushed with undefined credential when lookup fails."
+  },
+  {
+   "id": "V10",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#10",
+   "newGroup": null,
+   "reason": "Per-iteration credential findUnique instead of batched query."
+  }
+ ],
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": [
+  {
+   "id": "V1",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+   "newGroup": null,
+   "reason": "Computed keys from z.string().toString() in minimumTokenResponseSchema."
+  },
+  {
+   "id": "V2",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "Sync mode returns raw fetch Response breaking callers."
+  },
+  {
+   "id": "V3",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#07",
+   "newGroup": null,
+   "reason": "Hardcoded \"refresh_token\" string when refresh token missing."
+  },
+  {
+   "id": "V4",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#03",
+   "newGroup": null,
+   "reason": "Non-atomic findFirst-then-create allows duplicate credentials."
+  },
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Header name not lowercased; distinct from secret comparison issues."
+  },
+  {
+   "id": "V6",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#13",
+   "newGroup": null,
+   "reason": "Salesforce getClient refreshes token on every construction."
+  },
+  {
+   "id": "V7",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#16",
+   "newGroup": null,
+   "reason": "statusText !== \"OK\" instead of response.ok."
+  },
+  {
+   "id": "V8",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01",
+   "newGroup": null,
+   "reason": "Non-constant-time secret comparison."
+  },
+  {
+   "id": "V9",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Unreachable success check in Zoom/Salesforce; golden #11 is Office365 only, different place."
+  },
+  {
+   "id": "V10",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "newGroup": null,
+   "reason": "Google stores safeParse result instead of data."
+  },
+  {
+   "id": "V11",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "newGroup": null,
+   "reason": "Zoho Bigin passes credential id as user id."
+  },
+  {
+   "id": "V12",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "Sync mode raw fetch Response breaks callers."
+  }
+ ],
+ "add-guest-management-functionality-to-existing-bookings-cal-com": [
+  {
+   "id": "V1",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "newGroup": null,
+   "reason": "&& instead of || in isTeamAdminOrOwner."
+  },
+  {
+   "id": "V2",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#08",
+   "newGroup": null,
+   "reason": "EventManager built with requester credentials not organizer."
+  },
+  {
+   "id": "V3",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "newGroup": null,
+   "reason": "Unfiltered guests passed to sendAddGuestsEmails."
+  },
+  {
+   "id": "V4",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#05",
+   "newGroup": null,
+   "reason": "Case-sensitive email comparisons for existing-attendee dedup and authorization (broader, also blacklist)."
+  },
+  {
+   "id": "V5",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#kimip-02",
+   "newGroup": null,
+   "reason": "seatsPerTimeSlot capacity ignored."
+  },
+  {
+   "id": "V6",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#11",
+   "newGroup": null,
+   "reason": "No max size on guests array."
+  },
+  {
+   "id": "V7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "CalendarEvent lacks team so team members are not emailed; not in golden."
+  }
+ ],
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
+  {
+   "id": "V1",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "newGroup": null,
+   "reason": "join breaks out on deadline leaving processes running."
+  },
+  {
+   "id": "V2",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#01",
+   "newGroup": null,
+   "reason": "shard vs shards tag mismatch."
+  },
+  {
+   "id": "V3",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08",
+   "newGroup": null,
+   "reason": "Redundant per-buffer Redis memory INFO calls."
+  },
+  {
+   "id": "V4",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "newGroup": null,
+   "reason": "join breaks out on deadline leaving processes running."
+  },
+  {
+   "id": "V5",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08",
+   "newGroup": null,
+   "reason": "Per-buffer get_memory_info redundant calls (broader incl. record_stored_segments)."
+  }
+ ],
+ "notification-rule-processing-engine-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "notification-rule-processing-engine-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Missing key prop on GrafanaRuleListItem."
+  },
+  {
+   "id": "V2",
+   "match": "notification-rule-processing-engine-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Delete item requires rulerRule, hidden in list view."
+  },
+  {
+   "id": "V3",
+   "match": "notification-rule-processing-engine-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Pause item gated on ruler rule, hidden in list view."
+  },
+  {
+   "id": "V4",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "Silence drawer gated on ruler alerting rule."
+  },
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Per-rule useFolder requests (N+1); not in golden."
+  },
+  {
+   "id": "V6",
+   "match": "notification-rule-processing-engine-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Missing key prop on GrafanaRuleListItem."
+  },
+  {
+   "id": "V7",
+   "match": "notification-rule-processing-engine-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Pause/Delete items gated on rulerRule in list view (broader, also #02)."
+  },
+  {
+   "id": "V8",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "Silence drawer never renders for list-view rules."
+  },
+  {
+   "id": "V9",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Per-rule useFolder subscriptions, same as V5."
+  }
+ ],
+ "github-oauth-security-enhancement-sentry": [
+  {
+   "id": "V1",
+   "match": "github-oauth-security-enhancement-sentry#03",
+   "newGroup": null,
+   "reason": "OAuth state is static pipeline.signature."
+  },
+  {
+   "id": "V2",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "KeyError on missing sender metadata."
+  },
+  {
+   "id": "V3",
+   "match": "github-oauth-security-enhancement-sentry#03",
+   "newGroup": null,
+   "reason": "OAuth state is static pipeline.signature."
+  },
+  {
+   "id": "V4",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "KeyError on missing sender metadata."
+  },
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Missing redirect_uri in token exchange; not in golden."
+  }
+ ],
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "V1",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#pf-ds-C1",
+   "newGroup": null,
+   "reason": "Model rebuilt from raw list so used codes/next code never reflected."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Plaintext recovery code storage; not in golden."
+  },
+  {
+   "id": "V3",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#01",
+   "newGroup": null,
+   "reason": "Used code not consumed, replayable."
+  },
+  {
+   "id": "V4",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#06",
+   "newGroup": null,
+   "reason": "removeStoredCredentialById does not remove federated credential."
+  },
+  {
+   "id": "V5",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#01",
+   "newGroup": null,
+   "reason": "Used code not consumed, replayable."
+  },
+  {
+   "id": "V6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Plaintext recovery code storage, same as V2."
+  },
+  {
+   "id": "V7",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#pf-ds-C1",
+   "newGroup": null,
+   "reason": "Model rebuilt from raw list so usage never reflected."
+  },
+  {
+   "id": "V8",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#06",
+   "newGroup": null,
+   "reason": "removeStoredCredentialById does not remove federated credential."
+  }
+ ],
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": [
+  {
+   "id": "V1",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03",
+   "newGroup": null,
+   "reason": "Override early return skips busy-time check."
+  },
+  {
+   "id": "V2",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "Working-hours end computed from slotStartTime."
+  },
+  {
+   "id": "V3",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "newGroup": null,
+   "reason": "dayjs objects compared with ===."
+  },
+  {
+   "id": "V4",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-03",
+   "newGroup": null,
+   "reason": "Multiple same-day overrides reject slot outside any one."
+  },
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "lib/slots.ts override toString parsing depends on process TZ; different code than oph-02/#06."
+  },
+  {
+   "id": "V6",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-02",
+   "newGroup": null,
+   "reason": "Override day computed with local-time dayjs in checkIfIsAvailable."
+  },
+  {
+   "id": "V7",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "activeOverrides filter by UTC start drops overlapping overrides; not in golden."
+  }
+ ],
+ "fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Usernames not stripped in add_members; not in golden."
+  },
+  {
+   "id": "V2",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#10",
+   "newGroup": null,
+   "reason": "remove_member skips clearing primary_group_id."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Deletion persisted before group.save failure; not in golden."
+  },
+  {
+   "id": "V4",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#muse13-01",
+   "newGroup": null,
+   "reason": "Next clamps offset to user_count giving empty page."
+  },
+  {
+   "id": "V5",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#12",
+   "newGroup": null,
+   "reason": "Spec uses PUT for DELETE-only route."
+  },
+  {
+   "id": "V6",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02",
+   "newGroup": null,
+   "reason": "Unbounded/negative limit on public members endpoint."
+  },
+  {
+   "id": "V7",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "totalPages floor+1 extra page when multiple of limit."
+  },
+  {
+   "id": "V8",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Client never clears usernames after add allowing resubmission; server-side fix of opa-01 is different code."
+  }
+ ],
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "V1",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "newGroup": null,
+   "reason": "canManage accepts VIEW scope."
+  },
+  {
+   "id": "V2",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01",
+   "newGroup": null,
+   "reason": "Removed canViewGlobal short-circuit in group listing causes per-group evaluation."
+  },
+  {
+   "id": "V3",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01",
+   "newGroup": null,
+   "reason": "Same removed short-circuit in subgroup listing."
+  },
+  {
+   "id": "V4",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "newGroup": null,
+   "reason": "Resource id used instead of name (group id)."
+  }
+ ],
+ "anonymous-add-configurable-device-limit-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Non-atomic count then insert exceeds limit."
+  },
+  {
+   "id": "V2",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#09",
+   "newGroup": null,
+   "reason": "Synchronous tagging adds DB round-trips to auth."
+  },
+  {
+   "id": "V3",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Non-atomic count then insert exceeds limit."
+  },
+  {
+   "id": "V4",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Cache key set before limit check."
+  },
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "SQLite RowsAffected 0 on unchanged update misread as limit reached; not in golden."
+  }
+ ],
+ "implement-access-token-context-encoding-framework-keycloak": [
+  {
+   "id": "V1",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "grantType checked twice, rawTokenId never."
+  },
+  {
+   "id": "V2",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Wrong substring offset and inverted comparison in isAccessTokenId."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Missing shortcut length validation in encoder; golden #03 is the Javadoc text, fixed elsewhere."
+  },
+  {
+   "id": "V4",
+   "match": "implement-access-token-context-encoding-framework-keycloak#05",
+   "newGroup": null,
+   "reason": "Client-credentials never sets GRANT_TYPE, encoded as unknown."
+  }
+ ],
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+  {
+   "id": "V1",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#11",
+   "newGroup": null,
+   "reason": "deleteScheduledEmailReminder immediateDelete does not delete the row."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Cancel query not restricted to email method; not in golden."
+  },
+  {
+   "id": "V3",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#06",
+   "newGroup": null,
+   "reason": "Sequential SendGrid cancellations."
+  },
+  {
+   "id": "V4",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+   "newGroup": null,
+   "reason": "Single try around loop aborts remaining cancellations."
+  },
+  {
+   "id": "V5",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#13",
+   "newGroup": null,
+   "reason": "Row deleted only after successful Twilio cancel."
+  }
+ ],
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "TopicUser.find_by nil dereference."
+  },
+  {
+   "id": "V2",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "State-changing GET without CSRF."
+  },
+  {
+   "id": "V3",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Missing TopicUser NoMethodError (broader, also MessageBus)."
+  },
+  {
+   "id": "V4",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Watching/tracking moved to regular still notifies, copy inaccurate."
+  }
+ ],
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "website_name not in untrusted attributes, leaks for TL0."
+  },
+  {
+   "id": "V2",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#pf-kimi-C1",
+   "newGroup": null,
+   "reason": "URI re-parsed multiple times."
+  },
+  {
+   "id": "V3",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Label stripping treats public-suffix siblings as same domain."
+  }
+ ],
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "V1",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Cleanup registers literal \"alias\"."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Organization disable/delete does not invalidate login cache; #08 is IDP update path."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "N+1 getById on cached getForLogin; not in golden."
+  },
+  {
+   "id": "V4",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Cleanup registers literal \"alias\"."
+  }
+ ],
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Non-atomic match_count/last_match_at update."
+  },
+  {
+   "id": "V2",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Case-sensitive blocked email lookup."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "rejectedEmails check precedes OAuth validation; prod-01 is about never clearing the cache."
+  }
+ ],
+ "database-performance-optimizations-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "database-performance-optimizations-grafana-codex#08",
+   "newGroup": null,
+   "reason": "Ticker changed from 10 to 1 minute."
+  },
+  {
+   "id": "V2",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Error-level logs for normal cleanup."
+  }
+ ],
+ "unified-storage-performance-optimizations-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "unified-storage-performance-optimizations-grafana-codex#01",
+   "newGroup": null,
+   "reason": "BuildIndex lock removal allows duplicate concurrent builds."
+  },
+  {
+   "id": "V2",
+   "match": "unified-storage-performance-optimizations-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Init failure does not cancel context."
+  }
+ ],
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "clearfix pseudo-elements become flex items; not in golden."
+  },
+  {
+   "id": "V2",
+   "match": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#pf-gpt-C1",
+   "newGroup": null,
+   "reason": ".small-action-desc content-sized, floated buttons misaligned."
+  }
+ ],
+ "async-import-of-the-appstore-packages-cal-com": [
+  {
+   "id": "V1",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "forEach async in handleCancelBooking not awaited."
+  },
+  {
+   "id": "V2",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "forEach async in vital reschedule not awaited."
+  },
+  {
+   "id": "V3",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "forEach async in wipemycalother reschedule not awaited."
+  },
+  {
+   "id": "V4",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "forEach async in bookings router not awaited."
+  }
+ ],
+ "feature-localization-fallbacks-server-side-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Nil default_locale guard; not in golden."
+  }
+ ],
+ "frontend-asset-optimization-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "frontend-asset-optimization-grafana-codex#01",
+   "newGroup": null,
+   "reason": "No cache re-check after write lock."
+  },
+  {
+   "id": "V2",
+   "match": "frontend-asset-optimization-grafana-codex#01",
+   "newGroup": null,
+   "reason": "No cache re-check after write lock."
+  }
+ ],
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#03",
+   "newGroup": null,
+   "reason": "FromContext returns fresh TestLogger."
+  }
+ ]
+}

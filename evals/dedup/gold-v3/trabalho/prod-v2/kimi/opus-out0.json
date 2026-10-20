@@ -1,0 +1,632 @@
+{
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "ERB `end if` syntax claim in best.html.erb; no golden issue covers it."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Kernel#open command injection/file read in import_remote; golden issues cover redirects SSRF and timeouts, not scheme validation."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Kernel#open scheme injection in PollFeed feed URL; different place from any golden issue."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "Unescaped request.referer in embed layout JS; not in golden set."
+  },
+  {
+   "id": "V5",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#30",
+   "newGroup": null,
+   "reason": "Synchronous full-feed poll on every unembedded article retrieval."
+  },
+  {
+   "id": "V6",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "i.content.scrub on items without content raises NoMethodError."
+  },
+  {
+   "id": "V7",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#18",
+   "newGroup": null,
+   "reason": "Nil embed.post passed to PostRevisor when embedded post was deleted."
+  },
+  {
+   "id": "V8",
+   "match": "new",
+   "newGroup": "N5",
+   "reason": "embed.js null discourse-comments element; not in golden set."
+  },
+  {
+   "id": "V9",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#16",
+   "newGroup": null,
+   "reason": "import mutates caller contents string with <<."
+  },
+  {
+   "id": "V10",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+   "newGroup": null,
+   "reason": "absolutize_urls rewrites protocol-relative URLs incorrectly."
+  },
+  {
+   "id": "V11",
+   "match": "new",
+   "newGroup": "N6",
+   "reason": "embed_by_username.downcase on nil setting in fetch_http; not in golden set."
+  }
+ ],
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "join() ignores timeout and calls close again; not covered by shutdown-order issue 10."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Sequential per-worker join timeouts in pool shutdown; not in golden set."
+  },
+  {
+   "id": "V3",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "newGroup": null,
+   "reason": "Unbounded queues with no backpressure/MessageRejected."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Double shutdown of pool raising ShutDown; fix (idempotent shutdown) does not address issue 11 dead shared pool reuse."
+  }
+ ],
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Migration interpolates legacy host values into INSERT SQL."
+  },
+  {
+   "id": "V2",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "update/destroy do not handle nil host for unknown id."
+  },
+  {
+   "id": "V3",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Migration indexes [0] of empty embed_category result."
+  },
+  {
+   "id": "V4",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "record_for_host does not lowercase URI host."
+  },
+  {
+   "id": "V5",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "host.sub! on nil host in before_validation."
+  },
+  {
+   "id": "V6",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Migration copies hosts without stripping scheme/path."
+  },
+  {
+   "id": "V7",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#11",
+   "newGroup": null,
+   "reason": "After save, category set from null categoryId instead of server uncategorized."
+  }
+ ],
+ "dual-storage-architecture-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage Create failure recorded with recordLegacyDuration."
+  },
+  {
+   "id": "V2",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage Update failure recorded with recordLegacyDuration."
+  },
+  {
+   "id": "V3",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Legacy DeleteCollection goroutine uses recordStorageDuration."
+  },
+  {
+   "id": "V4",
+   "match": "dual-storage-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Delete puts base d.Log in context instead of enriched logger."
+  },
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Missing panic recovery in legacy goroutines; not in golden set."
+  },
+  {
+   "id": "V6",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Delete success metric uses name as kind label."
+  },
+  {
+   "id": "V7",
+   "match": "dual-storage-architecture-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Legacy Update receives raw objInfo instead of wrapper with stored object."
+  }
+ ],
+ "feat-2fa-backup-codes-cal-com": [
+  {
+   "id": "V1",
+   "match": "feat-2fa-backup-codes-cal-com#01",
+   "newGroup": null,
+   "reason": "Password check skipped when totpCode present with backup code."
+  },
+  {
+   "id": "V2",
+   "match": "feat-2fa-backup-codes-cal-com#17",
+   "newGroup": null,
+   "reason": "Case-sensitive backup code matching (disable endpoint)."
+  },
+  {
+   "id": "V3",
+   "match": "feat-2fa-backup-codes-cal-com#17",
+   "newGroup": null,
+   "reason": "Case-sensitive backup code matching (login)."
+  },
+  {
+   "id": "V4",
+   "match": "feat-2fa-backup-codes-cal-com#12",
+   "newGroup": null,
+   "reason": "Clipboard writeText not awaited; success toast always shown."
+  },
+  {
+   "id": "V5",
+   "match": "feat-2fa-backup-codes-cal-com#04",
+   "newGroup": null,
+   "reason": "BackupCode.tsx default export named TwoFactor."
+  },
+  {
+   "id": "V6",
+   "match": "feat-2fa-backup-codes-cal-com#07",
+   "newGroup": null,
+   "reason": "Non-atomic read-modify-write of backup codes allows reuse."
+  },
+  {
+   "id": "V7",
+   "match": "feat-2fa-backup-codes-cal-com#15",
+   "newGroup": null,
+   "reason": "Backup-codes object URL never revoked, leaking blob URL."
+  }
+ ],
+ "replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "V1",
+   "match": "replays-self-serve-bulk-delete-system-sentry#01",
+   "newGroup": null,
+   "reason": "Truthiness checks in age/timestamp mutual exclusion validators."
+  },
+  {
+   "id": "V2",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "zip pairing of error_ids with get_multi values misattributes errors."
+  },
+  {
+   "id": "V3",
+   "match": "replays-self-serve-bulk-delete-system-sentry#12",
+   "newGroup": null,
+   "reason": "TableWidgetVisualization rendered with hardcoded empty columns/data."
+  },
+  {
+   "id": "V4",
+   "match": "replays-self-serve-bulk-delete-system-sentry#snloop-01",
+   "newGroup": null,
+   "reason": "Reports with neither age nor timestamp are accepted."
+  }
+ ],
+ "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "mobile .custom-message-length light lightness 70%->30%."
+  },
+  {
+   "id": "V2",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": ".topic-meta-data h5 a light lightness 30%->70%."
+  },
+  {
+   "id": "V3",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "mobile topic-post h3 light lightness 20%->50%."
+  },
+  {
+   "id": "V4",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "desktop user.scss .name 30%->50%."
+  },
+  {
+   "id": "V5",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "mobile user.scss .name 30%->50%."
+  },
+  {
+   "id": "V6",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "mobile .custom-message-length light lightness 70%->30%."
+  },
+  {
+   "id": "V7",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": ".topic-meta-data h5 a light lightness 30%->70%."
+  },
+  {
+   "id": "V8",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "mobile topic-post h3 light lightness 20%->50%."
+  },
+  {
+   "id": "V9",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "desktop user.scss .name 30%->50%."
+  },
+  {
+   "id": "V10",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "mobile user.scss .name 30%->50%."
+  }
+ ],
+ "add-html-sanitizer-for-translated-message-resources-keycloak": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claim that PropertyResourceBundle reads ISO-8859-1 (Java 9+ reads UTF-8); not in golden set."
+  },
+  {
+   "id": "V2",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#opa-01",
+   "newGroup": null,
+   "reason": "Missing English file throws unchecked RuntimeException crashing the build."
+  },
+  {
+   "id": "V3",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Lithuanian TOTP step replaced with Italian (account)."
+  },
+  {
+   "id": "V4",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Lithuanian TOTP step replaced with Italian (login)."
+  },
+  {
+   "id": "V5",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+   "newGroup": null,
+   "reason": "zh_CN totpStep1 in Traditional Chinese."
+  },
+  {
+   "id": "V6",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#pf-kimi-C1",
+   "newGroup": null,
+   "reason": "Anchor regex matches any tag starting with a."
+  }
+ ],
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": [
+  {
+   "id": "V1",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#03",
+   "newGroup": null,
+   "reason": "Upsampling decision uses request dataset instead of scoped_dataset."
+  },
+  {
+   "id": "V2",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04",
+   "newGroup": null,
+   "reason": "Substring check on request query for event.type:error misclassifies mixed/negated queries."
+  }
+ ],
+ "feature-automatically-downsize-large-images-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Duplicate downsize definition breaks ResizeEmoji callers."
+  },
+  {
+   "id": "V2",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Client upload size hardcoded to 10MB instead of per-type setting."
+  },
+  {
+   "id": "V3",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Downsize loop ignores false return and repeats failing conversion."
+  },
+  {
+   "id": "V4",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Duplicate downsize definition breaks ResizeEmoji callers."
+  }
+ ],
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "ASN1Decoder sequence length / indefinite length validation; differs from constructed-tag issue."
+  },
+  {
+   "id": "V2",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Two throwaway ASN1Encoder computations in concatenatedRSToASN1DER."
+  }
+ ],
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": [
+  {
+   "id": "V1",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+   "newGroup": null,
+   "reason": "math.floor/ceil on datetime key raises TypeError."
+  },
+  {
+   "id": "V2",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Negative cursor offset passed to Django queryset slicing."
+  },
+  {
+   "id": "V3",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#07",
+   "newGroup": null,
+   "reason": "member.has_global_access dereferenced when member is None."
+  }
+ ],
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+  {
+   "id": "V1",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+   "newGroup": null,
+   "reason": "updateManyByCredentialId with empty data never refreshes updatedAt."
+  },
+  {
+   "id": "V2",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#03",
+   "newGroup": null,
+   "reason": "deleteCache does not invalidate connectedCalendars query."
+  },
+  {
+   "id": "V3",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#07",
+   "newGroup": null,
+   "reason": "macOS-only sed -i syntax."
+  }
+ ],
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "id": "V1",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#03",
+   "newGroup": null,
+   "reason": "ZUNIONSTORE default SUM doubles scores."
+  },
+  {
+   "id": "V2",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+   "newGroup": null,
+   "reason": "max_segment_spans ignored; Lua hardcodes 1000."
+  },
+  {
+   "id": "V3",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#05",
+   "newGroup": null,
+   "reason": "zpopmin can evict root span."
+  },
+  {
+   "id": "V4",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#05",
+   "newGroup": null,
+   "reason": "zpopmin can evict root span while has-root flag stays set."
+  },
+  {
+   "id": "V5",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#03",
+   "newGroup": null,
+   "reason": "ZUNIONSTORE default SUM doubles scores."
+  },
+  {
+   "id": "V6",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+   "newGroup": null,
+   "reason": "max_segment_spans ignored; Lua hardcodes 1000."
+  }
+ ],
+ "sms-workflow-reminder-retry-count-tracking-cal-com": [
+  {
+   "id": "V1",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "retryCount > 1 deletion lacks SMS method filter."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "retryCount incremented after successful Twilio schedule when DB update fails; not in golden set."
+  },
+  {
+   "id": "V3",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#07",
+   "newGroup": null,
+   "reason": "No index supports retryCount OR branch."
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "V1",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+   "newGroup": null,
+   "reason": "getClientsWithPermission returns Clients resource name instead of client ids."
+  },
+  {
+   "id": "V2",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+   "newGroup": null,
+   "reason": "getClientsWithPermission returns Clients resource name instead of client ids."
+  }
+ ],
+ "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": [
+  {
+   "id": "V1",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "MetricAlertDetectorHandler lacks abstract method implementations -> TypeError."
+  },
+  {
+   "id": "V2",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "MetricAlertDetectorHandler lacks abstract method implementations -> TypeError."
+  }
+ ],
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": [
+  {
+   "id": "V1",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#01",
+   "newGroup": null,
+   "reason": "getSubGroupsCount returns null violating contract."
+  },
+  {
+   "id": "V2",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "Test asserts before reader thread finishes."
+  },
+  {
+   "id": "V3",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#01",
+   "newGroup": null,
+   "reason": "getSubGroupsCount returns null violating contract."
+  },
+  {
+   "id": "V4",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "Test asserts before reader thread finishes."
+  }
+ ],
+ "authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Denial cache not invalidated on later grant; not in golden set."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Unbounded denial cache growth; not in golden set."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Denial cache not invalidated on later grant; not in golden set."
+  }
+ ],
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
+  {
+   "id": "V1",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "queued default timezone.now() evaluated at class definition."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "from_dict fails on JSON-serialized queued string; not in golden set."
+  }
+ ],
+ "advanced-query-processing-architecture-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "advanced-query-processing-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "applyTemplateVariables applied before splitting and again on execution, duplicating ad hoc filters."
+  },
+  {
+   "id": "V2",
+   "match": "advanced-query-processing-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Repeated interpolation in shard split path duplicates ad hoc filters."
+  }
+ ],
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": [
+  {
+   "id": "V1",
+   "match": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#kimi-03",
+   "newGroup": null,
+   "reason": "Public options type allows missing teamId for team scope, silently yielding no data."
+  }
+ ],
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "UpgradeTest null-strategy case does not enable rolling-updates; not in golden set."
+  }
+ ],
+ "advanced-sql-analytics-framework-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "enableSqlExpressions always returns false."
+  }
+ ]
+}

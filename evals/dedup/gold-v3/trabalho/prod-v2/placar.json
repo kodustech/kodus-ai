@@ -1,0 +1,7442 @@
+{
+ "sonnet": {
+  "comentarios": 134,
+  "tp": 73,
+  "fpNit": 59,
+  "fpAlucinacao": 2,
+  "totalTp": 192,
+  "semCasamento": 3,
+  "recall": 38.0,
+  "precisao": 54.5,
+  "f1": 44.8,
+  "f2": 40.5,
+  "porOrigem": {
+   "generalist": {
+    "comentarios": 122,
+    "tp": 66,
+    "fpNit": 51,
+    "fpAlucinacao": 1,
+    "recall": 34.4,
+    "precisao": 54.1,
+    "f1": 42.0,
+    "f2": 37.1
+   },
+   "synthesis-rescue": {
+    "comentarios": 12,
+    "tp": 7,
+    "fpNit": 4,
+    "fpAlucinacao": 1,
+    "recall": 3.6,
+    "precisao": 58.3,
+    "f1": 6.9,
+    "f2": 4.5
+   }
+  },
+  "porPr": {
+   "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+    "comentarios": 2,
+    "tp": 0,
+    "fp": 2
+   },
+   "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+    "comentarios": 1,
+    "tp": 0,
+    "fp": 1
+   },
+   "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+    "comentarios": 2,
+    "tp": 2,
+    "fp": 0
+   },
+   "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+    "comentarios": 2,
+    "tp": 1,
+    "fp": 1
+   },
+   "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+    "comentarios": 3,
+    "tp": 2,
+    "fp": 1
+   },
+   "add-guest-management-functionality-to-existing-bookings-cal-com": {
+    "comentarios": 5,
+    "tp": 5,
+    "fp": 0
+   },
+   "add-html-sanitizer-for-translated-message-resources-keycloak": {
+    "comentarios": 4,
+    "tp": 1,
+    "fp": 3
+   },
+   "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+    "comentarios": 0,
+    "tp": 0,
+    "fp": 0
+   },
+   "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+    "comentarios": 4,
+    "tp": 4,
+    "fp": 0
+   },
+   "advanced-query-processing-architecture-grafana-codex": {
+    "comentarios": 1,
+    "tp": 0,
+    "fp": 1
+   },
+   "advanced-sql-analytics-framework-grafana-codex": {
+    "comentarios": 1,
+    "tp": 0,
+    "fp": 1
+   },
+   "anonymous-add-configurable-device-limit-grafana-codex": {
+    "comentarios": 3,
+    "tp": 1,
+    "fp": 2
+   },
+   "async-import-of-the-appstore-packages-cal-com": {
+    "comentarios": 5,
+    "tp": 2,
+    "fp": 3
+   },
+   "authzservice-improve-authz-caching-grafana-codex": {
+    "comentarios": 1,
+    "tp": 0,
+    "fp": 1
+   },
+   "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+    "comentarios": 2,
+    "tp": 2,
+    "fp": 0
+   },
+   "database-performance-optimizations-grafana-codex": {
+    "comentarios": 2,
+    "tp": 2,
+    "fp": 0
+   },
+   "dual-storage-architecture-grafana-codex": {
+    "comentarios": 3,
+    "tp": 2,
+    "fp": 1
+   },
+   "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+    "comentarios": 9,
+    "tp": 4,
+    "fp": 5
+   },
+   "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+    "comentarios": 3,
+    "tp": 0,
+    "fp": 3
+   },
+   "feat-2fa-backup-codes-cal-com": {
+    "comentarios": 2,
+    "tp": 1,
+    "fp": 1
+   },
+   "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+    "comentarios": 3,
+    "tp": 1,
+    "fp": 2
+   },
+   "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+    "comentarios": 0,
+    "tp": 0,
+    "fp": 0
+   },
+   "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+    "comentarios": 1,
+    "tp": 0,
+    "fp": 1
+   },
+   "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+    "comentarios": 2,
+    "tp": 0,
+    "fp": 2
+   },
+   "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+    "comentarios": 4,
+    "tp": 4,
+    "fp": 0
+   },
+   "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+    "comentarios": 1,
+    "tp": 1,
+    "fp": 0
+   },
+   "feature-automatically-downsize-large-images-discourse-cursor": {
+    "comentarios": 2,
+    "tp": 2,
+    "fp": 0
+   },
+   "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+    "comentarios": 5,
+    "tp": 1,
+    "fp": 4
+   },
+   "feature-localization-fallbacks-server-side-discourse-cursor": {
+    "comentarios": 0,
+    "tp": 0,
+    "fp": 0
+   },
+   "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+    "comentarios": 3,
+    "tp": 3,
+    "fp": 0
+   },
+   "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+    "comentarios": 2,
+    "tp": 0,
+    "fp": 2
+   },
+   "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+    "comentarios": 9,
+    "tp": 7,
+    "fp": 2
+   },
+   "fix-proper-handling-of-group-memberships-discourse-cursor": {
+    "comentarios": 4,
+    "tp": 3,
+    "fp": 1
+   },
+   "fixing-re-authentication-with-passkeys-keycloak": {
+    "comentarios": 0,
+    "tp": 0,
+    "fp": 0
+   },
+   "frontend-asset-optimization-grafana-codex": {
+    "comentarios": 1,
+    "tp": 0,
+    "fp": 1
+   },
+   "github-oauth-security-enhancement-sentry": {
+    "comentarios": 2,
+    "tp": 0,
+    "fp": 2
+   },
+   "implement-access-token-context-encoding-framework-keycloak": {
+    "comentarios": 2,
+    "tp": 0,
+    "fp": 2
+   },
+   "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+    "comentarios": 2,
+    "tp": 0,
+    "fp": 2
+   },
+   "notification-rule-processing-engine-grafana-codex": {
+    "comentarios": 5,
+    "tp": 3,
+    "fp": 2
+   },
+   "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+    "comentarios": 8,
+    "tp": 4,
+    "fp": 4
+   },
+   "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+    "comentarios": 0,
+    "tp": 0,
+    "fp": 0
+   },
+   "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+    "comentarios": 4,
+    "tp": 2,
+    "fp": 2
+   },
+   "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+    "comentarios": 0,
+    "tp": 0,
+    "fp": 0
+   },
+   "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+    "comentarios": 0,
+    "tp": 0,
+    "fp": 0
+   },
+   "replays-self-serve-bulk-delete-system-sentry": {
+    "comentarios": 6,
+    "tp": 3,
+    "fp": 3
+   },
+   "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+    "comentarios": 5,
+    "tp": 4,
+    "fp": 1
+   },
+   "sms-workflow-reminder-retry-count-tracking-cal-com": {
+    "comentarios": 3,
+    "tp": 3,
+    "fp": 0
+   },
+   "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+    "comentarios": 2,
+    "tp": 1,
+    "fp": 1
+   },
+   "unified-storage-performance-optimizations-grafana-codex": {
+    "comentarios": 2,
+    "tp": 1,
+    "fp": 1
+   },
+   "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+    "comentarios": 1,
+    "tp": 1,
+    "fp": 0
+   }
+  },
+  "uso": {
+   "database-performance-optimizations-grafana-codex": {
+    "generalist": {
+     "input": 126048,
+     "cacheRead": 87600,
+     "output": 2683,
+     "ms": 26254,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 26219,
+     "cacheRead": 10932,
+     "output": 1252,
+     "ms": 10493,
+     "calls": 1
+    },
+    "finder": {
+     "input": 152267,
+     "cacheRead": 98532,
+     "output": 3935,
+     "calls": 2,
+     "ms": 36747
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+    "generalist": {
+     "input": 265637,
+     "cacheRead": 179622,
+     "output": 2352,
+     "ms": 26338,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 105748,
+     "cacheRead": 79678,
+     "output": 985,
+     "ms": 12705,
+     "calls": 2
+    },
+    "finder": {
+     "input": 371385,
+     "cacheRead": 259300,
+     "output": 3337,
+     "calls": 3,
+     "ms": 39043
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+    "generalist": {
+     "input": 100115,
+     "cacheRead": 68366,
+     "output": 1797,
+     "ms": 18195,
+     "calls": 2
+    },
+    "synthesis-rescue": {
+     "input": 29122,
+     "cacheRead": 10932,
+     "output": 1598,
+     "ms": 17337,
+     "calls": 1
+    },
+    "finder": {
+     "input": 129237,
+     "cacheRead": 79298,
+     "output": 3395,
+     "calls": 3,
+     "ms": 35532
+    },
+    "depoisDoFinder": 0
+   },
+   "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+    "generalist": {
+     "input": 60633,
+     "cacheRead": 44558,
+     "output": 2236,
+     "ms": 17231,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 17457,
+     "cacheRead": 10932,
+     "output": 943,
+     "ms": 8955,
+     "calls": 1
+    },
+    "finder": {
+     "input": 78090,
+     "cacheRead": 55490,
+     "output": 3179,
+     "calls": 2,
+     "ms": 26186
+    },
+    "depoisDoFinder": 0
+   },
+   "unified-storage-performance-optimizations-grafana-codex": {
+    "generalist": {
+     "input": 241980,
+     "cacheRead": 134352,
+     "output": 4634,
+     "ms": 36389,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 46730,
+     "cacheRead": 32578,
+     "output": 1119,
+     "ms": 12424,
+     "calls": 2
+    },
+    "finder": {
+     "input": 288710,
+     "cacheRead": 166930,
+     "output": 5753,
+     "calls": 3,
+     "ms": 48814
+    },
+    "depoisDoFinder": 0
+   },
+   "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+    "generalist": {
+     "input": 273194,
+     "cacheRead": 164308,
+     "output": 6616,
+     "ms": 50629,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 40337,
+     "cacheRead": 10932,
+     "output": 1356,
+     "ms": 10887,
+     "calls": 1
+    },
+    "finder": {
+     "input": 313531,
+     "cacheRead": 175240,
+     "output": 7972,
+     "calls": 2,
+     "ms": 61516
+    },
+    "depoisDoFinder": 0
+   },
+   "advanced-sql-analytics-framework-grafana-codex": {
+    "generalist": {
+     "input": 116686,
+     "cacheRead": 75681,
+     "output": 2059,
+     "ms": 17979,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 45959,
+     "cacheRead": 33194,
+     "output": 673,
+     "ms": 8044,
+     "calls": 2
+    },
+    "finder": {
+     "input": 162645,
+     "cacheRead": 108875,
+     "output": 2732,
+     "calls": 3,
+     "ms": 26023
+    },
+    "depoisDoFinder": 0
+   },
+   "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+    "generalist": {
+     "input": 201056,
+     "cacheRead": 116060,
+     "output": 5147,
+     "ms": 45027,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 87459,
+     "cacheRead": 66506,
+     "output": 1592,
+     "ms": 18178,
+     "calls": 2
+    },
+    "finder": {
+     "input": 288515,
+     "cacheRead": 182566,
+     "output": 6739,
+     "calls": 3,
+     "ms": 63205
+    },
+    "depoisDoFinder": 0
+   },
+   "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+    "generalist": {
+     "input": 332779,
+     "cacheRead": 197760,
+     "output": 12922,
+     "ms": 103067,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 103024,
+     "cacheRead": 76760,
+     "output": 2795,
+     "ms": 23431,
+     "calls": 1
+    },
+    "finder": {
+     "input": 435803,
+     "cacheRead": 274520,
+     "output": 15717,
+     "calls": 2,
+     "ms": 126498
+    },
+    "depoisDoFinder": 0
+   },
+   "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+    "generalist": {
+     "input": 131135,
+     "cacheRead": 88032,
+     "output": 1715,
+     "ms": 16228,
+     "calls": 2
+    },
+    "synthesis-rescue": {
+     "input": 81679,
+     "cacheRead": 63790,
+     "output": 880,
+     "ms": 11298,
+     "calls": 2
+    },
+    "finder": {
+     "input": 212814,
+     "cacheRead": 151822,
+     "output": 2595,
+     "calls": 4,
+     "ms": 27526
+    },
+    "depoisDoFinder": 0
+   },
+   "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+    "generalist": {
+     "input": 83852,
+     "cacheRead": 56796,
+     "output": 2380,
+     "ms": 18352,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 48830,
+     "cacheRead": 34626,
+     "output": 597,
+     "ms": 16956,
+     "calls": 2
+    },
+    "finder": {
+     "input": 132682,
+     "cacheRead": 91422,
+     "output": 2977,
+     "calls": 3,
+     "ms": 35309
+    },
+    "depoisDoFinder": 0
+   },
+   "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+    "generalist": {
+     "input": 411485,
+     "cacheRead": 258236,
+     "output": 3444,
+     "ms": 37650,
+     "calls": 2
+    },
+    "synthesis-rescue": {
+     "input": 31999,
+     "cacheRead": 10932,
+     "output": 1513,
+     "ms": 11129,
+     "calls": 1
+    },
+    "finder": {
+     "input": 443484,
+     "cacheRead": 269168,
+     "output": 4957,
+     "calls": 3,
+     "ms": 48780
+    },
+    "depoisDoFinder": 0
+   },
+   "add-html-sanitizer-for-translated-message-resources-keycloak": {
+    "generalist": {
+     "input": 851163,
+     "cacheRead": 535842,
+     "output": 11744,
+     "ms": 78807,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 55603,
+     "cacheRead": 10932,
+     "output": 2240,
+     "ms": 18701,
+     "calls": 1
+    },
+    "finder": {
+     "input": 906766,
+     "cacheRead": 546774,
+     "output": 13984,
+     "calls": 2,
+     "ms": 97508
+    },
+    "depoisDoFinder": 0
+   },
+   "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+    "generalist": {
+     "input": 106248,
+     "cacheRead": 62943,
+     "output": 2905,
+     "ms": 25620,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 45566,
+     "cacheRead": 32789,
+     "output": 1161,
+     "ms": 13760,
+     "calls": 2
+    },
+    "finder": {
+     "input": 151814,
+     "cacheRead": 95732,
+     "output": 4066,
+     "calls": 3,
+     "ms": 39384
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+    "generalist": {
+     "input": 196303,
+     "cacheRead": 132664,
+     "output": 3451,
+     "ms": 33875,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 132069,
+     "cacheRead": 105654,
+     "output": 1379,
+     "ms": 18331,
+     "calls": 2
+    },
+    "finder": {
+     "input": 328372,
+     "cacheRead": 238318,
+     "output": 4830,
+     "calls": 3,
+     "ms": 52206
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+    "generalist": {
+     "input": 234382,
+     "cacheRead": 148524,
+     "output": 5919,
+     "ms": 46836,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 74532,
+     "cacheRead": 46954,
+     "output": 1295,
+     "ms": 14773,
+     "calls": 2
+    },
+    "finder": {
+     "input": 308914,
+     "cacheRead": 195478,
+     "output": 7214,
+     "calls": 3,
+     "ms": 61610
+    },
+    "depoisDoFinder": 0
+   },
+   "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+    "generalist": {
+     "input": 123972,
+     "cacheRead": 78003,
+     "output": 3452,
+     "ms": 27235,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 47089,
+     "cacheRead": 34151,
+     "output": 1625,
+     "ms": 14390,
+     "calls": 1
+    },
+    "finder": {
+     "input": 171061,
+     "cacheRead": 112154,
+     "output": 5077,
+     "calls": 2,
+     "ms": 41625
+    },
+    "depoisDoFinder": 0
+   },
+   "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+    "generalist": {
+     "input": 258804,
+     "cacheRead": 152916,
+     "output": 6847,
+     "ms": 54968,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 75712,
+     "cacheRead": 47775,
+     "output": 3179,
+     "ms": 27259,
+     "calls": 1
+    },
+    "finder": {
+     "input": 334516,
+     "cacheRead": 200691,
+     "output": 10026,
+     "calls": 2,
+     "ms": 82227
+    },
+    "depoisDoFinder": 0
+   },
+   "dual-storage-architecture-grafana-codex": {
+    "generalist": {
+     "input": 187776,
+     "cacheRead": 120348,
+     "output": 3721,
+     "ms": 30303,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 38480,
+     "cacheRead": 10932,
+     "output": 1412,
+     "ms": 17675,
+     "calls": 2
+    },
+    "finder": {
+     "input": 226256,
+     "cacheRead": 131280,
+     "output": 5133,
+     "calls": 3,
+     "ms": 47979
+    },
+    "depoisDoFinder": 0
+   },
+   "notification-rule-processing-engine-grafana-codex": {
+    "generalist": {
+     "input": 533239,
+     "cacheRead": 320376,
+     "output": 7377,
+     "ms": 51860,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 108874,
+     "cacheRead": 64456,
+     "output": 1684,
+     "ms": 12937,
+     "calls": 1
+    },
+    "finder": {
+     "input": 642113,
+     "cacheRead": 384832,
+     "output": 9061,
+     "calls": 2,
+     "ms": 64797
+    },
+    "depoisDoFinder": 0
+   },
+   "frontend-asset-optimization-grafana-codex": {
+    "generalist": {
+     "input": 32150,
+     "cacheRead": 25774,
+     "output": 1203,
+     "ms": 12643,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 16011,
+     "cacheRead": 10932,
+     "output": 519,
+     "ms": 6224,
+     "calls": 2
+    },
+    "finder": {
+     "input": 48161,
+     "cacheRead": 36706,
+     "output": 1722,
+     "calls": 3,
+     "ms": 18868
+    },
+    "depoisDoFinder": 0
+   },
+   "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+    "generalist": {
+     "input": 291007,
+     "cacheRead": 170637,
+     "output": 3318,
+     "ms": 29844,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 24488,
+     "cacheRead": 10932,
+     "output": 1613,
+     "ms": 12226,
+     "calls": 1
+    },
+    "finder": {
+     "input": 315495,
+     "cacheRead": 181569,
+     "output": 4931,
+     "calls": 2,
+     "ms": 42070
+    },
+    "depoisDoFinder": 0
+   },
+   "async-import-of-the-appstore-packages-cal-com": {
+    "generalist": {
+     "input": 346901,
+     "cacheRead": 221760,
+     "output": 6000,
+     "ms": 57995,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 76423,
+     "cacheRead": 47647,
+     "output": 1184,
+     "ms": 12087,
+     "calls": 2
+    },
+    "finder": {
+     "input": 423324,
+     "cacheRead": 269407,
+     "output": 7184,
+     "calls": 3,
+     "ms": 70083
+    },
+    "depoisDoFinder": 0
+   },
+   "add-guest-management-functionality-to-existing-bookings-cal-com": {
+    "generalist": {
+     "input": 178380,
+     "cacheRead": 116091,
+     "output": 7128,
+     "ms": 47766,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 36704,
+     "cacheRead": 10932,
+     "output": 1442,
+     "ms": 10500,
+     "calls": 1
+    },
+    "finder": {
+     "input": 215084,
+     "cacheRead": 127023,
+     "output": 8570,
+     "calls": 2,
+     "ms": 58266
+    },
+    "depoisDoFinder": 0
+   },
+   "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+    "generalist": {
+     "input": 452822,
+     "cacheRead": 273444,
+     "output": 9091,
+     "ms": 71953,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 71975,
+     "cacheRead": 45724,
+     "output": 1544,
+     "ms": 14353,
+     "calls": 2
+    },
+    "finder": {
+     "input": 524797,
+     "cacheRead": 319168,
+     "output": 10635,
+     "calls": 3,
+     "ms": 86306
+    },
+    "depoisDoFinder": 0
+   },
+   "implement-access-token-context-encoding-framework-keycloak": {
+    "generalist": {
+     "input": 1038631,
+     "cacheRead": 661812,
+     "output": 10433,
+     "ms": 83045,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 228671,
+     "cacheRead": 161350,
+     "output": 2239,
+     "ms": 20929,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1267302,
+     "cacheRead": 823162,
+     "output": 12672,
+     "calls": 2,
+     "ms": 103974
+    },
+    "depoisDoFinder": 0
+   },
+   "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+    "generalist": {
+     "input": 784379,
+     "cacheRead": 528064,
+     "output": 9598,
+     "ms": 70759,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 533824,
+     "cacheRead": 392017,
+     "output": 4583,
+     "ms": 40448,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1318203,
+     "cacheRead": 920081,
+     "output": 14181,
+     "calls": 2,
+     "ms": 111208
+    },
+    "depoisDoFinder": 0
+   },
+   "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+    "generalist": {
+     "input": 396752,
+     "cacheRead": 242632,
+     "output": 9374,
+     "ms": 57802,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 72396,
+     "cacheRead": 46134,
+     "output": 1050,
+     "ms": 11303,
+     "calls": 2
+    },
+    "finder": {
+     "input": 469148,
+     "cacheRead": 288766,
+     "output": 10424,
+     "calls": 3,
+     "ms": 69106
+    },
+    "depoisDoFinder": 0
+   },
+   "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+    "generalist": {
+     "input": 132859,
+     "cacheRead": 89387,
+     "output": 3069,
+     "ms": 31255,
+     "calls": 2
+    },
+    "synthesis-rescue": {
+     "input": 17718,
+     "cacheRead": 10932,
+     "output": 1032,
+     "ms": 10255,
+     "calls": 2
+    },
+    "finder": {
+     "input": 150577,
+     "cacheRead": 100319,
+     "output": 4101,
+     "calls": 4,
+     "ms": 41512
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-2fa-backup-codes-cal-com": {
+    "generalist": {
+     "input": 377969,
+     "cacheRead": 217410,
+     "output": 5803,
+     "ms": 47718,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 73819,
+     "cacheRead": 46801,
+     "output": 2047,
+     "ms": 21703,
+     "calls": 2
+    },
+    "finder": {
+     "input": 451788,
+     "cacheRead": 264211,
+     "output": 7850,
+     "calls": 3,
+     "ms": 69422
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+    "generalist": {
+     "input": 180674,
+     "cacheRead": 118326,
+     "output": 4431,
+     "ms": 36241,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 37905,
+     "cacheRead": 10932,
+     "output": 1871,
+     "ms": 16720,
+     "calls": 2
+    },
+    "finder": {
+     "input": 218579,
+     "cacheRead": 129258,
+     "output": 6302,
+     "calls": 3,
+     "ms": 52961
+    },
+    "depoisDoFinder": 0
+   },
+   "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+    "generalist": {
+     "input": 385866,
+     "cacheRead": 239172,
+     "output": 5705,
+     "ms": 47162,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 81436,
+     "cacheRead": 50574,
+     "output": 1233,
+     "ms": 11501,
+     "calls": 1
+    },
+    "finder": {
+     "input": 467302,
+     "cacheRead": 289746,
+     "output": 6938,
+     "calls": 2,
+     "ms": 58664
+    },
+    "depoisDoFinder": 0
+   },
+   "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+    "generalist": {
+     "input": 665625,
+     "cacheRead": 435772,
+     "output": 10644,
+     "ms": 76187,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 523097,
+     "cacheRead": 453228,
+     "output": 3560,
+     "ms": 35893,
+     "calls": 2
+    },
+    "finder": {
+     "input": 1188722,
+     "cacheRead": 889000,
+     "output": 14204,
+     "calls": 3,
+     "ms": 112080
+    },
+    "depoisDoFinder": 0
+   },
+   "sms-workflow-reminder-retry-count-tracking-cal-com": {
+    "generalist": {
+     "input": 82428,
+     "cacheRead": 60708,
+     "output": 2986,
+     "ms": 24703,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 17363,
+     "cacheRead": 10932,
+     "output": 799,
+     "ms": 7752,
+     "calls": 1
+    },
+    "finder": {
+     "input": 99791,
+     "cacheRead": 71640,
+     "output": 3785,
+     "calls": 2,
+     "ms": 32455
+    },
+    "depoisDoFinder": 0
+   },
+   "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+    "generalist": {
+     "input": 130730,
+     "cacheRead": 89984,
+     "output": 3240,
+     "ms": 26294,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 20484,
+     "cacheRead": 10932,
+     "output": 2230,
+     "ms": 15980,
+     "calls": 1
+    },
+    "finder": {
+     "input": 151214,
+     "cacheRead": 100916,
+     "output": 5470,
+     "calls": 2,
+     "ms": 42274
+    },
+    "depoisDoFinder": 0
+   },
+   "github-oauth-security-enhancement-sentry": {
+    "generalist": {
+     "input": 147666,
+     "cacheRead": 95379,
+     "output": 3163,
+     "ms": 26641,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 89130,
+     "cacheRead": 68572,
+     "output": 1801,
+     "ms": 17660,
+     "calls": 1
+    },
+    "finder": {
+     "input": 236796,
+     "cacheRead": 163951,
+     "output": 4964,
+     "calls": 2,
+     "ms": 44303
+    },
+    "depoisDoFinder": 0
+   },
+   "authzservice-improve-authz-caching-grafana-codex": {
+    "generalist": {
+     "input": 186868,
+     "cacheRead": 115156,
+     "output": 4021,
+     "ms": 33898,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 26852,
+     "cacheRead": 10932,
+     "output": 1575,
+     "ms": 12732,
+     "calls": 1
+    },
+    "finder": {
+     "input": 213720,
+     "cacheRead": 126088,
+     "output": 5596,
+     "calls": 2,
+     "ms": 46631
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+    "generalist": {
+     "input": 219934,
+     "cacheRead": 148059,
+     "output": 5390,
+     "ms": 46935,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 46729,
+     "cacheRead": 10932,
+     "output": 2801,
+     "ms": 21646,
+     "calls": 1
+    },
+    "finder": {
+     "input": 266663,
+     "cacheRead": 158991,
+     "output": 8191,
+     "calls": 2,
+     "ms": 68581
+    },
+    "depoisDoFinder": 0
+   },
+   "replays-self-serve-bulk-delete-system-sentry": {
+    "generalist": {
+     "input": 3335810,
+     "cacheRead": 2371248,
+     "output": 14649,
+     "ms": 105552,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 3363084,
+     "cacheRead": 2583777,
+     "output": 8862,
+     "ms": 71351,
+     "calls": 1
+    },
+    "finder": {
+     "input": 6698894,
+     "cacheRead": 4955025,
+     "output": 23511,
+     "calls": 2,
+     "ms": 176903
+    },
+    "depoisDoFinder": 0
+   },
+   "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+    "generalist": {
+     "input": 1137035,
+     "cacheRead": 751078,
+     "output": 7474,
+     "ms": 66930,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 70564,
+     "cacheRead": 10932,
+     "output": 1099,
+     "ms": 9960,
+     "calls": 2
+    },
+    "finder": {
+     "input": 1207599,
+     "cacheRead": 762010,
+     "output": 8573,
+     "calls": 3,
+     "ms": 76890
+    },
+    "depoisDoFinder": 0
+   },
+   "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+    "generalist": {
+     "input": 113668,
+     "cacheRead": 76989,
+     "output": 4465,
+     "ms": 40902,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 22672,
+     "cacheRead": 10932,
+     "output": 1288,
+     "ms": 10508,
+     "calls": 1
+    },
+    "finder": {
+     "input": 136340,
+     "cacheRead": 87921,
+     "output": 5753,
+     "calls": 2,
+     "ms": 51410
+    },
+    "depoisDoFinder": 0
+   },
+   "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+    "generalist": {
+     "input": 649461,
+     "cacheRead": 368121,
+     "output": 9641,
+     "ms": 64747,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 53367,
+     "cacheRead": 10932,
+     "output": 2228,
+     "ms": 16317,
+     "calls": 1
+    },
+    "finder": {
+     "input": 702828,
+     "cacheRead": 379053,
+     "output": 11869,
+     "calls": 2,
+     "ms": 81065
+    },
+    "depoisDoFinder": 0
+   },
+   "anonymous-add-configurable-device-limit-grafana-codex": {
+    "generalist": {
+     "input": 154331,
+     "cacheRead": 93093,
+     "output": 4509,
+     "ms": 41788,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 29752,
+     "cacheRead": 10932,
+     "output": 1177,
+     "ms": 10994,
+     "calls": 2
+    },
+    "finder": {
+     "input": 184083,
+     "cacheRead": 104025,
+     "output": 5686,
+     "calls": 3,
+     "ms": 52784
+    },
+    "depoisDoFinder": 0
+   },
+   "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+    "generalist": {
+     "input": 179696,
+     "cacheRead": 119460,
+     "output": 3740,
+     "ms": 29033,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 88362,
+     "cacheRead": 66998,
+     "output": 1997,
+     "ms": 19206,
+     "calls": 2
+    },
+    "finder": {
+     "input": 268058,
+     "cacheRead": 186458,
+     "output": 5737,
+     "calls": 3,
+     "ms": 48240
+    },
+    "depoisDoFinder": 0
+   },
+   "fix-proper-handling-of-group-memberships-discourse-cursor": {
+    "generalist": {
+     "input": 112879,
+     "cacheRead": 70912,
+     "output": 4846,
+     "ms": 34467,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 100664,
+     "cacheRead": 73696,
+     "output": 2907,
+     "ms": 29370,
+     "calls": 2
+    },
+    "finder": {
+     "input": 213543,
+     "cacheRead": 144608,
+     "output": 7753,
+     "calls": 3,
+     "ms": 63838
+    },
+    "depoisDoFinder": 0
+   },
+   "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+    "generalist": {
+     "input": 444721,
+     "cacheRead": 267292,
+     "output": 8982,
+     "ms": 76138,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 34851,
+     "cacheRead": 10932,
+     "output": 1567,
+     "ms": 14079,
+     "calls": 2
+    },
+    "finder": {
+     "input": 479572,
+     "cacheRead": 278224,
+     "output": 10549,
+     "calls": 3,
+     "ms": 90217
+    },
+    "depoisDoFinder": 0
+   },
+   "feature-automatically-downsize-large-images-discourse-cursor": {
+    "generalist": {
+     "input": 40744,
+     "cacheRead": 28140,
+     "output": 2355,
+     "ms": 18742,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 55984,
+     "cacheRead": 46372,
+     "output": 2004,
+     "ms": 18895,
+     "calls": 1
+    },
+    "finder": {
+     "input": 96728,
+     "cacheRead": 74512,
+     "output": 4359,
+     "calls": 2,
+     "ms": 37638
+    },
+    "depoisDoFinder": 0
+   },
+   "fixing-re-authentication-with-passkeys-keycloak": {
+    "generalist": {
+     "input": 1234563,
+     "cacheRead": 659944,
+     "output": 8640,
+     "ms": 77138,
+     "calls": 2
+    },
+    "synthesis-rescue": {
+     "input": 161400,
+     "cacheRead": 114890,
+     "output": 1604,
+     "ms": 15558,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1395963,
+     "cacheRead": 774834,
+     "output": 10244,
+     "calls": 3,
+     "ms": 92696
+    },
+    "depoisDoFinder": 0
+   },
+   "feature-localization-fallbacks-server-side-discourse-cursor": {
+    "generalist": {
+     "input": 38065,
+     "cacheRead": 27347,
+     "output": 2308,
+     "ms": 27876,
+     "calls": 2
+    },
+    "synthesis-rescue": {
+     "input": 36729,
+     "cacheRead": 27870,
+     "output": 1313,
+     "ms": 12152,
+     "calls": 2
+    },
+    "finder": {
+     "input": 74794,
+     "cacheRead": 55217,
+     "output": 3621,
+     "calls": 4,
+     "ms": 40029
+    },
+    "depoisDoFinder": 0
+   },
+   "advanced-query-processing-architecture-grafana-codex": {
+    "generalist": {
+     "input": 303161,
+     "cacheRead": 170282,
+     "output": 4572,
+     "ms": 44081,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 22193,
+     "cacheRead": 10932,
+     "output": 902,
+     "ms": 7964,
+     "calls": 1
+    },
+    "finder": {
+     "input": 325354,
+     "cacheRead": 181214,
+     "output": 5474,
+     "calls": 2,
+     "ms": 52045
+    },
+    "depoisDoFinder": 0
+   }
+  }
+ },
+ "opus": {
+  "comentarios": 154,
+  "tp": 86,
+  "fpNit": 65,
+  "fpAlucinacao": 3,
+  "totalTp": 192,
+  "semCasamento": 6,
+  "recall": 44.8,
+  "precisao": 55.8,
+  "f1": 49.7,
+  "f2": 46.6,
+  "porOrigem": {
+   "generalist": {
+    "comentarios": 139,
+    "tp": 76,
+    "fpNit": 57,
+    "fpAlucinacao": 3,
+    "recall": 39.6,
+    "precisao": 54.7,
+    "f1": 45.9,
+    "f2": 41.9
+   },
+   "synthesis-rescue": {
+    "comentarios": 15,
+    "tp": 10,
+    "fpNit": 5,
+    "fpAlucinacao": 0,
+    "recall": 5.2,
+    "precisao": 66.7,
+    "f1": 9.7,
+    "f2": 6.4
+   }
+  },
+  "porPr": {
+   "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+    "comentarios": 2,
+    "tp": 0,
+    "fp": 2
+   },
+   "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+    "comentarios": 2,
+    "tp": 1,
+    "fp": 1
+   },
+   "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+    "comentarios": 3,
+    "tp": 2,
+    "fp": 1
+   },
+   "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+    "comentarios": 2,
+    "tp": 1,
+    "fp": 1
+   },
+   "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+    "comentarios": 3,
+    "tp": 3,
+    "fp": 0
+   },
+   "add-guest-management-functionality-to-existing-bookings-cal-com": {
+    "comentarios": 6,
+    "tp": 5,
+    "fp": 1
+   },
+   "add-html-sanitizer-for-translated-message-resources-keycloak": {
+    "comentarios": 6,
+    "tp": 2,
+    "fp": 4
+   },
+   "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+    "comentarios": 1,
+    "tp": 0,
+    "fp": 1
+   },
+   "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+    "comentarios": 5,
+    "tp": 5,
+    "fp": 0
+   },
+   "advanced-query-processing-architecture-grafana-codex": {
+    "comentarios": 1,
+    "tp": 0,
+    "fp": 1
+   },
+   "advanced-sql-analytics-framework-grafana-codex": {
+    "comentarios": 1,
+    "tp": 0,
+    "fp": 1
+   },
+   "anonymous-add-configurable-device-limit-grafana-codex": {
+    "comentarios": 6,
+    "tp": 1,
+    "fp": 5
+   },
+   "async-import-of-the-appstore-packages-cal-com": {
+    "comentarios": 4,
+    "tp": 2,
+    "fp": 2
+   },
+   "authzservice-improve-authz-caching-grafana-codex": {
+    "comentarios": 2,
+    "tp": 0,
+    "fp": 2
+   },
+   "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+    "comentarios": 3,
+    "tp": 3,
+    "fp": 0
+   },
+   "database-performance-optimizations-grafana-codex": {
+    "comentarios": 4,
+    "tp": 2,
+    "fp": 2
+   },
+   "dual-storage-architecture-grafana-codex": {
+    "comentarios": 5,
+    "tp": 4,
+    "fp": 1
+   },
+   "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+    "comentarios": 5,
+    "tp": 4,
+    "fp": 1
+   },
+   "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+    "comentarios": 3,
+    "tp": 0,
+    "fp": 3
+   },
+   "feat-2fa-backup-codes-cal-com": {
+    "comentarios": 3,
+    "tp": 0,
+    "fp": 3
+   },
+   "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+    "comentarios": 4,
+    "tp": 2,
+    "fp": 2
+   },
+   "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+    "comentarios": 0,
+    "tp": 0,
+    "fp": 0
+   },
+   "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+    "comentarios": 1,
+    "tp": 0,
+    "fp": 1
+   },
+   "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+    "comentarios": 2,
+    "tp": 0,
+    "fp": 2
+   },
+   "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+    "comentarios": 4,
+    "tp": 4,
+    "fp": 0
+   },
+   "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+    "comentarios": 1,
+    "tp": 1,
+    "fp": 0
+   },
+   "feature-automatically-downsize-large-images-discourse-cursor": {
+    "comentarios": 4,
+    "tp": 2,
+    "fp": 2
+   },
+   "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+    "comentarios": 6,
+    "tp": 1,
+    "fp": 5
+   },
+   "feature-localization-fallbacks-server-side-discourse-cursor": {
+    "comentarios": 2,
+    "tp": 2,
+    "fp": 0
+   },
+   "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+    "comentarios": 3,
+    "tp": 3,
+    "fp": 0
+   },
+   "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+    "comentarios": 1,
+    "tp": 0,
+    "fp": 1
+   },
+   "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+    "comentarios": 6,
+    "tp": 6,
+    "fp": 0
+   },
+   "fix-proper-handling-of-group-memberships-discourse-cursor": {
+    "comentarios": 5,
+    "tp": 5,
+    "fp": 0
+   },
+   "fixing-re-authentication-with-passkeys-keycloak": {
+    "comentarios": 0,
+    "tp": 0,
+    "fp": 0
+   },
+   "frontend-asset-optimization-grafana-codex": {
+    "comentarios": 1,
+    "tp": 0,
+    "fp": 1
+   },
+   "github-oauth-security-enhancement-sentry": {
+    "comentarios": 4,
+    "tp": 1,
+    "fp": 3
+   },
+   "implement-access-token-context-encoding-framework-keycloak": {
+    "comentarios": 2,
+    "tp": 0,
+    "fp": 2
+   },
+   "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+    "comentarios": 3,
+    "tp": 0,
+    "fp": 3
+   },
+   "notification-rule-processing-engine-grafana-codex": {
+    "comentarios": 2,
+    "tp": 1,
+    "fp": 1
+   },
+   "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+    "comentarios": 10,
+    "tp": 6,
+    "fp": 4
+   },
+   "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+    "comentarios": 2,
+    "tp": 2,
+    "fp": 0
+   },
+   "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+    "comentarios": 5,
+    "tp": 3,
+    "fp": 2
+   },
+   "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+    "comentarios": 1,
+    "tp": 0,
+    "fp": 1
+   },
+   "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+    "comentarios": 0,
+    "tp": 0,
+    "fp": 0
+   },
+   "replays-self-serve-bulk-delete-system-sentry": {
+    "comentarios": 3,
+    "tp": 2,
+    "fp": 1
+   },
+   "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+    "comentarios": 5,
+    "tp": 4,
+    "fp": 1
+   },
+   "sms-workflow-reminder-retry-count-tracking-cal-com": {
+    "comentarios": 3,
+    "tp": 3,
+    "fp": 0
+   },
+   "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+    "comentarios": 3,
+    "tp": 2,
+    "fp": 1
+   },
+   "unified-storage-performance-optimizations-grafana-codex": {
+    "comentarios": 3,
+    "tp": 0,
+    "fp": 3
+   },
+   "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+    "comentarios": 1,
+    "tp": 1,
+    "fp": 0
+   }
+  },
+  "uso": {
+   "database-performance-optimizations-grafana-codex": {
+    "generalist": {
+     "input": 124855,
+     "cacheRead": 87600,
+     "output": 3511,
+     "ms": 34550,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 27439,
+     "cacheRead": 10932,
+     "output": 1124,
+     "ms": 15279,
+     "calls": 2
+    },
+    "finder": {
+     "input": 152294,
+     "cacheRead": 98532,
+     "output": 4635,
+     "calls": 3,
+     "ms": 49830
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+    "generalist": {
+     "input": 362460,
+     "cacheRead": 247098,
+     "output": 3372,
+     "ms": 43740,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 35916,
+     "cacheRead": 10932,
+     "output": 1211,
+     "ms": 15917,
+     "calls": 2
+    },
+    "finder": {
+     "input": 398376,
+     "cacheRead": 258030,
+     "output": 4583,
+     "calls": 3,
+     "ms": 59657
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+    "generalist": {
+     "input": 143020,
+     "cacheRead": 97083,
+     "output": 1989,
+     "ms": 33201,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 29322,
+     "cacheRead": 10932,
+     "output": 1035,
+     "ms": 11066,
+     "calls": 1
+    },
+    "finder": {
+     "input": 172342,
+     "cacheRead": 108015,
+     "output": 3024,
+     "calls": 2,
+     "ms": 44267
+    },
+    "depoisDoFinder": 0
+   },
+   "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+    "generalist": {
+     "input": 58399,
+     "cacheRead": 44558,
+     "output": 1939,
+     "ms": 20522,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 17397,
+     "cacheRead": 10932,
+     "output": 901,
+     "ms": 10644,
+     "calls": 1
+    },
+    "finder": {
+     "input": 75796,
+     "cacheRead": 55490,
+     "output": 2840,
+     "calls": 2,
+     "ms": 31167
+    },
+    "depoisDoFinder": 0
+   },
+   "unified-storage-performance-optimizations-grafana-codex": {
+    "generalist": {
+     "input": 300560,
+     "cacheRead": 175492,
+     "output": 5498,
+     "ms": 60663,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 22867,
+     "cacheRead": 10932,
+     "output": 953,
+     "ms": 13182,
+     "calls": 2
+    },
+    "finder": {
+     "input": 323427,
+     "cacheRead": 186424,
+     "output": 6451,
+     "calls": 3,
+     "ms": 73845
+    },
+    "depoisDoFinder": 0
+   },
+   "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+    "generalist": {
+     "input": 169964,
+     "cacheRead": 115032,
+     "output": 2972,
+     "ms": 37293,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 189207,
+     "cacheRead": 128175,
+     "output": 3331,
+     "ms": 31152,
+     "calls": 1
+    },
+    "finder": {
+     "input": 359171,
+     "cacheRead": 243207,
+     "output": 6303,
+     "calls": 2,
+     "ms": 68447
+    },
+    "depoisDoFinder": 0
+   },
+   "advanced-sql-analytics-framework-grafana-codex": {
+    "generalist": {
+     "input": 104864,
+     "cacheRead": 75681,
+     "output": 1778,
+     "ms": 22940,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 81359,
+     "cacheRead": 55168,
+     "output": 1361,
+     "ms": 20212,
+     "calls": 2
+    },
+    "finder": {
+     "input": 186223,
+     "cacheRead": 130849,
+     "output": 3139,
+     "calls": 3,
+     "ms": 43152
+    },
+    "depoisDoFinder": 0
+   },
+   "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+    "generalist": {
+     "input": 151886,
+     "cacheRead": 116060,
+     "output": 3149,
+     "ms": 46378,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 162535,
+     "cacheRead": 118776,
+     "output": 3304,
+     "ms": 39192,
+     "calls": 1
+    },
+    "finder": {
+     "input": 314421,
+     "cacheRead": 234836,
+     "output": 6453,
+     "calls": 2,
+     "ms": 85570
+    },
+    "depoisDoFinder": 0
+   },
+   "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+    "generalist": {
+     "input": 104720,
+     "cacheRead": 73208,
+     "output": 5348,
+     "ms": 52779,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 142085,
+     "cacheRead": 106413,
+     "output": 2760,
+     "ms": 33586,
+     "calls": 2
+    },
+    "finder": {
+     "input": 246805,
+     "cacheRead": 179621,
+     "output": 8108,
+     "calls": 3,
+     "ms": 86365
+    },
+    "depoisDoFinder": 0
+   },
+   "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+    "generalist": {
+     "input": 123776,
+     "cacheRead": 88032,
+     "output": 1870,
+     "ms": 21277,
+     "calls": 2
+    },
+    "synthesis-rescue": {
+     "input": 108757,
+     "cacheRead": 89763,
+     "output": 1040,
+     "ms": 18465,
+     "calls": 2
+    },
+    "finder": {
+     "input": 232533,
+     "cacheRead": 177795,
+     "output": 2910,
+     "calls": 4,
+     "ms": 39742
+    },
+    "depoisDoFinder": 0
+   },
+   "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+    "generalist": {
+     "input": 112208,
+     "cacheRead": 79728,
+     "output": 1910,
+     "ms": 22056,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 49708,
+     "cacheRead": 34645,
+     "output": 1020,
+     "ms": 15540,
+     "calls": 2
+    },
+    "finder": {
+     "input": 161916,
+     "cacheRead": 114373,
+     "output": 2930,
+     "calls": 3,
+     "ms": 37599
+    },
+    "depoisDoFinder": 0
+   },
+   "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+    "generalist": {
+     "input": 228729,
+     "cacheRead": 165497,
+     "output": 3659,
+     "ms": 40957,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 113690,
+     "cacheRead": 74888,
+     "output": 2101,
+     "ms": 23415,
+     "calls": 2
+    },
+    "finder": {
+     "input": 342419,
+     "cacheRead": 240385,
+     "output": 5760,
+     "calls": 3,
+     "ms": 64372
+    },
+    "depoisDoFinder": 0
+   },
+   "add-html-sanitizer-for-translated-message-resources-keycloak": {
+    "generalist": {
+     "input": 233455,
+     "cacheRead": 168405,
+     "output": 3443,
+     "ms": 38571,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 171282,
+     "cacheRead": 117614,
+     "output": 3204,
+     "ms": 33259,
+     "calls": 1
+    },
+    "finder": {
+     "input": 404737,
+     "cacheRead": 286019,
+     "output": 6647,
+     "calls": 2,
+     "ms": 71830
+    },
+    "depoisDoFinder": 0
+   },
+   "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+    "generalist": {
+     "input": 153539,
+     "cacheRead": 104905,
+     "output": 3407,
+     "ms": 42409,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 46996,
+     "cacheRead": 33019,
+     "output": 1416,
+     "ms": 17323,
+     "calls": 2
+    },
+    "finder": {
+     "input": 200535,
+     "cacheRead": 137924,
+     "output": 4823,
+     "calls": 3,
+     "ms": 59733
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+    "generalist": {
+     "input": 178816,
+     "cacheRead": 132664,
+     "output": 2827,
+     "ms": 35091,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 105530,
+     "cacheRead": 73802,
+     "output": 1628,
+     "ms": 21905,
+     "calls": 2
+    },
+    "finder": {
+     "input": 284346,
+     "cacheRead": 206466,
+     "output": 4455,
+     "calls": 3,
+     "ms": 56996
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+    "generalist": {
+     "input": 155414,
+     "cacheRead": 114159,
+     "output": 3843,
+     "ms": 40342,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 192861,
+     "cacheRead": 151696,
+     "output": 2596,
+     "ms": 38173,
+     "calls": 1
+    },
+    "finder": {
+     "input": 348275,
+     "cacheRead": 265855,
+     "output": 6439,
+     "calls": 2,
+     "ms": 78516
+    },
+    "depoisDoFinder": 0
+   },
+   "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+    "generalist": {
+     "input": 150753,
+     "cacheRead": 100360,
+     "output": 4672,
+     "ms": 47369,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 48408,
+     "cacheRead": 34331,
+     "output": 897,
+     "ms": 17587,
+     "calls": 2
+    },
+    "finder": {
+     "input": 199161,
+     "cacheRead": 134691,
+     "output": 5569,
+     "calls": 3,
+     "ms": 64957
+    },
+    "depoisDoFinder": 0
+   },
+   "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+    "generalist": {
+     "input": 166071,
+     "cacheRead": 117420,
+     "output": 6403,
+     "ms": 66869,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 220365,
+     "cacheRead": 156960,
+     "output": 3912,
+     "ms": 47748,
+     "calls": 2
+    },
+    "finder": {
+     "input": 386436,
+     "cacheRead": 274380,
+     "output": 10315,
+     "calls": 3,
+     "ms": 114617
+    },
+    "depoisDoFinder": 0
+   },
+   "dual-storage-architecture-grafana-codex": {
+    "generalist": {
+     "input": 117388,
+     "cacheRead": 83876,
+     "output": 3268,
+     "ms": 36746,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 120359,
+     "cacheRead": 85268,
+     "output": 2051,
+     "ms": 21240,
+     "calls": 1
+    },
+    "finder": {
+     "input": 237747,
+     "cacheRead": 169144,
+     "output": 5319,
+     "calls": 2,
+     "ms": 57987
+    },
+    "depoisDoFinder": 0
+   },
+   "notification-rule-processing-engine-grafana-codex": {
+    "generalist": {
+     "input": 232283,
+     "cacheRead": 165654,
+     "output": 3694,
+     "ms": 37493,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 165271,
+     "cacheRead": 115674,
+     "output": 1673,
+     "ms": 19692,
+     "calls": 1
+    },
+    "finder": {
+     "input": 397554,
+     "cacheRead": 281328,
+     "output": 5367,
+     "calls": 2,
+     "ms": 57185
+    },
+    "depoisDoFinder": 0
+   },
+   "frontend-asset-optimization-grafana-codex": {
+    "generalist": {
+     "input": 67351,
+     "cacheRead": 55458,
+     "output": 1525,
+     "ms": 25146,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 32428,
+     "cacheRead": 26169,
+     "output": 746,
+     "ms": 11739,
+     "calls": 2
+    },
+    "finder": {
+     "input": 99779,
+     "cacheRead": 81627,
+     "output": 2271,
+     "calls": 3,
+     "ms": 36886
+    },
+    "depoisDoFinder": 0
+   },
+   "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+    "generalist": {
+     "input": 180159,
+     "cacheRead": 125007,
+     "output": 4071,
+     "ms": 50250,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 74536,
+     "cacheRead": 59580,
+     "output": 958,
+     "ms": 14545,
+     "calls": 1
+    },
+    "finder": {
+     "input": 254695,
+     "cacheRead": 184587,
+     "output": 5029,
+     "calls": 2,
+     "ms": 64795
+    },
+    "depoisDoFinder": 0
+   },
+   "async-import-of-the-appstore-packages-cal-com": {
+    "generalist": {
+     "input": 247272,
+     "cacheRead": 186622,
+     "output": 4343,
+     "ms": 49188,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 123867,
+     "cacheRead": 83254,
+     "output": 2445,
+     "ms": 33901,
+     "calls": 2
+    },
+    "finder": {
+     "input": 371139,
+     "cacheRead": 269876,
+     "output": 6788,
+     "calls": 3,
+     "ms": 83089
+    },
+    "depoisDoFinder": 0
+   },
+   "add-guest-management-functionality-to-existing-bookings-cal-com": {
+    "generalist": {
+     "input": 110695,
+     "cacheRead": 81038,
+     "output": 2770,
+     "ms": 28788,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 119808,
+     "cacheRead": 82434,
+     "output": 3138,
+     "ms": 28891,
+     "calls": 1
+    },
+    "finder": {
+     "input": 230503,
+     "cacheRead": 163472,
+     "output": 5908,
+     "calls": 2,
+     "ms": 57680
+    },
+    "depoisDoFinder": 0
+   },
+   "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+    "generalist": {
+     "input": 147925,
+     "cacheRead": 109374,
+     "output": 4213,
+     "ms": 49938,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 113076,
+     "cacheRead": 78552,
+     "output": 2492,
+     "ms": 32430,
+     "calls": 2
+    },
+    "finder": {
+     "input": 261001,
+     "cacheRead": 187926,
+     "output": 6705,
+     "calls": 3,
+     "ms": 82369
+    },
+    "depoisDoFinder": 0
+   },
+   "implement-access-token-context-encoding-framework-keycloak": {
+    "generalist": {
+     "input": 388837,
+     "cacheRead": 300212,
+     "output": 4200,
+     "ms": 56006,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 390665,
+     "cacheRead": 303768,
+     "output": 2727,
+     "ms": 41019,
+     "calls": 2
+    },
+    "finder": {
+     "input": 779502,
+     "cacheRead": 603980,
+     "output": 6927,
+     "calls": 3,
+     "ms": 97026
+    },
+    "depoisDoFinder": 0
+   },
+   "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+    "generalist": {
+     "input": 391121,
+     "cacheRead": 306436,
+     "output": 4503,
+     "ms": 52515,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 488416,
+     "cacheRead": 384717,
+     "output": 3209,
+     "ms": 40376,
+     "calls": 2
+    },
+    "finder": {
+     "input": 879537,
+     "cacheRead": 691153,
+     "output": 7712,
+     "calls": 3,
+     "ms": 92891
+    },
+    "depoisDoFinder": 0
+   },
+   "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+    "generalist": {
+     "input": 103402,
+     "cacheRead": 77132,
+     "output": 2711,
+     "ms": 23617,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 35510,
+     "cacheRead": 10932,
+     "output": 3194,
+     "ms": 32358,
+     "calls": 2
+    },
+    "finder": {
+     "input": 138912,
+     "cacheRead": 88064,
+     "output": 5905,
+     "calls": 3,
+     "ms": 55975
+    },
+    "depoisDoFinder": 0
+   },
+   "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+    "generalist": {
+     "input": 139994,
+     "cacheRead": 105078,
+     "output": 3631,
+     "ms": 42341,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 53077,
+     "cacheRead": 44454,
+     "output": 1048,
+     "ms": 16560,
+     "calls": 2
+    },
+    "finder": {
+     "input": 193071,
+     "cacheRead": 149532,
+     "output": 4679,
+     "calls": 3,
+     "ms": 58902
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-2fa-backup-codes-cal-com": {
+    "generalist": {
+     "input": 209342,
+     "cacheRead": 148584,
+     "output": 4454,
+     "ms": 48093,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 161968,
+     "cacheRead": 116910,
+     "output": 2363,
+     "ms": 27217,
+     "calls": 2
+    },
+    "finder": {
+     "input": 371310,
+     "cacheRead": 265494,
+     "output": 6817,
+     "calls": 3,
+     "ms": 75310
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+    "generalist": {
+     "input": 300970,
+     "cacheRead": 225660,
+     "output": 3676,
+     "ms": 45788,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 78927,
+     "cacheRead": 47808,
+     "output": 1501,
+     "ms": 18614,
+     "calls": 2
+    },
+    "finder": {
+     "input": 379897,
+     "cacheRead": 273468,
+     "output": 5177,
+     "calls": 3,
+     "ms": 64402
+    },
+    "depoisDoFinder": 0
+   },
+   "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+    "generalist": {
+     "input": 353669,
+     "cacheRead": 239172,
+     "output": 5425,
+     "ms": 57780,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 275430,
+     "cacheRead": 209232,
+     "output": 2896,
+     "ms": 36770,
+     "calls": 1
+    },
+    "finder": {
+     "input": 629099,
+     "cacheRead": 448404,
+     "output": 8321,
+     "calls": 2,
+     "ms": 94551
+    },
+    "depoisDoFinder": 0
+   },
+   "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+    "generalist": {
+     "input": 291193,
+     "cacheRead": 223352,
+     "output": 4714,
+     "ms": 51091,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 293322,
+     "cacheRead": 227844,
+     "output": 2543,
+     "ms": 47168,
+     "calls": 2
+    },
+    "finder": {
+     "input": 584515,
+     "cacheRead": 451196,
+     "output": 7257,
+     "calls": 3,
+     "ms": 98261
+    },
+    "depoisDoFinder": 0
+   },
+   "sms-workflow-reminder-retry-count-tracking-cal-com": {
+    "generalist": {
+     "input": 80993,
+     "cacheRead": 60708,
+     "output": 3190,
+     "ms": 32862,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 17329,
+     "cacheRead": 10932,
+     "output": 723,
+     "ms": 9428,
+     "calls": 1
+    },
+    "finder": {
+     "input": 98322,
+     "cacheRead": 71640,
+     "output": 3913,
+     "calls": 2,
+     "ms": 42290
+    },
+    "depoisDoFinder": 0
+   },
+   "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+    "generalist": {
+     "input": 98382,
+     "cacheRead": 70221,
+     "output": 2927,
+     "ms": 36027,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 44205,
+     "cacheRead": 31426,
+     "output": 1154,
+     "ms": 16525,
+     "calls": 2
+    },
+    "finder": {
+     "input": 142587,
+     "cacheRead": 101647,
+     "output": 4081,
+     "calls": 3,
+     "ms": 52553
+    },
+    "depoisDoFinder": 0
+   },
+   "github-oauth-security-enhancement-sentry": {
+    "generalist": {
+     "input": 131832,
+     "cacheRead": 95379,
+     "output": 3268,
+     "ms": 34537,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 164199,
+     "cacheRead": 126928,
+     "output": 2459,
+     "ms": 28842,
+     "calls": 1
+    },
+    "finder": {
+     "input": 296031,
+     "cacheRead": 222307,
+     "output": 5727,
+     "calls": 2,
+     "ms": 63380
+    },
+    "depoisDoFinder": 0
+   },
+   "authzservice-improve-authz-caching-grafana-codex": {
+    "generalist": {
+     "input": 230822,
+     "cacheRead": 132610,
+     "output": 4749,
+     "ms": 54855,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 28093,
+     "cacheRead": 10932,
+     "output": 1598,
+     "ms": 20613,
+     "calls": 2
+    },
+    "finder": {
+     "input": 258915,
+     "cacheRead": 143542,
+     "output": 6347,
+     "calls": 3,
+     "ms": 75468
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+    "generalist": {
+     "input": 146799,
+     "cacheRead": 102348,
+     "output": 3817,
+     "ms": 37188,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 148980,
+     "cacheRead": 103902,
+     "output": 2019,
+     "ms": 24711,
+     "calls": 2
+    },
+    "finder": {
+     "input": 295779,
+     "cacheRead": 206250,
+     "output": 5836,
+     "calls": 3,
+     "ms": 61899
+    },
+    "depoisDoFinder": 0
+   },
+   "replays-self-serve-bulk-delete-system-sentry": {
+    "generalist": {
+     "input": 859015,
+     "cacheRead": 685264,
+     "output": 3575,
+     "ms": 37372,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 516500,
+     "cacheRead": 349448,
+     "output": 2354,
+     "ms": 32495,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1375515,
+     "cacheRead": 1034712,
+     "output": 5929,
+     "calls": 2,
+     "ms": 69867
+    },
+    "depoisDoFinder": 0
+   },
+   "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+    "generalist": {
+     "input": 730509,
+     "cacheRead": 538368,
+     "output": 6084,
+     "ms": 70919,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 216517,
+     "cacheRead": 148294,
+     "output": 1419,
+     "ms": 29395,
+     "calls": 2
+    },
+    "finder": {
+     "input": 947026,
+     "cacheRead": 686662,
+     "output": 7503,
+     "calls": 3,
+     "ms": 100314
+    },
+    "depoisDoFinder": 0
+   },
+   "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+    "generalist": {
+     "input": 109549,
+     "cacheRead": 76989,
+     "output": 3943,
+     "ms": 39416,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 46548,
+     "cacheRead": 33754,
+     "output": 1149,
+     "ms": 14857,
+     "calls": 1
+    },
+    "finder": {
+     "input": 156097,
+     "cacheRead": 110743,
+     "output": 5092,
+     "calls": 2,
+     "ms": 54273
+    },
+    "depoisDoFinder": 0
+   },
+   "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+    "generalist": {
+     "input": 227829,
+     "cacheRead": 164013,
+     "output": 4790,
+     "ms": 49949,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 221767,
+     "cacheRead": 168018,
+     "output": 2262,
+     "ms": 25160,
+     "calls": 1
+    },
+    "finder": {
+     "input": 449596,
+     "cacheRead": 332031,
+     "output": 7052,
+     "calls": 2,
+     "ms": 75110
+    },
+    "depoisDoFinder": 0
+   },
+   "anonymous-add-configurable-device-limit-grafana-codex": {
+    "generalist": {
+     "input": 167768,
+     "cacheRead": 120480,
+     "output": 4085,
+     "ms": 48622,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 178321,
+     "cacheRead": 124324,
+     "output": 2804,
+     "ms": 30671,
+     "calls": 1
+    },
+    "finder": {
+     "input": 346089,
+     "cacheRead": 244804,
+     "output": 6889,
+     "calls": 2,
+     "ms": 79293
+    },
+    "depoisDoFinder": 0
+   },
+   "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+    "generalist": {
+     "input": 164852,
+     "cacheRead": 119460,
+     "output": 3778,
+     "ms": 37591,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 27992,
+     "cacheRead": 10932,
+     "output": 1691,
+     "ms": 21144,
+     "calls": 1
+    },
+    "finder": {
+     "input": 192844,
+     "cacheRead": 130392,
+     "output": 5469,
+     "calls": 2,
+     "ms": 58735
+    },
+    "depoisDoFinder": 0
+   },
+   "fix-proper-handling-of-group-memberships-discourse-cursor": {
+    "generalist": {
+     "input": 138073,
+     "cacheRead": 100902,
+     "output": 3900,
+     "ms": 37614,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 140249,
+     "cacheRead": 103464,
+     "output": 3217,
+     "ms": 35850,
+     "calls": 1
+    },
+    "finder": {
+     "input": 278322,
+     "cacheRead": 204366,
+     "output": 7117,
+     "calls": 2,
+     "ms": 73465
+    },
+    "depoisDoFinder": 0
+   },
+   "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+    "generalist": {
+     "input": 348481,
+     "cacheRead": 224315,
+     "output": 5094,
+     "ms": 58534,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 154685,
+     "cacheRead": 111330,
+     "output": 1790,
+     "ms": 23535,
+     "calls": 2
+    },
+    "finder": {
+     "input": 503166,
+     "cacheRead": 335645,
+     "output": 6884,
+     "calls": 3,
+     "ms": 82070
+    },
+    "depoisDoFinder": 0
+   },
+   "feature-automatically-downsize-large-images-discourse-cursor": {
+    "generalist": {
+     "input": 185254,
+     "cacheRead": 45348,
+     "output": 4147,
+     "ms": 47243,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 17831,
+     "cacheRead": 10932,
+     "output": 942,
+     "ms": 12907,
+     "calls": 1
+    },
+    "finder": {
+     "input": 203085,
+     "cacheRead": 56280,
+     "output": 5089,
+     "calls": 2,
+     "ms": 60150
+    },
+    "depoisDoFinder": 0
+   },
+   "fixing-re-authentication-with-passkeys-keycloak": {
+    "generalist": {
+     "input": 371237,
+     "cacheRead": 260552,
+     "output": 5537,
+     "ms": 59365,
+     "calls": 2
+    },
+    "synthesis-rescue": {
+     "input": 163364,
+     "cacheRead": 113428,
+     "output": 2250,
+     "ms": 40322,
+     "calls": 2
+    },
+    "finder": {
+     "input": 534601,
+     "cacheRead": 373980,
+     "output": 7787,
+     "calls": 4,
+     "ms": 99687
+    },
+    "depoisDoFinder": 0
+   },
+   "feature-localization-fallbacks-server-side-discourse-cursor": {
+    "generalist": {
+     "input": 77843,
+     "cacheRead": 60177,
+     "output": 3009,
+     "ms": 33766,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 18208,
+     "cacheRead": 10932,
+     "output": 1170,
+     "ms": 13254,
+     "calls": 2
+    },
+    "finder": {
+     "input": 96051,
+     "cacheRead": 71109,
+     "output": 4179,
+     "calls": 3,
+     "ms": 47020
+    },
+    "depoisDoFinder": 0
+   },
+   "advanced-query-processing-architecture-grafana-codex": {
+    "generalist": {
+     "input": 410693,
+     "cacheRead": 220872,
+     "output": 5295,
+     "ms": 62103,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 23350,
+     "cacheRead": 10932,
+     "output": 885,
+     "ms": 11545,
+     "calls": 2
+    },
+    "finder": {
+     "input": 434043,
+     "cacheRead": 231804,
+     "output": 6180,
+     "calls": 3,
+     "ms": 73648
+    },
+    "depoisDoFinder": 0
+   }
+  }
+ },
+ "ds": {
+  "comentarios": 147,
+  "tp": 53,
+  "fpNit": 86,
+  "fpAlucinacao": 8,
+  "totalTp": 192,
+  "semCasamento": 25,
+  "recall": 27.6,
+  "precisao": 36.1,
+  "f1": 31.3,
+  "f2": 29.0,
+  "porOrigem": {
+   "generalist": {
+    "comentarios": 114,
+    "tp": 45,
+    "fpNit": 60,
+    "fpAlucinacao": 5,
+    "recall": 23.4,
+    "precisao": 39.5,
+    "f1": 29.4,
+    "f2": 25.5
+   },
+   "synthesis-rescue": {
+    "comentarios": 33,
+    "tp": 10,
+    "fpNit": 20,
+    "fpAlucinacao": 3,
+    "recall": 5.2,
+    "precisao": 30.3,
+    "f1": 8.9,
+    "f2": 6.2
+   }
+  },
+  "porPr": {
+   "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+    "comentarios": 1,
+    "tp": 0,
+    "fp": 1
+   },
+   "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+    "comentarios": 1,
+    "tp": 0,
+    "fp": 1
+   },
+   "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+    "comentarios": 3,
+    "tp": 1,
+    "fp": 2
+   },
+   "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+    "comentarios": 3,
+    "tp": 0,
+    "fp": 3
+   },
+   "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+    "comentarios": 4,
+    "tp": 3,
+    "fp": 1
+   },
+   "add-guest-management-functionality-to-existing-bookings-cal-com": {
+    "comentarios": 4,
+    "tp": 3,
+    "fp": 1
+   },
+   "add-html-sanitizer-for-translated-message-resources-keycloak": {
+    "comentarios": 2,
+    "tp": 1,
+    "fp": 1
+   },
+   "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+    "comentarios": 2,
+    "tp": 0,
+    "fp": 2
+   },
+   "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+    "comentarios": 2,
+    "tp": 2,
+    "fp": 0
+   },
+   "advanced-query-processing-architecture-grafana-codex": {
+    "comentarios": 2,
+    "tp": 0,
+    "fp": 2
+   },
+   "advanced-sql-analytics-framework-grafana-codex": {
+    "comentarios": 4,
+    "tp": 0,
+    "fp": 4
+   },
+   "anonymous-add-configurable-device-limit-grafana-codex": {
+    "comentarios": 2,
+    "tp": 1,
+    "fp": 1
+   },
+   "async-import-of-the-appstore-packages-cal-com": {
+    "comentarios": 5,
+    "tp": 1,
+    "fp": 4
+   },
+   "authzservice-improve-authz-caching-grafana-codex": {
+    "comentarios": 2,
+    "tp": 0,
+    "fp": 2
+   },
+   "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+    "comentarios": 3,
+    "tp": 1,
+    "fp": 2
+   },
+   "database-performance-optimizations-grafana-codex": {
+    "comentarios": 2,
+    "tp": 2,
+    "fp": 0
+   },
+   "dual-storage-architecture-grafana-codex": {
+    "comentarios": 6,
+    "tp": 3,
+    "fp": 3
+   },
+   "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+    "comentarios": 3,
+    "tp": 1,
+    "fp": 2
+   },
+   "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+    "comentarios": 4,
+    "tp": 0,
+    "fp": 4
+   },
+   "feat-2fa-backup-codes-cal-com": {
+    "comentarios": 5,
+    "tp": 0,
+    "fp": 5
+   },
+   "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+    "comentarios": 3,
+    "tp": 1,
+    "fp": 2
+   },
+   "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+    "comentarios": 1,
+    "tp": 1,
+    "fp": 0
+   },
+   "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+    "comentarios": 1,
+    "tp": 0,
+    "fp": 1
+   },
+   "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+    "comentarios": 4,
+    "tp": 1,
+    "fp": 3
+   },
+   "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+    "comentarios": 8,
+    "tp": 1,
+    "fp": 7
+   },
+   "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+    "comentarios": 2,
+    "tp": 1,
+    "fp": 1
+   },
+   "feature-automatically-downsize-large-images-discourse-cursor": {
+    "comentarios": 2,
+    "tp": 1,
+    "fp": 1
+   },
+   "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+    "comentarios": 5,
+    "tp": 1,
+    "fp": 4
+   },
+   "feature-localization-fallbacks-server-side-discourse-cursor": {
+    "comentarios": 5,
+    "tp": 1,
+    "fp": 4
+   },
+   "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+    "comentarios": 2,
+    "tp": 2,
+    "fp": 0
+   },
+   "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+    "comentarios": 1,
+    "tp": 0,
+    "fp": 1
+   },
+   "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+    "comentarios": 6,
+    "tp": 3,
+    "fp": 3
+   },
+   "fix-proper-handling-of-group-memberships-discourse-cursor": {
+    "comentarios": 4,
+    "tp": 3,
+    "fp": 1
+   },
+   "fixing-re-authentication-with-passkeys-keycloak": {
+    "comentarios": 3,
+    "tp": 0,
+    "fp": 3
+   },
+   "frontend-asset-optimization-grafana-codex": {
+    "comentarios": 1,
+    "tp": 0,
+    "fp": 1
+   },
+   "github-oauth-security-enhancement-sentry": {
+    "comentarios": 3,
+    "tp": 0,
+    "fp": 3
+   },
+   "implement-access-token-context-encoding-framework-keycloak": {
+    "comentarios": 3,
+    "tp": 0,
+    "fp": 3
+   },
+   "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+    "comentarios": 2,
+    "tp": 0,
+    "fp": 2
+   },
+   "notification-rule-processing-engine-grafana-codex": {
+    "comentarios": 3,
+    "tp": 2,
+    "fp": 1
+   },
+   "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+    "comentarios": 6,
+    "tp": 3,
+    "fp": 3
+   },
+   "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+    "comentarios": 0,
+    "tp": 0,
+    "fp": 0
+   },
+   "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+    "comentarios": 3,
+    "tp": 1,
+    "fp": 2
+   },
+   "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+    "comentarios": 1,
+    "tp": 0,
+    "fp": 1
+   },
+   "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+    "comentarios": 0,
+    "tp": 0,
+    "fp": 0
+   },
+   "replays-self-serve-bulk-delete-system-sentry": {
+    "comentarios": 4,
+    "tp": 2,
+    "fp": 2
+   },
+   "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+    "comentarios": 5,
+    "tp": 4,
+    "fp": 1
+   },
+   "sms-workflow-reminder-retry-count-tracking-cal-com": {
+    "comentarios": 3,
+    "tp": 2,
+    "fp": 1
+   },
+   "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+    "comentarios": 4,
+    "tp": 2,
+    "fp": 2
+   },
+   "unified-storage-performance-optimizations-grafana-codex": {
+    "comentarios": 1,
+    "tp": 1,
+    "fp": 0
+   },
+   "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+    "comentarios": 1,
+    "tp": 1,
+    "fp": 0
+   }
+  },
+  "uso": {
+   "database-performance-optimizations-grafana-codex": {
+    "generalist": {
+     "input": 317181,
+     "cacheRead": 295680,
+     "output": 5782,
+     "ms": 37774,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 260393,
+     "cacheRead": 251392,
+     "output": 8940,
+     "ms": 45343,
+     "calls": 2
+    },
+    "finder": {
+     "input": 577574,
+     "cacheRead": 547072,
+     "output": 14722,
+     "calls": 3,
+     "ms": 83117
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+    "generalist": {
+     "input": 424397,
+     "cacheRead": 394880,
+     "output": 3991,
+     "ms": 43765,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 280812,
+     "cacheRead": 272640,
+     "output": 3252,
+     "ms": 20792,
+     "calls": 1
+    },
+    "finder": {
+     "input": 705209,
+     "cacheRead": 667520,
+     "output": 7243,
+     "calls": 2,
+     "ms": 64557
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+    "generalist": {
+     "input": 375450,
+     "cacheRead": 349312,
+     "output": 5429,
+     "ms": 28158,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 380549,
+     "cacheRead": 367488,
+     "output": 4873,
+     "ms": 37507,
+     "calls": 2
+    },
+    "finder": {
+     "input": 755999,
+     "cacheRead": 716800,
+     "output": 10302,
+     "calls": 3,
+     "ms": 65665
+    },
+    "depoisDoFinder": 0
+   },
+   "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+    "generalist": {
+     "input": 205491,
+     "cacheRead": 194432,
+     "output": 4876,
+     "ms": 17138,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 235317,
+     "cacheRead": 223232,
+     "output": 5099,
+     "ms": 20287,
+     "calls": 2
+    },
+    "finder": {
+     "input": 440808,
+     "cacheRead": 417664,
+     "output": 9975,
+     "calls": 3,
+     "ms": 37427
+    },
+    "depoisDoFinder": 0
+   },
+   "unified-storage-performance-optimizations-grafana-codex": {
+    "generalist": {
+     "input": 385490,
+     "cacheRead": 359680,
+     "output": 5777,
+     "ms": 26458,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 327248,
+     "cacheRead": 305664,
+     "output": 4775,
+     "ms": 28200,
+     "calls": 2
+    },
+    "finder": {
+     "input": 712738,
+     "cacheRead": 665344,
+     "output": 10552,
+     "calls": 3,
+     "ms": 54658
+    },
+    "depoisDoFinder": 0
+   },
+   "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+    "generalist": {
+     "input": 396091,
+     "cacheRead": 362880,
+     "output": 6021,
+     "ms": 35730,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 183123,
+     "cacheRead": 174848,
+     "output": 2202,
+     "ms": 13746,
+     "calls": 1
+    },
+    "finder": {
+     "input": 579214,
+     "cacheRead": 537728,
+     "output": 8223,
+     "calls": 2,
+     "ms": 49476
+    },
+    "depoisDoFinder": 0
+   },
+   "advanced-sql-analytics-framework-grafana-codex": {
+    "generalist": {
+     "input": 213604,
+     "cacheRead": 192256,
+     "output": 3522,
+     "ms": 20032,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 94703,
+     "cacheRead": 88064,
+     "output": 1558,
+     "ms": 8939,
+     "calls": 1
+    },
+    "finder": {
+     "input": 308307,
+     "cacheRead": 280320,
+     "output": 5080,
+     "calls": 2,
+     "ms": 28971
+    },
+    "depoisDoFinder": 0
+   },
+   "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+    "generalist": {
+     "input": 379274,
+     "cacheRead": 354944,
+     "output": 4447,
+     "ms": 15848,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 1248649,
+     "cacheRead": 1185792,
+     "output": 5911,
+     "ms": 33914,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1627923,
+     "cacheRead": 1540736,
+     "output": 10358,
+     "calls": 2,
+     "ms": 49763
+    },
+    "depoisDoFinder": 0
+   },
+   "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+    "generalist": {
+     "input": 369171,
+     "cacheRead": 335616,
+     "output": 4810,
+     "ms": 25175,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 551766,
+     "cacheRead": 509312,
+     "output": 8438,
+     "ms": 52221,
+     "calls": 2
+    },
+    "finder": {
+     "input": 920937,
+     "cacheRead": 844928,
+     "output": 13248,
+     "calls": 3,
+     "ms": 77396
+    },
+    "depoisDoFinder": 0
+   },
+   "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+    "generalist": {
+     "input": 193845,
+     "cacheRead": 173312,
+     "output": 2426,
+     "ms": 12939,
+     "calls": 2
+    },
+    "synthesis-rescue": {
+     "input": 212849,
+     "cacheRead": 201856,
+     "output": 3068,
+     "ms": 17377,
+     "calls": 2
+    },
+    "finder": {
+     "input": 406694,
+     "cacheRead": 375168,
+     "output": 5494,
+     "calls": 4,
+     "ms": 30316
+    },
+    "depoisDoFinder": 0
+   },
+   "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+    "generalist": {
+     "input": 253621,
+     "cacheRead": 232192,
+     "output": 2693,
+     "ms": 13993,
+     "calls": 2
+    },
+    "synthesis-rescue": {
+     "input": 274835,
+     "cacheRead": 262016,
+     "output": 2528,
+     "ms": 15046,
+     "calls": 1
+    },
+    "finder": {
+     "input": 528456,
+     "cacheRead": 494208,
+     "output": 5221,
+     "calls": 3,
+     "ms": 29039
+    },
+    "depoisDoFinder": 0
+   },
+   "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+    "generalist": {
+     "input": 409152,
+     "cacheRead": 376832,
+     "output": 5415,
+     "ms": 22299,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 200479,
+     "cacheRead": 190592,
+     "output": 6484,
+     "ms": 23047,
+     "calls": 3
+    },
+    "finder": {
+     "input": 609631,
+     "cacheRead": 567424,
+     "output": 11899,
+     "calls": 4,
+     "ms": 45347
+    },
+    "depoisDoFinder": 0
+   },
+   "add-html-sanitizer-for-translated-message-resources-keycloak": {
+    "generalist": {
+     "input": 1389648,
+     "cacheRead": 1319040,
+     "output": 16472,
+     "ms": 84049,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 249298,
+     "cacheRead": 240384,
+     "output": 5436,
+     "ms": 28454,
+     "calls": 2
+    },
+    "finder": {
+     "input": 1638946,
+     "cacheRead": 1559424,
+     "output": 21908,
+     "calls": 3,
+     "ms": 112503
+    },
+    "depoisDoFinder": 0
+   },
+   "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+    "generalist": {
+     "input": 397862,
+     "cacheRead": 363392,
+     "output": 6746,
+     "ms": 41359,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 373764,
+     "cacheRead": 357632,
+     "output": 3109,
+     "ms": 20906,
+     "calls": 2
+    },
+    "finder": {
+     "input": 771626,
+     "cacheRead": 721024,
+     "output": 9855,
+     "calls": 3,
+     "ms": 62265
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+    "generalist": {
+     "input": 404403,
+     "cacheRead": 372608,
+     "output": 5377,
+     "ms": 28222,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 478936,
+     "cacheRead": 464000,
+     "output": 2659,
+     "ms": 21547,
+     "calls": 1
+    },
+    "finder": {
+     "input": 883339,
+     "cacheRead": 836608,
+     "output": 8036,
+     "calls": 2,
+     "ms": 49773
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+    "generalist": {
+     "input": 723360,
+     "cacheRead": 678144,
+     "output": 7345,
+     "ms": 39978,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 566222,
+     "cacheRead": 553472,
+     "output": 3900,
+     "ms": 26710,
+     "calls": 2
+    },
+    "finder": {
+     "input": 1289582,
+     "cacheRead": 1231616,
+     "output": 11245,
+     "calls": 3,
+     "ms": 66688
+    },
+    "depoisDoFinder": 0
+   },
+   "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+    "generalist": {
+     "input": 303841,
+     "cacheRead": 277504,
+     "output": 7327,
+     "ms": 27119,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 412850,
+     "cacheRead": 396288,
+     "output": 3598,
+     "ms": 17103,
+     "calls": 2
+    },
+    "finder": {
+     "input": 716691,
+     "cacheRead": 673792,
+     "output": 10925,
+     "calls": 3,
+     "ms": 44222
+    },
+    "depoisDoFinder": 0
+   },
+   "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+    "generalist": {
+     "input": 410371,
+     "cacheRead": 377216,
+     "output": 8999,
+     "ms": 51852,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 105269,
+     "cacheRead": 99712,
+     "output": 6709,
+     "ms": 33138,
+     "calls": 3
+    },
+    "finder": {
+     "input": 515640,
+     "cacheRead": 476928,
+     "output": 15708,
+     "calls": 4,
+     "ms": 84990
+    },
+    "depoisDoFinder": 0
+   },
+   "dual-storage-architecture-grafana-codex": {
+    "generalist": {
+     "input": 497772,
+     "cacheRead": 451072,
+     "output": 5446,
+     "ms": 27944,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 82142,
+     "cacheRead": 76928,
+     "output": 1125,
+     "ms": 9771,
+     "calls": 2
+    },
+    "finder": {
+     "input": 579914,
+     "cacheRead": 528000,
+     "output": 6571,
+     "calls": 3,
+     "ms": 37716
+    },
+    "depoisDoFinder": 0
+   },
+   "notification-rule-processing-engine-grafana-codex": {
+    "generalist": {
+     "input": 591085,
+     "cacheRead": 539264,
+     "output": 5022,
+     "ms": 23155,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 689674,
+     "cacheRead": 677632,
+     "output": 5279,
+     "ms": 26798,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1280759,
+     "cacheRead": 1216896,
+     "output": 10301,
+     "calls": 2,
+     "ms": 49953
+    },
+    "depoisDoFinder": 0
+   },
+   "frontend-asset-optimization-grafana-codex": {
+    "generalist": {
+     "input": 118913,
+     "cacheRead": 111488,
+     "output": 4027,
+     "ms": 19402,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 72679,
+     "cacheRead": 68736,
+     "output": 2078,
+     "ms": 9687,
+     "calls": 2
+    },
+    "finder": {
+     "input": 191592,
+     "cacheRead": 180224,
+     "output": 6105,
+     "calls": 3,
+     "ms": 29091
+    },
+    "depoisDoFinder": 0
+   },
+   "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+    "generalist": {
+     "input": 559889,
+     "cacheRead": 529152,
+     "output": 6443,
+     "ms": 42042,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 443893,
+     "cacheRead": 426880,
+     "output": 6522,
+     "ms": 35726,
+     "calls": 2
+    },
+    "finder": {
+     "input": 1003782,
+     "cacheRead": 956032,
+     "output": 12965,
+     "calls": 3,
+     "ms": 77771
+    },
+    "depoisDoFinder": 0
+   },
+   "async-import-of-the-appstore-packages-cal-com": {
+    "generalist": {
+     "input": 570673,
+     "cacheRead": 533504,
+     "output": 7168,
+     "ms": 41529,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 402702,
+     "cacheRead": 388608,
+     "output": 2627,
+     "ms": 18829,
+     "calls": 2
+    },
+    "finder": {
+     "input": 973375,
+     "cacheRead": 922112,
+     "output": 9795,
+     "calls": 3,
+     "ms": 60359
+    },
+    "depoisDoFinder": 0
+   },
+   "add-guest-management-functionality-to-existing-bookings-cal-com": {
+    "generalist": {
+     "input": 380279,
+     "cacheRead": 348672,
+     "output": 5457,
+     "ms": 29367,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 353422,
+     "cacheRead": 344576,
+     "output": 4729,
+     "ms": 32224,
+     "calls": 1
+    },
+    "finder": {
+     "input": 733701,
+     "cacheRead": 693248,
+     "output": 10186,
+     "calls": 2,
+     "ms": 61591
+    },
+    "depoisDoFinder": 0
+   },
+   "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+    "generalist": {
+     "input": 410861,
+     "cacheRead": 377728,
+     "output": 9591,
+     "ms": 43095,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 1153216,
+     "cacheRead": 1131264,
+     "output": 12743,
+     "ms": 53569,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1564077,
+     "cacheRead": 1508992,
+     "output": 22334,
+     "calls": 2,
+     "ms": 96667
+    },
+    "depoisDoFinder": 0
+   },
+   "implement-access-token-context-encoding-framework-keycloak": {
+    "generalist": {
+     "input": 807266,
+     "cacheRead": 742912,
+     "output": 7166,
+     "ms": 26169,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 543971,
+     "cacheRead": 528512,
+     "output": 4341,
+     "ms": 18224,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1351237,
+     "cacheRead": 1271424,
+     "output": 11507,
+     "calls": 2,
+     "ms": 44393
+    },
+    "depoisDoFinder": 0
+   },
+   "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+    "generalist": {
+     "input": 1662284,
+     "cacheRead": 1510912,
+     "output": 9344,
+     "ms": 55141,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 321098,
+     "cacheRead": 308352,
+     "output": 2428,
+     "ms": 18099,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1983382,
+     "cacheRead": 1819264,
+     "output": 11772,
+     "calls": 2,
+     "ms": 73240
+    },
+    "depoisDoFinder": 0
+   },
+   "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+    "generalist": {
+     "input": 571715,
+     "cacheRead": 534272,
+     "output": 8902,
+     "ms": 24281,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 76542,
+     "cacheRead": 72704,
+     "output": 10427,
+     "ms": 24353,
+     "calls": 3
+    },
+    "finder": {
+     "input": 648257,
+     "cacheRead": 606976,
+     "output": 19329,
+     "calls": 4,
+     "ms": 48635
+    },
+    "depoisDoFinder": 0
+   },
+   "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+    "generalist": {
+     "input": 220182,
+     "cacheRead": 206336,
+     "output": 5483,
+     "ms": 25253,
+     "calls": 2
+    },
+    "synthesis-rescue": {
+     "input": 36775,
+     "cacheRead": 33536,
+     "output": 1145,
+     "ms": 4601,
+     "calls": 2
+    },
+    "finder": {
+     "input": 256957,
+     "cacheRead": 239872,
+     "output": 6628,
+     "calls": 4,
+     "ms": 29854
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-2fa-backup-codes-cal-com": {
+    "generalist": {
+     "input": 673744,
+     "cacheRead": 632192,
+     "output": 5341,
+     "ms": 46674,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 593909,
+     "cacheRead": 578816,
+     "output": 8746,
+     "ms": 79044,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1267653,
+     "cacheRead": 1211008,
+     "output": 14087,
+     "calls": 2,
+     "ms": 125718
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+    "generalist": {
+     "input": 740198,
+     "cacheRead": 665600,
+     "output": 6257,
+     "ms": 38105,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 605411,
+     "cacheRead": 580864,
+     "output": 3597,
+     "ms": 26059,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1345609,
+     "cacheRead": 1246464,
+     "output": 9854,
+     "calls": 2,
+     "ms": 64164
+    },
+    "depoisDoFinder": 0
+   },
+   "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+    "generalist": {
+     "input": 502303,
+     "cacheRead": 464256,
+     "output": 6469,
+     "ms": 25766,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 602813,
+     "cacheRead": 587904,
+     "output": 7744,
+     "ms": 37074,
+     "calls": 3
+    },
+    "finder": {
+     "input": 1105116,
+     "cacheRead": 1052160,
+     "output": 14213,
+     "calls": 4,
+     "ms": 62840
+    },
+    "depoisDoFinder": 0
+   },
+   "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+    "generalist": {
+     "input": 988515,
+     "cacheRead": 935808,
+     "output": 8122,
+     "ms": 31485,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 959505,
+     "cacheRead": 941184,
+     "output": 5565,
+     "ms": 35993,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1948020,
+     "cacheRead": 1876992,
+     "output": 13687,
+     "calls": 2,
+     "ms": 67478
+    },
+    "depoisDoFinder": 0
+   },
+   "sms-workflow-reminder-retry-count-tracking-cal-com": {
+    "generalist": {
+     "input": 124367,
+     "cacheRead": 114304,
+     "output": 3515,
+     "ms": 16859,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 234678,
+     "cacheRead": 223872,
+     "output": 5961,
+     "ms": 23668,
+     "calls": 1
+    },
+    "finder": {
+     "input": 359045,
+     "cacheRead": 338176,
+     "output": 9476,
+     "calls": 2,
+     "ms": 40528
+    },
+    "depoisDoFinder": 0
+   },
+   "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+    "generalist": {
+     "input": 391684,
+     "cacheRead": 369408,
+     "output": 4460,
+     "ms": 27897,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 352947,
+     "cacheRead": 328064,
+     "output": 8184,
+     "ms": 43358,
+     "calls": 2
+    },
+    "finder": {
+     "input": 744631,
+     "cacheRead": 697472,
+     "output": 12644,
+     "calls": 3,
+     "ms": 71255
+    },
+    "depoisDoFinder": 0
+   },
+   "github-oauth-security-enhancement-sentry": {
+    "generalist": {
+     "input": 506660,
+     "cacheRead": 477056,
+     "output": 4465,
+     "ms": 23451,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 428480,
+     "cacheRead": 412928,
+     "output": 7636,
+     "ms": 30538,
+     "calls": 2
+    },
+    "finder": {
+     "input": 935140,
+     "cacheRead": 889984,
+     "output": 12101,
+     "calls": 3,
+     "ms": 53994
+    },
+    "depoisDoFinder": 0
+   },
+   "authzservice-improve-authz-caching-grafana-codex": {
+    "generalist": {
+     "input": 519853,
+     "cacheRead": 490368,
+     "output": 6208,
+     "ms": 40275,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 392080,
+     "cacheRead": 377984,
+     "output": 9766,
+     "ms": 52393,
+     "calls": 3
+    },
+    "finder": {
+     "input": 911933,
+     "cacheRead": 868352,
+     "output": 15974,
+     "calls": 4,
+     "ms": 92669
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+    "generalist": {
+     "input": 624355,
+     "cacheRead": 581760,
+     "output": 5753,
+     "ms": 32914,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 391002,
+     "cacheRead": 383232,
+     "output": 8638,
+     "ms": 50096,
+     "calls": 3
+    },
+    "finder": {
+     "input": 1015357,
+     "cacheRead": 964992,
+     "output": 14391,
+     "calls": 4,
+     "ms": 83012
+    },
+    "depoisDoFinder": 0
+   },
+   "replays-self-serve-bulk-delete-system-sentry": {
+    "generalist": {
+     "input": 3271862,
+     "cacheRead": 3134336,
+     "output": 8839,
+     "ms": 52089,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 2717940,
+     "cacheRead": 2688512,
+     "output": 6544,
+     "ms": 33860,
+     "calls": 1
+    },
+    "finder": {
+     "input": 5989802,
+     "cacheRead": 5822848,
+     "output": 15383,
+     "calls": 2,
+     "ms": 85949
+    },
+    "depoisDoFinder": 0
+   },
+   "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+    "generalist": {
+     "input": 1276892,
+     "cacheRead": 1137664,
+     "output": 4974,
+     "ms": 34360,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 1099985,
+     "cacheRead": 1057280,
+     "output": 7800,
+     "ms": 44146,
+     "calls": 1
+    },
+    "finder": {
+     "input": 2376877,
+     "cacheRead": 2194944,
+     "output": 12774,
+     "calls": 2,
+     "ms": 78507
+    },
+    "depoisDoFinder": 0
+   },
+   "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+    "generalist": {
+     "input": 264932,
+     "cacheRead": 245760,
+     "output": 4147,
+     "ms": 23745,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 149978,
+     "cacheRead": 142208,
+     "output": 1638,
+     "ms": 10816,
+     "calls": 1
+    },
+    "finder": {
+     "input": 414910,
+     "cacheRead": 387968,
+     "output": 5785,
+     "calls": 2,
+     "ms": 34561
+    },
+    "depoisDoFinder": 0
+   },
+   "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+    "generalist": {
+     "input": 622740,
+     "cacheRead": 576256,
+     "output": 7549,
+     "ms": 25671,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 209517,
+     "cacheRead": 205312,
+     "output": 1830,
+     "ms": 10466,
+     "calls": 1
+    },
+    "finder": {
+     "input": 832257,
+     "cacheRead": 781568,
+     "output": 9379,
+     "calls": 2,
+     "ms": 36138
+    },
+    "depoisDoFinder": 0
+   },
+   "anonymous-add-configurable-device-limit-grafana-codex": {
+    "generalist": {
+     "input": 148453,
+     "cacheRead": 127872,
+     "output": 3355,
+     "ms": 16060,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 153088,
+     "cacheRead": 145920,
+     "output": 2667,
+     "ms": 22097,
+     "calls": 2
+    },
+    "finder": {
+     "input": 301541,
+     "cacheRead": 273792,
+     "output": 6022,
+     "calls": 3,
+     "ms": 38157
+    },
+    "depoisDoFinder": 0
+   },
+   "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+    "generalist": {
+     "input": 472103,
+     "cacheRead": 448256,
+     "output": 7777,
+     "ms": 34705,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 344832,
+     "cacheRead": 329472,
+     "output": 7139,
+     "ms": 26844,
+     "calls": 1
+    },
+    "finder": {
+     "input": 816935,
+     "cacheRead": 777728,
+     "output": 14916,
+     "calls": 2,
+     "ms": 61549
+    },
+    "depoisDoFinder": 0
+   },
+   "fix-proper-handling-of-group-memberships-discourse-cursor": {
+    "generalist": {
+     "input": 764369,
+     "cacheRead": 731520,
+     "output": 9248,
+     "ms": 37270,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 739794,
+     "cacheRead": 694784,
+     "output": 6999,
+     "ms": 40585,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1504163,
+     "cacheRead": 1426304,
+     "output": 16247,
+     "calls": 2,
+     "ms": 77856
+    },
+    "depoisDoFinder": 0
+   },
+   "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+    "generalist": {
+     "input": 586708,
+     "cacheRead": 549888,
+     "output": 6283,
+     "ms": 41274,
+     "calls": 2
+    },
+    "synthesis-rescue": {
+     "input": 643773,
+     "cacheRead": 588672,
+     "output": 7178,
+     "ms": 40774,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1230481,
+     "cacheRead": 1138560,
+     "output": 13461,
+     "calls": 3,
+     "ms": 82048
+    },
+    "depoisDoFinder": 0
+   },
+   "feature-automatically-downsize-large-images-discourse-cursor": {
+    "generalist": {
+     "input": 432445,
+     "cacheRead": 381440,
+     "output": 3481,
+     "ms": 29815,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 54604,
+     "cacheRead": 50688,
+     "output": 1685,
+     "ms": 10185,
+     "calls": 1
+    },
+    "finder": {
+     "input": 487049,
+     "cacheRead": 432128,
+     "output": 5166,
+     "calls": 2,
+     "ms": 40000
+    },
+    "depoisDoFinder": 0
+   },
+   "fixing-re-authentication-with-passkeys-keycloak": {
+    "generalist": {
+     "input": 1057352,
+     "cacheRead": 940160,
+     "output": 9238,
+     "ms": 45873,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 568770,
+     "cacheRead": 549120,
+     "output": 5795,
+     "ms": 26058,
+     "calls": 2
+    },
+    "finder": {
+     "input": 1626122,
+     "cacheRead": 1489280,
+     "output": 15033,
+     "calls": 3,
+     "ms": 71932
+    },
+    "depoisDoFinder": 0
+   },
+   "feature-localization-fallbacks-server-side-discourse-cursor": {
+    "generalist": {
+     "input": 174013,
+     "cacheRead": 162432,
+     "output": 3629,
+     "ms": 16663,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 296917,
+     "cacheRead": 286976,
+     "output": 9955,
+     "ms": 40801,
+     "calls": 3
+    },
+    "finder": {
+     "input": 470930,
+     "cacheRead": 449408,
+     "output": 13584,
+     "calls": 4,
+     "ms": 57464
+    },
+    "depoisDoFinder": 0
+   },
+   "advanced-query-processing-architecture-grafana-codex": {
+    "generalist": {
+     "input": 444770,
+     "cacheRead": 415744,
+     "output": 6421,
+     "ms": 31830,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 501878,
+     "cacheRead": 459008,
+     "output": 5509,
+     "ms": 32468,
+     "calls": 1
+    },
+    "finder": {
+     "input": 946648,
+     "cacheRead": 874752,
+     "output": 11930,
+     "calls": 2,
+     "ms": 64298
+    },
+    "depoisDoFinder": 0
+   }
+  }
+ },
+ "muse": {
+  "comentarios": 189,
+  "tp": 78,
+  "fpNit": 93,
+  "fpAlucinacao": 18,
+  "totalTp": 192,
+  "semCasamento": 4,
+  "recall": 40.6,
+  "precisao": 41.3,
+  "f1": 40.9,
+  "f2": 40.8,
+  "porOrigem": {
+   "generalist": {
+    "comentarios": 164,
+    "tp": 70,
+    "fpNit": 74,
+    "fpAlucinacao": 17,
+    "recall": 36.5,
+    "precisao": 42.7,
+    "f1": 39.3,
+    "f2": 37.6
+   },
+   "synthesis-rescue": {
+    "comentarios": 25,
+    "tp": 10,
+    "fpNit": 14,
+    "fpAlucinacao": 1,
+    "recall": 5.2,
+    "precisao": 40.0,
+    "f1": 9.2,
+    "f2": 6.3
+   }
+  },
+  "porPr": {
+   "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+    "comentarios": 7,
+    "tp": 0,
+    "fp": 7
+   },
+   "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+    "comentarios": 3,
+    "tp": 0,
+    "fp": 3
+   },
+   "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+    "comentarios": 5,
+    "tp": 3,
+    "fp": 2
+   },
+   "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+    "comentarios": 5,
+    "tp": 2,
+    "fp": 3
+   },
+   "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+    "comentarios": 3,
+    "tp": 3,
+    "fp": 0
+   },
+   "add-guest-management-functionality-to-existing-bookings-cal-com": {
+    "comentarios": 8,
+    "tp": 5,
+    "fp": 3
+   },
+   "add-html-sanitizer-for-translated-message-resources-keycloak": {
+    "comentarios": 4,
+    "tp": 1,
+    "fp": 3
+   },
+   "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+    "comentarios": 3,
+    "tp": 0,
+    "fp": 3
+   },
+   "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+    "comentarios": 4,
+    "tp": 4,
+    "fp": 0
+   },
+   "advanced-query-processing-architecture-grafana-codex": {
+    "comentarios": 2,
+    "tp": 0,
+    "fp": 2
+   },
+   "advanced-sql-analytics-framework-grafana-codex": {
+    "comentarios": 0,
+    "tp": 0,
+    "fp": 0
+   },
+   "anonymous-add-configurable-device-limit-grafana-codex": {
+    "comentarios": 4,
+    "tp": 1,
+    "fp": 3
+   },
+   "async-import-of-the-appstore-packages-cal-com": {
+    "comentarios": 4,
+    "tp": 1,
+    "fp": 3
+   },
+   "authzservice-improve-authz-caching-grafana-codex": {
+    "comentarios": 4,
+    "tp": 0,
+    "fp": 4
+   },
+   "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+    "comentarios": 5,
+    "tp": 2,
+    "fp": 3
+   },
+   "database-performance-optimizations-grafana-codex": {
+    "comentarios": 3,
+    "tp": 2,
+    "fp": 1
+   },
+   "dual-storage-architecture-grafana-codex": {
+    "comentarios": 6,
+    "tp": 4,
+    "fp": 2
+   },
+   "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+    "comentarios": 9,
+    "tp": 4,
+    "fp": 5
+   },
+   "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+    "comentarios": 2,
+    "tp": 0,
+    "fp": 2
+   },
+   "feat-2fa-backup-codes-cal-com": {
+    "comentarios": 2,
+    "tp": 1,
+    "fp": 1
+   },
+   "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+    "comentarios": 4,
+    "tp": 2,
+    "fp": 2
+   },
+   "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+    "comentarios": 0,
+    "tp": 0,
+    "fp": 0
+   },
+   "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+    "comentarios": 3,
+    "tp": 0,
+    "fp": 3
+   },
+   "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+    "comentarios": 4,
+    "tp": 1,
+    "fp": 3
+   },
+   "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+    "comentarios": 5,
+    "tp": 3,
+    "fp": 2
+   },
+   "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+    "comentarios": 1,
+    "tp": 1,
+    "fp": 0
+   },
+   "feature-automatically-downsize-large-images-discourse-cursor": {
+    "comentarios": 4,
+    "tp": 2,
+    "fp": 2
+   },
+   "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+    "comentarios": 6,
+    "tp": 1,
+    "fp": 5
+   },
+   "feature-localization-fallbacks-server-side-discourse-cursor": {
+    "comentarios": 2,
+    "tp": 0,
+    "fp": 2
+   },
+   "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+    "comentarios": 2,
+    "tp": 2,
+    "fp": 0
+   },
+   "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+    "comentarios": 2,
+    "tp": 0,
+    "fp": 2
+   },
+   "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+    "comentarios": 6,
+    "tp": 5,
+    "fp": 1
+   },
+   "fix-proper-handling-of-group-memberships-discourse-cursor": {
+    "comentarios": 5,
+    "tp": 3,
+    "fp": 2
+   },
+   "fixing-re-authentication-with-passkeys-keycloak": {
+    "comentarios": 0,
+    "tp": 0,
+    "fp": 0
+   },
+   "frontend-asset-optimization-grafana-codex": {
+    "comentarios": 1,
+    "tp": 0,
+    "fp": 1
+   },
+   "github-oauth-security-enhancement-sentry": {
+    "comentarios": 4,
+    "tp": 0,
+    "fp": 4
+   },
+   "implement-access-token-context-encoding-framework-keycloak": {
+    "comentarios": 5,
+    "tp": 0,
+    "fp": 5
+   },
+   "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+    "comentarios": 3,
+    "tp": 0,
+    "fp": 3
+   },
+   "notification-rule-processing-engine-grafana-codex": {
+    "comentarios": 4,
+    "tp": 2,
+    "fp": 2
+   },
+   "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+    "comentarios": 9,
+    "tp": 5,
+    "fp": 4
+   },
+   "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+    "comentarios": 4,
+    "tp": 2,
+    "fp": 2
+   },
+   "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+    "comentarios": 4,
+    "tp": 2,
+    "fp": 2
+   },
+   "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+    "comentarios": 2,
+    "tp": 0,
+    "fp": 2
+   },
+   "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+    "comentarios": 1,
+    "tp": 0,
+    "fp": 1
+   },
+   "replays-self-serve-bulk-delete-system-sentry": {
+    "comentarios": 7,
+    "tp": 3,
+    "fp": 4
+   },
+   "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+    "comentarios": 5,
+    "tp": 4,
+    "fp": 1
+   },
+   "sms-workflow-reminder-retry-count-tracking-cal-com": {
+    "comentarios": 3,
+    "tp": 2,
+    "fp": 1
+   },
+   "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+    "comentarios": 5,
+    "tp": 2,
+    "fp": 3
+   },
+   "unified-storage-performance-optimizations-grafana-codex": {
+    "comentarios": 2,
+    "tp": 1,
+    "fp": 1
+   },
+   "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+    "comentarios": 3,
+    "tp": 2,
+    "fp": 1
+   }
+  },
+  "uso": {
+   "database-performance-optimizations-grafana-codex": {
+    "generalist": {
+     "input": 232427,
+     "cacheRead": 163449,
+     "output": 19458,
+     "ms": 253125,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 269629,
+     "cacheRead": 201164,
+     "output": 24462,
+     "ms": 318700,
+     "calls": 2
+    },
+    "finder": {
+     "input": 502056,
+     "cacheRead": 364613,
+     "output": 43920,
+     "calls": 3,
+     "ms": 571826
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+    "generalist": {
+     "input": 147215,
+     "cacheRead": 85685,
+     "output": 6736,
+     "ms": 80554,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 128679,
+     "cacheRead": 100149,
+     "output": 3405,
+     "ms": 37821,
+     "calls": 2
+    },
+    "finder": {
+     "input": 275894,
+     "cacheRead": 185834,
+     "output": 10141,
+     "calls": 3,
+     "ms": 118376
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+    "generalist": {
+     "input": 240349,
+     "cacheRead": 164089,
+     "output": 17100,
+     "ms": 194558,
+     "calls": 2
+    },
+    "synthesis-rescue": {
+     "input": 138638,
+     "cacheRead": 71989,
+     "output": 13768,
+     "ms": 160761,
+     "calls": 1
+    },
+    "finder": {
+     "input": 378987,
+     "cacheRead": 236078,
+     "output": 30868,
+     "calls": 3,
+     "ms": 355319
+    },
+    "depoisDoFinder": 0
+   },
+   "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+    "generalist": {
+     "input": 110915,
+     "cacheRead": 80151,
+     "output": 13823,
+     "ms": 144111,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 76277,
+     "cacheRead": 63014,
+     "output": 10327,
+     "ms": 120226,
+     "calls": 1
+    },
+    "finder": {
+     "input": 187192,
+     "cacheRead": 143165,
+     "output": 24150,
+     "calls": 2,
+     "ms": 264338
+    },
+    "depoisDoFinder": 0
+   },
+   "unified-storage-performance-optimizations-grafana-codex": {
+    "generalist": {
+     "input": 206850,
+     "cacheRead": 115223,
+     "output": 17686,
+     "ms": 220743,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 193022,
+     "cacheRead": 122504,
+     "output": 19571,
+     "ms": 255021,
+     "calls": 2
+    },
+    "finder": {
+     "input": 399872,
+     "cacheRead": 237727,
+     "output": 37257,
+     "calls": 3,
+     "ms": 475764
+    },
+    "depoisDoFinder": 0
+   },
+   "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+    "generalist": {
+     "input": 322427,
+     "cacheRead": 193589,
+     "output": 30539,
+     "ms": 339425,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 259701,
+     "cacheRead": 146214,
+     "output": 20315,
+     "ms": 230820,
+     "calls": 1
+    },
+    "finder": {
+     "input": 582128,
+     "cacheRead": 339803,
+     "output": 50854,
+     "calls": 2,
+     "ms": 570246
+    },
+    "depoisDoFinder": 0
+   },
+   "advanced-sql-analytics-framework-grafana-codex": {
+    "generalist": {
+     "input": 199469,
+     "cacheRead": 119191,
+     "output": 12635,
+     "ms": 140556,
+     "calls": 2
+    },
+    "synthesis-rescue": {
+     "input": 91076,
+     "cacheRead": 71989,
+     "output": 5429,
+     "ms": 63120,
+     "calls": 2
+    },
+    "finder": {
+     "input": 290545,
+     "cacheRead": 191180,
+     "output": 18064,
+     "calls": 4,
+     "ms": 203676
+    },
+    "depoisDoFinder": 0
+   },
+   "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+    "generalist": {
+     "input": 215648,
+     "cacheRead": 145672,
+     "output": 11623,
+     "ms": 127598,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 366126,
+     "cacheRead": 285343,
+     "output": 26854,
+     "ms": 334818,
+     "calls": 1
+    },
+    "finder": {
+     "input": 581774,
+     "cacheRead": 431015,
+     "output": 38477,
+     "calls": 2,
+     "ms": 462416
+    },
+    "depoisDoFinder": 0
+   },
+   "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+    "generalist": {
+     "input": 172451,
+     "cacheRead": 95398,
+     "output": 9445,
+     "ms": 81471,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 91580,
+     "cacheRead": 43332,
+     "output": 8285,
+     "ms": 95357,
+     "calls": 1
+    },
+    "finder": {
+     "input": 264031,
+     "cacheRead": 138730,
+     "output": 17730,
+     "calls": 2,
+     "ms": 176829
+    },
+    "depoisDoFinder": 0
+   },
+   "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+    "generalist": {
+     "input": 103578,
+     "cacheRead": 58677,
+     "output": 9332,
+     "ms": 90487,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 115166,
+     "cacheRead": 74534,
+     "output": 7074,
+     "ms": 73099,
+     "calls": 1
+    },
+    "finder": {
+     "input": 218744,
+     "cacheRead": 133211,
+     "output": 16406,
+     "calls": 2,
+     "ms": 163587
+    },
+    "depoisDoFinder": 0
+   },
+   "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+    "generalist": {
+     "input": 239002,
+     "cacheRead": 169593,
+     "output": 14071,
+     "ms": 174192,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 132125,
+     "cacheRead": 90135,
+     "output": 9788,
+     "ms": 126390,
+     "calls": 1
+    },
+    "finder": {
+     "input": 371127,
+     "cacheRead": 259728,
+     "output": 23859,
+     "calls": 2,
+     "ms": 300584
+    },
+    "depoisDoFinder": 0
+   },
+   "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+    "generalist": {
+     "input": 274442,
+     "cacheRead": 192505,
+     "output": 20282,
+     "ms": 221206,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 323633,
+     "cacheRead": 243291,
+     "output": 25850,
+     "ms": 279865,
+     "calls": 2
+    },
+    "finder": {
+     "input": 598075,
+     "cacheRead": 435796,
+     "output": 46132,
+     "calls": 3,
+     "ms": 501071
+    },
+    "depoisDoFinder": 0
+   },
+   "add-html-sanitizer-for-translated-message-resources-keycloak": {
+    "generalist": {
+     "input": 561013,
+     "cacheRead": 350457,
+     "output": 20164,
+     "ms": 200724,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 108270,
+     "cacheRead": 41570,
+     "output": 24178,
+     "ms": 278180,
+     "calls": 1
+    },
+    "finder": {
+     "input": 669283,
+     "cacheRead": 392027,
+     "output": 44342,
+     "calls": 2,
+     "ms": 478904
+    },
+    "depoisDoFinder": 0
+   },
+   "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+    "generalist": {
+     "input": 67432,
+     "cacheRead": 13937,
+     "output": 6930,
+     "ms": 67398,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 297879,
+     "cacheRead": 127353,
+     "output": 36551,
+     "ms": 442533,
+     "calls": 1
+    },
+    "finder": {
+     "input": 365311,
+     "cacheRead": 141290,
+     "output": 43481,
+     "calls": 2,
+     "ms": 509932
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+    "generalist": {
+     "input": 137423,
+     "cacheRead": 66101,
+     "output": 8699,
+     "ms": 97816,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 269609,
+     "cacheRead": 178794,
+     "output": 20686,
+     "ms": 242255,
+     "calls": 1
+    },
+    "finder": {
+     "input": 407032,
+     "cacheRead": 244895,
+     "output": 29385,
+     "calls": 2,
+     "ms": 340072
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+    "generalist": {
+     "input": 193794,
+     "cacheRead": 77222,
+     "output": 15338,
+     "ms": 163634,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 591580,
+     "cacheRead": 500368,
+     "output": 51844,
+     "ms": 597004,
+     "calls": 1
+    },
+    "finder": {
+     "input": 785374,
+     "cacheRead": 577590,
+     "output": 67182,
+     "calls": 2,
+     "ms": 760638
+    },
+    "depoisDoFinder": 0
+   },
+   "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+    "generalist": {
+     "input": 164575,
+     "cacheRead": 128392,
+     "output": 8468,
+     "ms": 92462,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 108242,
+     "cacheRead": 61749,
+     "output": 24602,
+     "ms": 279854,
+     "calls": 1
+    },
+    "finder": {
+     "input": 272817,
+     "cacheRead": 190141,
+     "output": 33070,
+     "calls": 2,
+     "ms": 372316
+    },
+    "depoisDoFinder": 0
+   },
+   "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+    "generalist": {
+     "input": 170646,
+     "cacheRead": 101414,
+     "output": 10805,
+     "ms": 118493,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 133609,
+     "cacheRead": 61380,
+     "output": 13288,
+     "ms": 167669,
+     "calls": 2
+    },
+    "finder": {
+     "input": 304255,
+     "cacheRead": 162794,
+     "output": 24093,
+     "calls": 3,
+     "ms": 286162
+    },
+    "depoisDoFinder": 0
+   },
+   "dual-storage-architecture-grafana-codex": {
+    "generalist": {
+     "input": 296920,
+     "cacheRead": 175609,
+     "output": 8125,
+     "ms": 99319,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 149643,
+     "cacheRead": 96053,
+     "output": 8838,
+     "ms": 100323,
+     "calls": 1
+    },
+    "finder": {
+     "input": 446563,
+     "cacheRead": 271662,
+     "output": 16963,
+     "calls": 2,
+     "ms": 199643
+    },
+    "depoisDoFinder": 0
+   },
+   "notification-rule-processing-engine-grafana-codex": {
+    "generalist": {
+     "input": 459919,
+     "cacheRead": 244473,
+     "output": 16708,
+     "ms": 172368,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 647024,
+     "cacheRead": 430141,
+     "output": 27020,
+     "ms": 256922,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1106943,
+     "cacheRead": 674614,
+     "output": 43728,
+     "calls": 2,
+     "ms": 429291
+    },
+    "depoisDoFinder": 0
+   },
+   "frontend-asset-optimization-grafana-codex": {
+    "generalist": {
+     "input": 110863,
+     "cacheRead": 76552,
+     "output": 13322,
+     "ms": 165176,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 47551,
+     "cacheRead": 28612,
+     "output": 4737,
+     "ms": 61916,
+     "calls": 2
+    },
+    "finder": {
+     "input": 158414,
+     "cacheRead": 105164,
+     "output": 18059,
+     "calls": 3,
+     "ms": 227094
+    },
+    "depoisDoFinder": 0
+   },
+   "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+    "generalist": {
+     "input": 307271,
+     "cacheRead": 186233,
+     "output": 14610,
+     "ms": 168365,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 279640,
+     "cacheRead": 169322,
+     "output": 14278,
+     "ms": 182717,
+     "calls": 1
+    },
+    "finder": {
+     "input": 586911,
+     "cacheRead": 355555,
+     "output": 28888,
+     "calls": 2,
+     "ms": 351083
+    },
+    "depoisDoFinder": 0
+   },
+   "async-import-of-the-appstore-packages-cal-com": {
+    "generalist": {
+     "input": 188376,
+     "cacheRead": 72245,
+     "output": 8955,
+     "ms": 89106,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 188314,
+     "cacheRead": 128151,
+     "output": 10133,
+     "ms": 120584,
+     "calls": 2
+    },
+    "finder": {
+     "input": 376690,
+     "cacheRead": 200396,
+     "output": 19088,
+     "calls": 3,
+     "ms": 209690
+    },
+    "depoisDoFinder": 0
+   },
+   "add-guest-management-functionality-to-existing-bookings-cal-com": {
+    "generalist": {
+     "input": 206761,
+     "cacheRead": 137525,
+     "output": 7638,
+     "ms": 75915,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 253314,
+     "cacheRead": 129205,
+     "output": 11312,
+     "ms": 142316,
+     "calls": 1
+    },
+    "finder": {
+     "input": 460075,
+     "cacheRead": 266730,
+     "output": 18950,
+     "calls": 2,
+     "ms": 218231
+    },
+    "depoisDoFinder": 0
+   },
+   "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+    "generalist": {
+     "input": 267252,
+     "cacheRead": 160377,
+     "output": 9831,
+     "ms": 85667,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 76086,
+     "cacheRead": 55379,
+     "output": 10920,
+     "ms": 137272,
+     "calls": 1
+    },
+    "finder": {
+     "input": 343338,
+     "cacheRead": 215756,
+     "output": 20751,
+     "calls": 2,
+     "ms": 222940
+    },
+    "depoisDoFinder": 0
+   },
+   "implement-access-token-context-encoding-framework-keycloak": {
+    "generalist": {
+     "input": 613929,
+     "cacheRead": 384490,
+     "output": 10418,
+     "ms": 90066,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 766816,
+     "cacheRead": 616253,
+     "output": 37299,
+     "ms": 411568,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1380745,
+     "cacheRead": 1000743,
+     "output": 47717,
+     "calls": 2,
+     "ms": 501635
+    },
+    "depoisDoFinder": 0
+   },
+   "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+    "generalist": {
+     "input": 528373,
+     "cacheRead": 279861,
+     "output": 9154,
+     "ms": 125276,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 905023,
+     "cacheRead": 671677,
+     "output": 42756,
+     "ms": 437990,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1433396,
+     "cacheRead": 951538,
+     "output": 51910,
+     "calls": 2,
+     "ms": 563266
+    },
+    "depoisDoFinder": 0
+   },
+   "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+    "generalist": {
+     "input": 699563,
+     "cacheRead": 542322,
+     "output": 15336,
+     "ms": 108659,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 24588,
+     "cacheRead": 0,
+     "output": 3090,
+     "ms": 23390,
+     "calls": 2
+    },
+    "finder": {
+     "input": 724151,
+     "cacheRead": 542322,
+     "output": 18426,
+     "calls": 3,
+     "ms": 132051
+    },
+    "depoisDoFinder": 0
+   },
+   "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+    "generalist": {
+     "input": 23238,
+     "cacheRead": 14306,
+     "output": 4439,
+     "ms": 40851,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 29725,
+     "cacheRead": 14306,
+     "output": 5422,
+     "ms": 62619,
+     "calls": 1
+    },
+    "finder": {
+     "input": 52963,
+     "cacheRead": 28612,
+     "output": 9861,
+     "calls": 2,
+     "ms": 103470
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-2fa-backup-codes-cal-com": {
+    "generalist": {
+     "input": 199952,
+     "cacheRead": 108966,
+     "output": 11471,
+     "ms": 120634,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 156427,
+     "cacheRead": 79014,
+     "output": 14181,
+     "ms": 153676,
+     "calls": 2
+    },
+    "finder": {
+     "input": 356379,
+     "cacheRead": 187980,
+     "output": 25652,
+     "calls": 3,
+     "ms": 274310
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+    "generalist": {
+     "input": 547074,
+     "cacheRead": 333757,
+     "output": 30297,
+     "ms": 355453,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 437646,
+     "cacheRead": 286540,
+     "output": 18775,
+     "ms": 229926,
+     "calls": 1
+    },
+    "finder": {
+     "input": 984720,
+     "cacheRead": 620297,
+     "output": 49072,
+     "calls": 2,
+     "ms": 585379
+    },
+    "depoisDoFinder": 0
+   },
+   "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+    "generalist": {
+     "input": 437057,
+     "cacheRead": 296524,
+     "output": 19262,
+     "ms": 220938,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 379211,
+     "cacheRead": 204507,
+     "output": 30351,
+     "ms": 328380,
+     "calls": 1
+    },
+    "finder": {
+     "input": 816268,
+     "cacheRead": 501031,
+     "output": 49613,
+     "calls": 2,
+     "ms": 549319
+    },
+    "depoisDoFinder": 0
+   },
+   "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+    "generalist": {
+     "input": 370165,
+     "cacheRead": 230792,
+     "output": 8171,
+     "ms": 78625,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 927591,
+     "cacheRead": 708052,
+     "output": 38905,
+     "ms": 475774,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1297756,
+     "cacheRead": 938844,
+     "output": 47076,
+     "calls": 2,
+     "ms": 554399
+    },
+    "depoisDoFinder": 0
+   },
+   "sms-workflow-reminder-retry-count-tracking-cal-com": {
+    "generalist": {
+     "input": 99269,
+     "cacheRead": 63014,
+     "output": 10674,
+     "ms": 130437,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 53420,
+     "cacheRead": 32708,
+     "output": 9730,
+     "ms": 123443,
+     "calls": 2
+    },
+    "finder": {
+     "input": 152689,
+     "cacheRead": 95722,
+     "output": 20404,
+     "calls": 3,
+     "ms": 253880
+    },
+    "depoisDoFinder": 0
+   },
+   "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+    "generalist": {
+     "input": 173387,
+     "cacheRead": 85128,
+     "output": 14486,
+     "ms": 155490,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 258438,
+     "cacheRead": 125162,
+     "output": 19636,
+     "ms": 209868,
+     "calls": 2
+    },
+    "finder": {
+     "input": 431825,
+     "cacheRead": 210290,
+     "output": 34122,
+     "calls": 3,
+     "ms": 365359
+    },
+    "depoisDoFinder": 0
+   },
+   "github-oauth-security-enhancement-sentry": {
+    "generalist": {
+     "input": 301079,
+     "cacheRead": 201563,
+     "output": 12139,
+     "ms": 152718,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 19332,
+     "cacheRead": 18417,
+     "output": 5177,
+     "ms": 56277,
+     "calls": 1
+    },
+    "finder": {
+     "input": 320411,
+     "cacheRead": 219980,
+     "output": 17316,
+     "calls": 2,
+     "ms": 208996
+    },
+    "depoisDoFinder": 0
+   },
+   "authzservice-improve-authz-caching-grafana-codex": {
+    "generalist": {
+     "input": 152619,
+     "cacheRead": 67238,
+     "output": 9786,
+     "ms": 113840,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 248996,
+     "cacheRead": 203498,
+     "output": 29071,
+     "ms": 365922,
+     "calls": 2
+    },
+    "finder": {
+     "input": 401615,
+     "cacheRead": 270736,
+     "output": 38857,
+     "calls": 3,
+     "ms": 479763
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+    "generalist": {
+     "input": 235009,
+     "cacheRead": 123814,
+     "output": 8552,
+     "ms": 101423,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 168347,
+     "cacheRead": 87989,
+     "output": 20865,
+     "ms": 245102,
+     "calls": 1
+    },
+    "finder": {
+     "input": 403356,
+     "cacheRead": 211803,
+     "output": 29417,
+     "calls": 2,
+     "ms": 346525
+    },
+    "depoisDoFinder": 0
+   },
+   "replays-self-serve-bulk-delete-system-sentry": {
+    "generalist": {
+     "input": 1556784,
+     "cacheRead": 1014130,
+     "output": 29437,
+     "ms": 306055,
+     "calls": 3
+    },
+    "synthesis-rescue": {
+     "input": 455799,
+     "cacheRead": 234474,
+     "output": 12037,
+     "ms": 131261,
+     "calls": 3
+    },
+    "finder": {
+     "input": 2012583,
+     "cacheRead": 1248604,
+     "output": 41474,
+     "calls": 6,
+     "ms": 437325
+    },
+    "depoisDoFinder": 0
+   },
+   "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+    "generalist": {
+     "input": 259535,
+     "cacheRead": 60130,
+     "output": 6818,
+     "ms": 64116,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 775247,
+     "cacheRead": 528987,
+     "output": 32759,
+     "ms": 356739,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1034782,
+     "cacheRead": 589117,
+     "output": 39577,
+     "calls": 2,
+     "ms": 420857
+    },
+    "depoisDoFinder": 0
+   },
+   "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+    "generalist": {
+     "input": 128144,
+     "cacheRead": 84390,
+     "output": 14203,
+     "ms": 169530,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 244148,
+     "cacheRead": 147065,
+     "output": 28218,
+     "ms": 306322,
+     "calls": 1
+    },
+    "finder": {
+     "input": 372292,
+     "cacheRead": 231455,
+     "output": 42421,
+     "calls": 2,
+     "ms": 475852
+    },
+    "depoisDoFinder": 0
+   },
+   "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+    "generalist": {
+     "input": 444777,
+     "cacheRead": 305928,
+     "output": 9476,
+     "ms": 67781,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 275112,
+     "cacheRead": 199447,
+     "output": 22389,
+     "ms": 248942,
+     "calls": 1
+    },
+    "finder": {
+     "input": 719889,
+     "cacheRead": 505375,
+     "output": 31865,
+     "calls": 2,
+     "ms": 316723
+    },
+    "depoisDoFinder": 0
+   },
+   "anonymous-add-configurable-device-limit-grafana-codex": {
+    "generalist": {
+     "input": 120668,
+     "cacheRead": 62276,
+     "output": 4781,
+     "ms": 51161,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 205343,
+     "cacheRead": 159752,
+     "output": 14785,
+     "ms": 185737,
+     "calls": 1
+    },
+    "finder": {
+     "input": 326011,
+     "cacheRead": 222028,
+     "output": 19566,
+     "calls": 2,
+     "ms": 236899
+    },
+    "depoisDoFinder": 0
+   },
+   "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+    "generalist": {
+     "input": 254809,
+     "cacheRead": 220906,
+     "output": 25068,
+     "ms": 284884,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 206549,
+     "cacheRead": 128904,
+     "output": 13401,
+     "ms": 148270,
+     "calls": 1
+    },
+    "finder": {
+     "input": 461358,
+     "cacheRead": 349810,
+     "output": 38469,
+     "calls": 2,
+     "ms": 433154
+    },
+    "depoisDoFinder": 0
+   },
+   "fix-proper-handling-of-group-memberships-discourse-cursor": {
+    "generalist": {
+     "input": 290240,
+     "cacheRead": 169977,
+     "output": 17944,
+     "ms": 225622,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 42903,
+     "cacheRead": 27490,
+     "output": 10054,
+     "ms": 110337,
+     "calls": 1
+    },
+    "finder": {
+     "input": 333143,
+     "cacheRead": 197467,
+     "output": 27998,
+     "calls": 2,
+     "ms": 335960
+    },
+    "depoisDoFinder": 0
+   },
+   "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+    "generalist": {
+     "input": 321049,
+     "cacheRead": 198920,
+     "output": 8701,
+     "ms": 99488,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 420649,
+     "cacheRead": 262777,
+     "output": 45875,
+     "ms": 515914,
+     "calls": 1
+    },
+    "finder": {
+     "input": 741698,
+     "cacheRead": 461697,
+     "output": 54576,
+     "calls": 2,
+     "ms": 615403
+    },
+    "depoisDoFinder": 0
+   },
+   "feature-automatically-downsize-large-images-discourse-cursor": {
+    "generalist": {
+     "input": 316070,
+     "cacheRead": 209288,
+     "output": 20840,
+     "ms": 226307,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 11830,
+     "cacheRead": 7153,
+     "output": 2653,
+     "ms": 37879,
+     "calls": 1
+    },
+    "finder": {
+     "input": 327900,
+     "cacheRead": 216441,
+     "output": 23493,
+     "calls": 2,
+     "ms": 264188
+    },
+    "depoisDoFinder": 0
+   },
+   "fixing-re-authentication-with-passkeys-keycloak": {
+    "generalist": {
+     "input": 600320,
+     "cacheRead": 368972,
+     "output": 23314,
+     "ms": 258048,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 511051,
+     "cacheRead": 383180,
+     "output": 21840,
+     "ms": 229778,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1111371,
+     "cacheRead": 752152,
+     "output": 45154,
+     "calls": 2,
+     "ms": 487826
+    },
+    "depoisDoFinder": 0
+   },
+   "feature-localization-fallbacks-server-side-discourse-cursor": {
+    "generalist": {
+     "input": 185055,
+     "cacheRead": 128588,
+     "output": 25390,
+     "ms": 309008,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 23558,
+     "cacheRead": 14306,
+     "output": 7326,
+     "ms": 81558,
+     "calls": 1
+    },
+    "finder": {
+     "input": 208613,
+     "cacheRead": 142894,
+     "output": 32716,
+     "calls": 2,
+     "ms": 390567
+    },
+    "depoisDoFinder": 0
+   },
+   "advanced-query-processing-architecture-grafana-codex": {
+    "generalist": {
+     "input": 355713,
+     "cacheRead": 198235,
+     "output": 18011,
+     "ms": 198916,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 284328,
+     "cacheRead": 194011,
+     "output": 18220,
+     "ms": 210158,
+     "calls": 1
+    },
+    "finder": {
+     "input": 640041,
+     "cacheRead": 392246,
+     "output": 36231,
+     "calls": 2,
+     "ms": 409074
+    },
+    "depoisDoFinder": 0
+   }
+  }
+ },
+ "kimi": {
+  "comentarios": 214,
+  "tp": 70,
+  "fpNit": 137,
+  "fpAlucinacao": 7,
+  "totalTp": 192,
+  "semCasamento": 19,
+  "recall": 36.5,
+  "precisao": 32.7,
+  "f1": 34.5,
+  "f2": 35.6,
+  "porOrigem": {
+   "generalist": {
+    "comentarios": 148,
+    "tp": 56,
+    "fpNit": 82,
+    "fpAlucinacao": 4,
+    "recall": 29.2,
+    "precisao": 37.8,
+    "f1": 32.9,
+    "f2": 30.6
+   },
+   "synthesis-rescue": {
+    "comentarios": 66,
+    "tp": 28,
+    "fpNit": 35,
+    "fpAlucinacao": 3,
+    "recall": 14.6,
+    "precisao": 42.4,
+    "f1": 21.7,
+    "f2": 16.8
+   }
+  },
+  "porPr": {
+   "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+    "comentarios": 2,
+    "tp": 0,
+    "fp": 2
+   },
+   "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+    "comentarios": 4,
+    "tp": 1,
+    "fp": 3
+   },
+   "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+    "comentarios": 2,
+    "tp": 1,
+    "fp": 1
+   },
+   "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+    "comentarios": 3,
+    "tp": 1,
+    "fp": 2
+   },
+   "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+    "comentarios": 4,
+    "tp": 3,
+    "fp": 1
+   },
+   "add-guest-management-functionality-to-existing-bookings-cal-com": {
+    "comentarios": 7,
+    "tp": 3,
+    "fp": 4
+   },
+   "add-html-sanitizer-for-translated-message-resources-keycloak": {
+    "comentarios": 6,
+    "tp": 0,
+    "fp": 6
+   },
+   "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+    "comentarios": 1,
+    "tp": 0,
+    "fp": 1
+   },
+   "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+    "comentarios": 7,
+    "tp": 5,
+    "fp": 2
+   },
+   "advanced-query-processing-architecture-grafana-codex": {
+    "comentarios": 2,
+    "tp": 0,
+    "fp": 2
+   },
+   "advanced-sql-analytics-framework-grafana-codex": {
+    "comentarios": 1,
+    "tp": 0,
+    "fp": 1
+   },
+   "anonymous-add-configurable-device-limit-grafana-codex": {
+    "comentarios": 5,
+    "tp": 1,
+    "fp": 4
+   },
+   "async-import-of-the-appstore-packages-cal-com": {
+    "comentarios": 4,
+    "tp": 1,
+    "fp": 3
+   },
+   "authzservice-improve-authz-caching-grafana-codex": {
+    "comentarios": 3,
+    "tp": 0,
+    "fp": 3
+   },
+   "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+    "comentarios": 5,
+    "tp": 2,
+    "fp": 3
+   },
+   "database-performance-optimizations-grafana-codex": {
+    "comentarios": 2,
+    "tp": 2,
+    "fp": 0
+   },
+   "dual-storage-architecture-grafana-codex": {
+    "comentarios": 7,
+    "tp": 4,
+    "fp": 3
+   },
+   "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+    "comentarios": 11,
+    "tp": 4,
+    "fp": 7
+   },
+   "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+    "comentarios": 3,
+    "tp": 0,
+    "fp": 3
+   },
+   "feat-2fa-backup-codes-cal-com": {
+    "comentarios": 7,
+    "tp": 1,
+    "fp": 6
+   },
+   "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+    "comentarios": 3,
+    "tp": 1,
+    "fp": 2
+   },
+   "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+    "comentarios": 1,
+    "tp": 1,
+    "fp": 0
+   },
+   "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+    "comentarios": 2,
+    "tp": 0,
+    "fp": 2
+   },
+   "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+    "comentarios": 2,
+    "tp": 0,
+    "fp": 2
+   },
+   "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+    "comentarios": 4,
+    "tp": 1,
+    "fp": 3
+   },
+   "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+    "comentarios": 2,
+    "tp": 1,
+    "fp": 1
+   },
+   "feature-automatically-downsize-large-images-discourse-cursor": {
+    "comentarios": 4,
+    "tp": 2,
+    "fp": 2
+   },
+   "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+    "comentarios": 7,
+    "tp": 2,
+    "fp": 5
+   },
+   "feature-localization-fallbacks-server-side-discourse-cursor": {
+    "comentarios": 1,
+    "tp": 0,
+    "fp": 1
+   },
+   "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+    "comentarios": 4,
+    "tp": 3,
+    "fp": 1
+   },
+   "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+    "comentarios": 4,
+    "tp": 0,
+    "fp": 4
+   },
+   "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+    "comentarios": 10,
+    "tp": 4,
+    "fp": 6
+   },
+   "fix-proper-handling-of-group-memberships-discourse-cursor": {
+    "comentarios": 8,
+    "tp": 4,
+    "fp": 4
+   },
+   "fixing-re-authentication-with-passkeys-keycloak": {
+    "comentarios": 0,
+    "tp": 0,
+    "fp": 0
+   },
+   "frontend-asset-optimization-grafana-codex": {
+    "comentarios": 2,
+    "tp": 0,
+    "fp": 2
+   },
+   "github-oauth-security-enhancement-sentry": {
+    "comentarios": 5,
+    "tp": 0,
+    "fp": 5
+   },
+   "implement-access-token-context-encoding-framework-keycloak": {
+    "comentarios": 4,
+    "tp": 0,
+    "fp": 4
+   },
+   "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+    "comentarios": 8,
+    "tp": 0,
+    "fp": 8
+   },
+   "notification-rule-processing-engine-grafana-codex": {
+    "comentarios": 9,
+    "tp": 3,
+    "fp": 6
+   },
+   "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+    "comentarios": 12,
+    "tp": 5,
+    "fp": 7
+   },
+   "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+    "comentarios": 2,
+    "tp": 1,
+    "fp": 1
+   },
+   "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+    "comentarios": 6,
+    "tp": 2,
+    "fp": 4
+   },
+   "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+    "comentarios": 1,
+    "tp": 0,
+    "fp": 1
+   },
+   "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+    "comentarios": 0,
+    "tp": 0,
+    "fp": 0
+   },
+   "replays-self-serve-bulk-delete-system-sentry": {
+    "comentarios": 4,
+    "tp": 2,
+    "fp": 2
+   },
+   "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+    "comentarios": 10,
+    "tp": 4,
+    "fp": 6
+   },
+   "sms-workflow-reminder-retry-count-tracking-cal-com": {
+    "comentarios": 3,
+    "tp": 1,
+    "fp": 2
+   },
+   "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+    "comentarios": 5,
+    "tp": 1,
+    "fp": 4
+   },
+   "unified-storage-performance-optimizations-grafana-codex": {
+    "comentarios": 2,
+    "tp": 1,
+    "fp": 1
+   },
+   "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+    "comentarios": 3,
+    "tp": 2,
+    "fp": 1
+   }
+  },
+  "uso": {
+   "database-performance-optimizations-grafana-codex": {
+    "generalist": {
+     "input": 338730,
+     "cacheRead": 314112,
+     "output": 6832,
+     "ms": 183209,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 340839,
+     "cacheRead": 317696,
+     "output": 17356,
+     "ms": 440402,
+     "calls": 3
+    },
+    "finder": {
+     "input": 679569,
+     "cacheRead": 631808,
+     "output": 24188,
+     "calls": 4,
+     "ms": 623612
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+    "generalist": {
+     "input": 343978,
+     "cacheRead": 312576,
+     "output": 4433,
+     "ms": 123841,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 304206,
+     "cacheRead": 289792,
+     "output": 8015,
+     "ms": 201825,
+     "calls": 1
+    },
+    "finder": {
+     "input": 648184,
+     "cacheRead": 602368,
+     "output": 12448,
+     "calls": 2,
+     "ms": 325666
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+    "generalist": {
+     "input": 399703,
+     "cacheRead": 364288,
+     "output": 12098,
+     "ms": 294950,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 461127,
+     "cacheRead": 438272,
+     "output": 9847,
+     "ms": 271031,
+     "calls": 1
+    },
+    "finder": {
+     "input": 860830,
+     "cacheRead": 802560,
+     "output": 21945,
+     "calls": 2,
+     "ms": 565981
+    },
+    "depoisDoFinder": 0
+   },
+   "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+    "generalist": {
+     "input": 380618,
+     "cacheRead": 350464,
+     "output": 14030,
+     "ms": 360262,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 347829,
+     "cacheRead": 302592,
+     "output": 15125,
+     "ms": 407436,
+     "calls": 3
+    },
+    "finder": {
+     "input": 728447,
+     "cacheRead": 653056,
+     "output": 29155,
+     "calls": 4,
+     "ms": 767710
+    },
+    "depoisDoFinder": 0
+   },
+   "unified-storage-performance-optimizations-grafana-codex": {
+    "generalist": {
+     "input": 379942,
+     "cacheRead": 350976,
+     "output": 10838,
+     "ms": 263317,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 603254,
+     "cacheRead": 525312,
+     "output": 20412,
+     "ms": 498407,
+     "calls": 1
+    },
+    "finder": {
+     "input": 983196,
+     "cacheRead": 876288,
+     "output": 31250,
+     "calls": 2,
+     "ms": 761724
+    },
+    "depoisDoFinder": 0
+   },
+   "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+    "generalist": {
+     "input": 456134,
+     "cacheRead": 404992,
+     "output": 12252,
+     "ms": 298293,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 392873,
+     "cacheRead": 376576,
+     "output": 11351,
+     "ms": 283185,
+     "calls": 1
+    },
+    "finder": {
+     "input": 849007,
+     "cacheRead": 781568,
+     "output": 23603,
+     "calls": 2,
+     "ms": 581480
+    },
+    "depoisDoFinder": 0
+   },
+   "advanced-sql-analytics-framework-grafana-codex": {
+    "generalist": {
+     "input": 373753,
+     "cacheRead": 348928,
+     "output": 9319,
+     "ms": 240875,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 14981,
+     "cacheRead": 13312,
+     "output": 13028,
+     "ms": 304708,
+     "calls": 3
+    },
+    "finder": {
+     "input": 388734,
+     "cacheRead": 362240,
+     "output": 22347,
+     "calls": 4,
+     "ms": 545584
+    },
+    "depoisDoFinder": 0
+   },
+   "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+    "generalist": {
+     "input": 564526,
+     "cacheRead": 530688,
+     "output": 9366,
+     "ms": 227036,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 712510,
+     "cacheRead": 648192,
+     "output": 17392,
+     "ms": 399076,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1277036,
+     "cacheRead": 1178880,
+     "output": 26758,
+     "calls": 2,
+     "ms": 626112
+    },
+    "depoisDoFinder": 0
+   },
+   "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+    "generalist": {
+     "input": 727326,
+     "cacheRead": 673792,
+     "output": 29016,
+     "ms": 706635,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 50397,
+     "cacheRead": 40960,
+     "output": 19926,
+     "ms": 462768,
+     "calls": 1
+    },
+    "finder": {
+     "input": 777723,
+     "cacheRead": 714752,
+     "output": 48942,
+     "calls": 2,
+     "ms": 1169404
+    },
+    "depoisDoFinder": 0
+   },
+   "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+    "generalist": {
+     "input": 425761,
+     "cacheRead": 399872,
+     "output": 5668,
+     "ms": 152455,
+     "calls": 2
+    },
+    "synthesis-rescue": {
+     "input": 173149,
+     "cacheRead": 160512,
+     "output": 6222,
+     "ms": 149143,
+     "calls": 3
+    },
+    "finder": {
+     "input": 598910,
+     "cacheRead": 560384,
+     "output": 11890,
+     "calls": 5,
+     "ms": 301599
+    },
+    "depoisDoFinder": 0
+   },
+   "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+    "generalist": {
+     "input": 361009,
+     "cacheRead": 339200,
+     "output": 8577,
+     "ms": 210720,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 348342,
+     "cacheRead": 332288,
+     "output": 11432,
+     "ms": 255022,
+     "calls": 1
+    },
+    "finder": {
+     "input": 709351,
+     "cacheRead": 671488,
+     "output": 20009,
+     "calls": 2,
+     "ms": 465743
+    },
+    "depoisDoFinder": 0
+   },
+   "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+    "generalist": {
+     "input": 581558,
+     "cacheRead": 509184,
+     "output": 12745,
+     "ms": 297293,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 595882,
+     "cacheRead": 550912,
+     "output": 13343,
+     "ms": 326446,
+     "calls": 3
+    },
+    "finder": {
+     "input": 1177440,
+     "cacheRead": 1060096,
+     "output": 26088,
+     "calls": 4,
+     "ms": 623739
+    },
+    "depoisDoFinder": 0
+   },
+   "add-html-sanitizer-for-translated-message-resources-keycloak": {
+    "generalist": {
+     "input": 1039746,
+     "cacheRead": 959488,
+     "output": 18124,
+     "ms": 448184,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 94738,
+     "cacheRead": 71424,
+     "output": 26150,
+     "ms": 592523,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1134484,
+     "cacheRead": 1030912,
+     "output": 44274,
+     "calls": 2,
+     "ms": 1040708
+    },
+    "depoisDoFinder": 0
+   },
+   "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+    "generalist": {
+     "input": 470396,
+     "cacheRead": 433920,
+     "output": 12673,
+     "ms": 328829,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 13609,
+     "cacheRead": 12800,
+     "output": 21029,
+     "ms": 474814,
+     "calls": 1
+    },
+    "finder": {
+     "input": 484005,
+     "cacheRead": 446720,
+     "output": 33702,
+     "calls": 2,
+     "ms": 803643
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+    "generalist": {
+     "input": 531528,
+     "cacheRead": 489984,
+     "output": 12654,
+     "ms": 326460,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 319581,
+     "cacheRead": 301568,
+     "output": 10526,
+     "ms": 267628,
+     "calls": 1
+    },
+    "finder": {
+     "input": 851109,
+     "cacheRead": 791552,
+     "output": 23180,
+     "calls": 2,
+     "ms": 594089
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+    "generalist": {
+     "input": 761703,
+     "cacheRead": 713216,
+     "output": 13262,
+     "ms": 344596,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 624423,
+     "cacheRead": 602368,
+     "output": 22913,
+     "ms": 574600,
+     "calls": 3
+    },
+    "finder": {
+     "input": 1386126,
+     "cacheRead": 1315584,
+     "output": 36175,
+     "calls": 4,
+     "ms": 919196
+    },
+    "depoisDoFinder": 0
+   },
+   "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+    "generalist": {
+     "input": 362653,
+     "cacheRead": 326912,
+     "output": 16457,
+     "ms": 370994,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 242519,
+     "cacheRead": 226048,
+     "output": 17915,
+     "ms": 390214,
+     "calls": 1
+    },
+    "finder": {
+     "input": 605172,
+     "cacheRead": 552960,
+     "output": 34372,
+     "calls": 2,
+     "ms": 761209
+    },
+    "depoisDoFinder": 0
+   },
+   "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+    "generalist": {
+     "input": 468205,
+     "cacheRead": 430592,
+     "output": 12749,
+     "ms": 337320,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 633275,
+     "cacheRead": 574464,
+     "output": 10425,
+     "ms": 301518,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1101480,
+     "cacheRead": 1005056,
+     "output": 23174,
+     "calls": 2,
+     "ms": 638839
+    },
+    "depoisDoFinder": 0
+   },
+   "dual-storage-architecture-grafana-codex": {
+    "generalist": {
+     "input": 484292,
+     "cacheRead": 430336,
+     "output": 10735,
+     "ms": 282334,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 329158,
+     "cacheRead": 308992,
+     "output": 10472,
+     "ms": 267800,
+     "calls": 1
+    },
+    "finder": {
+     "input": 813450,
+     "cacheRead": 739328,
+     "output": 21207,
+     "calls": 2,
+     "ms": 550134
+    },
+    "depoisDoFinder": 0
+   },
+   "notification-rule-processing-engine-grafana-codex": {
+    "generalist": {
+     "input": 993497,
+     "cacheRead": 885760,
+     "output": 4428,
+     "ms": 160848,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 421522,
+     "cacheRead": 401408,
+     "output": 15680,
+     "ms": 325634,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1415019,
+     "cacheRead": 1287168,
+     "output": 20108,
+     "calls": 2,
+     "ms": 486483
+    },
+    "depoisDoFinder": 0
+   },
+   "frontend-asset-optimization-grafana-codex": {
+    "generalist": {
+     "input": 159830,
+     "cacheRead": 141568,
+     "output": 8509,
+     "ms": 197227,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 63463,
+     "cacheRead": 51968,
+     "output": 6508,
+     "ms": 161808,
+     "calls": 1
+    },
+    "finder": {
+     "input": 223293,
+     "cacheRead": 193536,
+     "output": 15017,
+     "calls": 2,
+     "ms": 359035
+    },
+    "depoisDoFinder": 0
+   },
+   "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+    "generalist": {
+     "input": 651473,
+     "cacheRead": 576000,
+     "output": 7052,
+     "ms": 205336,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 14211,
+     "cacheRead": 13056,
+     "output": 6823,
+     "ms": 151653,
+     "calls": 1
+    },
+    "finder": {
+     "input": 665684,
+     "cacheRead": 589056,
+     "output": 13875,
+     "calls": 2,
+     "ms": 356990
+    },
+    "depoisDoFinder": 0
+   },
+   "async-import-of-the-appstore-packages-cal-com": {
+    "generalist": {
+     "input": 532129,
+     "cacheRead": 493312,
+     "output": 9488,
+     "ms": 242707,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 384094,
+     "cacheRead": 368896,
+     "output": 7641,
+     "ms": 203548,
+     "calls": 2
+    },
+    "finder": {
+     "input": 916223,
+     "cacheRead": 862208,
+     "output": 17129,
+     "calls": 3,
+     "ms": 446257
+    },
+    "depoisDoFinder": 0
+   },
+   "add-guest-management-functionality-to-existing-bookings-cal-com": {
+    "generalist": {
+     "input": 753324,
+     "cacheRead": 703488,
+     "output": 11882,
+     "ms": 303377,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 807133,
+     "cacheRead": 736000,
+     "output": 14461,
+     "ms": 393347,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1560457,
+     "cacheRead": 1439488,
+     "output": 26343,
+     "calls": 2,
+     "ms": 696725
+    },
+    "depoisDoFinder": 0
+   },
+   "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+    "generalist": {
+     "input": 928381,
+     "cacheRead": 880128,
+     "output": 13454,
+     "ms": 331101,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 1140790,
+     "cacheRead": 1103360,
+     "output": 26628,
+     "ms": 596266,
+     "calls": 1
+    },
+    "finder": {
+     "input": 2069171,
+     "cacheRead": 1983488,
+     "output": 40082,
+     "calls": 2,
+     "ms": 927367
+    },
+    "depoisDoFinder": 0
+   },
+   "implement-access-token-context-encoding-framework-keycloak": {
+    "generalist": {
+     "input": 1211112,
+     "cacheRead": 1140224,
+     "output": 12646,
+     "ms": 325330,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 1395843,
+     "cacheRead": 1362176,
+     "output": 18239,
+     "ms": 440978,
+     "calls": 1
+    },
+    "finder": {
+     "input": 2606955,
+     "cacheRead": 2502400,
+     "output": 30885,
+     "calls": 2,
+     "ms": 766308
+    },
+    "depoisDoFinder": 0
+   },
+   "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+    "generalist": {
+     "input": 1190704,
+     "cacheRead": 1102080,
+     "output": 19768,
+     "ms": 490911,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 1487359,
+     "cacheRead": 1396480,
+     "output": 16136,
+     "ms": 434228,
+     "calls": 1
+    },
+    "finder": {
+     "input": 2678063,
+     "cacheRead": 2498560,
+     "output": 35904,
+     "calls": 2,
+     "ms": 925140
+    },
+    "depoisDoFinder": 0
+   },
+   "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+    "generalist": {
+     "input": 763126,
+     "cacheRead": 717312,
+     "output": 7123,
+     "ms": 187115,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 53900,
+     "cacheRead": 45568,
+     "output": 12122,
+     "ms": 267722,
+     "calls": 3
+    },
+    "finder": {
+     "input": 817026,
+     "cacheRead": 762880,
+     "output": 19245,
+     "calls": 4,
+     "ms": 454838
+    },
+    "depoisDoFinder": 0
+   },
+   "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+    "generalist": {
+     "input": 352279,
+     "cacheRead": 321280,
+     "output": 19792,
+     "ms": 450687,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 10378,
+     "cacheRead": 9472,
+     "output": 9528,
+     "ms": 206566,
+     "calls": 1
+    },
+    "finder": {
+     "input": 362657,
+     "cacheRead": 330752,
+     "output": 29320,
+     "calls": 2,
+     "ms": 657254
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-2fa-backup-codes-cal-com": {
+    "generalist": {
+     "input": 837050,
+     "cacheRead": 744960,
+     "output": 9161,
+     "ms": 277047,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 999430,
+     "cacheRead": 948480,
+     "output": 30836,
+     "ms": 755224,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1836480,
+     "cacheRead": 1693440,
+     "output": 39997,
+     "calls": 2,
+     "ms": 1032272
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+    "generalist": {
+     "input": 733291,
+     "cacheRead": 641024,
+     "output": 15019,
+     "ms": 406160,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 624404,
+     "cacheRead": 591360,
+     "output": 8536,
+     "ms": 229411,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1357695,
+     "cacheRead": 1232384,
+     "output": 23555,
+     "calls": 2,
+     "ms": 635571
+    },
+    "depoisDoFinder": 0
+   },
+   "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+    "generalist": {
+     "input": 498452,
+     "cacheRead": 454144,
+     "output": 11298,
+     "ms": 257249,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 493070,
+     "cacheRead": 459776,
+     "output": 23424,
+     "ms": 491611,
+     "calls": 1
+    },
+    "finder": {
+     "input": 991522,
+     "cacheRead": 913920,
+     "output": 34722,
+     "calls": 2,
+     "ms": 748860
+    },
+    "depoisDoFinder": 0
+   },
+   "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+    "generalist": {
+     "input": 1417693,
+     "cacheRead": 1299968,
+     "output": 11087,
+     "ms": 306052,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 1115361,
+     "cacheRead": 1072384,
+     "output": 15241,
+     "ms": 367897,
+     "calls": 1
+    },
+    "finder": {
+     "input": 2533054,
+     "cacheRead": 2372352,
+     "output": 26328,
+     "calls": 2,
+     "ms": 673950
+    },
+    "depoisDoFinder": 0
+   },
+   "sms-workflow-reminder-retry-count-tracking-cal-com": {
+    "generalist": {
+     "input": 106110,
+     "cacheRead": 90368,
+     "output": 7202,
+     "ms": 173197,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 68765,
+     "cacheRead": 61952,
+     "output": 11205,
+     "ms": 267702,
+     "calls": 3
+    },
+    "finder": {
+     "input": 174875,
+     "cacheRead": 152320,
+     "output": 18407,
+     "calls": 4,
+     "ms": 440900
+    },
+    "depoisDoFinder": 0
+   },
+   "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+    "generalist": {
+     "input": 421433,
+     "cacheRead": 393984,
+     "output": 10844,
+     "ms": 284856,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 418065,
+     "cacheRead": 386560,
+     "output": 17018,
+     "ms": 411498,
+     "calls": 1
+    },
+    "finder": {
+     "input": 839498,
+     "cacheRead": 780544,
+     "output": 27862,
+     "calls": 2,
+     "ms": 696354
+    },
+    "depoisDoFinder": 0
+   },
+   "github-oauth-security-enhancement-sentry": {
+    "generalist": {
+     "input": 523449,
+     "cacheRead": 467200,
+     "output": 4916,
+     "ms": 136167,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 363906,
+     "cacheRead": 346624,
+     "output": 12801,
+     "ms": 300910,
+     "calls": 1
+    },
+    "finder": {
+     "input": 887355,
+     "cacheRead": 813824,
+     "output": 17717,
+     "calls": 2,
+     "ms": 437077
+    },
+    "depoisDoFinder": 0
+   },
+   "authzservice-improve-authz-caching-grafana-codex": {
+    "generalist": {
+     "input": 598417,
+     "cacheRead": 552704,
+     "output": 22264,
+     "ms": 574929,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 229690,
+     "cacheRead": 211456,
+     "output": 8430,
+     "ms": 217161,
+     "calls": 1
+    },
+    "finder": {
+     "input": 828107,
+     "cacheRead": 764160,
+     "output": 30694,
+     "calls": 2,
+     "ms": 792091
+    },
+    "depoisDoFinder": 0
+   },
+   "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+    "generalist": {
+     "input": 854379,
+     "cacheRead": 797696,
+     "output": 14885,
+     "ms": 371317,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 395847,
+     "cacheRead": 368896,
+     "output": 21499,
+     "ms": 470684,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1250226,
+     "cacheRead": 1166592,
+     "output": 36384,
+     "calls": 2,
+     "ms": 842001
+    },
+    "depoisDoFinder": 0
+   },
+   "replays-self-serve-bulk-delete-system-sentry": {
+    "generalist": {
+     "input": 5504680,
+     "cacheRead": 5179648,
+     "output": 23547,
+     "ms": 763204,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 4003965,
+     "cacheRead": 3969792,
+     "output": 17662,
+     "ms": 502107,
+     "calls": 1
+    },
+    "finder": {
+     "input": 9508645,
+     "cacheRead": 9149440,
+     "output": 41209,
+     "calls": 2,
+     "ms": 1265312
+    },
+    "depoisDoFinder": 0
+   },
+   "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+    "generalist": {
+     "input": 1002353,
+     "cacheRead": 937472,
+     "output": 4974,
+     "ms": 158059,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 794012,
+     "cacheRead": 773376,
+     "output": 12235,
+     "ms": 286732,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1796365,
+     "cacheRead": 1710848,
+     "output": 17209,
+     "calls": 2,
+     "ms": 444793
+    },
+    "depoisDoFinder": 0
+   },
+   "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+    "generalist": {
+     "input": 411539,
+     "cacheRead": 373760,
+     "output": 21432,
+     "ms": 510678,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 368144,
+     "cacheRead": 338688,
+     "output": 20077,
+     "ms": 481318,
+     "calls": 1
+    },
+    "finder": {
+     "input": 779683,
+     "cacheRead": 712448,
+     "output": 41509,
+     "calls": 2,
+     "ms": 991997
+    },
+    "depoisDoFinder": 0
+   },
+   "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+    "generalist": {
+     "input": 1714672,
+     "cacheRead": 1638400,
+     "output": 16963,
+     "ms": 411061,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 360516,
+     "cacheRead": 339200,
+     "output": 19281,
+     "ms": 407962,
+     "calls": 1
+    },
+    "finder": {
+     "input": 2075188,
+     "cacheRead": 1977600,
+     "output": 36244,
+     "calls": 2,
+     "ms": 819024
+    },
+    "depoisDoFinder": 0
+   },
+   "anonymous-add-configurable-device-limit-grafana-codex": {
+    "generalist": {
+     "input": 528467,
+     "cacheRead": 491008,
+     "output": 10240,
+     "ms": 281526,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 213891,
+     "cacheRead": 192512,
+     "output": 18108,
+     "ms": 444933,
+     "calls": 1
+    },
+    "finder": {
+     "input": 742358,
+     "cacheRead": 683520,
+     "output": 28348,
+     "calls": 2,
+     "ms": 726460
+    },
+    "depoisDoFinder": 0
+   },
+   "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+    "generalist": {
+     "input": 499093,
+     "cacheRead": 461312,
+     "output": 10592,
+     "ms": 261569,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 285694,
+     "cacheRead": 268800,
+     "output": 12478,
+     "ms": 292819,
+     "calls": 1
+    },
+    "finder": {
+     "input": 784787,
+     "cacheRead": 730112,
+     "output": 23070,
+     "calls": 2,
+     "ms": 554389
+    },
+    "depoisDoFinder": 0
+   },
+   "fix-proper-handling-of-group-memberships-discourse-cursor": {
+    "generalist": {
+     "input": 682000,
+     "cacheRead": 639744,
+     "output": 15661,
+     "ms": 342086,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 334508,
+     "cacheRead": 317952,
+     "output": 18650,
+     "ms": 416293,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1016508,
+     "cacheRead": 957696,
+     "output": 34311,
+     "calls": 2,
+     "ms": 758380
+    },
+    "depoisDoFinder": 0
+   },
+   "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+    "generalist": {
+     "input": 729346,
+     "cacheRead": 672256,
+     "output": 20323,
+     "ms": 482937,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 462356,
+     "cacheRead": 445696,
+     "output": 9822,
+     "ms": 255665,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1191702,
+     "cacheRead": 1117952,
+     "output": 30145,
+     "calls": 2,
+     "ms": 738603
+    },
+    "depoisDoFinder": 0
+   },
+   "feature-automatically-downsize-large-images-discourse-cursor": {
+    "generalist": {
+     "input": 242085,
+     "cacheRead": 221952,
+     "output": 11833,
+     "ms": 297797,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 211986,
+     "cacheRead": 200448,
+     "output": 3206,
+     "ms": 90515,
+     "calls": 1
+    },
+    "finder": {
+     "input": 454071,
+     "cacheRead": 422400,
+     "output": 15039,
+     "calls": 2,
+     "ms": 388313
+    },
+    "depoisDoFinder": 0
+   },
+   "fixing-re-authentication-with-passkeys-keycloak": {
+    "generalist": {
+     "input": 863752,
+     "cacheRead": 759040,
+     "output": 11624,
+     "ms": 294639,
+     "calls": 2
+    },
+    "synthesis-rescue": {
+     "input": 581019,
+     "cacheRead": 557312,
+     "output": 12907,
+     "ms": 289958,
+     "calls": 1
+    },
+    "finder": {
+     "input": 1444771,
+     "cacheRead": 1316352,
+     "output": 24531,
+     "calls": 3,
+     "ms": 584598
+    },
+    "depoisDoFinder": 0
+   },
+   "feature-localization-fallbacks-server-side-discourse-cursor": {
+    "generalist": {
+     "input": 391781,
+     "cacheRead": 337920,
+     "output": 15013,
+     "ms": 355838,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 96526,
+     "cacheRead": 82944,
+     "output": 12417,
+     "ms": 256844,
+     "calls": 3
+    },
+    "finder": {
+     "input": 488307,
+     "cacheRead": 420864,
+     "output": 27430,
+     "calls": 4,
+     "ms": 612682
+    },
+    "depoisDoFinder": 0
+   },
+   "advanced-query-processing-architecture-grafana-codex": {
+    "generalist": {
+     "input": 568276,
+     "cacheRead": 498432,
+     "output": 12099,
+     "ms": 316398,
+     "calls": 1
+    },
+    "synthesis-rescue": {
+     "input": 13470,
+     "cacheRead": 12544,
+     "output": 10251,
+     "ms": 244463,
+     "calls": 1
+    },
+    "finder": {
+     "input": 581746,
+     "cacheRead": 510976,
+     "output": 22350,
+     "calls": 2,
+     "ms": 560861
+    },
+    "depoisDoFinder": 0
+   }
+  }
+ }
+}

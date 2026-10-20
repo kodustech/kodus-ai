@@ -1,0 +1,470 @@
+{
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "raw_html cook method returns unsanitized imported HTML rendered via raw post.cooked: stored XSS."
+  },
+  {
+   "id": "V2",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "i.content.scrub raises NoMethodError on feed items without content, aborting the import loop."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "TopicView raising NotFound for a deleted topic referenced by TopicEmbed is not covered by any golden issue."
+  }
+ ],
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": [
+  {
+   "id": "V1",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "Sync branch returns raw fetch Response while callers expect provider-specific .data shapes."
+  },
+  {
+   "id": "V2",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#11",
+   "newGroup": null,
+   "reason": "Office365 tokenResponse.success check is dead (helper throws) and the error logging was dropped."
+  },
+  {
+   "id": "V3",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#07",
+   "newGroup": null,
+   "reason": "Missing refresh_token replaced by the hardcoded string \"refresh_token\"."
+  },
+  {
+   "id": "V4",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+   "newGroup": null,
+   "reason": "Computed keys from z.string().toString() produce a literal key, so the schema does not validate as intended."
+  },
+  {
+   "id": "V5",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01",
+   "newGroup": null,
+   "reason": "Webhook secret compared with !== instead of a constant-time comparison."
+  },
+  {
+   "id": "V6",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#17",
+   "newGroup": null,
+   "reason": "jsforce.Connection built with stale access_token after refresh."
+  }
+ ],
+ "add-guest-management-functionality-to-existing-bookings-cal-com": [
+  {
+   "id": "V1",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "newGroup": null,
+   "reason": "isTeamAdmin && isTeamOwner restricts to owners; should be ||."
+  },
+  {
+   "id": "V2",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "newGroup": null,
+   "reason": "Guest emails not lowercased while blacklist is, so case variants bypass the blacklist (also existing-attendee dedup)."
+  },
+  {
+   "id": "V3",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "newGroup": null,
+   "reason": "Raw guests passed to sendAddGuestsEmails, so existing attendees get the full scheduled email."
+  },
+  {
+   "id": "V4",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#musep-01",
+   "newGroup": null,
+   "reason": "No booking status check: guests can be added to cancelled/rejected bookings."
+  }
+ ],
+ "dual-storage-architecture-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Delete records storage metric with name in kind label instead of options.Kind."
+  },
+  {
+   "id": "V2",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Legacy DeleteCollection goroutine uses recordStorageDuration instead of recordLegacyDuration."
+  },
+  {
+   "id": "V3",
+   "match": "dual-storage-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Delete puts base d.Log in context instead of the scoped logger."
+  },
+  {
+   "id": "V4",
+   "match": "dual-storage-architecture-grafana-codex#snapi-01",
+   "newGroup": null,
+   "reason": "Async legacy write errors are no longer logged, only recorded in metrics."
+  },
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Dead WithTimeoutCause cause / Go version concern is not a golden issue."
+  },
+  {
+   "id": "V6",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Test using assert instead of require before dereferencing obj is not a golden issue."
+  }
+ ],
+ "notification-rule-processing-engine-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "notification-rule-processing-engine-grafana-codex#07",
+   "newGroup": null,
+   "reason": "GrafanaRuleListItem rendered without key prop."
+  },
+  {
+   "id": "V2",
+   "match": "notification-rule-processing-engine-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Delete menu item still requires rulerRule, which list view no longer provides."
+  },
+  {
+   "id": "V3",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "Silence drawer gated on ruler rule, so Silence click does nothing in list view."
+  }
+ ],
+ "replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "_truncate_title called on PRCommentWorkflow is unrelated to any golden issue."
+  },
+  {
+   "id": "V2",
+   "match": "replays-self-serve-bulk-delete-system-sentry#12",
+   "newGroup": null,
+   "reason": "TableWidgetVisualization receives hardcoded empty columns/data."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "error_ids dropped by field-restricted projection is not a golden issue."
+  },
+  {
+   "id": "V4",
+   "match": "replays-self-serve-bulk-delete-system-sentry#13",
+   "newGroup": null,
+   "reason": "Custom cell renderer fallback on any falsy value instead of undefined."
+  }
+ ],
+ "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Mobile .custom-message-length light value inverted 70%->30%."
+  },
+  {
+   "id": "V2",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Desktop user.scss .name light value changed 30%->50%."
+  },
+  {
+   "id": "V3",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Mobile user.scss .name light value changed 30%->50%."
+  },
+  {
+   "id": "V4",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": ".topic-meta-data h5 a light value changed 30%->70%."
+  },
+  {
+   "id": "V5",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Mobile topic-post a.star h3 light value changed 20%->50%."
+  }
+ ],
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": [
+  {
+   "id": "V1",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+   "newGroup": null,
+   "reason": "math.floor/ceil on datetime key raises TypeError when building cursors."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Boundary-trim length check uses offset instead of start_offset; not a golden issue."
+  },
+  {
+   "id": "V3",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+   "newGroup": null,
+   "reason": "Same math.floor/ceil on datetime TypeError in OptimizedCursorPaginator.get_item_key."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Same boundary-trim offset vs start_offset comparison as V2."
+  }
+ ],
+ "feature-automatically-downsize-large-images-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "downsize defined twice; new signature breaks ResizeEmoji width/height callers."
+  },
+  {
+   "id": "V2",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Retry loop ignores failed conversion and repeats the same convert up to five times."
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Missing transitive manage->view/map-roles grants in hasPermission is not any golden issue (09 concerns canView listing path, musep-01 per-client resource shadowing)."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "ClientRemovedEvent calling setPermissionsEnabled which throws in V2 differs from issue 01 (listener guarded by V1 flag)."
+  },
+  {
+   "id": "V3",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+   "newGroup": null,
+   "reason": "getClientsWithPermission only finds the type-level Clients resource, never actual client ids."
+  }
+ ],
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": [
+  {
+   "id": "V1",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "Working-hours end computed from slotStartTime instead of slotEndTime."
+  },
+  {
+   "id": "V2",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03",
+   "newGroup": null,
+   "reason": "Date-override branch returns true before busy-time check."
+  }
+ ],
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "V1",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Two throwaway ASN1Encoder writes before the real return."
+  }
+ ],
+ "implement-access-token-context-encoding-framework-keycloak": [
+  {
+   "id": "V1",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "isAccessTokenId grant shortcut comparison inverted."
+  },
+  {
+   "id": "V2",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Constructor checks grantType twice instead of rawTokenId."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "encodeTokenId throwing for an unregistered grant type is not a golden issue (05 is about missing GRANT_TYPE attribute)."
+  }
+ ],
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "id": "V1",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#05",
+   "newGroup": null,
+   "reason": "zpopmin eviction can drop the root span leaving a rootless segment."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "zunionstore of set_key with itself then unlink wiping the segment is not a golden issue."
+  },
+  {
+   "id": "V3",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+   "newGroup": null,
+   "reason": "max_segment_spans kept but no longer enforced."
+  }
+ ],
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "website_name not untrusted, exposing TL0 website to anonymous viewers."
+  }
+ ],
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "V1",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#06",
+   "newGroup": null,
+   "reason": "removeStoredCredentialById only covers local storage, federated recovery credential never removed."
+  },
+  {
+   "id": "V2",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#06",
+   "newGroup": null,
+   "reason": "Same: exhausted federated recovery-codes credential is never removed at the same call."
+  }
+ ],
+ "database-performance-optimizations-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "database-performance-optimizations-grafana-codex#08",
+   "newGroup": null,
+   "reason": "Cleanup ticker changed from 10 min to 1 min."
+  },
+  {
+   "id": "V2",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Leftover Error-level debug logs with full ID list per batch."
+  }
+ ],
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "getForLogin ignoring organization invalidation differs from the golden cache issues (05 partial-miss merge, 08 enabled-state comparison)."
+  }
+ ],
+ "authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Denial cache staleness after a grant is not a golden issue."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Denial key using raw UserUID vs resolved UID differs from issue 01 (underscore collision)."
+  }
+ ],
+ "async-import-of-the-appstore-packages-cal-com": [
+  {
+   "id": "V1",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Async forEach callbacks for calendar/video deletion not awaited."
+  },
+  {
+   "id": "V2",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Async forEach in vital reschedule not awaited."
+  },
+  {
+   "id": "V3",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Async forEach in wipemycalother reschedule not awaited."
+  },
+  {
+   "id": "V4",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Async forEach in handleCancelBooking pushes apiDeletes after Promise.all."
+  },
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Discarded getCalendar promise for non-calendar credentials is not a golden issue."
+  }
+ ],
+ "advanced-query-processing-architecture-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "advanced-query-processing-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Targets interpolated twice, duplicating ad hoc filters."
+  },
+  {
+   "id": "V2",
+   "match": "advanced-query-processing-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Same double interpolation reported at runSplitQuery."
+  }
+ ],
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": [
+  {
+   "id": "V1",
+   "match": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#kimi-03",
+   "newGroup": null,
+   "reason": "Public options type makes teamId optional, silently yielding empty results."
+  }
+ ],
+ "advanced-sql-analytics-framework-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "enableSqlExpressions returns false on both branches."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "DB stubs breaking SQL expression execution is a functional claim, not muse13-01 naming issue."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Feature flag not enforced on the non-parser NewSQLCommand path is not a golden issue."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Misleading \"not implemented\" error message is not a golden issue."
+  }
+ ],
+ "frontend-asset-optimization-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "frontend-asset-optimization-grafana-codex#sncc-02",
+   "newGroup": null,
+   "reason": "Exclusive mutex held across manifest load serializes callers (also mentions missing re-check)."
+  }
+ ]
+}

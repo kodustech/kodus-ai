@@ -1,0 +1,332 @@
+{
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "V1",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#musep-01",
+   "newGroup": null,
+   "reason": "Same claim: organization changes (disable/remove) do not invalidate the cached getForLogin IDP lists, leaving stale results."
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims hasPermission ignores the canManage/canConfigure transitive grant (MANAGE short-circuits canView, canMapRoles ignores all-clients MANAGE); not the manage-clients realm-role claim of muse13-01."
+  },
+  {
+   "id": "V2",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+   "newGroup": null,
+   "reason": "Same claim: ClientRemovedEvent listener calls ClientPermissionsV2.setPermissionsEnabled which throws, breaking client deletion."
+  }
+ ],
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "V3",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#kimip-01",
+   "newGroup": null,
+   "reason": "Same claim: rejectedEmails array on the prototype is shared across instances/sessions."
+  }
+ ],
+ "add-html-sanitizer-for-translated-message-resources-keycloak": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims reordered anchors are falsely flagged due to lockstep positional matching; #03 is about more anchors than English, a different cause."
+  }
+ ],
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": [
+  {
+   "id": "V1",
+   "match": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Same claim: null updateStrategy early return skips enabling rolling-updates in UpgradeTest."
+  },
+  {
+   "id": "V2",
+   "match": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Same claim: null updateStrategy early return skips enabling rolling-updates in UpgradeTest."
+  }
+ ],
+ "advanced-sql-analytics-framework-grafana-codex": [
+  {
+   "id": "V2",
+   "match": "advanced-sql-analytics-framework-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Same claim: stubbed DB methods always return not implemented, so SQL expressions always fail."
+  },
+  {
+   "id": "V3",
+   "match": "advanced-sql-analytics-framework-grafana-codex#prod-01",
+   "newGroup": null,
+   "reason": "Same claim: nodes.go TypeSQL path reaches NewSQLCommand without the enable check."
+  },
+  {
+   "id": "V4",
+   "match": "advanced-sql-analytics-framework-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Same claim: disabled-flag rejection message says not implemented."
+  }
+ ],
+ "async-import-of-the-appstore-packages-cal-com": [
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims discarded un-awaited getCalendar promises cause unhandled rejections; no rejected issue covers this."
+  }
+ ],
+ "authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "authzservice-improve-authz-caching-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "Same claim: cached denial is never invalidated, so a new grant stays denied for the short TTL."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims denial cache key uses raw UserUID instead of resolved identifiers, causing key mismatch; no matching issue."
+  }
+ ],
+ "dual-storage-architecture-grafana-codex": [
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims WithTimeoutCause cause is never read and raises Go version; no matching issue."
+  },
+  {
+   "id": "V6",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Claims assert instead of require leads to panic on nil obj in TestMode3_Create; not the Equal/NotEqual claim of #08."
+  }
+ ],
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims TopicView raises NotFound when the embedded topic was deleted; no rejected issue makes this claim (#12 asserts no problem)."
+  }
+ ],
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": [
+  {
+   "id": "V2",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#03",
+   "newGroup": null,
+   "reason": "Same claim: prev-page trim compares with offset instead of start_offset."
+  },
+  {
+   "id": "V4",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#03",
+   "newGroup": null,
+   "reason": "Same claim: prev-page trim compares with offset instead of start_offset."
+  }
+ ],
+ "feat-2fa-backup-codes-cal-com": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims missing rate limiting on backup-code check in disable endpoint; #08 is about timing comparison."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Claims login authorize prefers backupCode branch over a present TOTP code; no matching issue."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Claims disable modal leaves stale backupCode when toggling back to TOTP; no matching issue."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "Claims backup-code disable path skips password check for non-CAL users; no matching issue."
+  },
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N5",
+   "reason": "Claims Download button in enable modal lacks type=button and submits the form; muse13-01 concerns a different button in the disable form."
+  }
+ ],
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+  {
+   "id": "V2",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#02",
+   "newGroup": null,
+   "reason": "Same claim: refresh writes SelectedCalendar.updatedAt while UI reads CalendarCache.updatedAt."
+  }
+ ],
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": [
+  {
+   "id": "V2",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: upsampled_count registered only in discover config, may be unknown for errors dataset."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims _is_error_focused_query uses the original request query instead of derived split queries; no matching issue."
+  },
+  {
+   "id": "V4",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#17",
+   "newGroup": null,
+   "reason": "Same claim at the factory helper: it writes the sample rate rather than the sample_weight that upsampled_count sums, so counts would be wrong."
+  }
+ ],
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims submit exception handler completes the offset of a never-enqueued message, causing silent skip; #08 claims the opposite (leaked outstanding offset) in FixedQueuePool.submit."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Claims join(timeout) ignores timeout and closes without draining; #19 is about commit threads after factory shutdown."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Claims mark_committed never trims outstanding, unbounded growth; no matching issue."
+  },
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Same as V1: submit except block compensates offsets never enqueued."
+  },
+  {
+   "id": "V7",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Same as V3: join ignores timeout."
+  },
+  {
+   "id": "V8",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Same as V4: outstanding not trimmed in mark_committed."
+  }
+ ],
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "V4",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#12",
+   "newGroup": null,
+   "reason": "Same claim: plural _ids hydration keeps undefined entries for missing ids."
+  }
+ ],
+ "feature-localization-fallbacks-server-side-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims memoized fallback chain is not reset when default_locale changes; #02 is about translation cache after locale load."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Claims per-request ensure_loaded! eagerly loads locales, defeating lazy loading; #05 is about SiteSetting DB/Redis hits."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Claims an exception in load_locale leaves the mutex held and locale unmarked; no matching issue."
+  },
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "Claims unvalidated user locale triggers loading a non-existent locale and fails the request; #07 is about regex metacharacters, a different cause."
+  }
+ ],
+ "fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#11",
+   "newGroup": null,
+   "reason": "Same defect: unclamped (negative) offset passed to the members query."
+  }
+ ],
+ "fixing-re-authentication-with-passkeys-keycloak": [
+  {
+   "id": "V1",
+   "match": "fixing-re-authentication-with-passkeys-keycloak#02",
+   "newGroup": null,
+   "reason": "Same defect: configuredFor treats passkey-only users as configured for PasswordForm."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims PasswordForm.authenticate never sets USER_SET_BEFORE_USERNAME_PASSWORD_AUTH, so re-auth error handling skips; no matching issue."
+  }
+ ],
+ "implement-access-token-context-encoding-framework-keycloak": [
+  {
+   "id": "V3",
+   "match": "implement-access-token-context-encoding-framework-keycloak#muse13-01",
+   "newGroup": null,
+   "reason": "Same claim: encodeTokenId throws IllegalStateException for unmapped grant types during initToken."
+  }
+ ],
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "id": "V2",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#02",
+   "newGroup": null,
+   "reason": "Same claim: span_key == set_key unions with itself then unlinks, deleting the segment."
+  }
+ ],
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Same claim: ContextualLoggerMiddleware dereferences req.PluginContext without nil guard."
+  }
+ ],
+ "replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "V1",
+   "match": "replays-self-serve-bulk-delete-system-sentry#prod-01",
+   "newGroup": null,
+   "reason": "Same claim: PRCommentWorkflow._truncate_title raises AttributeError."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims error_ids is dropped by field-restricted projection in summarize breadcrumbs; no matching issue."
+  }
+ ],
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
+  {
+   "id": "V4",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#09",
+   "newGroup": null,
+   "reason": "Same claim: max-flush-segments becomes per-process, multiplying the global cap."
+  }
+ ]
+}

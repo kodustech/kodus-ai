@@ -1,0 +1,560 @@
+{
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "raw_html imported posts rendered unsanitized (stored XSS)"
+  },
+  {
+   "id": "V2",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "footer interpolates URL unescaped into href"
+  },
+  {
+   "id": "V3",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "content nil for RSS items without content, .scrub crashes poll"
+  },
+  {
+   "id": "V4",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#30",
+   "newGroup": null,
+   "reason": "every lookup miss re-polls full feed; per-URL throttle"
+  },
+  {
+   "id": "V5",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#18",
+   "newGroup": null,
+   "reason": "deleted post: nil embed.post passed to PostRevisor"
+  }
+ ],
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": [
+  {
+   "id": "V1",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "newGroup": null,
+   "reason": "safeParse result object saved instead of .data"
+  },
+  {
+   "id": "V2",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+   "newGroup": null,
+   "reason": "computed key from z.string().toString() is literal key"
+  },
+  {
+   "id": "V3",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#07",
+   "newGroup": null,
+   "reason": "placeholder \"refresh_token\" injected when omitted"
+  },
+  {
+   "id": "V4",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "sync path returns raw fetch Response, callers expect provider shapes"
+  },
+  {
+   "id": "V5",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "newGroup": null,
+   "reason": "credentialId passed instead of userId to Zoho Bigin refresh"
+  },
+  {
+   "id": "V6",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#14",
+   "newGroup": null,
+   "reason": "prisma used without import in Salesforce (also statusText/stale token)"
+  },
+  {
+   "id": "V7",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#13",
+   "newGroup": null,
+   "reason": "Salesforce refreshes token and writes DB on every construction"
+  },
+  {
+   "id": "V8",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01",
+   "newGroup": null,
+   "reason": "webhook secret compared with !== (timing)"
+  },
+  {
+   "id": "V9",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#opa-01",
+   "newGroup": null,
+   "reason": "appStoreMetadata keyed by dirName but looked up by slug"
+  },
+  {
+   "id": "V10",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Zoom video adapter sends appSlug zoomvideo instead of zoom; no golden issue covers this call site"
+  }
+ ],
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "execute(...)[0][id] crashes when embed_category result empty"
+  },
+  {
+   "id": "V2",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "legacy hosts copied without stripping scheme/path (also SQL quoting)"
+  },
+  {
+   "id": "V3",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "lower(host) vs un-lowercased URI host"
+  },
+  {
+   "id": "V4",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "sub! on nil host raises NoMethodError"
+  },
+  {
+   "id": "V5",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "where(id).first nil in update/destroy -> 500"
+  },
+  {
+   "id": "V6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "store.js hydration of null xxx_ids; no golden issue about the store"
+  }
+ ],
+ "dual-storage-architecture-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "dual-storage-architecture-grafana-codex#05",
+   "newGroup": null,
+   "reason": "legacy goroutines derived from request context get cancelled"
+  },
+  {
+   "id": "V2",
+   "match": "dual-storage-architecture-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Legacy.Update gets raw objInfo instead of updateWrapper"
+  },
+  {
+   "id": "V3",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "storage Create/Update failures recorded with recordLegacyDuration (broader comment also covers other metric labels)"
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "data race from passing same obj pointer to legacy goroutine; not in golden set"
+  },
+  {
+   "id": "V5",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Delete success records storage metric with name as kind label"
+  }
+ ],
+ "notification-rule-processing-engine-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "Silence shown but drawer gated on ruler rule, does nothing"
+  },
+  {
+   "id": "V2",
+   "match": "notification-rule-processing-engine-grafana-codex#07",
+   "newGroup": null,
+   "reason": "GrafanaRuleListItem rendered without key"
+  }
+ ],
+ "replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "V1",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "get_multi order not preserved, zip misattributes error ids"
+  },
+  {
+   "id": "V2",
+   "match": "replays-self-serve-bulk-delete-system-sentry#01",
+   "newGroup": null,
+   "reason": "truthiness check lets age 0 with timestamp pass"
+  },
+  {
+   "id": "V3",
+   "match": "replays-self-serve-bulk-delete-system-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "seconds vs milliseconds timestamp comparison"
+  }
+ ],
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": [
+  {
+   "id": "V1",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "newGroup": null,
+   "reason": "=== on dayjs objects always false"
+  },
+  {
+   "id": "V2",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#05",
+   "newGroup": null,
+   "reason": "override end compared with slot start not end"
+  },
+  {
+   "id": "V3",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "end computed from slotStartTime"
+  },
+  {
+   "id": "V4",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#04",
+   "newGroup": null,
+   "reason": "split schedules rejected when any interval excludes slot"
+  },
+  {
+   "id": "V5",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03",
+   "newGroup": null,
+   "reason": "override path returns true before busy-time check"
+  }
+ ],
+ "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "topic-meta-data h5 a percentages inverted"
+  },
+  {
+   "id": "V2",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "mobile custom-message-length inverted 70/30"
+  },
+  {
+   "id": "V3",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "mobile star h3 light changed 20->50"
+  },
+  {
+   "id": "V4",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "desktop user .name 30->50"
+  },
+  {
+   "id": "V5",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "mobile user .name 30->50"
+  }
+ ],
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "V1",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "newGroup": null,
+   "reason": "resource id used instead of name (group id)"
+  },
+  {
+   "id": "V2",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "newGroup": null,
+   "reason": "canManage accepts VIEW scope"
+  },
+  {
+   "id": "V3",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01",
+   "newGroup": null,
+   "reason": "removing canViewGlobal short-circuit -> per-group evaluation in listings"
+  }
+ ],
+ "anonymous-add-configurable-device-limit-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#07",
+   "newGroup": null,
+   "reason": "cache entry set before CreateOrUpdateDevice survives limit error"
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "wire provider ProvideAnonDBStore lacks new int64 param; not in golden set"
+  },
+  {
+   "id": "V3",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#02",
+   "newGroup": null,
+   "reason": "client-controlled device id lets attacker fill limit"
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "MySQL RowsAffected 0 on unchanged update -> false limit error; not in golden set"
+  },
+  {
+   "id": "V5",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#09",
+   "newGroup": null,
+   "reason": "tagging now synchronous on request path"
+  },
+  {
+   "id": "V6",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#01",
+   "newGroup": null,
+   "reason": "count then insert non-atomic, concurrent requests exceed limit"
+  }
+ ],
+ "fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "pager floor+1 shows extra empty page when exact multiple"
+  },
+  {
+   "id": "V2",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-01",
+   "newGroup": null,
+   "reason": "add_members pushes existing members -> unique index 500"
+  },
+  {
+   "id": "V3",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#10",
+   "newGroup": null,
+   "reason": "removal skips clearing primary_group_id"
+  },
+  {
+   "id": "V4",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02",
+   "newGroup": null,
+   "reason": "public members limit unbounded"
+  },
+  {
+   "id": "V5",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "public members page capped at 50 without pagination"
+  }
+ ],
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+  {
+   "id": "V1",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+   "newGroup": null,
+   "reason": "updateMany with empty data does not bump updatedAt"
+  },
+  {
+   "id": "V2",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#08",
+   "newGroup": null,
+   "reason": "plain Error -> 500 instead of TRPCError"
+  },
+  {
+   "id": "V3",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#07",
+   "newGroup": null,
+   "reason": "macOS-only sed -i syntax"
+  },
+  {
+   "id": "V4",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#03",
+   "newGroup": null,
+   "reason": "connectedCalendars not invalidated after cache delete"
+  }
+ ],
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "TopicUser.find_by nil -> NoMethodError 500"
+  },
+  {
+   "id": "V2",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "state change on GET without CSRF (also non-idempotent)"
+  },
+  {
+   "id": "V3",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "notifications_reason_id not updated, TopicUser.change bypassed"
+  }
+ ],
+ "implement-access-token-context-encoding-framework-keycloak": [
+  {
+   "id": "V1",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "grantType checked twice, rawTokenId null passes"
+  },
+  {
+   "id": "V2",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "wrong substring offset and inverted comparison"
+  }
+ ],
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+  {
+   "id": "V1",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+   "newGroup": null,
+   "reason": "one failing SendGrid cancel aborts loop and blocks later runs"
+  },
+  {
+   "id": "V2",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+   "newGroup": null,
+   "reason": "cancel helpers fire-and-forget without await"
+  },
+  {
+   "id": "V3",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#13",
+   "newGroup": null,
+   "reason": "SMS row deleted only after successful Twilio cancel"
+  }
+ ],
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "raw plaintext recovery codes passed to federated provider; not in golden set"
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "NPE in test provider getCredentials for unknown user; not in golden set"
+  },
+  {
+   "id": "V3",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#06",
+   "newGroup": null,
+   "reason": "removeStoredCredentialById only removes local credentials, federated codes never removed/consumed"
+  }
+ ],
+ "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": [
+  {
+   "id": "V1",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "StatefulDetectorHandler abstract methods not implemented -> TypeError"
+  }
+ ],
+ "unified-storage-performance-optimizations-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "errgroup workers race on shared err/counter in init; golden #01 is duplicate builds, different problem"
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Stop sets initErr that no handler reads; not in golden set"
+  },
+  {
+   "id": "V3",
+   "match": "unified-storage-performance-optimizations-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Init failure path does not call cancel()"
+  }
+ ],
+ "authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "authzservice-improve-authz-caching-grafana-codex#01",
+   "newGroup": null,
+   "reason": "denial cache key collisions with underscore delimiter"
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "denial cache not invalidated when permissions refetched; golden #05 is the opposite reload cost"
+  }
+ ],
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#pf-gpt-C1",
+   "newGroup": null,
+   "reason": "small-action buttons no longer at right edge in flex row"
+  },
+  {
+   "id": "V2",
+   "match": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#pf-sonnet-C1",
+   "newGroup": null,
+   "reason": "mobile custom-message -40px margin overlaps avatar"
+  }
+ ],
+ "async-import-of-the-appstore-packages-cal-com": [
+  {
+   "id": "V1",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "forEach(async) not awaited, errors escape try/catch"
+  },
+  {
+   "id": "V2",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "same forEach(async) regression in wipemycalother"
+  },
+  {
+   "id": "V3",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "same forEach(async) regression in bookings.tsx"
+  },
+  {
+   "id": "V4",
+   "match": "async-import-of-the-appstore-packages-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "import() calls run eagerly in object literal"
+  }
+ ],
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "docs claim operator enforces rolling-updates feature; not in golden set"
+  }
+ ],
+ "frontend-asset-optimization-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "frontend-asset-optimization-grafana-codex#01",
+   "newGroup": null,
+   "reason": "no cache re-check after acquiring lock (also Dev serialization)"
+  }
+ ],
+ "advanced-sql-analytics-framework-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "enableSqlExpressions returns false on both branches"
+  }
+ ]
+}

@@ -1,0 +1,440 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "id": "V1",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Missing optional chaining on mainHostDestinationCalendar.integration throws for null/empty destination calendar."
+  },
+  {
+   "id": "V2",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#09",
+   "newGroup": null,
+   "reason": "Video references saved without credentialId, breaking later cancel/update."
+  },
+  {
+   "id": "V3",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#12",
+   "newGroup": null,
+   "reason": "updateLocation (lines 205-210) stores externalCalendarId from updateEvent result, which never sets it."
+  },
+  {
+   "id": "V4",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Fallback lookup cal.externalId === externalCalendarId inside branch where it is falsy never matches."
+  },
+  {
+   "id": "V5",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Same impossible destination-calendar lookup in deleteEvent."
+  },
+  {
+   "id": "V6",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#prod-01",
+   "newGroup": null,
+   "reason": "Hangout-link patch uses undefined calendarId when no destination matches credentialId."
+  },
+  {
+   "id": "V7",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#04",
+   "newGroup": null,
+   "reason": "Inverted IS_TEAM_BILLING_ENABLED condition for org slug."
+  },
+  {
+   "id": "V8",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "Recurring bulk delete runs once per calendar reference, duplicating delete calls."
+  },
+  {
+   "id": "V9",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "newGroup": null,
+   "reason": "destinationCalendar null so optional push drops other hosts calendars."
+  }
+ ],
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+  {
+   "id": "V1",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "Strategy close() shuts down the factory-shared pool; next strategy uses dead pool and commits unprocessed offsets."
+  },
+  {
+   "id": "V2",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "newGroup": null,
+   "reason": "Unbounded worker queues with no backpressure."
+  },
+  {
+   "id": "V3",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#01",
+   "newGroup": null,
+   "reason": "Offset gaps permanently block commits in get_committable_offsets."
+  },
+  {
+   "id": "V4",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#12",
+   "newGroup": null,
+   "reason": "Commit callback invoked from background thread, racing the consumer thread."
+  }
+ ],
+ "add-guest-management-functionality-to-existing-bookings-cal-com": [
+  {
+   "id": "V1",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "newGroup": null,
+   "reason": "isTeamAdmin && isTeamOwner should be OR."
+  },
+  {
+   "id": "V2",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#08",
+   "newGroup": null,
+   "reason": "EventManager built from acting user credentials, so organizer calendar not updated."
+  },
+  {
+   "id": "V3",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "newGroup": null,
+   "reason": "Blacklist comparison not normalized, mixed-case bypasses blacklist (broader comment includes it)."
+  },
+  {
+   "id": "V4",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "newGroup": null,
+   "reason": "sendAddGuestsEmails gets raw guests, existing attendees get scheduled email."
+  },
+  {
+   "id": "V5",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#03",
+   "newGroup": null,
+   "reason": "No server-side dedupe of guests within the request creates duplicate attendees."
+  }
+ ],
+ "notification-rule-processing-engine-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "notification-rule-processing-engine-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Delete (and Pause) menu items still gated on rulerRule absent in list view."
+  },
+  {
+   "id": "V2",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "Silence drawer gated on ruler rule so Silence does nothing for list items."
+  },
+  {
+   "id": "V3",
+   "match": "notification-rule-processing-engine-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Missing key prop on GrafanaRuleListItem."
+  },
+  {
+   "id": "V4",
+   "match": "notification-rule-processing-engine-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Duplicate reported supported when rule undefined, appears on cloud rules."
+  },
+  {
+   "id": "V5",
+   "match": "notification-rule-processing-engine-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Federated rule group check dropped (isFederated hardcoded false)."
+  }
+ ],
+ "replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "V1",
+   "match": "replays-self-serve-bulk-delete-system-sentry#12",
+   "newGroup": null,
+   "reason": "Table widget renders with hardcoded empty columns/data."
+  },
+  {
+   "id": "V2",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "zip pairs error_ids with get_multi values positionally."
+  },
+  {
+   "id": "V3",
+   "match": "replays-self-serve-bulk-delete-system-sentry#01",
+   "newGroup": null,
+   "reason": "Truthiness checks let age:0/timestamp:0 bypass mutual exclusion."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "No golden issue about per-issue get_recommended_event queries in PR comment environment info."
+  },
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "No golden issue about analytics recorded before the feature gate."
+  },
+  {
+   "id": "V6",
+   "match": "replays-self-serve-bulk-delete-system-sentry#opa-02",
+   "newGroup": null,
+   "reason": "HIDDEN_ATTRIBUTES only applied when search query present."
+  }
+ ],
+ "feat-2fa-backup-codes-cal-com": [
+  {
+   "id": "V1",
+   "match": "feat-2fa-backup-codes-cal-com#01",
+   "newGroup": null,
+   "reason": "Password check skipped when totpCode present; backup code plus dummy totp bypasses password."
+  },
+  {
+   "id": "V2",
+   "match": "feat-2fa-backup-codes-cal-com#02",
+   "newGroup": null,
+   "reason": "onEnable only called from close button; dismissing dialog leaves 2FA shown disabled."
+  }
+ ],
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": [
+  {
+   "id": "V1",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04",
+   "newGroup": null,
+   "reason": "Substring match for event.type:error treats negated/mixed queries as error-only."
+  },
+  {
+   "id": "V2",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#03",
+   "newGroup": null,
+   "reason": "Upsampling check uses dataset instead of scoped_dataset."
+  }
+ ],
+ "add-html-sanitizer-for-translated-message-resources-keycloak": [
+  {
+   "id": "V1",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Lithuanian TOTP step replaced with Italian text."
+  },
+  {
+   "id": "V2",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Lithuanian loginTotpStep1 replaced with Italian text."
+  },
+  {
+   "id": "V3",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+   "newGroup": null,
+   "reason": "zh_CN totpStep1 in Traditional Chinese."
+  },
+  {
+   "id": "V4",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#10",
+   "newGroup": null,
+   "reason": "UI bundles switched to MessageFormat placeholders that i18next renders literally."
+  }
+ ],
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": [
+  {
+   "id": "V1",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "OptimizedCursorPaginator slices queryset with negative offset."
+  },
+  {
+   "id": "V2",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#07",
+   "newGroup": null,
+   "reason": "member.has_global_access dereferenced without None check."
+  },
+  {
+   "id": "V3",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+   "newGroup": null,
+   "reason": "math.floor/ceil on datetime in get_item_key raises TypeError (also value_from_cursor)."
+  }
+ ],
+ "feature-automatically-downsize-large-images-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "downsize defined twice, breaking 5-arg ResizeEmoji caller."
+  },
+  {
+   "id": "V2",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Tempfile path lacks .gif extension so animated GIFs are flattened."
+  }
+ ],
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+  {
+   "id": "V1",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#03",
+   "newGroup": null,
+   "reason": "Delete cache mutation does not invalidate connectedCalendars."
+  },
+  {
+   "id": "V2",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+   "newGroup": null,
+   "reason": "Empty data in updateManyByCredentialId does not refresh updatedAt."
+  },
+  {
+   "id": "V3",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#07",
+   "newGroup": null,
+   "reason": "macOS-only sed -i syntax fails on GNU sed (also .env path)."
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "V1",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "newGroup": null,
+   "reason": "Removal-cleanup listener gated on V1 flag; wrong behavior when V2 enabled."
+  },
+  {
+   "id": "V2",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#04",
+   "newGroup": null,
+   "reason": "getResourceTypeResource null passed to findByResource causes NPE."
+  }
+ ],
+ "anonymous-add-configurable-device-limit-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Device cached before CreateOrUpdateDevice, rejected devices bypass limit."
+  },
+  {
+   "id": "V2",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Non-atomic count-then-insert lets concurrent devices exceed limit."
+  },
+  {
+   "id": "V3",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#09",
+   "newGroup": null,
+   "reason": "Device tagging now synchronous in Authenticate adding DB round trips."
+  }
+ ],
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "include_website_name lacks ? so guard never called (fix also covers untrusted leak)."
+  }
+ ],
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "id": "V1",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#04",
+   "newGroup": null,
+   "reason": "Set-to-zset change under same key names causes WRONGTYPE during rollout."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "No golden issue about KeyError on missing end_timestamp_precise in factory."
+  },
+  {
+   "id": "V3",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "Redirect loop limit cut from 10000 to 1000."
+  },
+  {
+   "id": "V4",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+   "newGroup": null,
+   "reason": "max_segment_spans ignored; limit hardcoded to 1000 in Lua."
+  }
+ ],
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Case-sensitive blocked email lookup allows bypass."
+  },
+  {
+   "id": "V2",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "match_count updated in validation, overcounted and non-atomic."
+  }
+ ],
+ "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": [
+  {
+   "id": "V1",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "MetricAlertDetectorHandler leaves abstract methods unimplemented, TypeError on instantiation."
+  }
+ ],
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "V1",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#08",
+   "newGroup": null,
+   "reason": "Invalidation predicate uses organization-aware enabled state, skipping invalidation when org disabled."
+  }
+ ],
+ "authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "authzservice-improve-authz-caching-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Denial cache key joins name/parent with underscore, collisions."
+  }
+ ],
+ "async-import-of-the-appstore-packages-cal-com": [
+  {
+   "id": "V1",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Unawaited async forEach in vital reschedule."
+  },
+  {
+   "id": "V2",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Unawaited async forEach in wipemycalother reschedule."
+  },
+  {
+   "id": "V3",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Unawaited async forEach in bookings router."
+  },
+  {
+   "id": "V4",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Unawaited async forEach in handleCancelBooking recurring deletes."
+  },
+  {
+   "id": "V5",
+   "match": "async-import-of-the-appstore-packages-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "Eager import() in object literal defeats lazy loading."
+  }
+ ],
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
+  {
+   "id": "V1",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "queued default timezone.now() evaluated at import time."
+  }
+ ]
+}

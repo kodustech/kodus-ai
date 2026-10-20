@@ -1,0 +1,296 @@
+{
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+    {
+      "id": "V1",
+      "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#06",
+      "newGroup": null,
+      "reason": "Same claim as #06: lenient ASN1 sequence/length parsing accepts malformed DER signatures."
+    }
+  ],
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+    {
+      "id": "V2",
+      "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#musep-01",
+      "newGroup": null,
+      "reason": "Same claim: disabling/removing an organization does not invalidate the getForLogin cache."
+    },
+    {
+      "id": "V3",
+      "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#06",
+      "newGroup": null,
+      "reason": "Same claim: cached IDs resolved one by one via getById, N lookups."
+    }
+  ],
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+    {
+      "id": "V3",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Ordering of rejectedEmails check vs authOptions.email_valid for OAuth signup is not among the rejected claims."
+    }
+  ],
+  "add-guest-management-functionality-to-existing-bookings-cal-com": [
+    {
+      "id": "V7",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Missing team property so co-hosts are not notified; prod-01 is about new guests missing, a different problem."
+    }
+  ],
+  "add-html-sanitizer-for-translated-message-resources-keycloak": [
+    {
+      "id": "V1",
+      "match": "add-html-sanitizer-for-translated-message-resources-keycloak#prod-01",
+      "newGroup": null,
+      "reason": "Same claim: PropertyResourceBundle(InputStream) decodes as ISO-8859-1, corrupting non-ASCII translations."
+    }
+  ],
+  "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": [
+    {
+      "id": "V1",
+      "match": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#01",
+      "newGroup": null,
+      "reason": "Same claim: rolling-updates feature not enabled for the null update strategy in UpgradeTest."
+    }
+  ],
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": [
+    {
+      "id": "V5",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Dependence on process timezone via override.start.toString(); snapi-01 is about undefined override.timeZone, a different cause."
+    },
+    {
+      "id": "V7",
+      "match": "new",
+      "newGroup": "N2",
+      "reason": "activeOverrides filter by UTC start dropping overlapping overrides is not among the rejected claims."
+    }
+  ],
+  "anonymous-add-configurable-device-limit-grafana-codex": [
+    {
+      "id": "V5",
+      "match": "anonymous-add-configurable-device-limit-grafana-codex#opa-03",
+      "newGroup": null,
+      "reason": "Same claim as opa-03: RowsAffected reports changed rather than matched rows, so an unchanged existing device is denied (SQLite instead of MySQL)."
+    }
+  ],
+  "authzservice-improve-authz-caching-grafana-codex": [
+    {
+      "id": "V1",
+      "match": "authzservice-improve-authz-caching-grafana-codex#oph-01",
+      "newGroup": null,
+      "reason": "Same claim: denial cache checked first and never invalidated, so a later grant is denied until TTL."
+    },
+    {
+      "id": "V2",
+      "match": "authzservice-improve-authz-caching-grafana-codex#06",
+      "newGroup": null,
+      "reason": "Same claim: per-resource denial entries grow the cache unboundedly."
+    },
+    {
+      "id": "V3",
+      "match": "authzservice-improve-authz-caching-grafana-codex#oph-01",
+      "newGroup": null,
+      "reason": "Same claim: denial cache never invalidated after a grant, false denials until TTL."
+    }
+  ],
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+    {
+      "id": "V2",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Cancel query not restricted to email method (SMS referenceIds sent to SendGrid) is not among the rejected claims."
+    }
+  ],
+  "dual-storage-architecture-grafana-codex": [
+    {
+      "id": "V5",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Missing panic recovery in legacy-write goroutines; kimi-01 is about unbounded goroutines, a different problem."
+    }
+  ],
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+    {
+      "id": "V1",
+      "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-01",
+      "newGroup": null,
+      "reason": "Same claim: `end if` in best.html.erb is invalid Ruby and raises SyntaxError."
+    },
+    {
+      "id": "V2",
+      "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#20",
+      "newGroup": null,
+      "reason": "Same claim: import_remote passes unvalidated URL to Kernel#open, enabling command execution/file reads."
+    },
+    {
+      "id": "V3",
+      "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#21",
+      "newGroup": null,
+      "reason": "Same defect as #21: PollFeed opens feed_polling_url without validating it; the comment stresses Kernel#open schemes instead of SSRF."
+    },
+    {
+      "id": "V4",
+      "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#25",
+      "newGroup": null,
+      "reason": "Same claim: request.referer interpolated into inline JS without JS escaping."
+    },
+    {
+      "id": "V8",
+      "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#02",
+      "newGroup": null,
+      "reason": "Same claim: appendChild on null when #discourse-comments is missing."
+    },
+    {
+      "id": "V11",
+      "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-01",
+      "newGroup": null,
+      "reason": "Same claim: embed_by_username.downcase without presence check raises NoMethodError."
+    }
+  ],
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
+    {
+      "id": "V2",
+      "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#07",
+      "newGroup": null,
+      "reason": "Same claim as #07: from_dict returns None for the received dict, so should_sync fails open and the cycle continues."
+    }
+  ],
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+    {
+      "id": "V1",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "join() ignoring timeout and re-calling close() is not among the rejected claims."
+    },
+    {
+      "id": "V2",
+      "match": "new",
+      "newGroup": "N2",
+      "reason": "Sequential 5s-per-worker join on pool shutdown is not among the rejected claims."
+    },
+    {
+      "id": "V4",
+      "match": "new",
+      "newGroup": "N3",
+      "reason": "Double pool shutdown from strategy.close and factory.shutdown is not among the rejected claims; #19 claims the opposite (threads left running)."
+    }
+  ],
+  "feature-localization-fallbacks-server-side-discourse-cursor": [
+    {
+      "id": "V1",
+      "match": "feature-localization-fallbacks-server-side-discourse-cursor#04",
+      "newGroup": null,
+      "reason": "Same claim: nil default_locale makes FallbackLocaleList#[] raise NoMethodError."
+    }
+  ],
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+    {
+      "id": "V1",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Calendar interface requiring credentialId breaking adapters is not among the rejected claims."
+    },
+    {
+      "id": "V6",
+      "match": "new",
+      "newGroup": "N2",
+      "reason": "requestReschedule missing fallback to user destinationCalendar is not among the rejected claims."
+    }
+  ],
+  "fix-proper-handling-of-group-memberships-discourse-cursor": [
+    {
+      "id": "V1",
+      "match": "fix-proper-handling-of-group-memberships-discourse-cursor#09",
+      "newGroup": null,
+      "reason": "Same claim: usernames not stripped, so \"alice, bob\" silently drops bob."
+    },
+    {
+      "id": "V3",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Non-atomic delete then group.save error response is not among the rejected claims."
+    },
+    {
+      "id": "V8",
+      "match": "new",
+      "newGroup": "N2",
+      "reason": "usernames not cleared after add, allowing resubmission, is not among the rejected claims."
+    }
+  ],
+  "github-oauth-security-enhancement-sentry": [
+    {
+      "id": "V5",
+      "match": "github-oauth-security-enhancement-sentry#prod-01",
+      "newGroup": null,
+      "reason": "Same claim: token exchange omits redirect_uri, so installations fail."
+    }
+  ],
+  "implement-access-token-context-encoding-framework-keycloak": [
+    {
+      "id": "V3",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Fixed 2-character shortcut assumption vs longer grant shortcuts is not among the rejected claims (muse13-01 is about missing shortcuts)."
+    }
+  ],
+  "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+    {
+      "id": "V2",
+      "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#04",
+      "newGroup": null,
+      "reason": "Same claim: raw recovery codes persisted in cleartext in user storage instead of hashed."
+    },
+    {
+      "id": "V6",
+      "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#04",
+      "newGroup": null,
+      "reason": "Same claim: recovery codes stored as plaintext JSON in user storage instead of hashed."
+    }
+  ],
+  "notification-rule-processing-engine-grafana-codex": [
+    {
+      "id": "V5",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Per-rule useFolder calls causing N folder requests is not among the rejected claims."
+    },
+    {
+      "id": "V9",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Same problem as V5: per-rule useFolder subscriptions in useAllGrafanaPromRuleAbilities."
+    }
+  ],
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": [
+    {
+      "id": "V5",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Configured header name not lowercased is not among the rejected claims."
+    },
+    {
+      "id": "V9",
+      "match": "new",
+      "newGroup": "N2",
+      "reason": "Unreachable parsedToken.success branch is not among the rejected claims."
+    }
+  ],
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
+    {
+      "id": "V1",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "clearfix pseudo-elements becoming flex items in .d-header .contents is not among the rejected claims."
+    }
+  ],
+  "sms-workflow-reminder-retry-count-tracking-cal-com": [
+    {
+      "id": "V2",
+      "match": "sms-workflow-reminder-retry-count-tracking-cal-com#kimi-01",
+      "newGroup": null,
+      "reason": "Same claim as kimi-01: catch block increments retryCount for any error, not only Twilio failures, deleting reminders wrongly."
+    }
+  ]
+}
