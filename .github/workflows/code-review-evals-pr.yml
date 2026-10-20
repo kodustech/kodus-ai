@@ -55,6 +55,11 @@ on:
             - ".github/actions/eval-sandbox/**"
             - "docker/Dockerfile"
     workflow_dispatch:
+        inputs:
+            approval_case_ids:
+                description: "Comma-separated approval-risk case IDs to rerun (empty = all 200)"
+                required: false
+                type: string
 
 concurrency:
     # A label that asks for nothing gets a group of its own: it must not cancel a running experiment.
@@ -146,9 +151,15 @@ jobs:
               env:
                   BYOK_FIREWORKS_API_KEY: ${{ secrets.BYOK_FIREWORKS_API_KEY }}
                   API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
+                  APPROVAL_CASE_IDS: ${{ inputs.approval_case_ids }}
               run: |
+                  case_args=()
+                  if [ -n "$APPROVAL_CASE_IDS" ]; then
+                    case_args+=("--ids=$APPROVAL_CASE_IDS")
+                  fi
                   node evals/approval-risk/run.js \
                     --set=full --model=deepseek-v4-flash@fireworks \
+                    "${case_args[@]}" \
                     --output=eval-results/approval-risk-full.json
             - name: Report comparison
               if: always() && hashFiles('eval-results/approval-risk-full.json') != ''

@@ -194,6 +194,14 @@ async function main() {
         console.error(`not measured: ${error.message}`);
         return 2;
     }
+    if (args.ids) {
+        const requested = new Set(String(args.ids).split(',').filter(Boolean));
+        cases = cases.filter((item) => requested.has(item.id));
+        if (!cases.length || cases.length !== requested.size) {
+            console.error('not measured: requested case IDs are missing');
+            return 2;
+        }
+    }
     const slot = routeCodeReviewModel(route.storedConfig, {}).resolvedModelSlot;
     if (!slot) {
         console.error('not measured: no production model slot');
@@ -269,10 +277,13 @@ async function main() {
             errored++;
             rows.push({
                 id: item.id,
-                checks: item.checks,
+                checks:
+                    item.checks ||
+                    'Approval risk at the pre-review PR snapshot.',
                 hits: 0,
                 total: 0,
                 unmeasured: true,
+                metadata: { error: error.message },
             });
             console.error(`${item.id}: ${error.message}`);
         }
