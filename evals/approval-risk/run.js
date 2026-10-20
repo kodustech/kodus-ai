@@ -38,17 +38,14 @@ function loadCases() {
         ['hold', 'eligible'].includes(row.decision),
     );
     if (scored.length < 200)
-        throw new Error(
-            'Full set needs at least 200 adjudicated PRs',
-        );
+        throw new Error('Full set needs at least 200 adjudicated PRs');
     const snapshots = path.join(__dirname, 'snapshots.json.gz');
     if (!fs.existsSync(snapshots))
         throw new Error('Full set snapshots have not been materialized');
     const byId = new Map(
-        JSON.parse(zlib.gunzipSync(fs.readFileSync(snapshots))).cases.map((row) => [
-            row.id,
-            row,
-        ]),
+        JSON.parse(zlib.gunzipSync(fs.readFileSync(snapshots))).cases.map(
+            (row) => [row.id, row],
+        ),
     );
     return scored.map((row) => {
         const snapshot = byId.get(row.id);
@@ -115,16 +112,21 @@ function summaryMetrics(rows) {
         hold: scored.filter((row) => row.metadata.expect === 'hold'),
         eligible: scored.filter((row) => row.metadata.expect === 'approve'),
         sparseHold: scored.filter(
-            (row) => row.metadata.sparseHistory && row.metadata.expect === 'hold',
+            (row) =>
+                row.metadata.sparseHistory && row.metadata.expect === 'hold',
         ),
         sparseEligible: scored.filter(
-            (row) => row.metadata.sparseHistory && row.metadata.expect === 'approve',
+            (row) =>
+                row.metadata.sparseHistory && row.metadata.expect === 'approve',
         ),
         linkedBugHold: scored.filter(
-            (row) => row.metadata.linkedBugHistory && row.metadata.expect === 'hold',
+            (row) =>
+                row.metadata.linkedBugHistory && row.metadata.expect === 'hold',
         ),
         linkedBugEligible: scored.filter(
-            (row) => row.metadata.linkedBugHistory && row.metadata.expect === 'approve',
+            (row) =>
+                row.metadata.linkedBugHistory &&
+                row.metadata.expect === 'approve',
         ),
     };
     const arms = ['baseline', 'modelOnly', 'modelAndMap'];
@@ -178,8 +180,7 @@ function touchesLinkedBugHistory(item) {
     );
     return Boolean(
         item.areaMap?.directDirectories?.some(
-            (area) =>
-                directPaths.has(area.path) && area.linkedBugFixPrs > 0,
+            (area) => directPaths.has(area.path) && area.linkedBugFixPrs > 0,
         ),
     );
 }
@@ -235,6 +236,10 @@ async function main() {
                     metadata: {
                         expect: item.expect,
                         arms,
+                        risks: {
+                            modelOnly: modelOnly.risk,
+                            modelAndMap: modelAndMap.risk,
+                        },
                         sparseHistory:
                             !item.areaMap ||
                             item.areaMap.coverage?.scannedPrs < 10,
