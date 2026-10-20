@@ -92,7 +92,11 @@ export const NewAgentDialog = ({
             else
                 router.push(agentPageHref(repositoryId, agent.id, directoryId));
         } catch (error) {
-            logCustomAgentsSaveError("Error creating custom agent:", error);
+            logCustomAgentsSaveError("Error creating custom agent:", error, {
+                teamId,
+                repositoryId,
+                directoryId,
+            });
             toast(
                 customAgentsSaveErrorToast(
                     error,

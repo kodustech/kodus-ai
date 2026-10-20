@@ -28,10 +28,7 @@ import {
     type KnowledgeCodeManagementPort,
 } from '@libs/code-review/infrastructure/agents/knowledge/base-branch-reader';
 import { locateSkill } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-resolver';
-import {
-    LOAD_SKILL_TOOL,
-    READ_SKILL_FILE_TOOL,
-} from '@libs/code-review/infrastructure/agents/knowledge/knowledge-tools';
+import type { SkillRead } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-tools';
 import { RepositorySkillDetectionService } from '@libs/code-review/infrastructure/agents/knowledge/skill-detection.service';
 import { parseSkillMarkdown } from '@libs/code-review/infrastructure/agents/knowledge/skill-validator';
 import { resolveReviewKnowledge } from '@libs/code-review/infrastructure/agents/knowledge/review-knowledge';
@@ -364,7 +361,9 @@ export function buildTryTrace(params: {
     events: AgentProgressEvent[];
     startedAt: number;
     /** Skills the run could open, to name each opened one by its path. */
-    skills?: Array<{ name: string; path: string; files?: string[] }>;
+    skills?: Array<{ name: string; path: string }>;
+    /** Each skill opened and file read that returned content, in order. */
+    skillReads?: SkillRead[];
     /** What each runCli call returned, in the order the calls ran. */
     cliRuns?: CustomAgentCliRun[];
 }): CustomAgentTryTrace {
@@ -384,32 +383,17 @@ export function buildTryTrace(params: {
     const skillPaths = new Map(
         (params.skills ?? []).map((skill) => [skill.name, skill]),
     );
-    // Each opened skill with the files the run read from it, not the folder.
+    // Each opened skill with the files the run read from it, not the folder:
+    // only reads that returned content, as the tools reported them.
     const skillsOpened = new Map<string, { path: string; files: string[] }>();
-    for (const call of calls) {
-        if (call.tool !== LOAD_SKILL_TOOL && call.tool !== READ_SKILL_FILE_TOOL)
-            continue;
-        try {
-            const args = JSON.parse(call.args);
-            const name =
-                call.tool === LOAD_SKILL_TOOL ? args?.name : args?.skill;
-            if (typeof name !== 'string') continue;
-            const skill = skillPaths.get(name);
-            const opened = skillsOpened.get(name) ?? {
-                path: skill?.path ?? name,
-                files: [],
-            };
-            skillsOpened.set(name, opened);
-            const file = args?.path;
-            if (
-                call.tool === READ_SKILL_FILE_TOOL &&
-                skill?.files?.includes(file) &&
-                !opened.files.includes(file)
-            ) {
-                opened.files.push(file);
-            }
-        } catch {
-            // Arguments are cut at 100 chars for progress; skip unreadable ones.
+    for (const read of params.skillReads ?? []) {
+        const opened = skillsOpened.get(read.skill) ?? {
+            path: skillPaths.get(read.skill)?.path ?? read.skill,
+            files: [],
+        };
+        skillsOpened.set(read.skill, opened);
+        if (read.path && !opened.files.includes(read.path)) {
+            opened.files.push(read.path);
         }
     }
 
@@ -717,6 +701,7 @@ export class CustomAgentTryRunnerService implements ICustomAgentTryRunner {
         };
         const events: AgentProgressEvent[] = [];
         const cliRuns: CustomAgentCliRun[] = [];
+        const skillReads: SkillRead[] = [];
         const warnings: ReviewWarning[] = [
             ...(context.customAgentClis?.warnings ?? []),
         ];
@@ -779,6 +764,7 @@ export class CustomAgentTryRunnerService implements ICustomAgentTryRunner {
                     sandbox,
                     installedClis: context.customAgentClis?.byAgentId,
                     onCliRun: (run) => cliRuns.push(run),
+                    onSkillRead: (read) => skillReads.push(read),
                 },
             });
             const runWarnings = toTryWarnings([
@@ -824,6 +810,7 @@ export class CustomAgentTryRunnerService implements ICustomAgentTryRunner {
                     output,
                     events,
                     cliRuns,
+                    skillReads,
                     startedAt,
                     skills: knowledge.byTarget?.get(agent.id)?.skills,
                 }),

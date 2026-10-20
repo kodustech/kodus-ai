@@ -150,7 +150,11 @@ function SkillsContent() {
                     : { description: "Settings saved", variant: "success" },
             );
         } catch (error) {
-            logCustomAgentsSaveError("Error saving skills and docs:", error);
+            logCustomAgentsSaveError("Error saving skills and docs:", error, {
+                teamId,
+                repositoryId,
+                directoryId,
+            });
             toast(
                 customAgentsSaveErrorToast(
                     error,

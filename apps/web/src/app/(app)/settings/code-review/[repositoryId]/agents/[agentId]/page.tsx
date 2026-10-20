@@ -164,7 +164,12 @@ function AgentContent() {
                     : { description: "Agent saved", variant: "success" },
             );
         } catch (error) {
-            logCustomAgentsSaveError("Error saving custom agent:", error);
+            logCustomAgentsSaveError("Error saving custom agent:", error, {
+                teamId,
+                repositoryId,
+                directoryId,
+                agentId,
+            });
             toast(
                 customAgentsSaveErrorToast(
                     error,
@@ -184,7 +189,12 @@ function AgentContent() {
             setConfirmingDelete(false);
             router.push(backHref);
         } catch (error) {
-            logCustomAgentsSaveError("Error deleting custom agent:", error);
+            logCustomAgentsSaveError("Error deleting custom agent:", error, {
+                teamId,
+                repositoryId,
+                directoryId,
+                agentId,
+            });
             setConfirmingDelete(false);
             toast(
                 customAgentsSaveErrorToast(

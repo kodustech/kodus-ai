@@ -46,6 +46,7 @@ import { CheckEvidence } from '@libs/platform/domain/platformIntegrations/types/
 import { AnalyzerFinding } from '@libs/code-review/infrastructure/analyzers/analyzer-finding.type';
 import type { BaseBranchReader } from '@libs/code-review/infrastructure/agents/knowledge/base-branch-reader';
 import type { ResolvedKnowledge } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-resolver';
+import type { SkillRead } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-tools';
 import type { InstalledCustomAgentCli } from '@libs/code-review/infrastructure/agents/custom-agent-cli/custom-agent-cli.provisioner';
 import type { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 
@@ -199,6 +200,9 @@ export interface CustomAgentTooling {
     installedClis?: Record<string, InstalledCustomAgentCli[]>;
     /** Told of every runCli call and what the agent read back (Try it). */
     onCliRun?: (run: CustomAgentCliRun) => void;
+    /** Told of every skill opened and skill file read that returned
+     *  content (Try it). */
+    onSkillRead?: (read: SkillRead) => void;
 }
 
 /** One runCli call: the CLI, its arguments and the output the agent got. */

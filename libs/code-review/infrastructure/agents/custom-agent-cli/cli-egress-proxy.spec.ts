@@ -40,8 +40,9 @@ const clientHello = (servername?: string): Promise<Buffer> =>
                 host: '127.0.0.1',
                 port,
                 ...(servername ? { servername } : {}),
-                rejectUnauthorized: false,
             });
+            // Only the ClientHello is wanted: the server cuts the socket
+            // before any certificate is sent, so the handshake error is moot.
             client.on('error', () => {});
         });
         server.on('error', reject);
