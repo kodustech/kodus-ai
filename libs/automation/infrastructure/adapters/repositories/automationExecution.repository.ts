@@ -4,7 +4,9 @@ import {
     FindManyOptions,
     FindOneOptions,
     FindOptionsWhere,
+    In,
     LessThan,
+    Not,
     Repository,
 } from 'typeorm';
 
@@ -126,13 +128,18 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
     async findStaleInProgress(
         cutoffDate: Date,
         limit = 100,
+        options?: { excludeOrigins?: string[] },
     ): Promise<AutomationExecutionEntity[]> {
         try {
+            const excludeOrigins = options?.excludeOrigins ?? [];
             const staleExecutions =
                 await this.automationExecutionRepository.find({
                     where: {
                         status: AutomationStatus.IN_PROGRESS,
                         updatedAt: LessThan(cutoffDate),
+                        ...(excludeOrigins.length && {
+                            origin: Not(In(excludeOrigins)),
+                        }),
                     },
                     order: { updatedAt: 'ASC' },
                     take: limit,
@@ -151,6 +158,15 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
             });
             return [];
         }
+    }
+
+    async touchInProgress(uuid: string): Promise<void> {
+        // Scoped to IN_PROGRESS so a late beat can never touch a row that
+        // already reached a terminal status.
+        await this.automationExecutionRepository.update(
+            { uuid, status: AutomationStatus.IN_PROGRESS },
+            { updatedAt: new Date() },
+        );
     }
 
     async delete(uuid: string): Promise<void> {
@@ -835,7 +851,9 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
                             : filters[key];
 
                     queryBuilder.andWhere(
-                        `automation_execution.${key} = :${key}`,
+                        Array.isArray(value)
+                            ? `automation_execution.${key} IN (:...${key})`
+                            : `automation_execution.${key} = :${key}`,
                         { [key]: value },
                     );
                 });

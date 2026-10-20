@@ -30,7 +30,9 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
         >
     >;
     let notificationService: jest.Mocked<Pick<NotificationService, 'emit'>>;
-    let prAuthorResolver: jest.Mocked<Pick<PrAuthorRecipientResolver, 'resolve'>>;
+    let prAuthorResolver: jest.Mocked<
+        Pick<PrAuthorRecipientResolver, 'resolve'>
+    >;
 
     // Frozen by DEFAULT — production hands every stage after the first
     // produce() a deep-frozen context. See test/fixtures/frozen-pipeline-context.ts.
@@ -154,7 +156,9 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
             kind: 'user',
             userId: 'user-1',
         });
-        notificationService.emit.mockRejectedValueOnce(new Error('outbox down'));
+        notificationService.emit.mockRejectedValueOnce(
+            new Error('outbox down'),
+        );
 
         await expect(stage.execute(makeContext())).resolves.toBeDefined();
     });
@@ -165,11 +169,12 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
         // an unanalyzed one. The stage must refuse to approve.
         const ctx = makeContext({
             errors: [
-            {
-                stage: 'AgentReviewStage',
-                error: new Error('byok auth failed'),
-                severity: 'critical',
-            } as any,            ] as any,
+                {
+                    stage: 'AgentReviewStage',
+                    error: new Error('byok auth failed'),
+                    severity: 'critical',
+                } as any,
+            ] as any,
         });
 
         await stage.execute(ctx);
@@ -183,11 +188,12 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
         // run cleanly; auto-approve must wait for the user to decide.
         const ctx = makeContext({
             errors: [
-            {
-                stage: 'ValidateSuggestionsStage',
-                error: new Error('validator timed out'),
-                severity: 'partial',
-            } as any,            ] as any,
+                {
+                    stage: 'ValidateSuggestionsStage',
+                    error: new Error('validator timed out'),
+                    severity: 'partial',
+                } as any,
+            ] as any,
         });
 
         await stage.execute(ctx);
@@ -247,6 +253,12 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
         });
 
         await stage.execute(ctx);
+
+        expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
+    });
+
+    it('does not approve after a `@kody -v <agent>` run, which ran that one agent only', async () => {
+        await stage.execute(makeContext({ onlyCustomAgent: 'ledger-rules' }));
 
         expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
     });

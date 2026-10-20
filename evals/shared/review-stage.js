@@ -305,6 +305,7 @@ function buildAgentReviewStage({ permissionService, codeManagement, previousDeci
     const { SecurityAgentProvider } = lib('code-review/infrastructure/agents/providers/security-agent.provider.ts');
     const { PerformanceAgentProvider } = lib('code-review/infrastructure/agents/providers/performance-agent.provider.ts');
     const { KodyRulesAgentProvider } = lib('code-review/infrastructure/agents/providers/kody-rules-agent.provider.ts');
+    const { CustomAgentProviderFactory } = lib('code-review/infrastructure/agents/providers/custom-agent.provider.ts');
     const { GraphContextService } = lib('code-review/infrastructure/adapters/services/graph/graph-context.service.ts');
     const { KodusGraphCli } = lib('code-review/infrastructure/adapters/services/graph/kodus-graph-cli.ts');
 
@@ -315,6 +316,11 @@ function buildAgentReviewStage({ permissionService, codeManagement, previousDeci
         agent(PerformanceAgentProvider),
         agent(GeneralistAgentProvider),
         new KodyRulesAgentProvider(permissionService, {}),
+        // The team's custom agents (codeReviewConfig.customAgents), one
+        // provider per agent as CodeReviewPipelineModule builds them; a team
+        // with none runs exactly as before. No MCP manager: no eval team
+        // selects plugin tools.
+        new CustomAgentProviderFactory(permissionService, {}),
     );
     // No repository record with a ready AST graph: the stage builds the call
     // graph from the checkout (GraphContextService.generateContextLegacy).

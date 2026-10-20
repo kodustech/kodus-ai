@@ -230,6 +230,29 @@ describe('ValidateNewCommitsStage', () => {
         );
     });
 
+    it('reviews the whole PR when one custom agent is asked for (`@kody -v`)', async () => {
+        context.origin = 'command';
+        context.onlyCustomAgent = 'ledger-rules';
+
+        mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+            {
+                uuid: 'exec-1',
+                dataExecution: { lastAnalyzedCommit: 'sha-1' },
+            },
+        );
+        mockAutomationExecutionService.hasStageWithStatus.mockResolvedValue(
+            false,
+        );
+        mockPullRequestManagerService.getNewCommitsSinceLastExecution.mockResolvedValue(
+            [{ sha: 'sha-1' }],
+        );
+
+        const result = await stage.execute(context);
+
+        expect(result.statusInfo?.status).not.toBe(AutomationStatus.SKIPPED);
+        expect(result.pipelineMetadata?.forceFullRerun).toBe(true);
+    });
+
     describe('orphaned baseCommit detection (rebase / force-push)', () => {
         it('should force full rerun when lastAnalyzedCommit is not in PR commits (orphan)', async () => {
             mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(

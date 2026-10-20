@@ -127,6 +127,10 @@ export class AutomationExecutionService implements IAutomationExecutionService {
         return result;
     }
 
+    touchInProgress(uuid: string): Promise<void> {
+        return this.automationExecutionRepository.touchInProgress(uuid);
+    }
+
     delete(uuid: string): Promise<void> {
         return this.automationExecutionRepository.delete(uuid);
     }
@@ -134,10 +138,12 @@ export class AutomationExecutionService implements IAutomationExecutionService {
     findStaleInProgress(
         cutoffDate: Date,
         limit?: number,
+        options?: { excludeOrigins?: string[] },
     ): Promise<AutomationExecutionEntity[]> {
         return this.automationExecutionRepository.findStaleInProgress(
             cutoffDate,
             limit,
+            options,
         );
     }
 

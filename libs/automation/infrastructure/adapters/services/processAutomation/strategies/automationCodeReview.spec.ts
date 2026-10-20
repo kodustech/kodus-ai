@@ -26,6 +26,7 @@ describe('AutomationCodeReviewService', () => {
     let organizationService: { findOne: jest.Mock };
     let codeReviewHandlerService: Record<string, jest.Mock>;
     let distributedLockService: { acquire: jest.Mock };
+    let enqueueImplementationCheckUseCase: { execute: jest.Mock };
     let lock: { release: jest.Mock; isReleased: jest.Mock };
 
     beforeEach(() => {
@@ -54,6 +55,9 @@ describe('AutomationCodeReviewService', () => {
             notifyCommandReviewRefused: jest.fn().mockResolvedValue(undefined),
         };
         distributedLockService = { acquire: jest.fn().mockResolvedValue(lock) };
+        enqueueImplementationCheckUseCase = {
+            execute: jest.fn().mockResolvedValue('job-1'),
+        };
 
         service = new AutomationCodeReviewService(
             teamAutomationService as any,
@@ -62,6 +66,7 @@ describe('AutomationCodeReviewService', () => {
             organizationService as any,
             codeReviewHandlerService as any,
             distributedLockService as any,
+            enqueueImplementationCheckUseCase as any,
         );
     });
 
@@ -190,6 +195,133 @@ describe('AutomationCodeReviewService', () => {
         });
     });
 
+    // A worker killed mid-review (deploy, OOM) never writes a terminal
+    // status, so its row stays IN_PROGRESS. The gate used to trust that row
+    // for 30 minutes from its creation, refusing `@kody start-review` with
+    // "already reviewing" while nothing ran. Liveness now comes from a
+    // heartbeat the running review keeps writing to the row.
+    describe('when an in-progress row was left by a review that died', () => {
+        const minutesAgo = (minutes: number) =>
+            new Date(Date.now() - minutes * 60_000);
+
+        // Evaluates the gate's filter the way Postgres would, so the test
+        // exercises the query the gate actually sends.
+        const matches = (row: Record<string, any>, filter: any) =>
+            Object.entries(filter).every(([key, expected]: [string, any]) => {
+                if (expected?.type === 'moreThanOrEqual') {
+                    return row[key] >= expected.value;
+                }
+                if (key === 'status') {
+                    return row.status === expected;
+                }
+                return true;
+            });
+
+        const withRows = (rows: Array<Record<string, any>>) =>
+            automationExecutionService.find.mockImplementation(
+                async (filter: any) =>
+                    rows.filter((row) => matches(row, filter)),
+            );
+
+        it('does not block a new review once the row stopped heartbeating', async () => {
+            withRows([
+                {
+                    uuid: 'dead-execution',
+                    status: 'in_progress',
+                    createdAt: minutesAgo(15),
+                    updatedAt: minutesAgo(15),
+                },
+            ]);
+
+            await service.run!(makePayload({ origin: 'command' }));
+
+            expect(
+                codeReviewHandlerService.handlePullRequest,
+            ).toHaveBeenCalled();
+        });
+
+        it('still blocks while the holder keeps heartbeating', async () => {
+            withRows([
+                {
+                    uuid: 'live-execution',
+                    status: 'in_progress',
+                    createdAt: minutesAgo(15),
+                    updatedAt: minutesAgo(0.5),
+                },
+            ]);
+
+            const error = await service
+                .run!(makePayload({ origin: 'command' }))
+                .catch((raised) => raised);
+
+            expect(isPrReviewInProgressError(error)).toBe(true);
+            expect(error.gate).toBe('execution');
+            expect(
+                codeReviewHandlerService.handlePullRequest,
+            ).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('while the review runs', () => {
+        beforeEach(() => {
+            jest.useFakeTimers();
+            automationExecutionService.touchInProgress = jest
+                .fn()
+                .mockResolvedValue(undefined);
+        });
+
+        afterEach(() => {
+            jest.useRealTimers();
+        });
+
+        it('heartbeats its execution row and stops once it finishes', async () => {
+            let finishReview!: (value: unknown) => void;
+            codeReviewHandlerService.handlePullRequest.mockReturnValue(
+                new Promise((resolve) => (finishReview = resolve)),
+            );
+
+            const run = service.run!(makePayload({ origin: 'command' }));
+            await jest.advanceTimersByTimeAsync(0);
+            expect(
+                codeReviewHandlerService.handlePullRequest,
+            ).toHaveBeenCalled();
+
+            await jest.advanceTimersByTimeAsync(3 * 60_000);
+            const beats =
+                automationExecutionService.touchInProgress.mock.calls.length;
+            expect(beats).toBeGreaterThanOrEqual(2);
+            expect(
+                automationExecutionService.touchInProgress,
+            ).toHaveBeenCalledWith('execution-1');
+
+            finishReview({ statusInfo: { status: 'success' } });
+            await run;
+            await jest.advanceTimersByTimeAsync(10 * 60_000);
+
+            expect(
+                automationExecutionService.touchInProgress,
+            ).toHaveBeenCalledTimes(beats);
+        });
+
+        it('keeps reviewing when a heartbeat write fails', async () => {
+            automationExecutionService.touchInProgress.mockRejectedValue(
+                new Error('postgres blip'),
+            );
+            let finishReview!: (value: unknown) => void;
+            codeReviewHandlerService.handlePullRequest.mockReturnValue(
+                new Promise((resolve) => (finishReview = resolve)),
+            );
+
+            const run = service.run!(makePayload({ origin: 'command' }));
+            await jest.advanceTimersByTimeAsync(2 * 60_000);
+            finishReview({ statusInfo: { status: 'success' } });
+
+            await expect(run).resolves.toBe(
+                'Automation executed successfully',
+            );
+        });
+    });
+
     // Losing the lock service must not become "the PR is busy" — that would
     // turn an infrastructure blip into an endlessly deferred review.
     describe('when the lock service itself fails', () => {
@@ -203,6 +335,105 @@ describe('AutomationCodeReviewService', () => {
             expect(
                 codeReviewHandlerService.handlePullRequest,
             ).toHaveBeenCalled();
+        });
+    });
+
+    // A commit pushed while the review ran was checked before the review
+    // stored its suggestions, so they stayed not_implemented (#2182).
+    describe('when the review finishes', () => {
+        const reviewResult = (overrides: Record<string, unknown> = {}) => ({
+            statusInfo: { status: 'success' },
+            lastAnalyzedCommit: { sha: 'reviewed-sha' },
+            ...overrides,
+        });
+
+        it.each([
+            ['success', {}],
+            ['partial_error', { errors: [{ severity: 'partial' }] }],
+        ])(
+            'checks implementation against the reviewed commit (%s)',
+            async (_status, overrides) => {
+                codeReviewHandlerService.handlePullRequest.mockResolvedValue(
+                    reviewResult(overrides),
+                );
+
+                await service.run!(makePayload());
+
+                expect(
+                    enqueueImplementationCheckUseCase.execute,
+                ).toHaveBeenCalledWith({
+                    organizationAndTeamData: {
+                        organizationId: 'org-1',
+                        teamId: 'team-1',
+                    },
+                    repository: { id: 'repo-1', name: 'repo-name' },
+                    pullRequestNumber: 42,
+                    commitSha: 'reviewed-sha',
+                    trigger: 'review_completed',
+                    platformType: 'github',
+                });
+            },
+        );
+
+        it('enqueues only after the execution is persisted', async () => {
+            codeReviewHandlerService.handlePullRequest.mockResolvedValue(
+                reviewResult(),
+            );
+
+            await service.run!(makePayload());
+
+            const persistedAt =
+                automationExecutionService.updateCodeReview.mock
+                    .invocationCallOrder.at(-1);
+            const enqueuedAt =
+                enqueueImplementationCheckUseCase.execute.mock
+                    .invocationCallOrder[0];
+            expect(enqueuedAt).toBeGreaterThan(persistedAt!);
+        });
+
+        it.each([
+            ['error', { errors: [{ severity: 'critical' }] }],
+            ['skipped', { statusInfo: { status: 'skipped' } }],
+            ['no reviewed commit', { lastAnalyzedCommit: undefined }],
+        ])('does not check when %s', async (_case, overrides) => {
+            codeReviewHandlerService.handlePullRequest.mockResolvedValue(
+                reviewResult(overrides),
+            );
+
+            await service.run!(makePayload());
+
+            expect(
+                enqueueImplementationCheckUseCase.execute,
+            ).not.toHaveBeenCalled();
+        });
+
+        // Without a SUCCESS row the check would diff from an older review.
+        it('does not check when the execution could not be persisted', async () => {
+            codeReviewHandlerService.handlePullRequest.mockResolvedValue(
+                reviewResult(),
+            );
+            automationExecutionService.updateCodeReview.mockRejectedValue(
+                new Error('postgres unreachable'),
+            );
+
+            await service.run!(makePayload());
+
+            expect(
+                enqueueImplementationCheckUseCase.execute,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('a failed enqueue does not fail the review', async () => {
+            codeReviewHandlerService.handlePullRequest.mockResolvedValue(
+                reviewResult(),
+            );
+            enqueueImplementationCheckUseCase.execute.mockRejectedValue(
+                new Error('queue down'),
+            );
+
+            await expect(service.run!(makePayload())).resolves.toBe(
+                'Automation executed successfully',
+            );
         });
     });
 });

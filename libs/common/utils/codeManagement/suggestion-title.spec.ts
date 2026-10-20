@@ -1,4 +1,9 @@
-import { MAX_TITLE_CHARS, resolveSuggestionTitle } from './suggestion-title';
+import {
+    boundSuggestionTitle,
+    fullSuggestionTitle,
+    MAX_TITLE_CHARS,
+    resolveSuggestionTitle,
+} from './suggestion-title';
 
 describe('resolveSuggestionTitle', () => {
     it('keeps a short summary as is', () => {
@@ -48,7 +53,52 @@ describe('resolveSuggestionTitle', () => {
         expect(title.slice(0, -1)).not.toMatch(/[\s,;:]$/);
     });
 
+    it('does not cut inside an inline code span (#2157)', () => {
+        const summary =
+            '`Array.prototype.forEach` does not await its async callback, so `bulkReassign` returns `{ reassigned: 0, skipped: 0 }` before any row is reassigned';
+        const title = resolveSuggestionTitle({ summary, body: '' });
+
+        expect(title).toBe(
+            '`Array.prototype.forEach` does not await its async callback, so `bulkReassign` returns…',
+        );
+        expect(title.split('`').length % 2).toBe(1);
+    });
+
+    it('closes the span when the title opens with code longer than the limit', () => {
+        const summary = `\`${'a.b '.repeat(40)}\` is wrong`;
+        const title = resolveSuggestionTitle({ summary, body: '' });
+
+        expect(title.length).toBeLessThanOrEqual(MAX_TITLE_CHARS);
+        expect(title.endsWith('`…')).toBe(true);
+        expect(title.split('`').length % 2).toBe(1);
+    });
+
     it('returns an empty string when there is nothing to build a title from', () => {
         expect(resolveSuggestionTitle({ summary: null, body: '' })).toBe('');
+    });
+});
+
+describe('fullSuggestionTitle and boundSuggestionTitle', () => {
+    const long =
+        'The paginator slices the queryset with a negative start index when the cursor offset is negative, which Django rejects at runtime';
+
+    it('resolves the title without cutting it, so a model can rewrite it first', () => {
+        expect(fullSuggestionTitle({ summary: `  ${long}.  `, body: '' })).toBe(
+            long,
+        );
+        expect(
+            fullSuggestionTitle({ summary: '', body: 'First one. Second.' }),
+        ).toBe('First one');
+    });
+
+    it('bounds what it is given and leaves a short title alone', () => {
+        expect(boundSuggestionTitle('Short title.')).toBe('Short title');
+        expect(boundSuggestionTitle(long)).toBe(
+            resolveSuggestionTitle({ summary: long, body: '' }),
+        );
+        expect(boundSuggestionTitle(long).length).toBeLessThanOrEqual(
+            MAX_TITLE_CHARS,
+        );
+        expect(boundSuggestionTitle(undefined)).toBe('');
     });
 });

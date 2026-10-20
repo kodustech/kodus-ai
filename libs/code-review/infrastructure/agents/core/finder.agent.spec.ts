@@ -201,6 +201,32 @@ describe('prose-findings recovery', () => {
         expect(out.suggestions).toEqual([]);
     });
 
+    it('keeps the findings of an earlier submit when the last one is empty, without recovering them from prose', async () => {
+        // The model submitted its findings, then submitted again with none,
+        // saying they were already recorded. Recovering them from that prose
+        // posted every finding twice under a new title.
+        const resubmitted = {
+            ...reasoningOnlyState,
+            artifacts: [
+                { type: 'submitResult', payload: sampleFindings },
+                {
+                    type: 'submitResult',
+                    payload: {
+                        reasoning: 'Findings already recorded above.',
+                        suggestions: [],
+                    },
+                },
+            ],
+        } as any;
+        const recover = jest.fn().mockResolvedValue(recovered);
+        const out = await extractFindingsWithRecovery(resubmitted, recover);
+        expect(recover).not.toHaveBeenCalled();
+        expect(out.suggestions).toHaveLength(1);
+        expect(out.suggestions[0].relevantFile).toBe(
+            sampleFindings.suggestions[0].relevantFile,
+        );
+    });
+
     it('is a no-op (never throws) when no recoverer is injected', async () => {
         const out = await extractFindingsWithRecovery(
             reasoningOnlyState,
@@ -730,6 +756,43 @@ describe('recoverFindingsFromProse — request assembly (the LLM.run boundary)',
         expect(arg.user).toContain(prose);
         expect(arg.user).toContain('Extract EVERY concrete finding');
         expect(arg.runName).toBe('code-review-recovery');
+    });
+
+    // #2157: recovery returned a 170-character title the stage then cut
+    // inside inline code. The finder's own schema states the title rule;
+    // recovery stated none, in the prompt or in the schema.
+    it.each([
+        ['without history', undefined],
+        [
+            'with history',
+            [
+                {
+                    suggestionId: 'round-a',
+                    suggestionContent: 'Earlier.',
+                    label: 'bug',
+                    outcome: 'pending' as const,
+                    decidedAt: '2026-10-03T10:00:00Z',
+                },
+            ],
+        ],
+    ])('asks for a bounded title, %s', async (_name, previous) => {
+        const spy = jest
+            .spyOn(LLM, 'run')
+            .mockResolvedValue({ suggestions: [] } as any);
+        await recoverFindingsFromProse(
+            prose,
+            undefined,
+            'org-9',
+            undefined,
+            previous,
+        );
+        const arg = spy.mock.calls[0][0] as any;
+        expect(arg.user).toContain(TITLE_PROMPT_SPEC);
+        expect(
+            arg.schema.shape.suggestions.element.shape.oneSentenceSummary
+                .description,
+        ).toBe(TITLE_PROMPT_SPEC);
+        expect(arg.user).toMatch(/json/i);
     });
 
     it('suffixes usageRunName with -recovery when provided', async () => {

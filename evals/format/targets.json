@@ -6,7 +6,7 @@
         "gpt-6-sol: calibrated 2026-10-17 from 2 local runs on a725253d6: 538/555 and 535/555, mean 0.967. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 555, rounded down: 0.95.",
         "claude-sonnet-5-5: calibrated 2026-10-17 from 2 local runs on a725253d6: 524/555 and 521/555, mean 0.941. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 555, rounded down: 0.92.",
         "kimi-k2.7-code@openrouter: calibrated 2026-10-17 from 2 local runs on a725253d6 and 8971e8fb3: 528/555 and 526/555, mean 0.95. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 555, rounded down: 0.93.",
-        "deepseek-v4-flash@fireworks: calibrated 2026-10-17 from 2 local runs on 641fb1999 (BYOK route): 408/555 and 419/555, mean 0.745. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 555, rounded down: 0.7.",
+        "deepseek-v4-flash@fireworks: recalibrated 2026-10-19 for #2157, which added the words, line-refs and title-cut checks and rewrote the formatter prompt: 2 local runs of the branch, 398/555 and 427/555, mean 0.743 (main's formatter scores 261/555 on the same checks). floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 555, rounded down: 0.7.",
         "RATCHET: a PR that moves the value on purpose (a formatter or prompt change, cases rebuilt) recalibrates here in the same PR, with its runs as evidence."
     ],
     "models": {
@@ -16,7 +16,7 @@
         },
         "deepseek-v4-flash@fireworks": {
             "floor": 0.7,
-            "observed": 0.745
+            "observed": 0.743
         },
         "gpt-6-sol": {
             "floor": 0.95,

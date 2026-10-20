@@ -21,6 +21,10 @@ import { useCodeReviewSettingsMutation } from "../../_hooks/use-code-review-sett
 import { type CodeReviewFormType } from "../../_types";
 import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedback";
 import {
+    customAgentsSaveErrorToast,
+    logCustomAgentsSaveError,
+} from "../../_utils/settings-save-conflict";
+import {
     useDefaultCodeReviewConfig,
     useFeatureFlags,
     usePlatformConfig,
@@ -106,13 +110,21 @@ function ReviewScopeContent() {
 
             toast({ description: "Settings saved", variant: "success" });
         } catch (error) {
-            console.error("Error saving settings:", error);
-            toast({
-                title: "Error",
-                description:
-                    "An error occurred while saving the settings. Please try again.",
-                variant: "danger",
+            logCustomAgentsSaveError("Error saving settings:", error, {
+                teamId,
+                repositoryId,
+                directoryId,
             });
+            toast(
+                customAgentsSaveErrorToast(
+                    error,
+                    "An error occurred while saving the settings. Please try again.",
+                    (
+                        form.getValues("customAgents" as never) as
+                            { value?: { name: string }[] } | undefined
+                    )?.value,
+                ),
+            );
         }
     });
 

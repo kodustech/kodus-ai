@@ -1,0 +1,107 @@
+---
+title: "Aplica una convención con ast-grep"
+description: "Un agente personalizado que aplica una convención del equipo con reglas de ast-grep, para que cada hallazgo sea una coincidencia probada."
+icon: "code"
+---
+
+## Por qué ast-grep
+
+Algunas convenciones son estructurales: "nunca llames a esta función aquí", "pasa siempre esta opción". Un modelo puede detectarlas, pero también puede pasar una por alto o imaginar otra. Una regla de [ast-grep](https://ast-grep.github.io) compara el árbol sintáctico, así que una coincidencia es prueba. Un hallazgo que cita una regla que coincidió en la ejecución omite la verificación del modelo y se publica.
+
+El ejemplo es un servicio de checkout con una convención: **los montos son centavos enteros manejados por el helper `Money`, nunca floats.**
+
+## Paso 1 — Escribe las reglas en el repositorio
+
+Haz commit de un archivo de reglas en tu rama por defecto. Kodus lo lee de la rama de destino de cada pull request, así que un pull request no puede relajar las reglas con las que se verifica.
+
+```yaml rules/money.yml
+id: no-parsefloat-amount
+language: typescript
+message: Parse amounts with Money.parse; parseFloat turns cents into a float.
+severity: error
+rule:
+  pattern: parseFloat($A)
+---
+id: no-tofixed-amount
+language: typescript
+message: Format amounts with Money.format; toFixed formats a float, not an amount.
+severity: error
+rule:
+  pattern: $A.toFixed($N)
+```
+
+El `message` de cada regla es lo que el comentario cita como regla, así que escríbelo para quien lee el pull request.
+
+Escribe también el razonamiento una vez en un doc, para los casos que un patrón no puede detectar:
+
+```markdown docs/money.md
+# Money
+
+Amounts are integers in cents, wrapped in `Money`. Never store, add or compare an amount as a float.
+Convert at the edges only: `Money.parse` on input, `Money.format` on output.
+```
+
+## Paso 2 — Crea el agente
+
+**New agent → Templates → Blank**, y luego:
+
+```text Name
+Money handling
+```
+
+```text Instructions
+Enforce the money convention in checkout and billing code: amounts are integer cents in Money, never floats.
+
+First run the team's ast-grep rules on the changed files. Report every match as its own finding on the matched line, citing its rule.
+
+Beyond the rules, flag arithmetic or comparison on amounts held as plain numbers only when docs/money.md states the rule; quote it.
+
+Ignore tests and amounts that are not money (percentages, durations, counts).
+```
+
+| Campo | Valor |
+| --- | --- |
+| **Files** | `src/checkout/**`, `src/billing/**` |
+| **Except** | `**/*.test.ts` |
+| **Skills & docs** | `docs/money.md` (**Add skill or doc → Add by path**) |
+
+## Paso 3 — Apúntalo a las reglas
+
+En **Tools → Advanced → Structural search (ast-grep rules)**, escribe la ruta en una sola línea:
+
+```text
+rules/money.yml
+```
+
+La ayuda lista las reglas que encontró: `2 rules in rules/money.yml: no-parsefloat-amount, no-tofixed-amount`. También puedes pegar el YAML inline en lugar de una ruta; las reglas viven entonces en el agente, no en el repositorio.
+
+## Paso 4 — Comentarios
+
+| Campo | Valor |
+| --- | --- |
+| **Format** | Inline comments |
+| **Minimum severity** | Team minimum |
+| **Suggested fix** | When confident |
+
+Haz clic en **Save**.
+
+## Paso 5 — Try it
+
+Ejecuta **Try it** en un pull request que agregue un `parseFloat` sobre un precio. El hallazgo queda **kept**, y su comentario cita la regla:
+
+```markdown
+**Rule** (`ast-grep:no-parsefloat-amount`):
+> Parse amounts with Money.parse; parseFloat turns cents into a float.
+```
+
+Un hallazgo que el agente levantó a partir de `docs/money.md` cita el doc en su lugar, y se descarta si la cita no está en el doc de la rama de destino.
+
+## Checklist
+
+- [ ] Archivo de reglas con commit en la rama por defecto
+- [ ] Cada regla tiene un `id`, una `rule` y un `message` legible
+- [ ] La ayuda del campo lista todas las reglas
+- [ ] Los globs cubren solo el código al que aplica la convención
+- [ ] Probado en un pull request con una violación conocida
+
+Consulta [Reglas de ast-grep](/es/how_to_use/code_review/custom_agents_knowledge_and_tools#reglas-de-ast-grep) para los detalles del campo.

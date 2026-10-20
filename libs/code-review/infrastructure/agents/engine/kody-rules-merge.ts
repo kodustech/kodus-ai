@@ -95,3 +95,31 @@ export function mergeKodyRuleFindings<T extends Partial<CodeSuggestion>>(
 
     return result;
 }
+
+/**
+ * The merged locations to render under "Also found in", without the comment's
+ * own range. Each merge leaves out the location it kept, but the kept finding
+ * can change in a later merge, or have its lines moved, so the list is
+ * checked against where the comment actually lands.
+ */
+export function otherLocationsToRender(
+    suggestion: Pick<
+        Partial<CodeSuggestion>,
+        | 'relevantFile'
+        | 'relevantLinesStart'
+        | 'relevantLinesEnd'
+        | 'alsoFoundIn'
+        | 'kodyRuleOtherLocations'
+    >,
+): string[] {
+    const own = new Set([
+        `${suggestion.relevantFile}:${suggestion.relevantLinesStart}-${suggestion.relevantLinesEnd}`,
+        `${suggestion.relevantFile}:${suggestion.relevantLinesStart ?? '?'}-${suggestion.relevantLinesEnd ?? '?'}`,
+    ]);
+    return [
+        ...new Set([
+            ...(suggestion.alsoFoundIn || []),
+            ...(suggestion.kodyRuleOtherLocations || []),
+        ]),
+    ].filter((location) => !own.has(location));
+}

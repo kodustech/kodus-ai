@@ -1,0 +1,238 @@
+---
+title: "Agentes Personalizados"
+description: "Revisores que define tu equipo, cada uno con sus instrucciones, archivos, conocimiento y herramientas. Se ejecutan junto a Kody en los pull requests que tocan sus archivos."
+tag: 'beta'
+---
+
+<Callout icon="alien" iconType="regular">Los agentes personalizados están en beta. El comportamiento y las pantallas aún pueden cambiar.</Callout>
+
+## Descripción General
+
+Un agente personalizado es un revisor que tu equipo escribe para un solo tema: límites de arquitectura, código duplicado, una política de seguridad, cobertura de pruebas end-to-end. Cada agente tiene:
+
+- **Instructions**: qué buscar, qué ignorar y qué prueba necesita un hallazgo
+- **Files**: los globs que revisa. Solo se ejecuta cuando un pull request cambia uno de ellos
+- **Skills & docs**: guías del repositorio que sigue
+- **Tools**: plugins de solo lectura, las CLIs de tu equipo y reglas de ast-grep
+- **Comments & model**: su etiqueta, formato, severidad mínima, límite de comentarios, estilo de escritura y modelo
+
+Los agentes se ejecutan junto a la revisión de Kody. Cada uno reporta solo su propio foco, y sus comentarios llevan una etiqueta con su nombre, para que el equipo sepa quién habla.
+
+Disponible en los planes **Teams y Enterprise**, y durante el trial. En el plan Free no se ejecuta ningún agente personalizado: ni en las revisiones, ni con `@kody -v`, ni en **Try it**. Los agentes, skills y docs guardados se conservan y vuelven a ejecutarse tras un upgrade.
+
+<CardGroup cols={2}>
+  <Card title="Skills, docs y herramientas" icon="toolbox" href="/es/how_to_use/code_review/custom_agents_knowledge_and_tools">
+    Vincula guías del repositorio, plugins, CLIs del equipo y reglas de ast-grep.
+  </Card>
+  <Card title="Buenas prácticas" icon="list-check" href="/es/how_to_use/code_review/custom_agents_best_practices">
+    Escribe agentes que encuentren problemas reales y se mantengan en silencio el resto del tiempo.
+  </Card>
+</CardGroup>
+
+## Dónde encontrarlos
+
+Abre **Code review → What to review**. La sección **Custom agents** está debajo de las categorías de revisión, con un botón **New agent** y un enlace a **Skills & docs**.
+
+Cada fila muestra el interruptor del agente, el color de su etiqueta, la primera línea de sus instrucciones, chips con sus archivos, skills, docs y herramientas, y lo que hizo últimamente (por ejemplo `9 PRs · 15 posted · 30 days`). Haz clic en una fila para abrir la página del agente. El menú **⋯** tiene **Edit**, **Try it** y **Delete**.
+
+<Note>
+  Los agentes personalizados se configuran solo en la app. Las claves `customAgents` y `knowledge` en `kodus-config.yml` se ignoran, y la revisión lo indica en su comentario final. Consulta las [Preguntas frecuentes](#preguntas-frecuentes).
+</Note>
+
+## Niveles
+
+Los agentes siguen el selector de alcance en la parte superior del grupo **Code review**, como el resto de tu configuración.
+
+| Nivel | Qué hace |
+| --- | --- |
+| **Global** | Agentes para todo repositorio que no tenga lista propia. |
+| **Repositorio** | La lista empieza igual a la global. El primer cambio que guardes ahí le da al repositorio su propia lista, que **reemplaza** a la global. Desde entonces, los cambios en los agentes globales no le llegan, y la pantalla lo indica: "This repository has its own agents list. Changes to the global agents don't reach it." |
+| **Directorio** | **Suma** sus agentes a los del repositorio. Los agentes del repositorio aparecen como **From repository** (o **From repository, off**) y son de solo lectura ahí. |
+
+En un directorio, un agente heredado se abre en solo lectura con **Override at this directory**. Sobrescribirlo copia el agente al directorio con el mismo id, y la copia reemplaza al agente del repositorio en ese directorio: cambia sus instrucciones o apágalo. Al borrar la sobrescritura, vuelve el agente del repositorio.
+
+<Note>
+  Los agentes de un directorio se ejecutan cuando la revisión usa la configuración de ese directorio. Consulta [Configuración por Directorio](/es/how_to_use/code_review/configs/directory_level) para ver cómo un pull request elige su configuración.
+</Note>
+
+## Crear un agente
+
+<Steps>
+  <Step title="Haz clic en New agent">
+    En **What to review → Custom agents**, haz clic en **New agent**.
+  </Step>
+  <Step title="Elige un punto de partida">
+    Los **Templates** empiezan con instrucciones ya escritas:
+
+    | Template | Foco |
+    | --- | --- |
+    | **Architecture** | Límites entre capas, dirección de las dependencias y dónde debe ir el código nuevo. |
+    | **E2E coverage** | Cambios visibles para el usuario que se publican sin una prueba end-to-end del flujo. |
+    | **Regression & hallucination** | Comportamiento que cambió sin avisar, y llamadas a APIs que no existen. |
+    | **Security reviewer** | Inyección, controles de autorización y de tenant, secretos y entrada no confiable. |
+    | **Blank** | Empieza desde cero y escribe tus propias instrucciones. |
+
+    **Import from repository** lista las skills encontradas en la rama por defecto del repositorio y convierte una en un revisor que la carga en cada revisión. No está disponible en el nivel global, porque las skills viven en cada repositorio.
+  </Step>
+  <Step title="Ajústalo en su página">
+    El agente se guarda de inmediato y se abre su página. Define sus archivos, vincula skills y docs, agrega herramientas.
+  </Step>
+  <Step title="Pruébalo con Try it y luego actívalo">
+    Un agente nuevo empieza **apagado**. Ejecútalo con [Try it](#try-it) en un pull request real. Cuando sus comentarios se vean bien, actívalo.
+  </Step>
+</Steps>
+
+<Tip>
+  El nombre del agente también es su nombre de comando: "Data Contracts" responde a `@kody -v data-contracts`. Dos agentes cuyos nombres generan el mismo nombre de comando no pueden guardarse en el mismo nivel.
+</Tip>
+
+## La página del agente
+
+La página tiene una línea de estado (encendido/apagado, los archivos en los que se ejecuta y lo que publicó en los últimos 30 días), cuatro tarjetas y el panel **Try it**. Los cambios en la página se conservan con **Save**.
+
+### Instructions
+
+| Campo | Notas |
+| --- | --- |
+| **Name** | Se muestra en la etiqueta del agente. Evita un nombre igual a una categoría de Kody (Bug, Performance, Security, Business Logic); la página sugiere uno distinto. |
+| **Instructions** | Hasta 8.000 caracteres. Un brief para un revisor que conoce el código: qué buscar, qué ignorar, qué prueba necesita un hallazgo. |
+
+### Files & knowledge
+
+| Campo | Notas |
+| --- | --- |
+| **Files** | Globs que revisa el agente, p. ej. `src/payments/**`. Vacío se ejecuta en todo pull request. |
+| **Except** | Globs que omite, p. ej. `**/*.test.ts`, `**/generated/**`. |
+| **Skills & docs** | Las guías que sigue este agente, leídas de la rama de destino del pull request. Consulta [Skills, docs y herramientas](/es/how_to_use/code_review/custom_agents_knowledge_and_tools). |
+
+Los globs se comparan con la ruta desde la raíz del repositorio, en todos los niveles, incluso en un directorio.
+
+**Archivos ignorados.** Las rutas ignoradas de tu repositorio (en **General**) siguen aplicando, con una excepción: un glob que **nombra** un archivo llega a él aunque el repositorio lo ignore. Un glob nombra archivos cuando al menos uno de sus segmentos de ruta es literal y su último segmento es más que `*` o `**`:
+
+| Glob | ¿Llega a archivos ignorados? |
+| --- | --- |
+| `package.json`, `apps/web/package.json`, `**/Dockerfile`, `infra/**/*.tf` | Sí |
+| `**`, `**/*`, `**/*.ts`, `*.{ts,tsx}`, `src/**`, `apps/web/*` | No |
+
+Los archivos de secretos (`.env*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`, `id_rsa*` y otras claves SSH) nunca llegan a un agente desde las rutas ignoradas, ni siquiera con un glob que los nombra.
+
+Un pull request cuyos archivos cambiados están todos ignorados sigue siendo revisado por un agente que nombra alguno de ellos, y solo por él: la revisión de Kody no tiene nada que mirar.
+
+### Tools
+
+Lo que el agente puede ejecutar además de leer el código, todo de solo lectura hacia tus sistemas: **Plugins** (MCP), **CLIs** (hasta 3) y, en **Advanced**, **Structural search (ast-grep rules)**. Consulta [Skills, docs y herramientas](/es/how_to_use/code_review/custom_agents_knowledge_and_tools).
+
+### Comments & model
+
+| Campo | Opciones |
+| --- | --- |
+| **Tag** | El color de la etiqueta del agente en sus comentarios. |
+| **Format** | **Inline comments**, o **One PR comment** con todos los hallazgos del agente, del más grave al menos grave. |
+| **Minimum severity** | **Team minimum** sigue **Minimum severity to post** de What to review. **Low (everything)**, **Medium**, **High** o **Critical** fijan un mínimo propio del agente. |
+| **Max comments per pull request** | Publica los más graves. Vacío para sin límite. |
+| **Suggested fix** | **When confident**: el comentario propone código cuando el agente está seguro del cambio. **Never**: solo describe el problema. |
+| **How it writes** | Hasta 2.000 caracteres sobre tono, extensión y lo que todo comentario debe decir. Vacío usa la configuración de escritura del equipo. Los comentarios siempre están en el idioma definido en **General**. |
+| **Model** | **Routing default** sigue el enrutamiento de tus proveedores de IA. Puedes elegir uno de tus modelos BYOK. Sin modelos BYOK, el agente usa los modelos de Kodus. |
+
+## Try it
+
+**Try it** ejecuta el agente tal como está en pantalla, guardado o no, en un pull request del repositorio. No se publica nada.
+
+<Steps>
+  <Step title="Pega el enlace de un pull request">
+    En la página del agente, pega el enlace de un pull request de este repositorio y haz clic en **Run agent**. Tarda unos minutos en un cambio grande.
+  </Step>
+  <Step title="Lee el resultado">
+    El encabezado cuenta los hallazgos, cuántos se mantuvieron y cuántos se publicarían. Debajo:
+
+    - **Warnings**: lo que perdió la ejecución, como no tener checkout (el agente leyó solo el diff), una CLI que no se pudo instalar o una skill o doc que no se pudo usar
+    - **Skills opened**, con los archivos de referencia que leyó el agente
+    - Las llamadas a herramientas (**tool calls**), cada una con su entrada y salida, incluida la salida de las CLIs
+    - Los hallazgos: cada uno **kept**, **dropped** o **unverified**, con el motivo, la regla citada y el **Comment** que se publicaría
+  </Step>
+  <Step title="Cambia y vuelve a ejecutar">
+    Edita las instrucciones, los globs o las herramientas y ejecuta de nuevo. Si editas después de una ejecución, la página avisa que el resultado es de una versión anterior.
+  </Step>
+</Steps>
+
+Try it funciona en los niveles de repositorio y de directorio, y requiere permiso para editar la configuración de code review. Si ningún archivo cambiado coincide con los globs del agente, la ejecución se omite e indica el motivo.
+
+## Ejecutar un agente en un pull request
+
+Comenta en un pull request con el nombre de comando del agente en la primera línea:
+
+```
+@kody -v data-contracts
+```
+
+Kody ejecuta solo ese agente, sobre todo el pull request, aunque el agente esté apagado, y publica sus comentarios. Los revisores propios de Kody no se ejecutan, y este comando nunca aprueba el pull request. Si ningún agente responde a ese nombre, Kody responde con los nombres que sí existen.
+
+## Cómo se ejecutan los agentes en una revisión
+
+<Steps>
+  <Step title="Selección de agentes">
+    Se ejecuta todo agente activado cuyos globs coincidan con al menos un archivo cambiado. Un agente sin archivos coincidentes no se ejecuta.
+  </Step>
+  <Step title="Revisión">
+    Cada agente revisa solo sus archivos, junto a la revisión de Kody, y reporta solo lo que piden sus instrucciones. Lee skills y docs de la rama de destino y usa sus herramientas.
+  </Step>
+  <Step title="Verificación de cada hallazgo">
+    Un hallazgo de convención debe citar la regla que aplica, de una guía vinculada o de las instrucciones del agente. Una cita que no está en la guía en la rama de destino se descarta. Una cita abreviada con "..." pasa cuando cada parte está ahí, en orden. Después, un verificador descarta los hallazgos fuera del foco del agente o sin respaldo en el código. Una coincidencia de ast-grep cuenta como prueba por sí sola.
+  </Step>
+  <Step title="Configuración del agente">
+    La severidad mínima del agente y, después, su límite de comentarios (se conservan los más graves).
+  </Step>
+  <Step title="Fusión con la revisión principal">
+    Cuando un agente y Kody reportan el mismo problema, se conserva un solo comentario. Para una regla del equipo dentro del foco del agente, gana el comentario del agente. Para todo lo demás, se queda el comentario de Kody.
+  </Step>
+  <Step title="Publicación">
+    Los comentarios llevan la etiqueta del agente. Un comentario de convención cita la regla aplicada (la guía y su texto, o "agent's instructions"). Un hallazgo respaldado por una CLI muestra, en **Evidence**, las líneas de salida de la CLI que nombran el archivo.
+  </Step>
+</Steps>
+
+Los comentarios de cada agente llevan su etiqueta, así el pull request muestra qué agente dijo qué. La página del agente muestra lo que hizo en los últimos 30 días: los pull requests que revisó y los comentarios que publicó.
+
+## Límites
+
+| Límite | Valor |
+| --- | --- |
+| Instructions | 8.000 caracteres |
+| How it writes | 2.000 caracteres |
+| CLIs por agente | 3 |
+| Skills por agente (y para la revisión principal) | 20 |
+| Docs por agente (y para la revisión principal) | 10 |
+| Tokens de docs por agente (y para la revisión principal) | 20.000 |
+| Reglas de ast-grep | 64.000 bytes |
+
+## Preguntas frecuentes
+
+<AccordionGroup>
+  <Accordion title="¿Por qué no se ejecutó mi agente?">
+    Revisa, en este orden:
+
+    - Está **apagado**. Los agentes nuevos empiezan apagados. `@kody -v <nombre>` lo ejecuta igualmente.
+    - Ningún archivo cambiado coincide con sus globs de **Files**, o todas las coincidencias están en **Except**.
+    - Sus archivos están en las rutas ignoradas del repositorio y sus globs no los nombran. Nombra los archivos explícitamente (consulta [Files & knowledge](#files--knowledge)).
+    - Sus archivos se borraron en el pull request.
+    - En un repositorio con lista propia, un agente agregado después en el nivel global no le llega.
+    - En un directorio, la revisión usó la configuración del repositorio (por ejemplo, el pull request tocó dos directorios configurados).
+  </Accordion>
+  <Accordion title="¿Por qué se descartó un hallazgo?">
+    Ejecuta el agente con **Try it** en el mismo pull request: cada hallazgo descartado muestra su motivo. Los habituales:
+
+    - La cita no está en la guía en la rama de destino (parafraseada, o la guía solo cambió en el pull request).
+    - El hallazgo está fuera de lo que piden las instrucciones del agente.
+    - El verificador no encontró respaldo en el código.
+    - Quedó por debajo de la severidad mínima del agente o superó su límite de comentarios.
+    - La revisión de Kody reportó el mismo problema y conservó su comentario.
+  </Accordion>
+  <Accordion title="¿Puedo configurar agentes en kodus-config.yml?">
+    No. `customAgents` y `knowledge` en `kodus-config.yml` no se leen. El comentario final lo indica: "kodus-config.yml: customAgents is not read from this file; configure custom agents in the app."
+  </Accordion>
+  <Accordion title="¿Puede un pull request cambiar las reglas con las que se evalúa?">
+    No. Las skills, los docs y los archivos de reglas de ast-grep se leen de la rama de destino del pull request. Los cambios en ellos dentro del pull request aplican después del merge.
+  </Accordion>
+  <Accordion title="¿Qué pasa con los comentarios anteriores cuando borro un agente?">
+    Sus hallazgos se quedan en los pull requests anteriores. Las skills y docs siguen registradas en la página Skills & docs.
+  </Accordion>
+</AccordionGroup>

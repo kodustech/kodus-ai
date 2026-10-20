@@ -272,6 +272,41 @@ const STAGES = [
         },
     },
     {
+        id: 'custom-agents',
+        name: 'Custom agents',
+        short: "Runs the team's own reviewers in their lane",
+        group: 'The agents, side by side',
+        does: 'Beside the finder: each custom agent the team set up reviews only the files its globs match (an ignored file too, when a glob names it), reports only what its instructions ask for, and its findings go through verify, its own severity floor and comment limit, then dedup. A disabled agent does not run.',
+        pipeline: ['AgentReviewStage'],
+        tests: [
+            {
+                kind: 'unit',
+                name: 'Scope, dispatch, lane, quote gate, floor and cap, directory cascade',
+                specs: [
+                    'libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope.spec.ts',
+                    'libs/code-review/infrastructure/agents/review-orchestrator.custom-agents.spec.ts',
+                    'libs/code-review/infrastructure/agents/providers/custom-agent.provider.spec.ts',
+                    'libs/code-review/infrastructure/agents/prompts/prompt-builder.custom-agent.spec.ts',
+                    'libs/code-review/infrastructure/agents/core/convention-check.spec.ts',
+                    'libs/code-review/pipeline/stages/agent-review.stage.custom-agents.spec.ts',
+                    'libs/code-review/pipeline/stages/fetch-changed-files.stage.spec.ts',
+                    'libs/ee/codeBase/__tests__/directory-custom-agents-cascade.spec.ts',
+                ],
+            },
+            { kind: 'contract', name: "A scripted model's review of each case: what the review hands every agent (scope, ignored files, disabled agents)", wiring: ['custom-agents'] },
+        ],
+        eval: {
+            path: 'evals/custom-agents',
+            metric: "of the agents' property checks right",
+            sets: {
+                controlled: 'small invented pull requests, each reviewed by a team with one custom agent: a violation of its instructions to flag, a defect outside them and a file outside its globs to leave alone, an ignored file its glob names, and compliant controls',
+                full: null,
+            },
+            nightly: 'shared',
+            caveat: 'Severity floor, comment limit and the quote gate are held by the unit specs, not this eval: the cases set no floor or limit and link no guide.',
+        },
+    },
+    {
         id: 'anchoring',
         name: 'Anchoring',
         short: 'Places each finding on its diff lines',

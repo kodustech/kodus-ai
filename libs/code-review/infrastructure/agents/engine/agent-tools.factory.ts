@@ -98,6 +98,11 @@ function normalizeRepoPath(value: string): string {
     return value.replace(/^\/+/, '').replace(/\/+/g, '/').replace(/\/$/, '');
 }
 
+/** A repo path starting with "-" is anchored so `find` reads it as a path. */
+function anchorRepoPath(value: string): string {
+    return value.startsWith('-') ? `./${value}` : value;
+}
+
 function truncateShellOutput(output: string): string {
     if (output.length <= MAX_SHELL_OUTPUT) return output;
     return output.substring(0, MAX_SHELL_OUTPUT) + '\n... (truncated)';
@@ -358,6 +363,11 @@ export function buildAgentTools(
                 if (!pattern) {
                     return 'Error: pattern is required';
                 }
+                // rg reads whatever the sandbox user can: a path climbing out
+                // of the checkout would reach other processes' /proc files.
+                if (searchPath.split('/').includes('..')) {
+                    return 'Error: Path traversal using ".." is not allowed';
+                }
 
                 const linked = await resolveLinkedRoot(args.repo);
                 if (!linked.ok) return `Error: ${linked.error}`;
@@ -381,7 +391,9 @@ export function buildAgentTools(
                             : '';
                         const modeArg = namesOnly ? ' -l' : ' -n -C 2';
                         const relForCd = searchPath === '.' ? '.' : searchPath;
-                        const cdCmd = `cd ${shSingleQuote(linked.rootPath)} && rg '${safePattern}'${globArg}${excludeTestsArgs}${modeArg} ${shSingleQuote(relForCd)}`;
+                        // `-e` and `--`: a pattern or path starting with "-"
+                        // is never read as an rg flag (`--pre` runs a command).
+                        const cdCmd = `cd ${shSingleQuote(linked.rootPath)} && rg${globArg}${excludeTestsArgs}${modeArg} -e '${safePattern}' -- ${shSingleQuote(relForCd)}`;
                         const { stdout, exitCode } =
                             await remoteCommands.exec(cdCmd);
                         if (exitCode >= 2) {
@@ -445,7 +457,9 @@ export function buildAgentTools(
                             ? ` --glob '!*test*' --glob '!*Test*' --glob '!*spec*' --glob '!*Spec*' --glob '!*__tests__*'`
                             : '';
                         const modeArg = namesOnly ? ' -l' : ' -n -C 2';
-                        const cmd = `rg '${safePattern}'${globArg}${excludeTestsArgs}${modeArg} '${safePath}'`;
+                        // `-e` and `--`: a pattern or path starting with "-"
+                        // is never read as an rg flag (`--pre` runs a command).
+                        const cmd = `rg${globArg}${excludeTestsArgs}${modeArg} -e '${safePattern}' -- '${safePath}'`;
                         const { stdout, exitCode } =
                             await remoteCommands.exec(cmd);
                         // exit code 1 with "not allowed" = blocked by sandbox, fall through to fallback
@@ -828,8 +842,10 @@ export function buildAgentTools(
                         dirPath,
                     );
                 }
-                // Filter out common noise directories
+                // Filter out common noise directories, and the astGrep tool's
+                // scratch directory while a call is using it.
                 const IGNORE_DIRS = [
+                    '.kody-ast-grep-',
                     'node_modules',
                     '.git',
                     'dist',
@@ -888,7 +904,11 @@ export function buildAgentTools(
                     (args.path || '.').replace(/^\/+/, '') || '.';
                 const ext = args.extension || args.ext || '';
                 const safePattern = pattern.replace(/'/g, "'\\''");
-                const safePath = searchPath.replace(/'/g, "'\\''");
+                // A path starting with "-" would be read as an fd option or a
+                // find expression (`-delete`): anchor it to the checkout.
+                const safePath = (
+                    searchPath.startsWith('-') ? `./${searchPath}` : searchPath
+                ).replace(/'/g, "'\\''");
                 const safeExt = ext ? ext.replace(/'/g, "'\\''") : '';
                 const extArg = safeExt ? ` -e '${safeExt}'` : '';
 
@@ -902,7 +922,7 @@ export function buildAgentTools(
                                 safePattern.includes('?')
                                     ? safePattern
                                     : `*${safePattern}*`;
-                            const fdCmd = `fd --glob '${globPattern}'${extArg} '${safePath}' --type f --max-results 30`;
+                            const fdCmd = `fd --glob --type f --max-results 30${extArg} -- '${globPattern}' '${safePath}'`;
                             const { stdout, exitCode } =
                                 await remoteCommands.exec(fdCmd);
                             // Only trust output on a clean exit. exec merges
@@ -995,7 +1015,9 @@ export function buildAgentTools(
             exactNames: string[] = [],
             globPattern?: string,
         ): Promise<string | null> => {
-            const normalizedTarget = normalizeRepoPath(targetPath || '.');
+            const normalizedTarget = anchorRepoPath(
+                normalizeRepoPath(targetPath || '.'),
+            );
             const exactChecks = exactNames
                 .map(
                     (name) =>
@@ -1048,7 +1070,9 @@ ${exactNames
             extension: string,
             maxFiles: number,
         ): Promise<string[]> => {
-            const normalizedTarget = normalizeRepoPath(targetPath || '.');
+            const normalizedTarget = anchorRepoPath(
+                normalizeRepoPath(targetPath || '.'),
+            );
             const safeTarget = shellQuote(normalizedTarget || '.');
             const safePattern = shellQuote(`*${extension}`);
             const script = `
@@ -1086,7 +1110,9 @@ fi
                 },
             },
             async (args: any) => {
-                const target = normalizeRepoPath(args.path || '.') || '.';
+                const target = anchorRepoPath(
+                    normalizeRepoPath(args.path || '.') || '.',
+                );
                 const safeTarget = shellQuote(target);
 
                 // Detect which languages exist

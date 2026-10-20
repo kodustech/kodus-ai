@@ -28,6 +28,7 @@ import {
     buildVerifierPrompt,
     VERIFIER_REPEAT_RULE,
     VERIFIER_REPO_INSTRUCTION_RULE,
+    verifierLaneRule,
 } from '@libs/code-review/infrastructure/agents/prompts/verifier-prompt';
 import {
     formatPreviousDecisions,
@@ -87,6 +88,9 @@ export interface BuildVerifierSpecParams {
     maxSteps?: number;
     /** Provider options (reasoning/thinking config) forwarded to the model. */
     providerOptions?: Readonly<Record<string, unknown>>;
+    /** System prompt override — the convention verifier passes its own. The
+     *  HV2 prompt when absent. */
+    systemPrompt?: string;
     /** Provider options attached to the system message (e.g. Anthropic prompt
      *  caching) so the verifier's system prompt is cached across steps. */
 }
@@ -96,7 +100,7 @@ export function buildVerifierAgentSpec(
 ): AgentSpec {
     // The HV2 system prompt is static (the per-finding evidence goes in the
     // run prompt), so we build it once with a placeholder bundle.
-    const { system } = buildVerifierPrompt('', 0);
+    const system = params.systemPrompt ?? buildVerifierPrompt('', 0).system;
     const tools = new InMemoryToolRegistry([
         ...params.tools.list(),
         // Strict/structured done-tool for strict-capable models (Gemini
@@ -152,13 +156,20 @@ function repoInstructionEvidence(
 
 /** Format a finding into the verifier's per-run task prompt (HV2 evidence).
  *  `previousDecisions` (issue #1313) is the PR's history, not filtered by
- *  file — see LlmVerifier.verify(). `repoInstructions` is read only for a
- *  `repo_instruction` candidate. */
+ *  file — see LlmVerifier.verify(). `laneFocus` (a custom agent kept to its
+ *  lane, #2172) adds the out-of-focus drop criterion; absent, the prompt is
+ *  unchanged. `repoInstructions` is read only for a `repo_instruction`
+ *  candidate. */
 export function verifierPromptFor(
     finding: FinderSuggestion,
     previousDecisions?: readonly PrDecisionRecord[],
-    repoInstructions?: RepoInstructionsContext,
+    options: {
+        laneFocus?: string;
+        repoInstructions?: RepoInstructionsContext;
+    } = {},
 ): string {
+    const laneFocus =
+        typeof options?.laneFocus === 'string' ? options.laneFocus : '';
     const bundle = [
         `File: ${finding.relevantFile}`,
         finding.relevantLinesStart != null
@@ -167,9 +178,10 @@ export function verifierPromptFor(
         `Severity: ${finding.severity ?? 'unknown'}`,
         `Claim: ${finding.suggestionContent}`,
         finding.existingCode ? `Code:\n${finding.existingCode}` : '',
-        repoInstructionEvidence(finding, repoInstructions),
+        repoInstructionEvidence(finding, options?.repoInstructions),
         formatPreviousDecisions(previousDecisions),
         previousDecisions?.length ? VERIFIER_REPEAT_RULE : '',
+        laneFocus.trim() ? verifierLaneRule(laneFocus) : '',
     ]
         .filter(Boolean)
         .join('\n');
@@ -199,6 +211,26 @@ export function extractVerdict(
     // files it read/grepped) to the observability trace. submitVerdict itself
     // is excluded (it's the result tool, not investigation).
     const toolCalls = collectVerifierToolCalls(state);
+    // The verifier's own run failed (provider error, 429, abort): nothing was
+    // judged. Still fail open, as the Verifier port requires, but say so —
+    // runFinderWithVerify keeps these out of the published set (#2171). A
+    // partial verdict tool call made before the failure is not trusted.
+    if (state.status === 'error') {
+        const error = state.trace.find((e) => e.kind === 'error');
+        const message =
+            (error?.detail?.message as string | undefined) ?? 'unknown error';
+        logger.warn({
+            message: `verifier run failed, finding left unverified: ${message}`,
+            context: 'VerifierAgent',
+            metadata: { parseMode: 'verify-error', ...telemetry },
+        });
+        return {
+            keep: true,
+            rationale: `verification unavailable: ${message}`,
+            toolCalls,
+            parseMode: 'verify-error',
+        };
+    }
     // SHAPE recovery (#1786): a non-strict model may wrap ({result:{keep}}),
     // rename (decision/verdict/shouldKeep), stringify, or bare-array the
     // verdict — readVerdictObject recovers the scalar `keep` before the boolean
@@ -229,6 +261,22 @@ export function extractVerdict(
             },
         });
         return { ...fromText, toolCalls, parseMode: 'text' };
+    }
+    // A run that did not finish (out of steps, stopped by a policy) and left
+    // no verdict judged nothing: unavailable, as an errored run is. One that
+    // completed and answered without a readable verdict keeps the default.
+    if (state.status !== 'completed') {
+        logger.warn({
+            message: `verifier run ended ${state.status} without a verdict, finding left unverified`,
+            context: 'VerifierAgent',
+            metadata: { parseMode: 'verify-error', ...telemetry },
+        });
+        return {
+            keep: true,
+            rationale: `verification unavailable: verifier ended ${state.status} without a verdict`,
+            toolCalls,
+            parseMode: 'verify-error',
+        };
     }
     return {
         keep: true,
@@ -296,6 +344,9 @@ export interface LlmVerifierParams {
     /** The coding-agent instructions the finder reviewed against; evidence
      *  for `repo_instruction` candidates only. */
     repoInstructions?: RepoInstructionsContext;
+    /** A custom agent kept to its lane (#2172): its focus, against which each
+     *  finding is also judged in the same run (see verifierLaneRule). */
+    laneFocus?: string;
 }
 
 /** The LLM-judge Verifier (HV2): runs a verifier AgentSpec once per finding on
@@ -379,11 +430,10 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
         const state = await this.runner.run(
             spec,
             {
-                prompt: verifierPromptFor(
-                    candidate,
-                    matchingDecisions,
-                    this.params.repoInstructions,
-                ),
+                prompt: verifierPromptFor(candidate, matchingDecisions, {
+                    laneFocus: this.params.laneFocus,
+                    repoInstructions: this.params.repoInstructions,
+                }),
                 ...toAiSdkTelemetryArgs(
                     buildLangfuseTelemetry(fnId, this.params.telemetryMetadata),
                 ),

@@ -15,8 +15,10 @@ import { Inject, Injectable } from '@nestjs/common';
 import { isCuratedCatalogProvider } from '@libs/llm/providers';
 import { GetModelsByProviderUseCase } from './get-models-by-provider.use-case';
 import {
+    collectCustomAgentModelOverrides,
     collectModelOverrides,
     type CollectedModelOverride,
+    type CustomAgentModelOverride,
 } from './model-overrides.util';
 
 export interface ModelOverrideEntry extends CollectedModelOverride {
@@ -32,6 +34,9 @@ export interface ListModelOverridesResult {
     overrides: ModelOverrideEntry[];
     /** Overrides we can confidently say don't match the current provider. */
     mismatchedCount: number;
+    /** Custom agents that pin their own model (#2172). Shown, never counted
+     *  as mismatched nor bulk-cleared: they live on the agent's page. */
+    customAgentOverrides: CustomAgentModelOverride[];
 }
 
 /**
@@ -62,8 +67,10 @@ export class ListModelOverridesUseCase {
             .catch(() => null);
 
         const overrides = collectModelOverrides(codeReviewConfig);
+        const customAgentOverrides =
+            collectCustomAgentModelOverrides(codeReviewConfig);
         if (overrides.length === 0) {
-            return { overrides: [], mismatchedCount: 0 };
+            return { overrides: [], mismatchedCount: 0, customAgentOverrides };
         }
 
         const provider = await this.resolveMainProvider(
@@ -96,6 +103,7 @@ export class ListModelOverridesUseCase {
             mismatchedCount: entries.filter(
                 (e) => e.inCurrentProviderCatalog === false,
             ).length,
+            customAgentOverrides,
         };
     }
 

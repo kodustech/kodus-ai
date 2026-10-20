@@ -311,3 +311,29 @@ export const isKodyMentionNonReview = (
         return true;
     return false;
 };
+
+/** Reserved `-v` targets that are not custom agents. */
+const RESERVED_VALIDATION_TARGETS = new Set(['business-logic']);
+
+/**
+ * The custom agent slug in `@kody -v <slug>` (#2172), or undefined when the
+ * comment is not that command or names a built-in validation such as
+ * `business-logic`. Only the first line counts.
+ */
+export const parseCustomAgentCommand = (
+    text: string | undefined | null,
+    botUsername?: string | null,
+): string | undefined => {
+    if (!text) return undefined;
+    const firstLine = text.trim().split(/\r?\n/)[0];
+    const names = [DEFAULT_BOT_USERNAME, botUsername]
+        .filter((name): name is string => !!name)
+        .map(escapeRegex)
+        .join('|');
+    const match = firstLine.match(
+        new RegExp(`^@(?:${names})\\s+-v\\s+([a-z0-9][a-z0-9-]*)\\s*$`, 'i'),
+    );
+    if (!match) return undefined;
+    const slug = match[1].toLowerCase();
+    return RESERVED_VALIDATION_TARGETS.has(slug) ? undefined : slug;
+};

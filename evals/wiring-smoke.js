@@ -143,6 +143,10 @@ async function main() {
         { name: 'business-logic', result: 'shared', model: true, args: ['evals/business-logic/run.js', '--model=eval-fake', '--gate'] },
         // The cases bring their repository: the scripted model reads it through the local sandbox.
         { name: 'memories', result: 'shared', model: true, args: ['evals/memories/run.js', '--model=eval-fake', '--gate'] },
+        // Each team's custom agents through production's stage on a repository
+        // written for it: the gate holds what the review hands every agent (its
+        // globs, an ignored file a glob names, a disabled agent), no model needed.
+        { name: 'custom-agents', result: 'shared', model: true, args: ['evals/custom-agents/run.js', '--model=eval-fake', '--gate'] },
         // The steps after the agents (evals/funnel), each through its production
         // method on its control pair: a repository written for it, so no GitHub
         // fetch. Anchoring calls no model. Each name is written out: the specs

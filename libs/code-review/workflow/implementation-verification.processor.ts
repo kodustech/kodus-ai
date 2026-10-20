@@ -176,13 +176,18 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
                     AutomationType.AUTOMATION_CODE_REVIEW,
             );
 
-            // Retrieve last analyzed commit from the last successful code review execution
+            // Retrieve last analyzed commit from the last code review that
+            // posted its comments. PARTIAL_ERROR posts them too (only an
+            // auxiliary stage failed), and its suggestions are the ones to check.
             const lastExecution =
                 await this.automationExecutionService.findLatestExecutionByFilters(
                     {
                         pullRequestNumber: payload.pullRequestNumber,
                         repositoryId: payload.repository.id,
-                        status: AutomationStatus.SUCCESS,
+                        status: [
+                            AutomationStatus.SUCCESS,
+                            AutomationStatus.PARTIAL_ERROR,
+                        ],
                         teamAutomation: { uuid: teamAutomation?.uuid },
                     },
                 );

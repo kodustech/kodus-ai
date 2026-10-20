@@ -85,6 +85,36 @@ describe('BusinessLogicValidationStage — input contract', () => {
         expect(result.statusInfo?.status).not.toBe(AutomationStatus.SKIPPED);
     });
 
+    it('skips (no agent call) when only a custom agent reviews the ignored files (#2172)', async () => {
+        passGate();
+        const context = buildContext({
+            changedFiles: [],
+            ignoredFileChanges: [
+                { filename: 'package.json', status: 'modified' },
+            ],
+            codeReviewConfig: {
+                reviewOptions: { business_logic: true },
+                customAgents: [
+                    {
+                        id: 'agent-1',
+                        name: 'Manifest',
+                        enabled: true,
+                        scope: { include: ['package.json'] },
+                    },
+                ],
+            },
+        } as any);
+
+        const result = await stage.execute(context);
+
+        expect(agent.execute).not.toHaveBeenCalled();
+        expect((result as any).businessLogicOutcome).toMatchObject({
+            kind: 'skipped',
+            reason: 'no_reviewed_files',
+        });
+        expect(result.statusInfo?.status).not.toBe(AutomationStatus.SKIPPED);
+    });
+
     it('skips when the org context is missing (no agent call)', async () => {
         const context = buildContext({ organizationAndTeamData: undefined } as any);
 

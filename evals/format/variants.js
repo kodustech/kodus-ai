@@ -13,12 +13,12 @@ const VARIANTS = {
     'en-US': {
         checks: 'in English (700 teams, the default)',
         languageResultPrompt: 'en-US',
-        want: { language: 'en', maxSentences: 2 },
+        want: { language: 'en', maxSentences: 2, maxWords: 50 },
     },
     'pt-BR': {
         checks: 'in Brazilian Portuguese (148 teams)',
         languageResultPrompt: 'pt-BR',
-        want: { language: 'pt', maxSentences: 2 },
+        want: { language: 'pt', maxSentences: 2, maxWords: 50 },
     },
     'zh-CN': {
         checks: 'in Simplified Chinese (28 teams)',
@@ -28,7 +28,7 @@ const VARIANTS = {
     'es-ES': {
         checks: 'in Spanish (18 teams)',
         languageResultPrompt: 'es-ES',
-        want: { language: 'es', maxSentences: 2 },
+        want: { language: 'es', maxSentences: 2, maxWords: 50 },
     },
     'en-US-one-sentence': {
         checks: 'in one sentence, as a team guideline asks',

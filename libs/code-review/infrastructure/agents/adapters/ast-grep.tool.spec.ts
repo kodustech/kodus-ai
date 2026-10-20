@@ -1,0 +1,522 @@
+/**
+ * astGrep tool — deterministic, no sandbox. The exec is mocked so the tests
+ * pin the command the tool emits (argv shape, neutral config, no rewrite
+ * flags) and how `--json=stream` output is parsed and capped.
+ */
+import {
+    AST_GREP_TOOL_NAME,
+    MAX_AST_GREP_MATCHES,
+    buildAstGrepTool,
+    type AstGrepToolDeps,
+} from '@libs/code-review/infrastructure/agents/adapters/ast-grep.tool';
+import { isProvenByAstGrep } from '@libs/code-review/infrastructure/agents/core/convention-check';
+
+// One shared warn so the test can read what the tool's module logger wrote.
+const mockWarn = jest.fn();
+jest.mock('@libs/core/log/logger', () => ({
+    createLogger: () => ({
+        log: jest.fn(),
+        error: jest.fn(),
+        warn: (...args: unknown[]) => mockWarn(...args),
+        debug: jest.fn(),
+        info: jest.fn(),
+    }),
+}));
+
+const ctx = { runId: 'r' } as any;
+const WORK_DIR = '.kody-ast-grep-test';
+
+function match(
+    file: string,
+    line: number,
+    text: string,
+    extra: Record<string, unknown> = {},
+) {
+    return JSON.stringify({
+        text,
+        file,
+        range: {
+            start: { line: line - 1, column: 4 },
+            end: { line: line - 1, column: 4 + text.length },
+        },
+        language: 'TypeScript',
+        ...extra,
+    });
+}
+
+function setup(overrides: Partial<AstGrepToolDeps> = {}) {
+    const exec = jest.fn(async (_command: string) => ({
+        stdout: '',
+        stderr: '',
+        exitCode: 1,
+    }));
+    const writeFile = jest.fn(async (_path: string, _content: string) => {});
+    const readTargetFile = jest.fn(async (_path: string) => null as any);
+    const deps: AstGrepToolDeps = {
+        exec,
+        writeFile,
+        changedFiles: ['src/orders/checkout.ts', 'src/orders/cart.ts'],
+        readTargetFile,
+        workDirName: WORK_DIR,
+        ...overrides,
+    };
+    return {
+        tool: buildAstGrepTool(deps),
+        exec: (overrides.exec as jest.Mock) ?? exec,
+        writeFile: (overrides.writeFile as jest.Mock) ?? writeFile,
+        readTargetFile:
+            (overrides.readTargetFile as jest.Mock) ?? readTargetFile,
+    };
+}
+
+/** Undo the single-quote shell quoting the tool applies, so assertions read
+ *  the argv the program receives. */
+function argvOf(command: string): string[] {
+    const out: string[] = [];
+    const re = /'((?:[^']|'\\'')*)'/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(command))) out.push(m[1].replace(/'\\''/g, "'"));
+    return out;
+}
+
+describe('astGrep tool', () => {
+    it('is named astGrep and only offers rules when a rule path is set', () => {
+        const { tool } = setup();
+        expect(tool.name).toBe(AST_GREP_TOOL_NAME);
+        expect(tool.inputSchema.properties).not.toHaveProperty('useRules');
+
+        const withRules = setup({ rulesPath: 'tools/review-rules.yml' });
+        expect(withRules.tool.inputSchema.properties).toHaveProperty(
+            'useRules',
+        );
+    });
+
+    it('runs a pattern search as quoted argv with a neutral config and no rewrite flags', async () => {
+        const { tool, exec, writeFile } = setup();
+        exec.mockResolvedValueOnce({
+            stdout: [
+                match('src/orders/checkout.ts', 12, 'console.log(total)'),
+                match('src/orders/cart.ts', 3, "console.log('it''s')"),
+            ].join('\n'),
+            stderr: '',
+            exitCode: 0,
+        });
+
+        const r = await tool.execute(
+            {
+                pattern: "console.log('$A')",
+                language: 'typescript',
+                paths: ['src/orders'],
+            },
+            ctx,
+        );
+
+        expect(writeFile).toHaveBeenCalledWith(
+            `${WORK_DIR}/sgconfig.yml`,
+            'ruleDirs: []\n',
+        );
+        const command = exec.mock.calls[0][0];
+        expect(argvOf(command)).toEqual([
+            'ast-grep',
+            'run',
+            `--config=${WORK_DIR}/sgconfig.yml`,
+            "--pattern=console.log('$A')",
+            '--lang=typescript',
+            '--json=stream',
+            '--',
+            'src/orders',
+        ]);
+        expect(command).not.toMatch(/(^|\s)'?-U'?(\s|$)|--update-all|--follow/);
+
+        expect(r.isError).toBeFalsy();
+        expect(r.output).toContain('2 matches');
+        expect(r.output).toContain('src/orders/checkout.ts:12:5');
+        expect(r.output).toContain('console.log(total)');
+        expect(r.meta).toMatchObject({ mode: 'pattern', matches: 2 });
+    });
+
+    it('searches the whole repository when no path is given', async () => {
+        const { tool, exec } = setup();
+        await tool.execute({ pattern: 'eval($X)', language: 'ts' }, ctx);
+        expect(argvOf(exec.mock.calls[0][0]).slice(-2)).toEqual(['--', '.']);
+    });
+
+    it('writes the neutral config once per run', async () => {
+        const { tool, writeFile } = setup();
+        await tool.execute({ pattern: 'a', language: 'ts' }, ctx);
+        await tool.execute({ pattern: 'b', language: 'ts' }, ctx);
+        expect(writeFile).toHaveBeenCalledTimes(1);
+    });
+
+    describe('temp directory', () => {
+        it('removes it from the checkout after each run, rewriting it for the next', async () => {
+            const removeDir = jest.fn(async (_path: string) => {});
+            const { tool, exec, writeFile } = setup({ removeDir });
+            await tool.execute({ pattern: 'a', language: 'ts' }, ctx);
+            expect(removeDir).toHaveBeenCalledWith(WORK_DIR);
+            expect(removeDir.mock.invocationCallOrder[0]).toBeGreaterThan(
+                exec.mock.invocationCallOrder[0],
+            );
+            await tool.execute({ pattern: 'b', language: 'ts' }, ctx);
+            expect(removeDir).toHaveBeenCalledTimes(2);
+            expect(writeFile).toHaveBeenCalledTimes(2);
+        });
+
+        it('removes it when the run throws', async () => {
+            const removeDir = jest.fn(async (_path: string) => {});
+            const { tool, exec } = setup({ removeDir });
+            exec.mockRejectedValueOnce(new Error('sandbox gone'));
+            const r = await tool.execute({ pattern: 'a', language: 'ts' }, ctx);
+            expect(r.isError).toBe(true);
+            expect(removeDir).toHaveBeenCalledWith(WORK_DIR);
+        });
+
+        it('keeps it while a parallel call still runs, then removes it once', async () => {
+            const removeDir = jest.fn(async (_path: string) => {});
+            let release!: () => void;
+            const gate = new Promise<void>((resolve) => (release = resolve));
+            const exec = jest.fn(async (_command: string) => {
+                await gate;
+                return { stdout: '', stderr: '', exitCode: 1 };
+            });
+            const { tool } = setup({ removeDir, exec });
+            const first = tool.execute({ pattern: 'a', language: 'ts' }, ctx);
+            const second = tool.execute({ pattern: 'b', language: 'ts' }, ctx);
+            await new Promise((resolve) => setImmediate(resolve));
+            expect(removeDir).not.toHaveBeenCalled();
+            release();
+            await Promise.all([first, second]);
+            expect(removeDir).toHaveBeenCalledTimes(1);
+        });
+
+        it('reads a rule file from the branch once, though it rewrites it per run', async () => {
+            const removeDir = jest.fn(async (_path: string) => {});
+            const readTargetFile = jest.fn(async () => 'id: r\nrule: {}');
+            const { tool, writeFile } = setup({
+                removeDir,
+                rulesPath: 'tools/review-rules.yml',
+                readTargetFile,
+            });
+            await tool.execute({ useRules: true }, ctx);
+            await tool.execute({ useRules: true }, ctx);
+            expect(readTargetFile).toHaveBeenCalledTimes(1);
+            expect(
+                writeFile.mock.calls.filter(([path]) =>
+                    path.endsWith('rules.yml'),
+                ),
+            ).toHaveLength(2);
+        });
+
+        it('touches nothing for input it refuses', async () => {
+            const removeDir = jest.fn(async (_path: string) => {});
+            const { tool, writeFile } = setup({ removeDir });
+            await tool.execute({ pattern: 'x', language: '-U' }, ctx);
+            expect(writeFile).not.toHaveBeenCalled();
+            expect(removeDir).not.toHaveBeenCalled();
+        });
+    });
+
+    it.each([
+        [{ pattern: 'x', language: 'ts', paths: ['../outside'] }, 'path'],
+        [{ pattern: 'x', language: 'ts', paths: ['/etc/passwd'] }, 'path'],
+        [{ pattern: 'x', language: 'ts', paths: ['-U'] }, 'path'],
+        [{ pattern: 'x', language: '-U' }, 'language'],
+        [{ pattern: 'x', language: 'ts --update-all' }, 'language'],
+        [{ language: 'ts' }, 'pattern'],
+        [{ pattern: 'x' }, 'language'],
+    ])(
+        'refuses invalid input %j without running anything',
+        async (input, word) => {
+            const { tool, exec } = setup();
+            const r = await tool.execute(input as any, ctx);
+            expect(r.isError).toBe(true);
+            expect(r.output.toLowerCase()).toContain(word);
+            expect(exec).not.toHaveBeenCalled();
+        },
+    );
+
+    it('caps the number of matches it returns', async () => {
+        const { tool, exec } = setup();
+        const lines = Array.from({ length: MAX_AST_GREP_MATCHES + 7 }, (_, i) =>
+            match('src/orders/checkout.ts', i + 1, `call${i}()`),
+        );
+        exec.mockResolvedValueOnce({
+            stdout: lines.join('\n'),
+            stderr: '',
+            exitCode: 0,
+        });
+
+        const r = await tool.execute({ pattern: '$F()', language: 'ts' }, ctx);
+        expect(r.output).toContain(`${MAX_AST_GREP_MATCHES + 7} matches`);
+        expect(r.output).toContain('7 more not shown');
+        expect(r.output).not.toContain(`call${MAX_AST_GREP_MATCHES}()`);
+    });
+
+    it('keeps the matches it can parse when the stream was cut mid-line', async () => {
+        const { tool, exec } = setup();
+        exec.mockResolvedValueOnce({
+            stdout:
+                match('src/orders/cart.ts', 4, 'eval(code)') +
+                '\n{"text":"eval(',
+            stderr: '',
+            exitCode: 0,
+        });
+        const r = await tool.execute(
+            { pattern: 'eval($A)', language: 'ts' },
+            ctx,
+        );
+        expect(r.isError).toBeFalsy();
+        expect(r.output).toContain('1 match');
+        expect(r.output).toContain('src/orders/cart.ts:4:5');
+    });
+
+    it('reports no matches as a plain answer, not an error', async () => {
+        const { tool } = setup();
+        const r = await tool.execute({ pattern: 'zzz()', language: 'ts' }, ctx);
+        expect(r.isError).toBeFalsy();
+        expect(r.output).toMatch(/no matches/i);
+    });
+
+    it('surfaces an ast-grep failure as an error result', async () => {
+        const { tool, exec } = setup();
+        exec.mockResolvedValueOnce({
+            stdout: '',
+            stderr: "error: invalid value 'cobol' for '--lang <LANG>'",
+            exitCode: 2,
+        });
+        const r = await tool.execute({ pattern: 'x', language: 'cobol' }, ctx);
+        expect(r.isError).toBe(true);
+        expect(r.output).toContain('invalid value');
+    });
+
+    it('returns a thrown exec as an error result instead of throwing', async () => {
+        const { tool, exec } = setup();
+        exec.mockRejectedValueOnce(new Error('sandbox gone'));
+        const r = await tool.execute({ pattern: 'x', language: 'ts' }, ctx);
+        expect(r.isError).toBe(true);
+        expect(r.output).toContain('sandbox gone');
+    });
+
+    it('logs a thrown exec with the review identifiers', async () => {
+        mockWarn.mockClear();
+        const { tool, exec } = setup({
+            logContext: { organizationId: 'org-1', prNumber: 7 },
+        });
+        exec.mockRejectedValueOnce(new Error('sandbox gone'));
+
+        await tool.execute({ pattern: 'x', language: 'ts' }, ctx);
+
+        expect(mockWarn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                error: expect.objectContaining({ message: 'sandbox gone' }),
+                metadata: expect.objectContaining({
+                    mode: 'pattern',
+                    organizationId: 'org-1',
+                    prNumber: 7,
+                }),
+            }),
+        );
+    });
+
+    describe('rules from the target branch', () => {
+        const RULES = [
+            'id: no-raw-sql',
+            'language: TypeScript',
+            'message: Use the query builder',
+            'rule:',
+            '  pattern: db.raw($Q)',
+        ].join('\n');
+
+        it('writes the rules saved on the agent and never reads the branch for them', async () => {
+            const readTargetFile = jest.fn(async () => 'from the branch');
+            const { tool, exec, writeFile } = setup({
+                rules: RULES,
+                readTargetFile,
+            });
+            exec.mockResolvedValueOnce({
+                stdout: match('src/orders/cart.ts', 9, 'db.raw(q)', {
+                    ruleId: 'no-raw-sql',
+                }),
+                stderr: '',
+                exitCode: 0,
+            });
+
+            expect(tool.inputSchema.properties).toHaveProperty('useRules');
+            const r = await tool.execute({ useRules: true }, ctx);
+
+            expect(readTargetFile).not.toHaveBeenCalled();
+            expect(writeFile).toHaveBeenCalledWith(
+                `${WORK_DIR}/rules.yml`,
+                RULES,
+            );
+            expect(r.output).toContain('[no-raw-sql]');
+            expect(r.output).toContain(
+                "1 match for the agent's rules over the changed files:",
+            );
+            expect(r.output).not.toContain('undefined');
+        });
+
+        it('reads the rule file from the target branch and scans only the changed files', async () => {
+            const readTargetFile = jest.fn(async () => RULES);
+            const { tool, exec, writeFile } = setup({
+                rulesPath: 'tools/review-rules.yml',
+                readTargetFile,
+            });
+            exec.mockResolvedValueOnce({
+                stdout: match('src/orders/cart.ts', 9, 'db.raw(q)', {
+                    ruleId: 'no-raw-sql',
+                    message: 'Use the query builder',
+                }),
+                stderr: '',
+                exitCode: 0,
+            });
+
+            const r = await tool.execute({ useRules: true }, ctx);
+
+            expect(readTargetFile).toHaveBeenCalledWith(
+                'tools/review-rules.yml',
+            );
+            expect(writeFile).toHaveBeenCalledWith(
+                `${WORK_DIR}/rules.yml`,
+                RULES,
+            );
+            expect(argvOf(exec.mock.calls[0][0])).toEqual([
+                'ast-grep',
+                'scan',
+                `--config=${WORK_DIR}/sgconfig.yml`,
+                `--rule=${WORK_DIR}/rules.yml`,
+                '--json=stream',
+                '--',
+                'src/orders/checkout.ts',
+                'src/orders/cart.ts',
+            ]);
+            expect(r.output).toContain('[no-raw-sql] Use the query builder');
+            expect(r.output).toContain(
+                '1 match for the rules in tools/review-rules.yml (target branch) over the changed files:',
+            );
+            expect(r.meta).toMatchObject({ mode: 'rules', matches: 1 });
+        });
+
+        it('never reads the rule file from the checkout (the PR head)', async () => {
+            const readTargetFile = jest.fn(async () => RULES);
+            const { tool, exec } = setup({
+                rulesPath: 'tools/review-rules.yml',
+                readTargetFile,
+            });
+            await tool.execute({ useRules: true }, ctx);
+            const command = exec.mock.calls[0][0];
+            expect(command).not.toContain("'tools/review-rules.yml'");
+        });
+
+        it('refuses rules when the agent has no rule path configured', async () => {
+            const { tool, exec } = setup();
+            const r = await tool.execute({ useRules: true }, ctx);
+            expect(r.isError).toBe(true);
+            expect(exec).not.toHaveBeenCalled();
+        });
+
+        it('returns an error when the rule file is missing on the target branch', async () => {
+            const { tool, exec } = setup({
+                rulesPath: 'tools/review-rules.yml',
+                readTargetFile: jest.fn(async () => null),
+            });
+            const r = await tool.execute({ useRules: true }, ctx);
+            expect(r.isError).toBe(true);
+            expect(r.output).toContain('tools/review-rules.yml');
+            expect(exec).not.toHaveBeenCalled();
+        });
+
+        it('reads exit 1 with matches from severity: error rules as success, without the summary as a warning', async () => {
+            const { tool, exec } = setup({ rules: RULES });
+            // What ast-grep 0.42 prints when an error-severity rule matches.
+            exec.mockResolvedValueOnce({
+                stdout: match('src/orders/cart.ts', 9, 'db.raw(q)', {
+                    ruleId: 'no-raw-sql',
+                    severity: 'error',
+                }),
+                stderr: 'Error: 1 error(s) found in code.\nHelp: Scan succeeded and found error level diagnostics in the codebase.\n',
+                exitCode: 1,
+            });
+            const r = await tool.execute({ useRules: true }, ctx);
+            expect(r.isError).toBeFalsy();
+            expect(r.output).toContain('1 match');
+            expect(r.output).not.toContain('ast-grep warnings');
+            expect(r.output).not.toContain('error(s) found');
+        });
+
+        it('keeps a real warning next to the error summary', async () => {
+            const { tool, exec } = setup({ rules: RULES });
+            exec.mockResolvedValueOnce({
+                stdout: match('src/orders/cart.ts', 9, 'db.raw(q)', {
+                    ruleId: 'no-raw-sql',
+                }),
+                stderr: 'Warning: src/legacy.ts could not be parsed\nError: 1 error(s) found in code.\nHelp: Scan succeeded and found error level diagnostics in the codebase.',
+                exitCode: 1,
+            });
+            const r = await tool.execute({ useRules: true }, ctx);
+            expect(r.output).toContain(
+                'ast-grep warnings: Warning: src/legacy.ts could not be parsed',
+            );
+            expect(r.output).not.toContain('error(s) found');
+        });
+
+        it('teaches the citation that makes a rule match proof, in rules mode only', () => {
+            expect(setup().tool.description).not.toContain('ast-grep:<ruleId>');
+            const { tool } = setup({ rules: RULES });
+            expect(tool.description).toContain('kind "convention"');
+            expect(tool.description).toContain('"ast-grep:<ruleId>"');
+            expect(tool.description).toContain("rule's message");
+        });
+
+        it('ends a rules run with the citation of each matched rule, which the proof check accepts', async () => {
+            const { tool, exec } = setup({ rules: RULES });
+            exec.mockResolvedValueOnce({
+                stdout: match('src/orders/cart.ts', 9, 'db.raw(q)', {
+                    ruleId: 'no-raw-sql',
+                    message: 'Use the query builder',
+                }),
+                stderr: '',
+                exitCode: 0,
+            });
+            const r = await tool.execute({ useRules: true }, ctx);
+            expect(r.output).toContain('source.file "ast-grep:no-raw-sql"');
+
+            // The finding the model writes from that instruction is proven.
+            const finding = {
+                relevantFile: 'src/orders/cart.ts',
+                relevantLinesStart: 9,
+                relevantLinesEnd: 9,
+                kind: 'convention',
+                source: {
+                    file: 'ast-grep:no-raw-sql',
+                    quote: 'Use the query builder',
+                },
+            } as any;
+            expect(isProvenByAstGrep(finding, [r.output])).toBe(true);
+        });
+
+        it('adds no citation to a pattern search', async () => {
+            const { tool, exec } = setup({ rules: RULES });
+            exec.mockResolvedValueOnce({
+                stdout: match('src/orders/cart.ts', 9, 'db.raw(q)'),
+                stderr: '',
+                exitCode: 0,
+            });
+            const r = await tool.execute(
+                { pattern: 'db.raw($Q)', language: 'ts' },
+                ctx,
+            );
+            expect(r.output).not.toContain('source.file');
+        });
+
+        it('refuses an oversized rule file', async () => {
+            const { tool, exec } = setup({
+                rulesPath: 'tools/review-rules.yml',
+                readTargetFile: jest.fn(async () => 'x'.repeat(200_000)),
+            });
+            const r = await tool.execute({ useRules: true }, ctx);
+            expect(r.isError).toBe(true);
+            expect(exec).not.toHaveBeenCalled();
+        });
+    });
+});

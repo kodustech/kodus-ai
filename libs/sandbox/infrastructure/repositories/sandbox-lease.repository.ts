@@ -124,6 +124,7 @@ export class SandboxLeaseRepository {
         prKey: string,
         sandboxId: string,
         baseBranch?: string,
+        privilegesDropped?: boolean,
     ): Promise<void> {
         await this.leaseModel.updateOne(
             { _id: prKey, state: 'CREATING' },
@@ -132,6 +133,7 @@ export class SandboxLeaseRepository {
                     state: 'READY',
                     sandboxId,
                     ...(baseBranch ? { baseBranch } : {}),
+                    privilegesDropped: privilegesDropped === true,
                 },
             },
         );

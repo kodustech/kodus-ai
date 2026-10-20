@@ -92,4 +92,67 @@ describe('ListModelOverridesUseCase', () => {
         expect(res.overrides).toEqual([]);
         expect(res.mismatchedCount).toBe(0);
     });
+
+    describe('custom agent model pins (#2172)', () => {
+        const withAgent = (repoConfigs: Record<string, unknown>) => ({
+            configs: {},
+            repositories: [
+                {
+                    id: 'r1',
+                    name: 'acme/api',
+                    configs: {
+                        ...repoConfigs,
+                        customAgents: [
+                            {
+                                id: 'a1',
+                                name: 'API contracts',
+                                models: { run: 'gemini-3.1-pro' },
+                            },
+                        ],
+                    },
+                    directories: [],
+                },
+            ],
+        });
+
+        it('lists them even when no repository pins a review model', async () => {
+            const useCase = build({
+                codeReviewConfig: withAgent({}),
+                provider: 'openai_compatible',
+                catalog: [{ id: 'kimi-k2.7-code', name: 'Kimi' }],
+            });
+
+            const res = await useCase.execute(org);
+            expect(res.overrides).toEqual([]);
+            expect(res.customAgentOverrides).toEqual([
+                {
+                    scope: 'repository',
+                    repositoryId: 'r1',
+                    repositoryName: 'acme/api',
+                    agentId: 'a1',
+                    agentName: 'API contracts',
+                    step: 'run',
+                    model: 'gemini-3.1-pro',
+                },
+            ]);
+        });
+
+        it('keeps them out of the review overrides and the mismatch count', async () => {
+            const useCase = build({
+                codeReviewConfig: withAgent({ byokModel: 'kimi-k2.7-code' }),
+                provider: 'openai_compatible',
+                catalog: [{ id: 'kimi-k2.7-code', name: 'Kimi' }],
+            });
+
+            const res = await useCase.execute(org);
+            expect(res.overrides).toHaveLength(1);
+            expect(res.mismatchedCount).toBe(0);
+            expect(res.customAgentOverrides).toHaveLength(1);
+        });
+
+        it('returns an empty list when nothing is pinned', async () => {
+            const res = await build({ codeReviewConfig: null }).execute(org);
+            expect(res.customAgentOverrides).toEqual([]);
+        });
+    });
 });

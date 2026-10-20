@@ -277,7 +277,7 @@ describe("ByokModelSelect — custom endpoint (openai_compatible)", () => {
                 }}
             />,
         );
-        expect(screen.getByText("Deepseek V4p1")).toBeInTheDocument();
+        expect(screen.getByText("Deepseek V4.1")).toBeInTheDocument();
         expect(screen.queryByText(/select a model/i)).not.toBeInTheDocument();
     });
 

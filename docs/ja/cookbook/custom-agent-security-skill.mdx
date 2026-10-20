@@ -1,0 +1,112 @@
+---
+title: "リポジトリの skill からセキュリティレビュアーを作る"
+description: "チームのセキュリティ skill を、すべてのプルリクエストでそれに従うカスタムエージェントに変換します。"
+icon: "shield-halved"
+---
+
+## なぜ skill か
+
+チームはすでに、コーディングアシスタント向けにセキュリティルールをエージェント skill として管理しているかもしれません。カスタムエージェントはコードレビューで同じ skill に従えます。変更が必要とするときに skill を開き、参照ファイルを読み、各指摘が適用するルールを引用します。メインブランチで skill が変わると、設定を変えなくてもエージェントは新しいバージョンに従います。
+
+例はマルチテナントのスケジューリング API で、すべてのクエリは呼び出し元のワークスペースにスコープされる必要があります。
+
+## ステップ1 — リポジトリの skill
+
+```markdown .claude/skills/tenant-isolation/SKILL.md
+---
+name: tenant-isolation
+description: Rules that keep one workspace's data out of another's. Use when changing endpoints, queries or background jobs.
+---
+
+# Tenant isolation
+
+- Every query on a tenant table filters by `workspaceId` taken from the authenticated session, never from the request body or query string.
+- Every new endpoint declares `@RequireWorkspaceRole(...)`; an endpoint without it is public.
+- Background jobs receive `workspaceId` in their payload and pass it to every repository call.
+- Logs never include tokens, passwords or full email addresses.
+
+For the list of tenant tables, see references/tenant-tables.md.
+```
+
+```markdown .claude/skills/tenant-isolation/references/tenant-tables.md
+# Tenant tables
+
+bookings, calendars, invoices, members, resources
+```
+
+フォルダー名と `name` は一致する必要があり、`description` は必須です。
+
+## ステップ2 — エージェントとしてインポートする
+
+<Steps>
+  <Step title="リポジトリの設定を開く">
+    スコープピッカーでリポジトリを選び、**What to review → Custom agents → New agent** を開きます。
+  </Step>
+  <Step title="Import from repository">
+    タブにデフォルトブランチで見つかった skills が表示されます。**tenant-isolation** をクリックします。
+  </Step>
+  <Step title="結果を確認する">
+    エージェントはオフで作成され、名前は **Tenant isolation reviewer**、skill が紐付けられ、指示は次のとおりです。
+
+    ```text
+    Review the change against the team's "tenant-isolation" skill: load it, follow its rules and references, and report where the change departs from them. Cite the rule you apply.
+    ```
+  </Step>
+</Steps>
+
+## ステップ3 — 指示を磨く
+
+skill への参照は残し、指摘に必要な証拠を加えます。
+
+```text Instructions
+Review the change against the team's "tenant-isolation" skill: load it, follow its rules and references, and report where the change departs from them. Cite the rule you apply.
+
+Trace where workspaceId comes from in every query or repository call the change adds or edits. A finding must show the line where the value enters (session, body, query string, job payload) and the line where it is used.
+
+Ignore tests and seed scripts. Do not report general security issues the skill does not cover; Kody's own review handles those.
+```
+
+| フィールド | 値 |
+| --- | --- |
+| **Files** | `src/api/**`, `src/jobs/**`, `src/repositories/**` |
+| **Except** | `**/*.test.ts`, `src/db/seeds/**` |
+
+## ステップ4 — オプション：プラグイン
+
+課題管理ツールがプラグインとしてインストールされていれば、**Tools → Plugins** でオンにします。提供されるのは読み取りツールだけです。プルリクエストの説明がチケットにリンクしていれば、エージェントはそれを読み、変更が求められた内容に合っているかを確認できます。
+
+## ステップ5 — コメント
+
+| フィールド | 値 | 理由 |
+| --- | --- | --- |
+| **Format** | Inline comments | |
+| **Minimum severity** | High | テナント漏えいと認可の欠落だけを対象にし、ハードニングの提案は出しません。 |
+| **Suggested fix** | When confident | |
+
+**Save** をクリックします。
+
+## ステップ6 — Try it
+
+エンドポイントを追加するプルリクエストで **Try it** を実行します。確認すること：
+
+- **Skills opened** に `.claude/skills/tenant-isolation` が表示され、エージェントが必要としたときは `references/tenant-tables.md` も表示される。
+- 保持された指摘が skill のルールを引用している：
+
+```markdown
+**Rule** (`.claude/skills/tenant-isolation/SKILL.md`):
+> Every new endpoint declares `@RequireWorkspaceRole(...)`; an endpoint without it is public.
+```
+
+- 破棄された指摘に理由が表示される。skill がカバーしない一般的なセキュリティの指摘は、エージェントの担当範囲外として破棄されます。ここではそれが望ましい動作です。
+
+エージェントをオンにします。後で開いているプルリクエストにセカンドオピニオンが欲しいときは、`@kody -v tenant-isolation-reviewer` とコメントします。
+
+## チェックリスト
+
+- [ ] `SKILL.md` にフォルダー名と一致する `name` と `description` がある
+- [ ] 参照ファイルは skill から最大 1 フォルダー下にある
+- [ ] 指示に指摘に必要な証拠が書かれている
+- [ ] 最小重大度がエージェントの望ましい発言量に合っている
+- [ ] 既知の不備を含むプルリクエストで試した
+
+検出と予算については [Skills & docs](/ja/how_to_use/code_review/custom_agents_knowledge_and_tools#skills--docs) を参照してください。
