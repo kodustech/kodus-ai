@@ -157,7 +157,9 @@ class ClaudeSdkRunner {
         const finder = spec.id === 'finder';
         const acima = Number(process.env.RECALL_CLAUDE_SDK_NOCAP_ACIMA || 0);
         const esc = {
-            preset: finder && process.env.RECALL_CLAUDE_SDK_PRESET === '1',
+            // Preset do Claude Code ligado por padrao desde 20/10/26: todo teste
+            // de modelo Anthropic roda pelo Agent SDK com ele. RECALL_CLAUDE_SDK_PRESET=0 desliga.
+            preset: finder && process.env.RECALL_CLAUDE_SDK_PRESET !== '0',
             // As lentes (passadas com teto) mantem a tool de submit: o prompt
             // delas manda chamar submitResult, e sem a tool o modelo chama
             // assim mesmo e gasta um passo no erro.

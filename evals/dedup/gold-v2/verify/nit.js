@@ -228,8 +228,8 @@ async function julgaSdk(s, diff, dir, schema, cmd) {
     try {
         for await (const msg of sdk.query({ prompt: texto, options: {
             model: TIER0[MODELO].sdkModel,
-            // RECALL_CLAUDE_SDK_PRESET=1: o preset do Claude Code com o nosso texto no fim, como no finder.
-            systemPrompt: process.env.RECALL_CLAUDE_SDK_PRESET === '1'
+            // O preset do Claude Code com o nosso texto no fim, como no finder; RECALL_CLAUDE_SDK_PRESET=0 desliga.
+            systemPrompt: process.env.RECALL_CLAUDE_SDK_PRESET !== '0'
                 ? { type: 'preset', preset: 'claude_code', append: 'You can read the repository at the pull request head with the grep, readFile and listDir tools.' }
                 : 'You can read the repository at the pull request head with the grep, readFile and listDir tools.',
             tools: [], allowedTools: repo.allowedTools, mcpServers: repo.mcpServers,
