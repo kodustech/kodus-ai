@@ -139,6 +139,9 @@ const AgentRow = ({
                                 : "From repository, off"}
                         </Chip>
                     )}
+                    {own && !agent.enabled && (
+                        <Chip>Off, not run in reviews</Chip>
+                    )}
                 </div>
                 <p className="text-text-secondary truncate text-xs">
                     {describeAgent(agent)}

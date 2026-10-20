@@ -677,6 +677,7 @@ describe("custom agent drafts", () => {
         const base = (): CustomAgent => ({
             ...createAgentFromTemplate("blank", []),
             name: "E2E tests reviewer",
+            enabled: true,
         });
         const knowledge: KnowledgeItem[] = [
             {
@@ -724,6 +725,14 @@ describe("custom agent drafts", () => {
             );
             expect(agentStatusLine(base(), undefined, 30, true)).toBe(
                 "Runs on all files",
+            );
+        });
+
+        it("says an agent that is off does not run in reviews", () => {
+            expect(
+                agentStatusLine({ ...base(), enabled: false }, undefined, 30),
+            ).toBe(
+                "Off: reviews don't run it · would run on all files · no findings in 30 days",
             );
         });
 

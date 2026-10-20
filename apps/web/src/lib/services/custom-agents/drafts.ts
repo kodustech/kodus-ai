@@ -607,12 +607,16 @@ export const scopeLabel = (agent: Pick<CustomAgent, "scope">): string => {
  * "Runs on src/payments/** · 9 PRs · 15 posted in 30 days".
  */
 export const agentStatusLine = (
-    agent: Pick<CustomAgent, "scope">,
+    agent: Pick<CustomAgent, "scope" | "enabled">,
     status: CustomAgentStatus | undefined,
     windowDays: number,
     isGlobal = false,
 ): string => {
-    const where = `Runs on ${scopeLabel(agent)}`;
+    // An agent starts off: say reviews skip it, not where it runs.
+    const where =
+        agent.enabled === false
+            ? `Off: reviews don't run it · would run on ${scopeLabel(agent)}`
+            : `Runs on ${scopeLabel(agent)}`;
     // Usage is counted per repository.
     if (isGlobal) return where;
     if (!status || status.pullRequests === 0) {
