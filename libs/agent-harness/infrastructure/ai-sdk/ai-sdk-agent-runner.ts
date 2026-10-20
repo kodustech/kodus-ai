@@ -16,6 +16,7 @@
  */
 import { jsonSchema, tool as aiTool, type ModelMessage } from 'ai';
 import { LLM, type AgentLoopResult } from '@libs/llm/llm';
+import type { LoopDirector } from '@libs/llm/agent-loop-call';
 import { readAiSdkUsage } from '@libs/llm/ai-sdk-usage';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 
@@ -190,6 +191,38 @@ export class AiSdkAgentRunner implements AgentRunner {
             return out;
         };
 
+        // The same decisions for a runtime that owns its own loop (the Claude
+        // Agent SDK executor): the note and active tools `prepareStep` would
+        // inject, the `stopWhen` verdict, and the last step's finalize
+        // directive. The AI SDK path never reads it.
+        const director: LoopDirector = {
+            beforeStep: async (stepNumber) => {
+                const view = buildView(stepNumber, messages, [...allToolNames]);
+                const merged = await this.mergeDirectives(spec.policies, view, emit);
+                const unsupported = [
+                    ...(merged.messages ? ['messages'] : []),
+                    ...(merged.modelId ? ['modelId'] : []),
+                ];
+                return {
+                    ...(merged.injectNote ? { note: merged.injectNote.content } : {}),
+                    ...(merged.activeTools ? { activeTools: [...merged.activeTools] } : {}),
+                    ...(unsupported.length ? { unsupported } : {}),
+                };
+            },
+            shouldStop: (stepNumber) =>
+                policyStopWhen({ steps: { length: stepNumber } }),
+            finalize: async (stepNumber) => {
+                const last = Math.max(stepNumber, spec.maxSteps - 1);
+                const view = buildView(last, messages, [...allToolNames]);
+                const merged = await this.mergeDirectives(spec.policies, view, emit);
+                if (!merged.injectNote) return null;
+                return {
+                    note: merged.injectNote.content,
+                    ...(merged.activeTools ? { activeTools: [...merged.activeTools] } : {}),
+                };
+            },
+        };
+
         // onStepFinish: collect the step + run policy hooks.
         const stepCollector = async (event: any) => {
             // ai@7.0.70+ refuses to auto-execute tools when a model turn ends on
@@ -304,6 +337,10 @@ export class AiSdkAgentRunner implements AgentRunner {
                     stopWhen: [policyStopWhen],
                     prepareStep: policyPrepareStep,
                     onStepFinish: stepCollector,
+                    director,
+                    ...(spec.resultToolName
+                        ? { resultToolName: spec.resultToolName }
+                        : {}),
                 },
             });
         } catch (err) {

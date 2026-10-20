@@ -77,6 +77,11 @@ import {
     sleep,
 } from '@libs/llm/retry-policy';
 import { getLlmObservability } from '@libs/llm/llm-observability';
+import {
+    sdkExecutorsFor,
+    withSdkInfraFallback,
+    type SdkOneShotResult,
+} from '@libs/llm/sdk-executor-registry';
 
 const logger = createLogger('StructuredReviewCall');
 
@@ -481,7 +486,7 @@ async function runReviewCall<T>(
             prompt?: string;
         },
     ): Promise<T> => {
-        const exec = () =>
+        const runGenerateText = () =>
             tracedGenerateText({
                 model: model as any,
                 system: systemOverride ?? system,
@@ -518,6 +523,50 @@ async function runReviewCall<T>(
                     ),
                 ),
             } as any);
+
+        // A slot the registered SDK executor takes (#2113: Claude on the Agent
+        // SDK) runs there, inside the same span, plan and recovery: a structured
+        // answer that fails the schema throws the NoObjectGeneratedError
+        // generateText would, so the repair and json_object re-issue below run
+        // unchanged. A runtime failure reruns the call on generateText.
+        const outputArgs = override?.outputArgs ?? mode.outputArgs;
+        const wantsObject = 'output' in outputArgs && mode.validatingSchema != null;
+        const sdk = sdkExecutorsFor(mainSlot);
+        const exec = sdk
+            ? () =>
+                  withSdkInfraFallback({
+                      executors: sdk,
+                      runSdk: async () => {
+                          const r = await sdk.runOneShot({
+                              slot: mainSlot,
+                              system: systemOverride ?? system,
+                              prompt: override?.prompt ?? user,
+                              ...(wantsObject
+                                  ? {
+                                        jsonSchema: asSchema(mode.validatingSchema as any)
+                                            .jsonSchema as Record<string, unknown>,
+                                    }
+                                  : {}),
+                              runName,
+                              organizationId,
+                              providerOptions: providerOptionsOverride ?? providerOptions,
+                              maxOutputTokens: maxOutputTokensOverride ?? callOptions.maxOutputTokens,
+                              temperature: temperatureOverride ?? callOptions.temperature,
+                              signal: timeoutSignal(timeoutMs ?? LLM_CALL_TIMEOUT_MS),
+                              telemetryMetadata: telemetryMetadata ?? { organizationId },
+                          });
+                          return wantsObject
+                              ? { ...r, output: await validatedSdkOutput(r, mode.validatingSchema) }
+                              : r;
+                      },
+                      runAiSdk: runGenerateText,
+                      // One-shot calls are atomic: nothing was handed out yet.
+                      started: () => false,
+                      runName,
+                      organizationId,
+                      slot: mainSlot,
+                  })
+            : runGenerateText;
 
         // Wrap the call in the app's observability span (reads usage from
         // result.usage). Resolved from the LLM observability PORT — the app
@@ -914,4 +963,36 @@ export async function runTextReviewCall(
         outputArgs: {},
         extract: (r) => (r.text ?? '') as string,
     });
+}
+
+/**
+ * The structured object of an SDK one-shot answer, validated against the same
+ * schema `Output.object` uses — or the `NoObjectGeneratedError` generateText
+ * throws for the same answer (JSONParseError when the text is not JSON,
+ * TypeValidationError when the object has the wrong shape), so the caller's
+ * recovery treats both runtimes alike.
+ */
+async function validatedSdkOutput(r: SdkOneShotResult, validatingSchema: unknown): Promise<unknown> {
+    const fail = (message: string, cause: Error) =>
+        new NoObjectGeneratedError({
+            message,
+            cause,
+            text: r.text,
+            response: { id: 'claude-agent-sdk', timestamp: new Date(), modelId: '' },
+            usage: r.usage as any,
+            finishReason: r.finishReason as any,
+        });
+    let value = r.output;
+    if (value === undefined) {
+        try {
+            value = JSON.parse(r.text);
+        } catch (cause) {
+            throw fail('No object generated: could not parse the response.', new JSONParseError({ text: r.text, cause }));
+        }
+    }
+    const schema = asSchema(validatingSchema as any);
+    if (typeof schema.validate !== 'function') return value;
+    const check = await schema.validate(value);
+    if (check.success) return check.value;
+    throw fail('No object generated: response did not match schema.', new TypeValidationError({ value, cause: (check as { error?: unknown }).error }));
 }

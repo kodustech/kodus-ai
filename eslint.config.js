@@ -47,6 +47,35 @@ module.exports = tseslint.config(
             ],
         },
     },
+    // License boundary (#2113): the Claude Agent SDK is proprietary, the core
+    // is AGPL. Only libs/ee/claude-agent-sdk may import it, and the LLM core
+    // reaches it through its registry (libs/llm/sdk-executor-registry.ts), never
+    // by importing EE code.
+    {
+        files: ['{apps,libs}/**/*.ts'],
+        ignores: ['libs/ee/claude-agent-sdk/**'],
+        rules: {
+            'no-restricted-imports': [
+                'error',
+                {
+                    paths: [{ name: '@anthropic-ai/claude-agent-sdk', message: 'Proprietary (#2113): only libs/ee/claude-agent-sdk may import it.' }],
+                },
+            ],
+        },
+    },
+    {
+        files: ['libs/llm/**/*.ts'],
+        ignores: ['libs/llm/**/*.spec.ts'],
+        rules: {
+            'no-restricted-imports': [
+                'error',
+                {
+                    paths: [{ name: '@anthropic-ai/claude-agent-sdk', message: 'Proprietary (#2113): only libs/ee/claude-agent-sdk may import it.' }],
+                    patterns: [{ group: ['@libs/ee/*', '@libs/ee'], message: 'The AGPL LLM core never imports EE code; EE registers into it (sdk-executor-registry.ts).' }],
+                },
+            ],
+        },
+    },
     {
         ignores: [
             '**/node_modules/**',

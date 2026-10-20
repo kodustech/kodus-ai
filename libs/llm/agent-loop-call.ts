@@ -36,6 +36,7 @@ import { agentModelIdentity } from '@libs/llm/model-identity';
 import { applyCacheBreakpoints } from '@libs/llm/prompt-cache';
 import { repairInvalidToolInput } from '@libs/llm/repair-tool-call';
 import { getLlmObservability } from '@libs/llm/llm-observability';
+import { sdkExecutorsFor, withSdkInfraFallback } from '@libs/llm/sdk-executor-registry';
 import {
     hardTimeout,
     timeoutSignal,
@@ -70,6 +71,36 @@ export interface AgentLoopSeams {
     prepareStep?: (opts: any) => unknown;
     /** Per-step observation hook (policy `onStepFinish` + step collection). */
     onStepFinish?: (event: any) => unknown;
+    /** The same policy decisions as `stopWhen`/`prepareStep`, for a runtime that
+     *  owns its own loop (the Claude Agent SDK executor, #2113). The
+     *  `generateText` path never reads it. */
+    director?: LoopDirector;
+    /** The tool whose call is the run's result, when the agent has one. */
+    resultToolName?: string;
+}
+
+/**
+ * The policies' per-step decisions, without the AI SDK's message shapes. Built
+ * by the harness runner from the same `mergeDirectives`/`shouldStop` that feed
+ * `prepareStep`/`stopWhen`, so both runtimes apply the same policies.
+ */
+export interface LoopDirector {
+    /** Before step `stepNumber` (0-based, = steps done): the note to add, the
+     *  tools allowed, and any directive this runtime cannot apply. */
+    beforeStep(stepNumber: number): Promise<LoopStepDirective>;
+    /** After a step: true ends the run (policy `shouldStop`). */
+    shouldStop(stepNumber: number): Promise<boolean>;
+    /** The run is ending at `stepNumber` without the result tool: what the
+     *  last step would have said, or null when no policy finalizes. */
+    finalize(stepNumber: number): Promise<{ note: string; activeTools?: string[] } | null>;
+}
+
+export interface LoopStepDirective {
+    note?: string;
+    activeTools?: string[];
+    /** Directives with no equivalent outside the AI SDK loop (message-window
+     *  replacement, model switch); the executor traces them. */
+    unsupported?: string[];
 }
 
 export interface AgentLoopParams {
@@ -204,7 +235,7 @@ export async function runAgentLoopCall(
         ...(organizationId ? { organizationId } : {}),
     };
 
-    const exec = () =>
+    const runGenerateText = () =>
         generateText({
             model: inv.model as any,
             maxRetries: AGENT_STEP_MAX_RETRIES,
@@ -240,6 +271,48 @@ export async function runAgentLoopCall(
                   )
                 : {}),
         } as any);
+
+    // ── The model call itself. A slot the registered SDK executor takes (#2113:
+    // Claude on the Agent SDK) runs there with everything above unchanged —
+    // config, span, signal, deadline; the rest calls generateText as always.
+    // If the SDK runtime itself fails before its first step, the same call
+    // runs on generateText instead. ──
+    const sdk = sdkExecutorsFor(slot);
+    let sdkStarted = false;
+    const exec = sdk
+        ? () =>
+              withSdkInfraFallback({
+                  executors: sdk,
+                  runSdk: () =>
+                      sdk.runLoop({
+                          slot,
+                          system,
+                          messages,
+                          loop: {
+                              ...loop,
+                              onStepFinish: (event: unknown) => {
+                                  sdkStarted = true;
+                                  return loop.onStepFinish?.(event);
+                              },
+                          },
+                          runName,
+                          organizationId,
+                          reporter,
+                          queueTimeoutMs: params.queueTimeoutMs,
+                          provider: params.provider,
+                          providerOptions,
+                          maxOutputTokens,
+                          temperature,
+                          signal,
+                          telemetryMetadata,
+                      }),
+                  runAiSdk: runGenerateText,
+                  started: () => sdkStarted,
+                  runName,
+                  organizationId,
+                  slot,
+              })
+        : runGenerateText;
 
     // ── ONE observability span — records the run's aggregate usage. Absent port
     // (a bare unit test) runs directly, still gets the model/loop, just no span. ──
