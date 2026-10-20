@@ -440,7 +440,9 @@ export function buildTryTrace(params: {
     });
 
     return {
-        status: 'completed',
+        ...(output.hitHardLimit
+            ? { status: 'incomplete' as const, reason: stoppedEarly(output) }
+            : { status: 'completed' as const }),
         models: { run: agent.models?.run },
         skillsOpened: [...skillsOpened.values()].map(({ path, files }) => ({
             path,
@@ -480,6 +482,18 @@ export function buildTryTrace(params: {
         ],
         durationMs: Date.now() - params.startedAt,
     };
+}
+
+/** Why a run stopped before it finished, as Try it says it. */
+function stoppedEarly(output: ReviewAgentOutput): string {
+    switch (output.finishReason) {
+        case 'no-result':
+            return 'The agent stopped without submitting a result, so no findings does not mean the code is clean';
+        case 'truncated':
+            return "The model provider cut the agent's turn before it finished";
+        default:
+            return 'The agent ran out of steps before it finished';
+    }
 }
 
 /**

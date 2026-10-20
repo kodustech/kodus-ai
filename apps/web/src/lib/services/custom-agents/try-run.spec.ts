@@ -1,4 +1,4 @@
-import { pollTryRun, type TryRunView } from "./try-run";
+import { pollTryRun, tryResultHeadline, type TryRunView } from "./try-run";
 
 const trace = {
     status: "completed" as const,
@@ -34,5 +34,25 @@ describe("Try it run polling", () => {
                 async () => undefined,
             ),
         ).rejects.toThrow("404");
+    });
+});
+
+describe("Try it result headline", () => {
+    it("says a run that stopped early stopped early, not completed", () => {
+        expect(
+            tryResultHeadline({
+                ...trace,
+                status: "incomplete",
+                reason: "The agent stopped without submitting a result",
+            }),
+        ).toBe(
+            "Stopped early · The agent stopped without submitting a result · 0 findings · 0 kept · 0 would post",
+        );
+    });
+
+    it("counts findings for a completed run", () => {
+        expect(tryResultHeadline(trace)).toBe(
+            "0 findings · 0 kept · 0 would post",
+        );
     });
 });

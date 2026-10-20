@@ -6,6 +6,7 @@ import { Card } from "@components/ui/card";
 import { Input } from "@components/ui/input";
 import { prepareAgentsForSave } from "@services/custom-agents/drafts";
 import { useTryCustomAgent } from "@services/custom-agents/hooks";
+import { tryResultHeadline } from "@services/custom-agents/try-run";
 import type {
     CustomAgent,
     CustomAgentTryFinding,
@@ -225,24 +226,19 @@ const FindingRow = ({ finding }: { finding: CustomAgentTryFinding }) => (
 );
 
 export const TryResult = ({ trace }: { trace: CustomAgentTryTrace }) => {
-    const kept = trace.findings.filter((finding) => finding.verdict === "kept");
-    const wouldPost = kept.filter((finding) => finding.wouldPost).length;
-
     return (
         <Card color="lv1" className="flex flex-col gap-4 px-5 py-4 text-sm">
             <span className="text-text-primary flex items-center gap-2 font-medium">
                 {trace.status === "completed" ? (
                     <CircleCheckIcon className="text-success size-4" />
+                ) : trace.status === "incomplete" ? (
+                    <CircleAlertIcon className="text-warning size-4" />
                 ) : trace.status === "skipped" ? (
                     <CircleSlashIcon className="text-text-tertiary size-4" />
                 ) : (
                     <CircleXIcon className="text-danger size-4" />
                 )}
-                {trace.status === "completed"
-                    ? `${trace.findings.length} findings · ${kept.length} kept · ${wouldPost} would post`
-                    : trace.status === "skipped"
-                      ? `Skipped${trace.reason ? ` · ${trace.reason}` : ""}`
-                      : `Failed${trace.reason ? ` · ${trace.reason}` : ""}`}
+                {tryResultHeadline(trace)}
             </span>
             <span className="text-text-secondary flex flex-wrap gap-x-3 text-xs">
                 {trace.models?.run && <span>Model: {trace.models.run}</span>}

@@ -116,8 +116,11 @@ export type CustomAgentTryFinding = {
 };
 
 export type CustomAgentTryTrace = {
-    status: 'completed' | 'skipped' | 'failed';
-    /** Why the agent was skipped (no file matched) or failed. */
+    /** `incomplete`: the agent stopped before it finished looking (out of
+     *  steps, its turn cut, or no result submitted); its findings are what it
+     *  had by then, and none found does not mean the code is clean. */
+    status: 'completed' | 'incomplete' | 'skipped' | 'failed';
+    /** Why the agent was skipped (no file matched), stopped early or failed. */
     reason?: string;
     models?: { run?: string };
     skillsOpened: Array<{ path: string; files?: string[] }>;

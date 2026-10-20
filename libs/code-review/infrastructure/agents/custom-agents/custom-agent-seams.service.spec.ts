@@ -494,6 +494,40 @@ describe('buildTryTrace', () => {
     });
 });
 
+describe('buildTryTrace — a run that stopped early', () => {
+    const empty = (over: Record<string, unknown>) =>
+        buildTryTrace({
+            agent: agent(),
+            output: {
+                suggestions: [],
+                agentName: 'x',
+                turnsUsed: 1,
+                durationMs: 1,
+                ...over,
+            } as any,
+            events: [],
+            startedAt: Date.now(),
+        });
+
+    it('says a run that never submitted a result stopped early, not completed', () => {
+        const trace = empty({ hitHardLimit: true, finishReason: 'no-result' });
+
+        expect(trace.status).toBe('incomplete');
+        expect(trace.reason).toMatch(/without submitting a result/);
+    });
+
+    it('says a run out of steps stopped early', () => {
+        const trace = empty({ hitHardLimit: true, finishReason: 'max-steps' });
+
+        expect(trace.status).toBe('incomplete');
+        expect(trace.reason).toMatch(/ran out of steps/);
+    });
+
+    it('keeps a run that finished as completed', () => {
+        expect(empty({ finishReason: 'stop' }).status).toBe('completed');
+    });
+});
+
 describe('buildTryTrace — repeated findings', () => {
     it('shows a second finding on the same lines as a repeat, not as another post', () => {
         // Try it skips the review's dedup: two near-identical findings on one

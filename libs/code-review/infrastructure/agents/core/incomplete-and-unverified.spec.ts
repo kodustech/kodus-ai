@@ -149,6 +149,7 @@ describe('#2171 — finder run that ends without a submitted result', () => {
         const out = await runAgentLoopViaCore(makeInput(), secrets);
 
         expect(out.incompleteReason).toBeUndefined();
+        expect(out.submittedResult).toBe(true);
     });
 
     // PR #2173 review: the runner turns every REQUESTED result call into an
@@ -307,6 +308,8 @@ describe('#2171 — finder run that ends without a submitted result', () => {
         const out = await runAgentLoopViaCore(makeInput(), secrets);
 
         expect(out.incompleteReason).toBeUndefined();
+        // Says it never submitted, so a custom agent can read it as stopped.
+        expect(out.submittedResult).toBe(false);
     });
 });
 

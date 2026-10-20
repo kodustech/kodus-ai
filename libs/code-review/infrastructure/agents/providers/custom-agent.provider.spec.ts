@@ -166,6 +166,34 @@ describe('CustomAgentProvider', () => {
         expect(out.discardedByVerify?.[0].customAgent?.id).toBe('agent-ledger');
     });
 
+    it('reads a run that ended without submitting a result as stopped early', async () => {
+        runLoopMock.mockResolvedValue({
+            ...harnessResult(),
+            findings: { reasoning: 'I looked around.', suggestions: [] },
+            droppedByVerify: [],
+            submittedResult: false,
+        });
+
+        const out = await provider().execute(input());
+
+        expect(out.hitHardLimit).toBe(true);
+        expect(out.finishReason).toBe('no-result');
+    });
+
+    it('keeps a run that submitted an empty result as finished', async () => {
+        runLoopMock.mockResolvedValue({
+            ...harnessResult(),
+            findings: { reasoning: 'clean', suggestions: [] },
+            droppedByVerify: [],
+            submittedResult: true,
+        });
+
+        const out = await provider().execute(input());
+
+        expect(out.hitHardLimit).toBe(false);
+        expect(out.finishReason).toBe('stop');
+    });
+
     it("names itself by the agent's name in the review warnings", async () => {
         const result = harnessResult();
         runLoopMock.mockResolvedValue({

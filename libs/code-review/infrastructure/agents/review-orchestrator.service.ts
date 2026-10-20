@@ -76,7 +76,7 @@ export interface OrchestratorAgentFailure {
 export interface OrchestratorAgentIncomplete {
     agentName: string;
     category: string;
-    finishReason: 'max-steps' | 'truncated';
+    finishReason: 'max-steps' | 'truncated' | 'no-result';
     suggestionsFound: number;
     durationMs: number;
     customAgent?: OrchestratorCustomAgentRef;
@@ -467,8 +467,9 @@ export class ReviewOrchestratorService {
                         agentName,
                         category: result.value.agentCategory ?? agentName,
                         finishReason:
-                            result.value.finishReason === 'truncated'
-                                ? 'truncated'
+                            result.value.finishReason === 'truncated' ||
+                            result.value.finishReason === 'no-result'
+                                ? result.value.finishReason
                                 : 'max-steps',
                         suggestionsFound: result.value.suggestions.length,
                         durationMs: result.value.durationMs,

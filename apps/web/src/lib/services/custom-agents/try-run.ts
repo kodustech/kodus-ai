@@ -27,3 +27,20 @@ export const pollTryRun = async (
     }
     return view.result;
 };
+
+/** The line a Try it result opens with. */
+export const tryResultHeadline = (trace: CustomAgentTryTrace): string => {
+    const kept = trace.findings.filter((finding) => finding.verdict === "kept");
+    const wouldPost = kept.filter((finding) => finding.wouldPost).length;
+    const counts = `${trace.findings.length} findings · ${kept.length} kept · ${wouldPost} would post`;
+    switch (trace.status) {
+        case "completed":
+            return counts;
+        case "incomplete":
+            return `Stopped early${trace.reason ? ` · ${trace.reason}` : ""} · ${counts}`;
+        case "skipped":
+            return `Skipped${trace.reason ? ` · ${trace.reason}` : ""}`;
+        default:
+            return `Failed${trace.reason ? ` · ${trace.reason}` : ""}`;
+    }
+};
