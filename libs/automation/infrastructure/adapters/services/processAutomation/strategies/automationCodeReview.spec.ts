@@ -195,6 +195,133 @@ describe('AutomationCodeReviewService', () => {
         });
     });
 
+    // A worker killed mid-review (deploy, OOM) never writes a terminal
+    // status, so its row stays IN_PROGRESS. The gate used to trust that row
+    // for 30 minutes from its creation, refusing `@kody start-review` with
+    // "already reviewing" while nothing ran. Liveness now comes from a
+    // heartbeat the running review keeps writing to the row.
+    describe('when an in-progress row was left by a review that died', () => {
+        const minutesAgo = (minutes: number) =>
+            new Date(Date.now() - minutes * 60_000);
+
+        // Evaluates the gate's filter the way Postgres would, so the test
+        // exercises the query the gate actually sends.
+        const matches = (row: Record<string, any>, filter: any) =>
+            Object.entries(filter).every(([key, expected]: [string, any]) => {
+                if (expected?.type === 'moreThanOrEqual') {
+                    return row[key] >= expected.value;
+                }
+                if (key === 'status') {
+                    return row.status === expected;
+                }
+                return true;
+            });
+
+        const withRows = (rows: Array<Record<string, any>>) =>
+            automationExecutionService.find.mockImplementation(
+                async (filter: any) =>
+                    rows.filter((row) => matches(row, filter)),
+            );
+
+        it('does not block a new review once the row stopped heartbeating', async () => {
+            withRows([
+                {
+                    uuid: 'dead-execution',
+                    status: 'in_progress',
+                    createdAt: minutesAgo(15),
+                    updatedAt: minutesAgo(15),
+                },
+            ]);
+
+            await service.run!(makePayload({ origin: 'command' }));
+
+            expect(
+                codeReviewHandlerService.handlePullRequest,
+            ).toHaveBeenCalled();
+        });
+
+        it('still blocks while the holder keeps heartbeating', async () => {
+            withRows([
+                {
+                    uuid: 'live-execution',
+                    status: 'in_progress',
+                    createdAt: minutesAgo(15),
+                    updatedAt: minutesAgo(0.5),
+                },
+            ]);
+
+            const error = await service
+                .run!(makePayload({ origin: 'command' }))
+                .catch((raised) => raised);
+
+            expect(isPrReviewInProgressError(error)).toBe(true);
+            expect(error.gate).toBe('execution');
+            expect(
+                codeReviewHandlerService.handlePullRequest,
+            ).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('while the review runs', () => {
+        beforeEach(() => {
+            jest.useFakeTimers();
+            automationExecutionService.touchInProgress = jest
+                .fn()
+                .mockResolvedValue(undefined);
+        });
+
+        afterEach(() => {
+            jest.useRealTimers();
+        });
+
+        it('heartbeats its execution row and stops once it finishes', async () => {
+            let finishReview!: (value: unknown) => void;
+            codeReviewHandlerService.handlePullRequest.mockReturnValue(
+                new Promise((resolve) => (finishReview = resolve)),
+            );
+
+            const run = service.run!(makePayload({ origin: 'command' }));
+            await jest.advanceTimersByTimeAsync(0);
+            expect(
+                codeReviewHandlerService.handlePullRequest,
+            ).toHaveBeenCalled();
+
+            await jest.advanceTimersByTimeAsync(3 * 60_000);
+            const beats =
+                automationExecutionService.touchInProgress.mock.calls.length;
+            expect(beats).toBeGreaterThanOrEqual(2);
+            expect(
+                automationExecutionService.touchInProgress,
+            ).toHaveBeenCalledWith('execution-1');
+
+            finishReview({ statusInfo: { status: 'success' } });
+            await run;
+            await jest.advanceTimersByTimeAsync(10 * 60_000);
+
+            expect(
+                automationExecutionService.touchInProgress,
+            ).toHaveBeenCalledTimes(beats);
+        });
+
+        it('keeps reviewing when a heartbeat write fails', async () => {
+            automationExecutionService.touchInProgress.mockRejectedValue(
+                new Error('postgres blip'),
+            );
+            let finishReview!: (value: unknown) => void;
+            codeReviewHandlerService.handlePullRequest.mockReturnValue(
+                new Promise((resolve) => (finishReview = resolve)),
+            );
+
+            const run = service.run!(makePayload({ origin: 'command' }));
+            await jest.advanceTimersByTimeAsync(2 * 60_000);
+            finishReview({ statusInfo: { status: 'success' } });
+
+            await expect(run).resolves.toBe(
+                'Automation executed successfully',
+            );
+        });
+    });
+
     // Losing the lock service must not become "the PR is busy" — that would
     // turn an infrastructure blip into an endlessly deferred review.
     describe('when the lock service itself fails', () => {

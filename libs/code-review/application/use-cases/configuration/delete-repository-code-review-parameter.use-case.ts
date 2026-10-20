@@ -12,6 +12,7 @@ import { DeleteByRepositoryOrDirectoryPullRequestMessagesUseCase } from '@libs/c
 import { buildKodyRuleCentralizedFilePath } from '@libs/centralized-config/utils/kody-rules-centralized-pr.builder';
 import { buildKodusConfigCentralizedMutationRequest } from '@libs/centralized-config/utils/kodus-config-centralized-pr.builder';
 import { buildGroupFolderName } from '@libs/centralized-config/utils/path-encoder';
+import { maskCliSecrets } from '@libs/code-review/domain/custom-agents/cli-secrets';
 import { ParametersKey } from '@libs/core/domain/enums';
 import { CodeReviewParameter } from '@libs/core/infrastructure/config/types/general/codeReviewConfig.type';
 import { ActionType } from '@libs/core/infrastructure/config/types/general/codeReviewSettingsLog.type';
@@ -169,7 +170,8 @@ export class DeleteRepositoryCodeReviewParameterUseCase {
             // If a centralized PR was opened, surface its metadata to the
             // caller so the UI can link to it; otherwise return the raw DB
             // mutation result.
-            return centralizedPr ?? result;
+            // CLI secrets are write-only: the stored config goes back masked.
+            return maskCliSecrets(centralizedPr ?? result);
         } catch (error) {
             this.logger.error({
                 message: 'Could not delete code review configuration',
@@ -628,7 +630,7 @@ export class DeleteRepositoryCodeReviewParameterUseCase {
                 userId: resolvedActor.userId,
                 userEmail: resolvedActor.userEmail,
             },
-            repository,
+            repository: maskCliSecrets(repository),
             actionType: ActionType.DELETE,
         });
     }
@@ -668,7 +670,7 @@ export class DeleteRepositoryCodeReviewParameterUseCase {
                 userId: resolvedActor.userId,
                 userEmail: resolvedActor.userEmail,
             },
-            repository,
+            repository: maskCliSecrets(repository),
             directory,
             actionType: ActionType.DELETE,
         });

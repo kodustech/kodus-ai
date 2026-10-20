@@ -38,9 +38,9 @@ export function buildFormatPrompt(
 ): string {
     const customGuidelines = options?.customWritingGuidelines?.trim() || '';
 
-    const langInstruction = options?.languageLabel
-        ? `\nIMPORTANT: Write all output in ${options.languageLabel}. Do not fall back to English.`
-        : '';
+    const langInstruction = !options?.languageLabel
+        ? ''
+        : `\nIMPORTANT: Write all output in ${options.languageLabel}. Do not fall back to English.`;
 
     const suggestionsText = suggestions
         .map(

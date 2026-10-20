@@ -8,6 +8,7 @@ import {
     Res,
     UseGuards,
 } from '@nestjs/common';
+import { maskCliSecrets } from '@libs/code-review/domain/custom-agents/cli-secrets';
 import { REQUEST } from '@nestjs/core';
 import {
     ApiBadRequestResponse,
@@ -164,27 +165,31 @@ export class ParametersController {
         }
 
         if (body.key === ParametersKey.CODE_REVIEW_CONFIG) {
-            return await this.updateOrCreateCodeReviewParameterUseCase.execute({
-                actor: {
-                    source: 'web',
-                    organizationId,
-                },
-                configValue: body.configValue,
-                organizationAndTeamData: {
+            return maskCliSecrets(
+                await this.updateOrCreateCodeReviewParameterUseCase.execute({
+                    actor: {
+                        source: 'web',
+                        organizationId,
+                    },
+                    configValue: body.configValue,
+                    organizationAndTeamData: {
+                        organizationId,
+                        teamId: body.organizationAndTeamData.teamId,
+                    },
+                    requestUser: toRequestUserContext(this.request?.user),
+                } as any),
+            );
+        }
+
+        return maskCliSecrets(
+            await this.createOrUpdateParametersUseCase.execute(
+                body.key,
+                body.configValue,
+                {
                     organizationId,
                     teamId: body.organizationAndTeamData.teamId,
                 },
-                requestUser: toRequestUserContext(this.request?.user),
-            } as any);
-        }
-
-        return await this.createOrUpdateParametersUseCase.execute(
-            body.key,
-            body.configValue,
-            {
-                organizationId,
-                teamId: body.organizationAndTeamData.teamId,
-            },
+            ),
         );
     }
 
@@ -214,10 +219,12 @@ export class ParametersController {
     ) {
         const organizationId = this.request?.user?.organization?.uuid;
 
-        return await this.findByKeyParametersUseCase.execute(key, {
-            teamId,
-            organizationId,
-        });
+        return maskCliSecrets(
+            await this.findByKeyParametersUseCase.execute(key, {
+                teamId,
+                organizationId,
+            }),
+        );
     }
 
     //endregion
@@ -283,14 +290,16 @@ export class ParametersController {
             throw new Error('Organization ID is missing from request');
         }
 
-        return await this.updateOrCreateCodeReviewParameterUseCase.execute({
-            ...body,
-            organizationAndTeamData: {
-                ...body.organizationAndTeamData,
-                organizationId,
-            },
-            requestUser: toRequestUserContext(this.request?.user),
-        });
+        return maskCliSecrets(
+            await this.updateOrCreateCodeReviewParameterUseCase.execute({
+                ...body,
+                organizationAndTeamData: {
+                    ...body.organizationAndTeamData,
+                    organizationId,
+                },
+                requestUser: toRequestUserContext(this.request?.user),
+            }),
+        );
     }
 
     @Post('/update-code-review-parameter-repositories')
@@ -318,13 +327,15 @@ export class ParametersController {
             throw new Error('Organization ID is missing from request');
         }
 
-        return await this.updateCodeReviewParameterRepositoriesUseCase.execute({
-            ...body,
-            organizationAndTeamData: {
-                ...body.organizationAndTeamData,
-                organizationId,
-            },
-        });
+        return maskCliSecrets(
+            await this.updateCodeReviewParameterRepositoriesUseCase.execute({
+                ...body,
+                organizationAndTeamData: {
+                    ...body.organizationAndTeamData,
+                    organizationId,
+                },
+            }),
+        );
     }
 
     @Get('/code-review-parameter')
@@ -352,10 +363,12 @@ export class ParametersController {
         @Query('teamId') teamId: string,
         @Query('includeFileOverlay') includeFileOverlay?: string,
     ) {
-        return await this.getCodeReviewParameterUseCase.execute(
-            this.request.user,
-            teamId,
-            { includeFileOverlay: includeFileOverlay !== 'false' },
+        return maskCliSecrets(
+            await this.getCodeReviewParameterUseCase.execute(
+                this.request.user,
+                teamId,
+                { includeFileOverlay: includeFileOverlay !== 'false' },
+            ),
         );
     }
 
@@ -461,7 +474,9 @@ export class ParametersController {
         @Body()
         body: DeleteRepositoryCodeReviewParameterDto,
     ) {
-        return this.deleteRepositoryCodeReviewParameterUseCase.execute(body);
+        return maskCliSecrets(
+            await this.deleteRepositoryCodeReviewParameterUseCase.execute(body),
+        );
     }
     //#endregion
 

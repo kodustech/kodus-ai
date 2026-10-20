@@ -130,7 +130,18 @@ export type ReviewWarningKind =
     | "CALLGRAPH_FAILED"
     | "SUGGESTIONS_DROPPED_PATH_MISMATCH"
     | "KODY_RULES_PARTIAL"
-    | "VERIFY_UNAVAILABLE";
+    | "VERIFY_UNAVAILABLE"
+    | "SKILL_NOT_FOUND"
+    | "SKILL_INVALID"
+    | "SKILL_CHANGED_IN_PR"
+    | "DOC_NOT_FOUND"
+    | "KNOWLEDGE_TRUNCATED"
+    | "KNOWLEDGE_UNAVAILABLE"
+    | "SKILL_COMPATIBILITY"
+    | "CLI_INSTALL_FAILED"
+    | "CROSS_REPO_UNAVAILABLE"
+    | "AST_GREP_UNAVAILABLE"
+    | "CONFIG_FILE_KEY_IGNORED";
 
 export interface ReviewWarning {
     kind: ReviewWarningKind;
@@ -144,7 +155,11 @@ export interface ReviewWarning {
         | "path_mismatch"
         | "judge_shard_failed"
         | "large_pr"
-        | "verify_failed";
+        | "verify_failed"
+        | "knowledge"
+        | "cli_install_failed"
+        | "tool_unavailable"
+        | "config_file";
     contextWindowTokens: number;
     modelName: string;
     detail?: string;

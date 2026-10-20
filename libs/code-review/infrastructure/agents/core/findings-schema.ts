@@ -33,6 +33,18 @@ const suggestionSchema = z.object({
     // range-check here: an out-of-range value must not drop a real finding.
     confidence: z.number().optional(),
     ruleUuid: z.string().optional(), // Kody Rules: UUID of the violated rule
+    // Custom agents: 'convention' = the finding applies a team guide, quoted in
+    // `source`; the quote is checked on the target branch before verify. An
+    // off-schema value reads as absent instead of dropping the finding.
+    kind: z.enum(['bug', 'convention']).optional().catch(undefined),
+    source: z
+        .object({
+            file: z.string(),
+            section: z.string().optional(),
+            quote: z.string(),
+        })
+        .optional()
+        .catch(undefined),
 });
 
 const _findingsSchema = z.object({

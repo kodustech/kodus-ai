@@ -58,6 +58,12 @@ import { buildProviderOptions } from '@libs/llm/reasoning-options';
 // buildAgentAnomalies is review-specific (anomaly summary shapes) — lives in its
 // own module (relocated out of the legacy llm/agent-loop.ts).
 import { buildAgentAnomalies } from '@libs/code-review/infrastructure/agents/core/agent-anomalies';
+import {
+    AstGrepOutputLog,
+    makeTargetBranchGuideLister,
+    makeTargetBranchGuideReader,
+    recordAstGrepOutputs,
+} from '@libs/code-review/infrastructure/agents/core/convention-check';
 
 const funnelLogger = createLogger('review-funnel');
 
@@ -86,7 +92,7 @@ export function finderRunEnvironment(
         reporter: secrets.byokErrorReporter,
     });
 
-    const { registry: tools, cache: toolCache } = buildFinderToolRegistry({
+    const { registry: baseTools, cache: toolCache } = buildFinderToolRegistry({
         remoteCommands: secrets.remoteCommands,
         gitHubToken: secrets.gitHubToken,
         repositoryFullName: input.repositoryFullName,
@@ -95,7 +101,25 @@ export function finderRunEnvironment(
         callGraph: input.callGraph,
         outlineFirst: input.outlineFirst,
         linkedRepoAccess: secrets.linkedRepoAccess,
+        extraTools: secrets.extraTools,
     });
+
+    // Second pass for convention findings (custom agents): needs the guides
+    // as they are on the target branch, so only with a sandbox that can run
+    // git. Without one, convention findings fall back to HV2 like any other.
+    const readGuide =
+        input.conventionGuides !== undefined
+            ? makeTargetBranchGuideReader(
+                  secrets.remoteCommands,
+                  input.baseBranch,
+              )
+            : undefined;
+    // What ast-grep matched in this review: a convention finding it backs
+    // needs no model check.
+    const astGrepLog = readGuide ? new AstGrepOutputLog() : undefined;
+    const tools = astGrepLog
+        ? recordAstGrepOutputs(baseTools, astGrepLog)
+        : baseTools;
 
     // Reasoning/thinking config (provider-specific) → providerOptions, forwarded
     // to every model call (finder + verifier). Ported from the legacy loop.
@@ -173,6 +197,8 @@ export function finderRunEnvironment(
         specModelId,
         fallbackModelId,
         finderRunner,
+        readGuide,
+        astGrepLog,
         // What verify runs with (verifyFindings), as runFinderWithVerify gets it.
         verifyParams: {
             runner: finderRunner,
@@ -223,6 +249,8 @@ export async function runAgentLoopViaCore(
         specModelId,
         fallbackModelId,
         verifyParams,
+        readGuide,
+        astGrepLog,
     } = finderRunEnvironment(input, secrets);
 
     const coverageLedger = new DiffCoverageLedger({
@@ -261,6 +289,7 @@ export async function runAgentLoopViaCore(
             maxSteps: input.maxSteps ?? 20,
             providerOptions,
             acceptsRevisions: !!input.previousDecisions?.length,
+            acceptsConventions: !!readGuide,
         });
 
     // Base pass uses the reported `coverageLedger` (read back below for the
@@ -284,9 +313,48 @@ export async function runAgentLoopViaCore(
         parentSignal: input.parentSignal,
     });
 
+    // A custom agent checks its findings on its own model (#2172). Same slot
+    // as the finder, or none given: verify stays on the finder's runner.
+    const verifySlot = secrets.verifyByokConfig;
+    const verifyOnOwnModel =
+        !!verifySlot &&
+        (verifySlot.provider !== secrets.byokConfig?.provider ||
+            verifySlot.model !== secrets.byokConfig?.model);
+    const ownVerify = verifyOnOwnModel
+        ? {
+              verifyRunner: new AiSdkAgentRunner(verifySlot, {
+                  organizationId: input.telemetryMetadata?.organizationId,
+                  provider:
+                      typeof verifySlot.provider === 'string'
+                          ? verifySlot.provider
+                          : undefined,
+                  queueTimeoutMs: secrets.byokQueueTimeoutMs,
+                  reporter: secrets.byokErrorReporter,
+              }),
+              verifyModelId: verifySlot.model ?? 'resolved',
+              verifyFallbackModelId: verifySlot.fallback?.model,
+              verifyProviderOptions: buildProviderOptions(
+                  `${input.agentName ?? 'finder'}/verify`,
+                  input.telemetryMetadata,
+                  {
+                      reasoningEffort: verifySlot.reasoningEffort,
+                      reasoningConfigOverride:
+                          verifySlot.reasoningConfigOverride,
+                      byokProvider: verifySlot.provider,
+                      modelName: verifySlot.model,
+                      openrouterProviderOrder:
+                          verifySlot.openrouterProviderOrder,
+                      openrouterAllowFallbacks:
+                          verifySlot.openrouterAllowFallbacks,
+                  },
+              ),
+          }
+        : {};
+
     const r = await runFinderWithVerify(
         {
             ...verifyParams,
+            ...ownVerify,
             finderSpec,
             makeResampleSpec,
             skipHeavyPasses,
@@ -294,6 +362,20 @@ export async function runAgentLoopViaCore(
             // HEAVY mode — extra critic pass. Only meaningful when heavy passes
             // run at all (not fast/self-contained); harmless otherwise.
             heavy: !!input.heavy && !skipHeavyPasses,
+            teamSystemTools: input.teamSystemTools,
+            laneFocus: input.laneFocus,
+            ...(readGuide && {
+                conventionCheck: {
+                    readGuide,
+                    listGuideDir: makeTargetBranchGuideLister(
+                        secrets.remoteCommands,
+                        input.baseBranch,
+                    ),
+                    guideFiles: input.conventionGuides,
+                    teamInstructions: input.teamInstructions,
+                    astGrepLog,
+                },
+            }),
             // Wire the prose-findings recovery to the internal-model fallback.
             // The finder/recall passes stay decoupled from BYOK — they only see
             // the ProseRecoverer function.
@@ -367,7 +449,10 @@ export async function runAgentLoopViaCore(
 
     // Verify funnel made observable: before = kept + dropped, after = kept.
     const verifiedBefore =
-        r.kept.length + r.droppedByVerify.length + r.unverified.length;
+        r.kept.length +
+        r.droppedByVerify.length +
+        r.unverified.length +
+        r.droppedByQuoteCheck.length;
     const verification: VerificationTraceSummary | null =
         verifiedBefore === 0
             ? null
@@ -376,6 +461,9 @@ export async function runAgentLoopViaCore(
                   afterCount: r.kept.length,
                   droppedByVerifier: r.droppedByVerify.length,
                   unverified: r.unverified.length,
+                  ...(r.droppedByQuoteCheck.length > 0 && {
+                      droppedByQuoteCheck: r.droppedByQuoteCheck.length,
+                  }),
                   droppedByEvidenceFilter: 0,
                   decisions: [
                       ...r.kept.map((f, i) => ({
@@ -448,6 +536,7 @@ export async function runAgentLoopViaCore(
         toolCalls,
         finishReason: r.finderState.status,
         ...(incompleteReason && { incompleteReason }),
+        submittedResult: submitted,
         ...(errorEvent && {
             errorMessage: (errorEvent.detail?.message as string) || undefined,
             errorName: (errorEvent.detail?.name as string) || undefined,
@@ -465,8 +554,17 @@ export async function runAgentLoopViaCore(
             totalTokens: inputTokens + outputTokens,
         },
         discardedBySeverity: [],
-        droppedByVerify: r.droppedByVerify.map((d) => d.finding) as any,
+        droppedByVerify: r.droppedByVerify.map((d) => ({
+            ...d.finding,
+            discardReason: d.evidence,
+        })) as any,
         unverifiedByVerify: r.unverified.map((u) => u.finding) as any,
+        ...(r.droppedByQuoteCheck.length > 0 && {
+            droppedByQuoteCheck: r.droppedByQuoteCheck.map((q) => ({
+                ...q.finding,
+                discardReason: q.detail,
+            })) as any,
+        }),
         coverage,
         verification,
         verificationUsage: {

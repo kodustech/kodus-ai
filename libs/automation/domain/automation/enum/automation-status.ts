@@ -25,6 +25,8 @@ export enum AutomationMessage {
     PR_PAUSED_BURST_PUSHES = `PR is paused due to multiple pushes in a short time window.`,
     PROCESSING_AUTO_PAUSE = 'Processing in auto-pause mode.',
     CONFIG_VALIDATION_ERROR = 'Error during configuration validation.',
+    UNKNOWN_CUSTOM_AGENT = 'No custom agent matches the @kody -v command.',
+    CUSTOM_AGENTS_PLAN_REQUIRED = "Custom agents are not on this organization's plan.",
     NO_NEW_COMMITS_SINCE_LAST = 'No new commits since the last run.',
     ONLY_MERGE_COMMITS_SINCE_LAST = 'Only merge commits since the last run.',
     PROVIDER_RATE_LIMITED = 'The Git provider rate-limited the request; the review was not run.',

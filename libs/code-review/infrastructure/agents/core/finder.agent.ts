@@ -34,6 +34,16 @@ import { ForceFinalizePolicy } from '@libs/agent-harness/infrastructure/policies
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
 
 import { LlmVerifier } from '@libs/code-review/infrastructure/agents/core/verifier.agent';
+import { ConventionVerifier } from '@libs/code-review/infrastructure/agents/core/convention-verifier.agent';
+import {
+    checkConventionQuotes,
+    isToolSource,
+    isProvenByAstGrep,
+    type AstGrepOutputLog,
+    type ConventionCheckRejected,
+    type GuideDirLister,
+    type GuideFileReader,
+} from '@libs/code-review/infrastructure/agents/core/convention-check';
 import { buildToolEvidenceSummary } from '@libs/code-review/infrastructure/agents/core/agent-anomalies';
 import { supportsStrictToolsForRun } from '@libs/code-review/infrastructure/agents/core/model-strictness';
 import type { ToolEvidenceSummary } from '@libs/code-review/infrastructure/agents/review-agent.contract';
@@ -84,6 +94,9 @@ export interface FinderSuggestion {
     ruleUuid?: string;
     /** Id of the earlier suggestion on this PR this finding revises (#2039). */
     revisesSuggestionId?: string;
+    /** Custom agents: `convention` = applies a team guide quoted in `source`. */
+    kind?: 'bug' | 'convention';
+    source?: { file: string; section?: string; quote: string };
 }
 
 /** JSON schema for submitResult — mirrors the legacy _findingsSchema. */
@@ -149,6 +162,50 @@ export const submitResultTool: AgentTool = {
     execute: async () => ({ output: 'submitted' }),
 };
 
+/** submitResult with `kind` + `source` on each finding (custom agents with
+ *  linked guides). Offered only to those agents, so every other review sends
+ *  exactly the tool it always did. */
+function withConventionFields(tool: AgentTool): AgentTool {
+    const schema = tool.inputSchema as any;
+    const items = schema.properties.suggestions.items;
+    return {
+        ...tool,
+        inputSchema: {
+            ...schema,
+            properties: {
+                ...schema.properties,
+                suggestions: {
+                    ...schema.properties.suggestions,
+                    items: {
+                        ...items,
+                        properties: {
+                            ...items.properties,
+                            kind: {
+                                type: 'string',
+                                enum: ['bug', 'convention'],
+                                description:
+                                    "'convention' when the finding applies a rule from a team guide or reports an ast-grep rule match; 'bug' otherwise.",
+                            },
+                            source: {
+                                type: 'object',
+                                additionalProperties: false,
+                                description:
+                                    'Required for kind convention: the guide file, its section heading, and the exact sentence of the rule, copied verbatim. For an ast-grep rule match: file "ast-grep:<ruleId>" and the rule\'s message as quote.',
+                                properties: {
+                                    file: { type: 'string' },
+                                    section: { type: 'string' },
+                                    quote: { type: 'string' },
+                                },
+                                required: ['file', 'quote'],
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    };
+}
+
 /** submitResult with `revisesSuggestionId` on each finding (#2039/#2020).
  *  Offered only when the PR has earlier suggestions: a first-round review sends
  *  exactly the tool it always did, so this change cannot move its recall. */
@@ -200,11 +257,18 @@ export interface BuildFinderSpecParams {
     /** The PR has earlier suggestions: the done-tool accepts
      *  `revisesSuggestionId` (see withRevisionField). */
     acceptsRevisions?: boolean;
+    /** A custom agent with linked guides: the done-tool accepts `kind` +
+     *  `source` (see withConventionFields). */
+    acceptsConventions?: boolean;
     /** Provider options attached to the system message (e.g. Anthropic prompt
      *  caching) so the long system prompt is cached across the loop's steps. */
 }
 
 export function buildFinderAgentSpec(params: BuildFinderSpecParams): AgentSpec {
+    let doneTool = params.acceptsRevisions
+        ? withRevisionField(submitResultTool)
+        : submitResultTool;
+    if (params.acceptsConventions) doneTool = withConventionFields(doneTool);
     const tools = new InMemoryToolRegistry([
         ...params.tools.list(),
         // Enable strict/structured tool calling on the done-tool for
@@ -214,9 +278,7 @@ export function buildFinderAgentSpec(params: BuildFinderSpecParams): AgentSpec {
         // Considers the failover target too: a strict tool built for a Gemini
         // primary must NOT be sent to an OpenAI fallback (it rejects the schema).
         {
-            ...(params.acceptsRevisions
-                ? withRevisionField(submitResultTool)
-                : submitResultTool),
+            ...doneTool,
             strict: supportsStrictToolsForRun(
                 params.modelId,
                 params.fallbackModelId,
@@ -262,6 +324,21 @@ export function buildFinderAgentSpec(params: BuildFinderSpecParams): AgentSpec {
  *  submitResult call into RunState.artifacts in step order). The LAST artifact
  *  is the finder's final output. Falls back to [] if the agent never finalized
  *  (budget-exhausted). No hand re-scan of steps — that is the runner's job. */
+/** The findings of the submits before `latest`, in the order they came. */
+function earlierSubmittedFindings(
+    state: RunState,
+    latest: RunState['artifacts'][number],
+    telemetryMetadata?: { organizationId?: string },
+): FinderSuggestion[] {
+    return state.artifacts
+        .filter((a) => a.type === FINDER_DONE_TOOL && a !== latest)
+        .flatMap(
+            (a) =>
+                (sanitizeFindingsResult(a.payload as any, telemetryMetadata)
+                    ?.suggestions ?? []) as FinderSuggestion[],
+        );
+}
+
 export function extractFindings(
     state: RunState,
     // Purely for the [LLM_ENVELOPE] logs sanitizeFindingsResult emits — see
@@ -291,9 +368,21 @@ export function extractFindings(
             telemetryMetadata,
         );
         if (clean) {
+            const suggestions = (clean.suggestions ?? []) as FinderSuggestion[];
+            // A model that submits its findings and then submits again with
+            // none ("already recorded") still means the first ones. Reading
+            // only the last submit lost them, and the prose recovery then
+            // re-extracted them under new titles, posting each twice.
             return {
                 reasoning: clean.reasoning ?? '',
-                suggestions: (clean.suggestions ?? []) as FinderSuggestion[],
+                suggestions:
+                    suggestions.length > 0
+                        ? suggestions
+                        : earlierSubmittedFindings(
+                              state,
+                              artifact,
+                              telemetryMetadata,
+                          ),
             };
         }
         // Artifact present but unusable — either empty args (e.g. Gemini
@@ -510,6 +599,15 @@ export interface RunFinderWithVerifyParams {
     fallbackModelId?: string;
     /** Investigation tools shared with the verifier. */
     tools: ToolRegistry;
+    /** Runner for the verify pass when it runs on its own model (a custom
+     *  agent's check slot, #2172). Defaults to `runner`. */
+    verifyRunner?: AgentRunner;
+    /** Model id of `verifyRunner`'s slot; `modelId` when unset. */
+    verifyModelId?: string;
+    /** Failover target of `verifyRunner`'s slot. */
+    verifyFallbackModelId?: string;
+    /** Provider options built for `verifyRunner`'s model. */
+    verifyProviderOptions?: Readonly<Record<string, unknown>>;
     /** Verify concurrency (default 4). */
     concurrency?: number;
     /** Provider options (reasoning/thinking config) forwarded to verifier runs. */
@@ -539,6 +637,35 @@ export interface RunFinderWithVerifyParams {
      *  (issue #1313). Forwarded to the LlmVerifier, which filters by file per
      *  candidate — see LlmVerifierParams. */
     previousDecisions?: PrDecisionRecord[];
+    /** Second pass for convention findings (custom agents with linked guides).
+     *  When set, `kind: 'convention'` findings take the quote check and the
+     *  convention verifier instead of HV2. Absent → every finding takes HV2,
+     *  exactly as before. */
+    conventionCheck?: ConventionCheckParams;
+    /** A custom agent's team system (MCP) tools; see RecallPassesParams. */
+    teamSystemTools?: string[];
+    /** A custom agent kept to its lane: what it may report. The verifier
+     *  drops a bug finding outside it (see verifierPromptFor), and the
+     *  synthesis rescue asks only for missed findings within it. Absent →
+     *  both run exactly as before. */
+    laneFocus?: string;
+}
+
+export interface ConventionCheckParams {
+    /** Reads a guide as it is on the PR's target branch. */
+    readGuide: GuideFileReader;
+    /** Lists a skill's files on the target branch, so a rule quoted from a
+     *  file beside SKILL.md is found there. */
+    listGuideDir?: GuideDirLister;
+    /** Guides linked to this agent. Non-empty → only these may be quoted, and
+     *  the recall pass asks for missed violations of them. */
+    guideFiles?: string[];
+    /** The custom agent's instructions: a rule cited from `TeamInstructions`
+     *  is checked against them. */
+    teamInstructions?: string;
+    /** What the ast-grep tool returned during this review (see
+     *  recordAstGrepOutputs). Absent → no finding is proven by ast-grep. */
+    astGrepLog?: AstGrepOutputLog;
 }
 
 export interface VerifyUsage {
@@ -570,6 +697,10 @@ export interface FinderWithVerifyResult {
      *  nobody judged them. Not in `kept`: a review never publishes a finding
      *  as checked when the check did not run (#2171). */
     unverified: Array<{ finding: FinderSuggestion; error: string }>;
+    /** Convention findings whose quote is not in the cited guide on the target
+     *  branch (`quote-not-found`): dropped before any verify, kept apart so
+     *  the gate is observable. Always empty without `conventionCheck`. */
+    droppedByQuoteCheck: ConventionCheckRejected[];
     /** The finder's RunState (for usage/steps/trace mapping by callers). */
     finderState: RunState;
     /** Token usage of the verify sub-step (sum across verifier runs). The
@@ -588,6 +719,30 @@ const ZERO_VERIFY_USAGE: VerifyUsage = {
     reasoningTokens: 0,
     cacheReadTokens: 0,
 };
+
+/** The runner and model the verify pass uses: its own when the caller gave
+ *  one (a custom agent's check slot), the finder's otherwise. */
+function verifyModelOf(params: RunFinderWithVerifyParams): {
+    runner: AgentRunner;
+    modelId: string;
+    fallbackModelId?: string;
+    providerOptions?: Readonly<Record<string, unknown>>;
+} {
+    if (!params.verifyRunner) {
+        return {
+            runner: params.runner,
+            modelId: params.modelId,
+            fallbackModelId: params.fallbackModelId,
+            providerOptions: params.providerOptions,
+        };
+    }
+    return {
+        runner: params.verifyRunner,
+        modelId: params.verifyModelId ?? params.modelId,
+        fallbackModelId: params.verifyFallbackModelId,
+        providerOptions: params.verifyProviderOptions,
+    };
+}
 
 /**
  * Runs the finder, then verifies each finding on the SAME runner (HV2
@@ -639,6 +794,9 @@ export async function runFinderWithVerify(
             telemetryMetadata: params.telemetryMetadata,
             agentName: params.agentName,
             recoverProse: params.recoverProse,
+            conventionGuides: params.conventionCheck?.guideFiles,
+            teamSystemTools: params.teamSystemTools,
+            laneScoped: !!params.laneFocus,
         },
         ctx,
     );
@@ -673,20 +831,107 @@ export async function runFinderWithVerify(
             keptParseMode: [],
             droppedByVerify: [],
             unverified: [],
+            droppedByQuoteCheck: [],
             finderState,
             verifyUsage: ZERO_VERIFY_USAGE,
             recallUsage,
         };
     }
 
-    // EVIDENCE GATE input: the files the finder itself investigated.
+    // SECOND PASS ROUTING (custom agents). A convention finding is judged
+    // against the team's rule, not by HV2 — which drops "style" and "missing
+    // X" by rule and never sees the guide. First the deterministic quote check
+    // on the target branch, then the convention verifier. A finding an
+    // ast-grep call in this run actually matched is proven and skips both.
+    // Without `conventionCheck` everything below sees only `bugs` = all.
+    const route = params.conventionCheck
+        ? await routeByKind(suggestions, params.conventionCheck, {
+              organizationId: params.telemetryMetadata?.organizationId,
+              teamId: params.telemetryMetadata?.teamId,
+              repositoryId: params.telemetryMetadata?.repositoryId,
+              pullRequestId: params.telemetryMetadata?.pullRequestId,
+              agent: params.agentName,
+          })
+        : {
+              bugs: suggestions,
+              proven: [] as FinderSuggestion[],
+              conventions: [] as FinderSuggestion[],
+              sectionOf: new Map<FinderSuggestion, string>(),
+              rejected: [] as ConventionCheckRejected[],
+          };
+
+    // HV2 on the bug findings (refute-to-drop + evidence gate), on the check
+    // model when the caller gave one.
+    const verify = verifyModelOf(params);
     const investigated = strongFilesFromRun(finderState);
-    const {
-        kept: verified,
-        dropped,
-        verdictByFinding,
-        verifyUsage,
-    } = await verifyFindings(params, suggestions, investigated, ctx);
+    const hv2 = await verifyFindings(
+        {
+            ...params,
+            runner: verify.runner,
+            modelId: verify.modelId,
+            fallbackModelId: verify.fallbackModelId,
+            providerOptions: verify.providerOptions,
+        },
+        route.bugs,
+        investigated,
+        ctx,
+    );
+    let kept = hv2.kept;
+    let dropped = hv2.dropped;
+    // Per-finding verifier verdict (carries the verifier's investigation tool
+    // calls) so we can attribute per-finding verifier evidence to the trace.
+    const verdictByFinding = hv2.verdictByFinding;
+
+    // Convention findings that passed the quote check. The quote check is
+    // their evidence gate: they never take the HV2 full re-verify above,
+    // which would drop them as style.
+    let conventionUsage: VerifyUsage = ZERO_VERIFY_USAGE;
+    if (route.conventions.length > 0) {
+        // Judged on the check model, like the HV2 verifier above.
+        const conventionVerifier = new ConventionVerifier(verify.runner, {
+            modelId: verify.modelId,
+            fallbackModelId: verify.fallbackModelId,
+            tools: params.tools,
+            sectionOf: (f) => route.sectionOf.get(f),
+            providerOptions: verify.providerOptions,
+            telemetryMetadata: params.telemetryMetadata,
+            agentName: params.agentName,
+            usageRunName: params.usageRunName,
+            previousDecisions: params.previousDecisions,
+        });
+        const conv = await runVerificationPass<FinderSuggestion>(
+            {
+                candidates: route.conventions,
+                verifier: conventionVerifier,
+                concurrency: params.concurrency,
+            },
+            ctx,
+        );
+        conv.kept.forEach((f, i) =>
+            verdictByFinding.set(f, conv.keptVerdicts[i]),
+        );
+        conv.dropped.forEach((d) =>
+            verdictByFinding.set(d.candidate, d.verdict),
+        );
+        kept = [...kept, ...conv.kept];
+        dropped = [...dropped, ...conv.dropped];
+        conventionUsage = { ...conventionVerifier.usage };
+    }
+    for (const f of route.proven) {
+        verdictByFinding.set(f, {
+            keep: true,
+            rationale: 'ast-grep match',
+            toolCalls: [],
+            parseMode: 'proof',
+        });
+    }
+    if (route.conventions.length > 0 || route.proven.length > 0) {
+        // Back to the finder's order, so routing never reorders the output.
+        const order = new Map(suggestions.map((s, i) => [s, i]));
+        kept = [...kept, ...route.proven].sort(
+            (a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0),
+        );
+    }
 
     // Map the generic verdict.toolCalls (name/args/result) into the review
     // ToolEvidenceSummary (strong=readFile/checkTypes files, weak=grep hits).
@@ -706,9 +951,9 @@ export async function runFinderWithVerify(
 
     // The Verifier port fails open, so a candidate whose verify run failed
     // comes back as kept. Nobody judged it: take it out of the published set
-    // and report it on its own (#2171). verifyFindings' evidence gate already
-    // superseded the first verdict, so this reads the final one.
-    const unverified = verified
+    // and report it on its own (#2171). The evidence gate's re-verify already
+    // superseded the first verdict above, so this reads the final one.
+    const unverified = kept
         .filter((f) => parseModeOf(f) === 'verify-error')
         .map((f) => ({
             finding: f,
@@ -716,8 +961,10 @@ export async function runFinderWithVerify(
                 verdictByFinding.get(f)?.rationale ??
                 'verification unavailable',
         }));
-    const unverifiedSet = new Set(unverified.map((u) => u.finding));
-    const kept = verified.filter((f) => !unverifiedSet.has(f));
+    if (unverified.length > 0) {
+        const unverifiedSet = new Set(unverified.map((u) => u.finding));
+        kept = kept.filter((f) => !unverifiedSet.has(f));
+    }
 
     return {
         reasoning,
@@ -731,8 +978,9 @@ export async function runFinderWithVerify(
             parseMode: d.verdict.parseMode ?? 'default-keep',
         })),
         unverified,
+        droppedByQuoteCheck: route.rejected,
         finderState,
-        verifyUsage,
+        verifyUsage: sumVerifyUsage(hv2.verifyUsage, conventionUsage),
         recallUsage,
     };
 }
@@ -756,6 +1004,7 @@ export async function verifyFindings(
         | 'agentName'
         | 'usageRunName'
         | 'previousDecisions'
+        | 'laneFocus'
     >,
     suggestions: FinderSuggestion[],
     investigated: Set<string>,
@@ -777,6 +1026,7 @@ export async function verifyFindings(
         agentName: params.agentName,
         usageRunName: params.usageRunName,
         previousDecisions: params.previousDecisions,
+        laneFocus: params.laneFocus,
     });
     const pass = await runVerificationPass<FinderSuggestion>(
         { candidates: suggestions, verifier, concurrency: params.concurrency },
@@ -810,6 +1060,7 @@ export async function verifyFindings(
             agentName: params.agentName,
             usageRunName: params.usageRunName,
             previousDecisions: params.previousDecisions,
+            laneFocus: params.laneFocus,
         });
         const gate = await runVerificationPass<FinderSuggestion>(
             {
@@ -839,6 +1090,102 @@ export async function verifyFindings(
         verdictByFinding,
         verifyUsage: sumVerifyUsage(verifier.usage, gateUsage),
     };
+}
+
+/** Split candidates for the second pass: bug findings → HV2; convention
+ *  findings proven by an ast-grep match → kept without a judge; the other
+ *  convention findings → quote check, whose survivors go to the convention
+ *  verifier with their guide section and whose failures are dropped. */
+async function routeByKind(
+    suggestions: FinderSuggestion[],
+    check: ConventionCheckParams,
+    logContext: Record<string, unknown> = {},
+): Promise<{
+    bugs: FinderSuggestion[];
+    proven: FinderSuggestion[];
+    conventions: FinderSuggestion[];
+    sectionOf: Map<FinderSuggestion, string>;
+    rejected: ConventionCheckRejected[];
+}> {
+    // A "convention" sourced from a tool's output (e.g. a CLI) quotes no
+    // rule, so the quote gate would drop it: it is checked as a bug instead.
+    const toolSourced = suggestions.filter(
+        (s) => s.kind === 'convention' && isToolSource(s, check.guideFiles),
+    );
+    const bugs = [
+        ...suggestions.filter((s) => s.kind !== 'convention'),
+        ...toolSourced.map((s) => ({ ...s, kind: 'bug' as const, source: undefined })),
+    ];
+    const candidates = suggestions.filter(
+        (s) => s.kind === 'convention' && !isToolSource(s, check.guideFiles),
+    );
+    if (candidates.length === 0) {
+        return {
+            bugs,
+            proven: [],
+            conventions: [],
+            sectionOf: new Map(),
+            rejected: [],
+        };
+    }
+    const astGrepOutputs = check.astGrepLog?.outputs ?? [];
+    const proven = candidates.filter((s) =>
+        isProvenByAstGrep(s, astGrepOutputs),
+    );
+    const provenSet = new Set(proven);
+    const quoted = await checkConventionQuotes(
+        candidates.filter((s) => !provenSet.has(s)),
+        check.readGuide,
+        check.guideFiles ?? [],
+        check.listGuideDir,
+        check.teamInstructions,
+    );
+    if (quoted.rejected.length > 0) {
+        finderLogger.log({
+            message: `[quote-check] dropped ${quoted.rejected.length} convention finding(s) whose quote is not in the guide on the target branch`,
+            context: 'finder',
+            serviceName: 'finder',
+            metadata: {
+                ...logContext,
+                // Counts by why: the detail names the guide, never the quote.
+                byReason: quoted.rejected.reduce<Record<string, number>>(
+                    (counts, r) => {
+                        const why = quoteRejectReason(r.detail);
+                        counts[why] = (counts[why] ?? 0) + 1;
+                        return counts;
+                    },
+                    {},
+                ),
+                rejected: quoted.rejected.map((r) => ({
+                    file: r.finding.relevantFile,
+                    guide: r.finding.source?.file,
+                    detail: r.detail,
+                })),
+            },
+        });
+    }
+    return {
+        bugs,
+        proven,
+        conventions: quoted.passed.map((p) => p.finding),
+        sectionOf: new Map(
+            quoted.passed.map((p) => [p.finding, p.sectionText]),
+        ),
+        rejected: quoted.rejected,
+    };
+}
+
+/** A quote-check rejection's detail without the guide's path, so the log
+ *  counts rejections by why. */
+function quoteRejectReason(detail: string): string {
+    if (detail.startsWith('quote not found in ')) return 'quote not in guide';
+    if (detail.endsWith(' is not a guide linked to this review'))
+        return 'guide not linked';
+    if (detail.endsWith(' not found on the target branch'))
+        return 'guide not on target branch';
+    if (detail.startsWith('could not list the files of '))
+        return 'skill files not listable';
+    return detail;
 }
 
 /** Files the finder actually investigated via readFile/checkTypes — the "strong
@@ -929,6 +1276,17 @@ interface RecallPassesParams {
     agentName?: string;
     /** Injected prose-findings recovery (see ProseRecoverer). */
     recoverProse?: ProseRecoverer;
+    /** Guides linked to a custom agent: the synthesis rescue also asks for
+     *  missed violations of them, not only missed bugs. */
+    conventionGuides?: string[];
+    /** A custom agent's team system (MCP) tools: the synthesis rescue also
+     *  asks whether one it consulted states a requirement the change breaks.
+     *  Unset or empty for every other agent, whose prompt stays unchanged. */
+    teamSystemTools?: string[];
+    /** A custom agent kept to its lane: the synthesis rescue asks for missed
+     *  findings within its focus instead of missed bugs. Unset for every
+     *  other agent, whose prompt stays unchanged. */
+    laneScoped?: boolean;
 }
 
 const ZERO_RECALL_USAGE: VerifyUsage = {
@@ -998,6 +1356,9 @@ export async function runRecallPasses(
                 inspected,
                 toolCalls,
                 findings.suggestions,
+                params.conventionGuides,
+                params.teamSystemTools,
+                params.laneScoped,
             ),
             'synthesis-rescue',
         );
@@ -1115,6 +1476,9 @@ function buildSynthesisPrompt(
     inspected: Set<string>,
     toolCalls: Array<{ tool: string; args: unknown }>,
     current: FinderSuggestion[],
+    conventionGuides?: string[],
+    teamSystemTools?: string[],
+    laneScoped?: boolean,
 ): string {
     const inspectedList = inspected.size
         ? [...inspected].join('\n')
@@ -1141,10 +1505,64 @@ ${investigationSummary(toolCalls) || 'No tool calls captured.'}
 ${currentSummary}
 </CurrentFindings>
 
-Your task:
+${laneScoped ? LANE_SYNTHESIS_TASK : SYNTHESIS_TASK}${formatMissedConventionsTask(conventionGuides)}${formatTeamSystemsTask(teamSystemTools, toolCalls)}`;
+}
+
+const SYNTHESIS_TASK = `Your task:
 - Re-think the review based on the context above.
 - Do not add variants or restatements of existing findings.
 - Do not add speculative risks.
 - If there are concrete missed bugs, submit them.
 - If there is no clearly missed bug, submit an empty suggestions array.`;
+
+/** The rescue of a custom agent kept to its lane: re-thinking for missed bugs
+ *  would re-do the generalist's hunt (#2172). */
+const LANE_SYNTHESIS_TASK = `Your task:
+- Re-think the review based on the context above, within your focus (the team's instructions, guides, skills and tools in your system prompt).
+- Do not add variants or restatements of existing findings.
+- Do not add speculative risks, and do not add general bugs outside your focus: the generalist reviewer covers them.
+- If there are concrete missed findings within your focus, submit them.
+- If there is none, submit an empty suggestions array.`;
+
+/** Custom agents with team system (MCP) tools: the rescue also asks whether a
+ *  record they read states a requirement the change breaks. The finder only
+ *  reports what it sees in the code, so a requirement the code never mentions
+ *  was left out (#2172). Empty for every other agent, so their rescue prompt
+ *  is unchanged. */
+function formatTeamSystemsTask(
+    teamSystemTools: string[] | undefined,
+    toolCalls: Array<{ tool: string; args: unknown }>,
+): string {
+    if (!teamSystemTools?.length) return '';
+    const names = new Set(teamSystemTools);
+    const consulted = toolCalls
+        .filter((tc) => names.has(tc.tool))
+        .map((tc) => `- ${investigationSummary([tc])}`);
+    return `
+
+<ConsultedTeamSystems>
+${[...new Set(consulted)].join('\n') || 'None yet.'}
+</ConsultedTeamSystems>
+
+Did a team system you consulted state a requirement this change breaks?
+- Check what those records require (a ticket's acceptance criteria, a recorded decision, an incident's follow-up) against the changed code. Call the tool again to re-read a record; the answer is kept for this review.
+- A requirement the change contradicts or leaves out is a finding even when the code never mentions it. Report it on the changed code it concerns, and cite the record (system, id and the requirement's own words) as the evidence.
+- A requirement that does not apply to this change is not a violation.`;
+}
+
+/** Custom agents with linked guides: the rescue also looks for rules of those
+ *  guides the changed code breaks. Empty for every other agent, so their
+ *  rescue prompt is unchanged. */
+function formatMissedConventionsTask(guides?: string[]): string {
+    if (!guides?.length) return '';
+    return `
+
+<LinkedGuides>
+${guides.map((g) => `- ${g}`).join('\n')}
+</LinkedGuides>
+
+This agent also enforces the team guides above:
+- Also look for MISSED VIOLATIONS of these guides in the changed code — a rule the change breaks that no current finding reports.
+- For each, set kind "convention" and source { file, section, quote }, where file is the file you read the rule from (a skill's SKILL.md or the skill file you opened) and quote is the rule's exact sentence copied verbatim from it (read it with the tools; never paraphrase or invent a rule).
+- A rule that does not cover this file or case is not a violation.`;
 }

@@ -36,6 +36,15 @@ features:
             of security rules over the changed lines, then folds those findings
             into the same review instead of reporting them separately.
 
+    custom-agents:
+        name: "Custom review agents"
+        stage: beta
+        audience: [cloud, self-hosted]
+        description: >-
+            Define your own reviewers with their instructions, the files they
+            look at, the tools they may use and how their comments appear,
+            and run them next to Kody on every pull request.
+
     heavy-review:
         name: "Heavy review (deeper pass)"
         stage: alpha

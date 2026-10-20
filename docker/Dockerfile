@@ -130,11 +130,12 @@ FROM --platform=$BUILDPLATFORM docker.io/library/debian:bookworm-slim AS analyze
 ARG TARGETARCH
 ARG BETTERLEAKS_VERSION=1.8.1
 ARG OSV_SCANNER_VERSION=2.6.0
+ARG AST_GREP_VERSION=0.45.3
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates curl \
+  && apt-get install -y --no-install-recommends ca-certificates curl unzip \
   && case "$TARGETARCH" in \
-       amd64) bl=linux_x64 ;; \
-       arm64) bl=linux_arm64 ;; \
+       amd64) bl=linux_x64; ag=x86_64 ;; \
+       arm64) bl=linux_arm64; ag=aarch64 ;; \
        *) echo "unsupported TARGETARCH '$TARGETARCH'" >&2; exit 1 ;; \
      esac \
   && curl -fsSL -o /tmp/betterleaks.tgz \
@@ -143,7 +144,11 @@ RUN apt-get update \
   && chmod +x /betterleaks && test -s /betterleaks \
   && curl -fsSL -o /osv-scanner \
        "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_linux_${TARGETARCH}" \
-  && chmod +x /osv-scanner && test -s /osv-scanner
+  && chmod +x /osv-scanner && test -s /osv-scanner \
+  && curl -fsSL -o /tmp/ast-grep.zip \
+       "https://github.com/ast-grep/ast-grep/releases/download/${AST_GREP_VERSION}/app-${ag}-unknown-linux-gnu.zip" \
+  && unzip -o /tmp/ast-grep.zip ast-grep -d / \
+  && chmod +x /ast-grep && test -s /ast-grep
 
 FROM docker.io/library/node:22.22.2-slim AS runtime-common
 LABEL org.opencontainers.image.source="https://github.com/kodustech/kodus-ai"
@@ -212,6 +217,9 @@ FROM runtime-common AS worker
 # RunAnalyzersStage resolves it from PATH.
 COPY --from=analyzer-source /betterleaks /usr/local/bin/betterleaks
 COPY --from=analyzer-source /osv-scanner /usr/local/bin/osv-scanner
+# Structural search for custom review agents (the `astGrep` tool). Only the
+# `ast-grep` name: on Linux `sg` is util-linux's setgroups.
+COPY --from=analyzer-source /ast-grep /usr/local/bin/ast-grep
 CMD ["node", "dist/apps/worker/main.js"]
 FROM runtime-common AS mcp-manager
 ENTRYPOINT ["/usr/local/bin/prod-entrypoint-mcp-manager"]

@@ -18,7 +18,8 @@ import {
     isKodyMentionNonReview,
     isReviewCommand,
     parseReviewDirective,
-    isHeavyReviewCommand
+    isHeavyReviewCommand,
+    parseCustomAgentCommand
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { isNewThreadReply } from '@libs/common/utils/codeManagement/threadReply';
 import {
@@ -574,7 +575,10 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
                 }
 
                 const botUsername = context.botUsername;
-                const isStartCommand = isReviewCommand(comment.body, botUsername);
+                // `@kody -v <agent>` reviews the PR again with that custom agent only.
+                const customAgentSlug = parseCustomAgentCommand(comment.body, botUsername);
+                const isStartCommand =
+                    isReviewCommand(comment.body, botUsername) || !!customAgentSlug;
                 const isForceCommand = isForceReviewCommand(comment.body, botUsername);
                 const hasMarker = hasReviewMarker(comment.body);
 
@@ -596,6 +600,7 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
                             triggerCommentId: comment?.id,
                             reviewDirective: parseReviewDirective(comment.body, botUsername),
                             heavy: isHeavyReviewCommand(comment.body, botUsername),
+                            onlyCustomAgent: customAgentSlug,
                         },
                     };
 

@@ -6,7 +6,7 @@ import { createLogger } from '@libs/core/log/logger';
 import { fitPRDescription } from '@libs/code-review/utils/fit-pr-description';
 import { hasKodyMarker } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { getCodeReviewBadge } from '@libs/common/utils/codeManagement/codeReviewBadge';
-import { getLabelShield } from '@libs/common/utils/codeManagement/labels';
+import { getSuggestionShield } from '@libs/common/utils/codeManagement/labels';
 import { getSeverityLevelShield } from '@libs/common/utils/codeManagement/severityLevel';
 import {
     formatFixBlock,
@@ -3195,7 +3195,7 @@ export class ForgejoService implements Omit<
             [
                 getCodeReviewBadge(),
                 lineComment?.suggestion
-                    ? getLabelShield(lineComment.suggestion.label)
+                    ? getSuggestionShield(lineComment.suggestion)
                     : '',
                 severityShield,
             ].join(' ') + '\n\n';

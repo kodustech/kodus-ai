@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
 import { IStageValidationResult } from '@libs/core/infrastructure/pipeline/interfaces/stage-result.interface';
@@ -37,6 +37,15 @@ import {
     shouldReviewBranches,
 } from '@libs/code-review/infrastructure/adapters/services/branchReview.service';
 import { routeCodeReviewModel } from './route-code-review-model';
+import { unknownCustomAgentReply } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
+import {
+    CUSTOM_AGENTS_PLAN_REQUIRED,
+    isCustomAgentsPlanAllowed,
+} from '@libs/code-review/infrastructure/agents/custom-agents/custom-agents-plan';
+import {
+    ILicenseService,
+    LICENSE_SERVICE_TOKEN,
+} from '@libs/ee/license/interfaces/license.interface';
 
 @Injectable()
 export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -52,6 +61,11 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         @Inject(ORGANIZATION_PARAMETERS_SERVICE_TOKEN)
         private organizationParametersService: IOrganizationParametersService,
         private codeManagementService: CodeManagementService,
+        // Optional so specs that do not care about the plan still compile;
+        // without it no custom agent runs (fail-closed for the paid feature).
+        @Optional()
+        @Inject(LICENSE_SERVICE_TOKEN)
+        private readonly licenseService?: ILicenseService,
     ) {
         super();
     }
@@ -76,6 +90,68 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                         message: AutomationMessage.NO_CONFIG_IN_CONTEXT,
                     };
                 });
+            }
+
+            // Custom agents and their skills and docs run on Teams and above
+            // (#2172). On another plan the saved config is left as it is and
+            // this review runs without it; `@kody -v` says why and stops.
+            if (
+                (context.onlyCustomAgent ||
+                    context.codeReviewConfig.customAgents?.length ||
+                    context.codeReviewConfig.knowledge?.length) &&
+                !(await isCustomAgentsPlanAllowed(
+                    this.licenseService,
+                    context.organizationAndTeamData,
+                    this.stageName,
+                ))
+            ) {
+                if (context.onlyCustomAgent) {
+                    await this.replyToCustomAgentCommand(
+                        context,
+                        `\`@kody -v ${context.onlyCustomAgent}\` did not run. ${CUSTOM_AGENTS_PLAN_REQUIRED}`,
+                    );
+                    return this.updateContext(context, (draft) => {
+                        draft.statusInfo = {
+                            status: AutomationStatus.SKIPPED,
+                            message:
+                                AutomationMessage.CUSTOM_AGENTS_PLAN_REQUIRED,
+                        };
+                    });
+                }
+                this.logger.log({
+                    message:
+                        'customAgents configured but plan is not Teams/Enterprise — custom agents disabled',
+                    context: this.stageName,
+                    metadata: {
+                        prNumber: context.pullRequest?.number,
+                        organizationId:
+                            context.organizationAndTeamData?.organizationId,
+                        configuredCount:
+                            context.codeReviewConfig.customAgents?.length ?? 0,
+                    },
+                });
+                context = this.updateContext(context, (draft) => {
+                    draft.codeReviewConfig.customAgents = [];
+                    draft.codeReviewConfig.knowledge = [];
+                });
+            }
+
+            // `@kody -v <slug>` naming no agent would run an empty review;
+            // answer on the PR with the agents there are, and stop.
+            if (context.onlyCustomAgent) {
+                const reply = unknownCustomAgentReply(
+                    context.codeReviewConfig.customAgents,
+                    context.onlyCustomAgent,
+                );
+                if (reply) {
+                    await this.replyToCustomAgentCommand(context, reply);
+                    return this.updateContext(context, (draft) => {
+                        draft.statusInfo = {
+                            status: AutomationStatus.SKIPPED,
+                            message: AutomationMessage.UNKNOWN_CUSTOM_AGENT,
+                        };
+                    });
+                }
             }
 
             //TODO: revisar logica
@@ -452,6 +528,34 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                 error,
             });
             return [];
+        }
+    }
+
+    private async replyToCustomAgentCommand(
+        context: CodeReviewPipelineContext,
+        body: string,
+    ): Promise<void> {
+        try {
+            await this.codeManagementService.createSingleIssueComment({
+                organizationAndTeamData: context.organizationAndTeamData,
+                repository: context.repository,
+                prNumber: context.pullRequest.number,
+                body,
+            });
+        } catch (error) {
+            this.logger.error({
+                message: `Failed to reply to @kody -v on PR #${context.pullRequest?.number}`,
+                context: ValidateConfigStage.name,
+                error,
+                metadata: {
+                    onlyCustomAgent: context.onlyCustomAgent,
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
+                    teamId: context.organizationAndTeamData?.teamId,
+                    repositoryId: context.repository?.id,
+                    prNumber: context.pullRequest?.number,
+                },
+            });
         }
     }
 

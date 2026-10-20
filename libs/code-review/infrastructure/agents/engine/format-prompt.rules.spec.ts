@@ -97,3 +97,15 @@ describe('parseFormatResponse — title', () => {
         expect(formatted.get(2)).not.toHaveProperty('title');
     });
 });
+
+describe('buildFormatPrompt — language', () => {
+    it("keeps the team's language mandatory, whatever the writing guidelines say", () => {
+        const prompt = buildFormatPrompt([suggestion], {
+            customWritingGuidelines: 'Escribe en español.',
+            languageLabel: 'English',
+        });
+
+        expect(prompt).toContain('IMPORTANT: Write all output in English.');
+        expect(prompt).not.toContain('"title"');
+    });
+});

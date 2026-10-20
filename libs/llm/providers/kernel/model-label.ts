@@ -52,7 +52,7 @@ export function formatModelLabel(id: string): string {
         tokens.pop();
     }
     return tokens
-        .map((tok) => tok.replace(/^(k?\d+)p(\d+)$/i, '$1.$2'))
+        .map((tok) => tok.replace(/^([kv]?\d+)p(\d+)$/i, '$1.$2'))
         .map((tok) => {
             if (ACRONYMS.has(tok.toLowerCase())) return tok.toUpperCase();
             // Capitalize the first char, keep the rest verbatim so version tokens

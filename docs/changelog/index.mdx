@@ -67,6 +67,34 @@ rss: true
 
     <div className="kodus-changelog-release">
         <div className="kodus-changelog-meta">
+            <span className="kodus-changelog-date">October 19, 2026</span>
+        </div>
+
+        <div className="kodus-changelog-content">
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">What's new</div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-ai-engine filter-mcp filter-ux-interface">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Custom review agents (beta)</div>
+                    <p className="kodus-changelog-copy">Your team can now write its own reviewers. A custom agent has its own instructions, the files it reviews, the repository guides it follows and the tools it may run. It reviews the pull requests its files match, next to Kody, and reports only its own focus. Its comments carry a tag with its name, so the team knows who is speaking.</p>
+                    <ul className="kodus-changelog-list">
+                        <li><strong>Start from a template</strong> (Architecture, E2E coverage, Regression &amp; hallucination, Security reviewer) or turn a skill from your repository into an agent.</li>
+                        <li><strong>Skills &amp; docs</strong>: link the skills and Markdown guides that already live in the repository. They are read from each pull request's target branch, so a pull request can't change the rule that judges it.</li>
+                        <li><strong>Tools</strong>: read-only MCP plugins, up to three of your team's CLIs in an isolated sandbox, and ast-grep rules whose matches count as proof.</li>
+                        <li><strong>Findings are checked before they post</strong>: a finding that applies a team rule must quote it, and a verifier drops findings outside the agent's focus or without support in the code. The comment cites the rule or the CLI output it relies on.</li>
+                        <li><strong>Try it</strong>: run an agent on a pull request from its settings page and see every tool call, every finding kept or dropped with the reason, and the comment it would post. Nothing is posted.</li>
+                        <li><code className="kodus-changelog-code">@kody -v &lt;agent&gt;</code> runs one agent on a pull request, even while it is off.</li>
+                    </ul>
+                    <p className="kodus-changelog-copy">Find them in Code review → What to review → Custom agents. Learn more in the <a className="kodus-changelog-link" href="https://docs.kodus.io/en/how_to_use/code_review/custom_agents">Custom Agents</a> documentation.</p>
+                </div>
+            </div>
+
+            <p className="kodus-changelog-empty">No changelog entries for this filter yet.</p>
+        </div>
+    </div>
+
+    <div className="kodus-changelog-release">
+        <div className="kodus-changelog-meta">
             <span className="kodus-changelog-date">October 6, 2026</span>
         </div>
 

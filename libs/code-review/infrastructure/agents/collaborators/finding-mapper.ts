@@ -127,6 +127,11 @@ export interface RawFinding {
     relevantLinesEnd?: number;
     severity?: string;
     label?: string;
+    /** Custom agents: whether the finding applies a team rule, and which. */
+    kind?: CodeSuggestion['kind'];
+    source?: CodeSuggestion['source'];
+    /** On a discarded finding: why the check set it aside. */
+    discardReason?: string;
 }
 
 export interface MappableAgentResult {
@@ -134,6 +139,7 @@ export interface MappableAgentResult {
     discardedBySeverity?: RawFinding[];
     droppedByVerify?: RawFinding[];
     unverifiedByVerify?: RawFinding[];
+    droppedByQuoteCheck?: RawFinding[];
 }
 
 export interface FindingMapperContext {
@@ -332,6 +338,9 @@ export function mapAgentFindings(
             ...(s.revisesSuggestionId && {
                 revisesSuggestionId: s.revisesSuggestionId,
             }),
+            // Lane credit in dedup and the rule citation read these.
+            ...(s.kind && { kind: s.kind }),
+            ...(s.source && { source: s.source }),
         } as Partial<CodeSuggestion>;
     });
 
@@ -342,12 +351,23 @@ export function mapAgentFindings(
             severity: (s.severity || 'medium') as CodeSuggestion['severity'],
             label: resolveSuggestionLabel(s, ctx.labelPolicy),
             oneSentenceSummary: s.oneSentenceSummary || '',
+            relevantLinesStart: s.relevantLinesStart,
+            relevantLinesEnd: s.relevantLinesEnd,
+            ...(s.kind && { kind: s.kind }),
+            ...(s.source && { source: s.source }),
+            ...(s.discardReason && { discardReason: s.discardReason }),
         }));
 
     return {
         suggestions,
         discardedBySeverity: mapDiscarded(agentResult.discardedBySeverity),
-        discardedByVerify: mapDiscarded(agentResult.droppedByVerify),
+        // A convention finding whose quoted rule is not in the guide was
+        // checked and refuted like a verify drop; counted apart it vanished
+        // from the agent's "dropped by verification" figure.
+        discardedByVerify: mapDiscarded([
+            ...(agentResult.droppedByVerify ?? []),
+            ...(agentResult.droppedByQuoteCheck ?? []),
+        ]),
         discardedByVerifyError: mapDiscarded(agentResult.unverifiedByVerify),
         droppedForPath,
     };

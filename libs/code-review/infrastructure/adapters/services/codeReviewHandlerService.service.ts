@@ -203,6 +203,8 @@ export class CodeReviewHandlerService {
         reviewDirective?: string,
         // `@kody review --heavy` — extra critic pass in the finder.
         heavy?: boolean,
+        // `@kody -v <slug>` — run only that custom agent (#2172).
+        onlyCustomAgent?: string,
     ) {
         let initialContext: CodeReviewPipelineContext;
 
@@ -229,6 +231,7 @@ export class CodeReviewHandlerService {
                 userGitId,
                 reviewDirective,
                 heavy,
+                ...(onlyCustomAgent ? { onlyCustomAgent } : {}),
                 pipelineMetadata: {
                     lastExecution: {
                         ...(lastExecutionData || null),

@@ -10,6 +10,10 @@ import {
     impactAndActionFallback,
     stripReviewScaffolding,
 } from '@libs/code-review/infrastructure/agents/engine/strip-review-scaffolding';
+import {
+    customAgentWriting,
+    type CustomAgentsById,
+} from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-presentation';
 
 export interface SuggestionShapeCounts {
     shaped: number;
@@ -52,6 +56,10 @@ export async function formatAndShapeSuggestions(
         /** The org the formatter call is billed and traced to; every caller
          *  passes it, even when the review has none. */
         organizationId: string | undefined;
+        /** The review's custom agents (#2172): an agent's writing
+         *  instructions replace the team's for its own findings. Without it
+         *  every finding is written in the team's voice. */
+        customAgentsById?: CustomAgentsById;
     },
 ): Promise<FormatAndShapeResult> {
     const { writingGuidelines } = options;
@@ -87,40 +95,61 @@ export async function formatAndShapeSuggestions(
         const {
             formatSuggestionContent,
         } = require('@libs/code-review/infrastructure/agents/engine/format-suggestion-content');
-        const formatted = await formatSuggestionContent(
-            formatTargets.map((i) => ({
-                title: suggestions[i].oneSentenceSummary || '',
-                rewriteTitle: isOverCeiling(suggestions[i]),
-                suggestionContent: suggestions[i].suggestionContent || '',
-                existingCode: suggestions[i].existingCode || '',
-                improvedCode: suggestions[i].improvedCode || '',
-                relevantFile: suggestions[i].relevantFile || '',
-                language: suggestions[i].language || '',
-            })),
-            {
-                // A saved copy of a shipped default is not the team's own
-                // text; only a real edit outranks the formatter's rules.
-                customWritingGuidelines: writingGuidelines.isCustom
-                    ? writingGuidelines.text
-                    : undefined,
-                byokConfig: options.byokConfig,
-                languageResultPrompt: options.languageResultPrompt,
-                organizationId: options.organizationId,
-            },
-        );
-        for (const [i, fmt] of formatted) {
-            const target = formatTargets[i];
-            if (
-                target !== undefined &&
-                suggestions[target] &&
-                fmt.suggestionContent?.trim()
-            ) {
-                formattedTargets.add(suggestions[target]);
-                suggestions[target].suggestionContent = fmt.suggestionContent;
-                acceptTitle(suggestions[target], fmt.title);
+        // A custom agent's writing instructions replace the team's for its
+        // own findings (#2172): one formatter call per voice.
+        const targetsByWriting = new Map<string | undefined, number[]>();
+        for (const i of formatTargets) {
+            const writing = options.customAgentsById
+                ? customAgentWriting(suggestions[i], options.customAgentsById)
+                : undefined;
+            if (!targetsByWriting.has(writing)) {
+                targetsByWriting.set(writing, []);
             }
+            targetsByWriting.get(writing)!.push(i);
         }
-        formattedCount = formatted.size;
+        let count = 0;
+        for (const [agentWriting, voiceTargets] of targetsByWriting) {
+            const formatted = await formatSuggestionContent(
+                voiceTargets.map((i) => ({
+                    title: suggestions[i].oneSentenceSummary || '',
+                    rewriteTitle: isOverCeiling(suggestions[i]),
+                    suggestionContent: suggestions[i].suggestionContent || '',
+                    existingCode: suggestions[i].existingCode || '',
+                    improvedCode: suggestions[i].improvedCode || '',
+                    relevantFile: suggestions[i].relevantFile || '',
+                    language: suggestions[i].language || '',
+                })),
+                {
+                    // A saved copy of a shipped default is not the team's own
+                    // text; only a real edit outranks the formatter's rules.
+                    customWritingGuidelines:
+                        agentWriting ??
+                        (writingGuidelines.isCustom
+                            ? writingGuidelines.text
+                            : undefined),
+                    byokConfig: options.byokConfig,
+                    // The team's language, set in General, holds for an
+                    // agent's voice too.
+                    languageResultPrompt: options.languageResultPrompt,
+                    organizationId: options.organizationId,
+                },
+            );
+            for (const [i, fmt] of formatted) {
+                const target = voiceTargets[i];
+                if (
+                    target !== undefined &&
+                    suggestions[target] &&
+                    fmt.suggestionContent?.trim()
+                ) {
+                    formattedTargets.add(suggestions[target]);
+                    suggestions[target].suggestionContent =
+                        fmt.suggestionContent;
+                    acceptTitle(suggestions[target], fmt.title);
+                }
+            }
+            count += formatted.size;
+        }
+        formattedCount = count;
     } catch (err) {
         formatError = err;
     }

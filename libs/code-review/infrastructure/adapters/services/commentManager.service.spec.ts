@@ -1,5 +1,6 @@
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { LanguageValue } from '@libs/core/domain/enums/language-parameter.enum';
+import { buildConfigFileKeysIgnoredWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import {
     BehaviourForExistingDescription,
     ClusteringType,
@@ -817,6 +818,94 @@ describe('CommentManagerService — pure helpers', () => {
         });
     });
 
+    describe('generatePullRequestFinishSummaryMarkdown — a single custom agent run (#2172)', () => {
+        const summary = (singleAgentRun: boolean) =>
+            (
+                new CommentManagerService(
+                    {} as any,
+                    { processTemplate: async () => '' } as any,
+                    {} as any,
+                    {} as any,
+                    {} as any,
+                ) as any
+            ).generatePullRequestFinishSummaryMarkdown(
+                { organizationId: 'org' },
+                42,
+                [], // no new comments
+                { languageResultPrompt: LanguageValue.ENGLISH },
+                [],
+                false,
+                undefined,
+                false,
+                undefined,
+                undefined,
+                undefined,
+                singleAgentRun,
+            );
+
+        it('never claims the pull request has no issues when only one agent ran', async () => {
+            const body = await summary(true);
+
+            expect(body).not.toContain('No issues were found');
+            expect(body).toContain('Code Review Completed');
+        });
+
+        it('keeps the no-issues summary for a full review', async () => {
+            expect(await summary(false)).toContain('No issues were found');
+        });
+    });
+
+    describe('generatePullRequestFinishSummaryMarkdown — comments that could not be posted', () => {
+        const svcFor = () =>
+            new CommentManagerService(
+                {} as any,
+                { processTemplate: async () => '' } as any,
+                {} as any,
+                {} as any,
+                {} as any,
+            ) as any;
+        const result = (deliveryStatus: string) => ({
+            comment: { suggestion: { relevantFile: 'a.ts' } },
+            deliveryStatus,
+        });
+        const summary = (commentResults: any[], prLevel: any[] = []) =>
+            svcFor().generatePullRequestFinishSummaryMarkdown(
+                { organizationId: 'org' },
+                42,
+                commentResults,
+                { languageResultPrompt: LanguageValue.ENGLISH },
+                prLevel,
+                false,
+            );
+
+        it('says the comments could not be posted when every delivery failed', async () => {
+            const body = await summary(
+                [result('failed'), result('failed_lines_mismatch')],
+                [result('failed')],
+            );
+
+            expect(body).not.toContain('No issues were found');
+            expect(body).toContain('3');
+            expect(body).toMatch(/could not be posted/);
+        });
+
+        it('keeps the completed summary when the comments were posted', async () => {
+            const sent = await summary([result('sent'), result('failed')]);
+            const before = await summary([result('sent')]);
+
+            expect(sent).not.toMatch(/could not be posted/);
+            expect(sent.split('<!-- kody-codereview-')[0]).toBe(
+                before.split('<!-- kody-codereview-')[0],
+            );
+        });
+
+        it('keeps the no-issues summary when the review found nothing', async () => {
+            const body = await summary([]);
+
+            expect(body).not.toMatch(/could not be posted/);
+        });
+    });
+
     describe('generatePullRequestFinishSummaryMarkdown — skipped rules reach the PR body (KRC-16)', () => {
         // messageProcessor is constructor arg #2; the config block calls it.
         const withProcessor = () =>
@@ -898,6 +987,26 @@ describe('CommentManagerService — pure helpers', () => {
                 );
             expect(body).not.toContain('workflow trimmed');
             expect(body).not.toContain('Kody Rule(s) were not evaluated');
+        });
+
+        it('names a kodus-config.yml key the review ignored', async () => {
+            const body =
+                await withProcessor().generatePullRequestFinishSummaryMarkdown(
+                    { organizationId: 'org' },
+                    42,
+                    [],
+                    { languageResultPrompt: LanguageValue.ENGLISH },
+                    [],
+                    false,
+                    undefined,
+                    false,
+                    undefined,
+                    undefined,
+                    [buildConfigFileKeysIgnoredWarning(['customAgents'])],
+                );
+            expect(body).toContain(
+                'kodus-config.yml: customAgents is not read from this file; configure custom agents in the app.',
+            );
         });
     });
 

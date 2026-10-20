@@ -1,4 +1,5 @@
 import {
+    CUSTOM_AGENT_RUN_PREFIX,
     deriveArea,
     deriveTu,
     ROUTING_TASKS,
@@ -6,6 +7,7 @@ import {
     SYSTEM_RUN_NAMES,
 } from './token-usage-tu';
 import {
+    BACKFILL_CUSTOM_AGENT_RUN_PREFIX,
     BACKFILL_ROUTING_TASKS,
     BACKFILL_SUGGESTION_RUN_NAMES,
     BACKFILL_SYSTEM_RUN_NAMES,
@@ -138,6 +140,65 @@ describe('deriveTu', () => {
             ).toBe('prSummary');
         });
 
+        describe('custom review agents (#2172)', () => {
+            // A custom agent's spans are named `code-review-custom-<slug>`
+            // (finder, `-recovery`) and `…-verify` / `…-convention-verify`
+            // (its check). Without a stamped route (managed model, no BYOK)
+            // they used to fall into the `review` area → `codeReview`.
+            it('attributes an unstamped custom agent run to `customAgent`', () => {
+                for (const rn of [
+                    'code-review-custom-api-contracts',
+                    'code-review-custom-api-contracts-recovery',
+                ]) {
+                    expect(
+                        deriveTu({ ...usage, 'gen_ai.run.name': rn })!.route,
+                    ).toBe('customAgent');
+                }
+            });
+
+            it('counts a custom agent verify in `customAgent`, the model it runs on', () => {
+                for (const rn of [
+                    'code-review-custom-api-contracts-verify',
+                    'code-review-custom-api-contracts-convention-verify',
+                ]) {
+                    expect(
+                        deriveTu({ ...usage, 'gen_ai.run.name': rn })!.route,
+                    ).toBe('customAgent');
+                }
+            });
+
+            it('keeps a stamped custom agent route', () => {
+                expect(
+                    deriveTu({
+                        ...usage,
+                        'gen_ai.run.name': 'code-review-custom-api-contracts',
+                        'route': 'customAgent',
+                    })!.route,
+                ).toBe('customAgent');
+            });
+
+            it('leaves the native review agents on `codeReview`', () => {
+                for (const rn of [
+                    'code-review-security',
+                    'code-review-security-verify',
+                    'code-review-generalist-recovery',
+                ]) {
+                    expect(
+                        deriveTu({ ...usage, 'gen_ai.run.name': rn })!.route,
+                    ).toBe('codeReview');
+                }
+            });
+
+            it('keeps the custom agent run in the `review` area', () => {
+                expect(
+                    deriveTu({
+                        ...usage,
+                        'gen_ai.run.name': 'code-review-custom-api-contracts',
+                    })!.area,
+                ).toBe('review');
+            });
+        });
+
         it('BACK-COMPAT: infers the task from area when `route` is absent', () => {
             // Pre-launch spans have no `route` attr → de-para from the area.
             expect(
@@ -253,6 +314,7 @@ describe('deriveArea', () => {
             new Set(SUGGESTION_RUN_NAMES),
         );
         expect(new Set(BACKFILL_ROUTING_TASKS)).toEqual(ROUTING_TASKS);
+        expect(BACKFILL_CUSTOM_AGENT_RUN_PREFIX).toBe(CUSTOM_AGENT_RUN_PREFIX);
     });
 
     it('ROUTING_TASKS matches the real LlmTask enum', () => {

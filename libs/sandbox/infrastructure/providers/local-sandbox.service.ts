@@ -24,6 +24,7 @@ import {
     CreateSandboxParams,
     ISandboxProvider,
     SandboxInstance,
+    SandboxRunOptions,
     SandboxRunResult,
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
@@ -318,8 +319,17 @@ export class LocalSandboxService implements ISandboxProvider {
             // explicitly instead of piggybacking on this entry point.
             const run = async (
                 command: string,
-                opts?: { timeoutMs?: number; envs?: Record<string, string> },
+                opts?: SandboxRunOptions,
             ): Promise<SandboxRunResult> => {
+                // The local sandbox is the worker's own host: there is no
+                // root channel, and none is ever opened from a review.
+                if (opts?.asRoot) {
+                    return {
+                        stdout: '',
+                        stderr: 'Running as root is not available in the local sandbox',
+                        exitCode: 1,
+                    };
+                }
                 if (/`|\$\(/.test(command)) {
                     this.logger.warn({
                         message:
@@ -452,16 +462,18 @@ export class LocalSandboxService implements ISandboxProvider {
 
                 // rg with --no-follow ensures symlinks are not followed during search.
                 // cwd = repoDir so rg outputs relative paths (downstream expects "./src/foo.ts")
+                // `-e` and `--`: a pattern or path starting with "-" is never
+                // read as an rg flag (`--pre` would run a command).
                 const args = [
                     '--no-heading',
                     '-n',
                     '--no-follow',
+                    ...(glob ? ['--glob', glob] : []),
+                    '-e',
                     pattern,
+                    '--',
                     path,
                 ];
-                if (glob) {
-                    args.push('--glob', glob);
-                }
 
                 try {
                     const { stdout } = await execFileAsync('rg', args, {
@@ -532,7 +544,9 @@ export class LocalSandboxService implements ISandboxProvider {
                     const { stdout } = await execFileAsync(
                         'find',
                         [
-                            path,
+                            // A path starting with "-" is anchored so find
+                            // reads it as a path, not an expression.
+                            path.startsWith('-') ? `./${path}` : path,
                             '-maxdepth',
                             String(maxDepth),
                             '-type',

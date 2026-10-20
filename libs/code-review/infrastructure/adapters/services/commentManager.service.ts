@@ -61,7 +61,10 @@ import { prompt_repeated_suggestion_clustering_system } from '@libs/common/utils
 import { createLogger } from '@libs/core/log/logger';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
-import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
+import {
+    formatConfigFileNotice,
+    type ReviewWarning,
+} from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import { estimateTokens, tokensToChars } from './utils/token-estimator';
 
 interface ClusteredSuggestion {
@@ -1063,13 +1066,23 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
         reviewErrorCustomMessage?: string,
         linkedRepositoriesMetadata?: LinkedRepositoriesReviewMetadata,
         reviewWarnings?: ReviewWarning[],
+        /** `@kody -v <agent>`: one agent re-checked the pull request. */
+        singleAgentRun?: boolean,
     ): Promise<void> {
         try {
             // When the review failed, we cannot honor a customer-configured
             // endReviewMessage template — those say "review completed", which
             // would be a lie. Force the default summary path so the
             // `withErrors` variant renders the real reason.
-            let commentBody = reviewFailed ? undefined : finalCommentBody;
+            // Same when no comment could be posted: a template written for a
+            // finished review would hide that the findings never reached it.
+            const nothingDelivered =
+                countUndeliveredComments(codeSuggestions) > 0 &&
+                !codeSuggestions?.some(
+                    (c) => c?.deliveryStatus === DeliveryStatus.SENT,
+                );
+            let commentBody =
+                reviewFailed || nothingDelivered ? undefined : finalCommentBody;
 
             if (!commentBody || commentBody === '') {
                 commentBody = await this.generateLastReviewCommenBody(
@@ -1085,6 +1098,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                     reviewErrorCustomMessage,
                     linkedRepositoriesMetadata,
                     reviewWarnings,
+                    singleAgentRun,
                 );
             } else {
                 // Custom end-review template is rendering — the default
@@ -1113,6 +1127,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                 if (skippedNotice) {
                     commentBody = `${commentBody}${skippedNotice}`;
                 }
+                commentBody = `${commentBody}${formatConfigFileNotice(reviewWarnings)}`;
             }
 
             await this.codeManagementService.updateIssueComment(
@@ -1168,6 +1183,8 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
         reviewErrorCustomMessage?: string,
         linkedRepositoriesMetadata?: LinkedRepositoriesReviewMetadata,
         reviewWarnings?: ReviewWarning[],
+        /** `@kody -v <agent>`: one agent re-checked the pull request. */
+        singleAgentRun?: boolean,
     ): Promise<string> {
         let commentBody = await this.generatePullRequestFinishSummaryMarkdown(
             organizationAndTeamData,
@@ -1181,6 +1198,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
             reviewErrorCustomMessage,
             linkedRepositoriesMetadata,
             reviewWarnings,
+            singleAgentRun,
         );
 
         commentBody = this.sanitizeBitbucketMarkdown(commentBody, platformType);
@@ -1897,6 +1915,8 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
         reviewErrorCustomMessage?: string,
         linkedRepositoriesMetadata?: LinkedRepositoriesReviewMetadata,
         reviewWarnings?: ReviewWarning[],
+        /** `@kody -v <agent>`: one agent re-checked the pull request. */
+        singleAgentRun?: boolean,
     ): Promise<string> {
         try {
             const language =
@@ -1921,6 +1941,13 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
             ).length;
 
             const hasComments = hasPrLevelComments || hasFileComments;
+            // Comments the review produced but the platform refused (a rate
+            // limit, an outage). With none posted, "no issues found" would
+            // call a review with findings clean.
+            const undelivered = countUndeliveredComments(
+                commentResults,
+                prLevelCommentResults,
+            );
 
             // Failure variant takes priority: when the agent engine flagged
             // the review as failed (critical errors on the pipeline) we
@@ -1971,9 +1998,21 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                 // explaining why auto-approve didn't fire — otherwise the
                 // user sees "review completed" + no approval and thinks
                 // approve is broken.
-                resultText = hasComments
-                    ? translation.withComments
-                    : translation.withoutComments;
+                // One agent re-checking the pull request is told not to repeat
+                // what is already posted, so "no new comment" says nothing
+                // about the comments still open: never announce no issues.
+                resultText =
+                    hasComments || singleAgentRun
+                        ? translation.withComments
+                        : undelivered > 0
+                          ? (
+                                translation.withUndeliveredComments ??
+                                getTranslationsForLanguageByCategory(
+                                    LanguageValue.ENGLISH,
+                                    TranslationsCategory.PullRequestFinishSummaryMarkdown,
+                                )?.withUndeliveredComments
+                            )?.replace(/\{\{count\}\}/g, String(undelivered))
+                          : translation.withoutComments;
 
                 if (reviewHasPartialErrors) {
                     const notice = this.resolvePartialErrorsNotice(language);
@@ -2008,6 +2047,9 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
             if (skippedRulesNotice) {
                 resultText = `${resultText}${skippedRulesNotice}`;
             }
+            // A kodus-config.yml key the review ignored (customAgents,
+            // knowledge) is named here too: the file's author reads the PR.
+            resultText = `${resultText}${formatConfigFileNotice(reviewWarnings)}`;
 
             // Cross-repo transparency (#1576): CodeRabbit-style line listing
             // which linked repos/refs were actually cloned and consulted.
@@ -2972,6 +3014,7 @@ ${reviewOptions}
             if (skippedNotice) {
                 commentBody = `${commentBody}${skippedNotice}`;
             }
+            commentBody = `${commentBody}${formatConfigFileNotice(reviewWarnings)}`;
         } else {
             commentBody = await this.generateLastReviewCommenBody(
                 organizationAndTeamData,
@@ -3121,4 +3164,17 @@ ${reviewOptions}
 
         return chunks;
     }
+}
+
+/** Comments the platform refused to post, file-level and PR-level. */
+function countUndeliveredComments(
+    ...results: Array<CommentResult[] | undefined>
+): number {
+    return results
+        .flat()
+        .filter(
+            (c) =>
+                c?.deliveryStatus === DeliveryStatus.FAILED ||
+                c?.deliveryStatus === DeliveryStatus.FAILED_LINES_MISMATCH,
+        ).length;
 }

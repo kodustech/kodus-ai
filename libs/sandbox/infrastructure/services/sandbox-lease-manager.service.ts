@@ -9,6 +9,7 @@ import {
     CreateSandboxParams,
     ISandboxProvider,
     SandboxInstance,
+    SandboxRunOptions,
     SANDBOX_PROVIDER_TOKEN,
     toBranchName,
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
@@ -23,6 +24,7 @@ import { SANDBOX_LEASE_CLEANUP_STATUS } from '../repositories/schemas/sandbox-le
 import { NULL_SANDBOX_INSTANCE } from '../providers/null-sandbox.service';
 import {
     buildE2BRemoteCommands,
+    runE2BCommand,
     syncE2BSandboxRepo,
 } from '../providers/e2b-sandbox.service';
 import {
@@ -615,6 +617,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 prKey,
                 sandboxId,
                 sandbox?.baseBranch,
+                sandbox?.privilegesDropped,
             );
 
             // Check for mid-create invalidation (Pitfall 5)
@@ -933,16 +936,19 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
 
         // The caller's value is authoritative for THIS review; the persisted
         // one covers a joiner that arrived without clone params.
-        const baseBranch =
-            cloneParams?.baseBranch ??
-            (await this.leaseRepo.findByPrKey(prKey).catch(() => null))
-                ?.baseBranch;
+        const leaseDoc = await this.leaseRepo
+            .findByPrKey(prKey)
+            .catch(() => null);
+        const baseBranch = cloneParams?.baseBranch ?? leaseDoc?.baseBranch;
 
         const sandbox: SandboxInstance = this.buildSandboxInstance(
             e2bSandbox,
             prKey,
             leaseId,
             baseBranch,
+            // Only what creation recorded counts: dropping now would not undo
+            // what earlier rounds could do while the user still had sudo.
+            leaseDoc?.privilegesDropped === true,
         );
         this.leaseIdToPrKey.set(leaseId, prKey);
 
@@ -964,6 +970,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         prKey: string,
         leaseId: string,
         baseBranch?: string,
+        privilegesDropped = false,
     ): SandboxInstance {
         return {
             // Restored from the lease. The base ref is already on disk from
@@ -993,20 +1000,9 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             type: 'e2b',
             sandboxId: e2bSandbox.sandboxId,
             repoDir: '/home/user/repo',
-            run: async (
-                command: string,
-                opts?: { timeoutMs?: number; envs?: Record<string, string> },
-            ) => {
-                const result = await e2bSandbox.commands.run(command, {
-                    timeoutMs: opts?.timeoutMs ?? 30_000,
-                    ...(opts?.envs && { envs: opts.envs }),
-                });
-                return {
-                    stdout: result.stdout || '',
-                    stderr: result.stderr || '',
-                    exitCode: result.exitCode,
-                };
-            },
+            privilegesDropped,
+            run: (command: string, opts?: SandboxRunOptions) =>
+                runE2BCommand(e2bSandbox, command, opts),
             readFile: async (path: string, opts?: { timeoutMs?: number }) => {
                 return e2bSandbox.files.read(path, {
                     requestTimeoutMs: opts?.timeoutMs ?? 600_000,

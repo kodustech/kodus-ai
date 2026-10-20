@@ -1,3 +1,4 @@
+import { customAgentsRevisionsAtLevel } from '@libs/code-review/domain/custom-agents/revision';
 import { ParametersKey } from '@libs/core/domain/enums';
 
 import { GetCodeReviewParameterUseCase } from '../get-code-review-parameter.use-case';
@@ -66,5 +67,126 @@ describe('GetCodeReviewParameterUseCase — get-or-create', () => {
         await useCase.execute(user as any, 'team-1');
 
         expect(createActiveVersionIfAbsent).not.toHaveBeenCalled();
+    });
+
+    it('masks custom agent CLI secrets before the config leaves the server', async () => {
+        const stored = {
+            id: 'ledger-agent',
+            tools: {
+                cli: [
+                    {
+                        name: 'ledgerctl',
+                        secrets: [
+                            { env: 'LEDGER_TOKEN', ciphertext: 'iv:stored' },
+                        ],
+                    },
+                ],
+            },
+        };
+        const entity = {
+            toObject: () => ({
+                configValue: {
+                    configs: { customAgents: [stored] },
+                    repositories: [
+                        {
+                            id: 'repo-1',
+                            configs: { customAgents: [stored] },
+                            directories: [],
+                        },
+                    ],
+                },
+                createdAt: new Date('2026-01-01T00:00:00Z'),
+            }),
+        };
+        const { useCase } = build(
+            jest.fn().mockResolvedValue(entity),
+            jest.fn(),
+        );
+        const formatted = useCase[
+            'getCodeReviewConfigFormatted'
+        ] as unknown as jest.Mock;
+
+        await useCase.execute(user as any, 'team-1', {
+            skipAuthorization: true,
+        });
+
+        const handedToFormatter = formatted.mock.calls[0][1];
+        expect(JSON.stringify(handedToFormatter)).not.toContain('iv:stored');
+        expect(
+            handedToFormatter.configs.customAgents[0].tools.cli[0].secrets,
+        ).toEqual([{ env: 'LEDGER_TOKEN', ciphertext: '••••' }]);
+    });
+
+    it('tells each level which revision of its agents and knowledge it read', async () => {
+        const stored = {
+            configs: {
+                customAgents: [{ id: 'global-agent', instructions: 'A.' }],
+                knowledge: [{ path: 'docs/a.md', kind: 'doc', linkedTo: [] }],
+            },
+            repositories: [
+                {
+                    id: 'repo-1',
+                    configs: {
+                        customAgents: [
+                            { id: 'ledger-agent', instructions: 'B.' },
+                        ],
+                    },
+                    directories: [
+                        {
+                            id: 'dir-1',
+                            configs: {
+                                customAgents: [
+                                    { id: 'dir-agent', instructions: 'C.' },
+                                ],
+                            },
+                        },
+                    ],
+                },
+            ],
+        };
+        const { useCase } = build(
+            jest.fn().mockResolvedValue({
+                toObject: () => ({
+                    configValue: JSON.parse(JSON.stringify(stored)),
+                    createdAt: new Date('2026-01-01T00:00:00Z'),
+                }),
+            }),
+            jest.fn(),
+        );
+        (
+            useCase['getCodeReviewConfigFormatted'] as unknown as jest.Mock
+        ).mockResolvedValue({
+            configs: {},
+            repositories: [
+                {
+                    id: 'repo-1',
+                    configs: {},
+                    directories: [{ id: 'dir-1', configs: {} }],
+                },
+            ],
+        });
+
+        const result: any = await useCase.execute(user as any, 'team-1', {
+            skipAuthorization: true,
+        });
+
+        const at = (level: Record<string, string>) =>
+            customAgentsRevisionsAtLevel(stored, level);
+        expect(result.configValue.customAgentsRevision).toBe(
+            at({}).customAgents,
+        );
+        expect(result.configValue.knowledgeRevision).toBe(at({}).knowledge);
+        const [repository] = result.configValue.repositories;
+        expect(repository.customAgentsRevision).toBe(
+            at({ repositoryId: 'repo-1' }).customAgents,
+        );
+        expect(repository.knowledgeRevision).toBe(
+            at({ repositoryId: 'repo-1' }).knowledge,
+        );
+        expect(repository.directories[0].customAgentsRevision).toBe(
+            at({ repositoryId: 'repo-1', directoryId: 'dir-1' }).customAgents,
+        );
+        // The revisions sit beside the settings, never inside them.
+        expect(repository.configs).toEqual({});
     });
 });

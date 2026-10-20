@@ -1,4 +1,17 @@
-import { TokenUsageRepository } from './tokenUsage.repository';
+import { ROUTING_TASKS } from '@libs/core/log/token-usage-tu';
+import {
+    READ_ROUTING_TASKS,
+    TokenUsageRepository,
+} from './tokenUsage.repository';
+
+describe('TokenUsageRepository per-task read', () => {
+    // The read path trusts `tu.route` only when it is a known task. A task
+    // missing here (customAgent, #2172) is folded back
+    // into `codeReview` on the Token Usage screen.
+    it('trusts every routing task the write path stamps', () => {
+        expect(new Set(READ_ROUTING_TASKS)).toEqual(ROUTING_TASKS);
+    });
+});
 
 /**
  * Regression coverage for the tier derivation the aggregation pipelines share.

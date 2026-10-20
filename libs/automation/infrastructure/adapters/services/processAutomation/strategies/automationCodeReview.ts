@@ -42,6 +42,16 @@ import { EnqueueImplementationCheckUseCase } from '@libs/code-review/application
  */
 const ACTIVE_EXECUTION_LOOKBACK_MINUTES = 30;
 
+/**
+ * A running review rewrites its row's `updatedAt` every interval; a row
+ * not touched within the stale window belongs to a process that died
+ * (deploy, OOM, SIGKILL) without a terminal update, and must stop holding
+ * the PR. The window spans several missed beats so one slow or failed
+ * write does not let a second review start next to a live one.
+ */
+const ACTIVE_EXECUTION_HEARTBEAT_INTERVAL_MS = 60_000;
+const ACTIVE_EXECUTION_HEARTBEAT_STALE_MINUTES = 5;
+
 const STALE_STARTUP_MESSAGES = new Set([
     'pipeline started',
     'code review started',
@@ -123,6 +133,7 @@ export class AutomationCodeReviewService implements Omit<
             triggerCommentId,
             reviewDirective,
             heavy,
+            onlyCustomAgent,
             userGitId,
             signal,
         } = payload as Record<string, any>;
@@ -220,6 +231,7 @@ export class AutomationCodeReviewService implements Omit<
         }
 
         let execution: IAutomationExecution | null = null;
+        let stopHeartbeat: (() => void) | undefined;
 
         try {
             const existingExecution = await this.getActiveExecution(
@@ -265,6 +277,8 @@ export class AutomationCodeReviewService implements Omit<
                 });
                 return 'Could not create code review execution';
             }
+
+            stopHeartbeat = this.startExecutionHeartbeat(execution.uuid);
 
             // Check for pre-validation error passed from UseCase
             if (payload.validationError) {
@@ -319,6 +333,7 @@ export class AutomationCodeReviewService implements Omit<
                     signal, // parentSignal — forwarded to pipeline context
                     reviewDirective, // @kody review <directive> steering text
                     heavy, // @kody review --heavy — extra critic pass
+                    onlyCustomAgent, // @kody -v <slug> — that custom agent only
                 );
 
             await this._handleExecutionCompletion(
@@ -338,6 +353,7 @@ export class AutomationCodeReviewService implements Omit<
             await this._handleExecutionError(execution, error, payload);
             return 'Error executing automation';
         } finally {
+            stopHeartbeat?.();
             if (lock) {
                 try {
                     await lock.release();
@@ -410,6 +426,25 @@ export class AutomationCodeReviewService implements Omit<
         });
     }
 
+    private startExecutionHeartbeat(executionUuid: string): () => void {
+        const timer = setInterval(() => {
+            this.automationExecutionService
+                .touchInProgress(executionUuid)
+                .catch((error) => {
+                    this.logger.warn({
+                        message: 'Failed to heartbeat code review execution',
+                        context: AutomationCodeReviewService.name,
+                        error: error instanceof Error ? error : undefined,
+                        metadata: { executionUuid },
+                    });
+                });
+        }, ACTIVE_EXECUTION_HEARTBEAT_INTERVAL_MS);
+        // Never keep the process alive just to heartbeat.
+        timer.unref?.();
+
+        return () => clearInterval(timer);
+    }
+
     private async getActiveExecution(
         teamAutomationId: string,
         pullRequestNumber: number,
@@ -421,6 +456,11 @@ export class AutomationCodeReviewService implements Omit<
                 cutoffTime.getMinutes() - ACTIVE_EXECUTION_LOOKBACK_MINUTES,
             );
 
+            // A row whose heartbeat went quiet is a dead run, not a holder.
+            const heartbeatCutoff = new Date(
+                Date.now() - ACTIVE_EXECUTION_HEARTBEAT_STALE_MINUTES * 60_000,
+            );
+
             const activeExecutions = await this.automationExecutionService.find(
                 {
                     teamAutomation: { uuid: teamAutomationId },
@@ -428,6 +468,7 @@ export class AutomationCodeReviewService implements Omit<
                     repositoryId: repositoryId,
                     status: AutomationStatus.IN_PROGRESS,
                     createdAt: MoreThanOrEqual(cutoffTime),
+                    updatedAt: MoreThanOrEqual(heartbeatCutoff),
                 } as any,
             );
 

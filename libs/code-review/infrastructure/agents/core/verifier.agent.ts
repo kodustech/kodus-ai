@@ -27,6 +27,7 @@ import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/i
 import {
     buildVerifierPrompt,
     VERIFIER_REPEAT_RULE,
+    verifierLaneRule,
 } from '@libs/code-review/infrastructure/agents/prompts/verifier-prompt';
 import { formatPreviousDecisions } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
 import { LLM_ENVELOPE_TAG } from '@libs/llm/structured-output-repair';
@@ -82,6 +83,9 @@ export interface BuildVerifierSpecParams {
     maxSteps?: number;
     /** Provider options (reasoning/thinking config) forwarded to the model. */
     providerOptions?: Readonly<Record<string, unknown>>;
+    /** System prompt override — the convention verifier passes its own. The
+     *  HV2 prompt when absent. */
+    systemPrompt?: string;
     /** Provider options attached to the system message (e.g. Anthropic prompt
      *  caching) so the verifier's system prompt is cached across steps. */
 }
@@ -91,7 +95,7 @@ export function buildVerifierAgentSpec(
 ): AgentSpec {
     // The HV2 system prompt is static (the per-finding evidence goes in the
     // run prompt), so we build it once with a placeholder bundle.
-    const { system } = buildVerifierPrompt('', 0);
+    const system = params.systemPrompt ?? buildVerifierPrompt('', 0).system;
     const tools = new InMemoryToolRegistry([
         ...params.tools.list(),
         // Strict/structured done-tool for strict-capable models (Gemini
@@ -135,11 +139,16 @@ export function buildVerifierAgentSpec(
 
 /** Format a finding into the verifier's per-run task prompt (HV2 evidence).
  *  `previousDecisions` (issue #1313) is the PR's history, not filtered by
- *  file — see LlmVerifier.verify(). */
+ *  file — see LlmVerifier.verify(). `laneFocus` (a custom agent kept to its
+ *  lane, #2172) adds the out-of-focus drop criterion; absent, the prompt is
+ *  unchanged. */
 export function verifierPromptFor(
     finding: FinderSuggestion,
     previousDecisions?: readonly PrDecisionRecord[],
+    options: { laneFocus?: string } = {},
 ): string {
+    const laneFocus =
+        typeof options?.laneFocus === 'string' ? options.laneFocus : '';
     const bundle = [
         `File: ${finding.relevantFile}`,
         finding.relevantLinesStart != null
@@ -150,6 +159,7 @@ export function verifierPromptFor(
         finding.existingCode ? `Code:\n${finding.existingCode}` : '',
         formatPreviousDecisions(previousDecisions),
         previousDecisions?.length ? VERIFIER_REPEAT_RULE : '',
+        laneFocus.trim() ? verifierLaneRule(laneFocus) : '',
     ]
         .filter(Boolean)
         .join('\n');
@@ -309,6 +319,9 @@ export interface LlmVerifierParams {
      *  NOT done here (line numbers shift across commits); the model judges
      *  whether a same-file record is "the same issue" semantically. */
     previousDecisions?: PrDecisionRecord[];
+    /** A custom agent kept to its lane (#2172): its focus, against which each
+     *  finding is also judged in the same run (see verifierLaneRule). */
+    laneFocus?: string;
 }
 
 /** The LLM-judge Verifier (HV2): runs a verifier AgentSpec once per finding on
@@ -392,7 +405,9 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
         const state = await this.runner.run(
             spec,
             {
-                prompt: verifierPromptFor(candidate, matchingDecisions),
+                prompt: verifierPromptFor(candidate, matchingDecisions, {
+                    laneFocus: this.params.laneFocus,
+                }),
                 ...toAiSdkTelemetryArgs(
                     buildLangfuseTelemetry(fnId, this.params.telemetryMetadata),
                 ),

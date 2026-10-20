@@ -18,10 +18,13 @@ import type { ToolContext } from './tool.contract';
  *  `tool` = the model called the verdict tool; `text` = it answered in text and
  *  the deterministic parser recovered the verdict; `default-keep` = nothing was
  *  parseable and the fail-open default applied; `verify-error` = the verifier's
- *  own run failed (provider error, abort), so nothing was judged. Recorded
+ *  own run failed (provider error, abort), so nothing was judged; `proof` =
+ *  the candidate carried executable proof (e.g. a structural-search match)
+ *  and no judge was needed. Recorded
  *  because "kept" alone cannot distinguish a judged keep from a parse miss
  *  (issue #1937) or from a check that never ran (issue #2171). */
-export type VerdictParseMode = 'tool' | 'text' | 'default-keep' | 'verify-error';
+export type VerdictParseMode =
+    'tool' | 'text' | 'default-keep' | 'verify-error' | 'proof';
 
 export interface VerdictDimension {
     readonly name: string;

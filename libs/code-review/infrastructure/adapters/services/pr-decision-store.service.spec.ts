@@ -97,6 +97,31 @@ describe('decision records read the full explanation', () => {
     });
 });
 
+describe('decision records name the custom agent that made them', () => {
+    const agent = { id: 'ag-1', name: 'Money', color: 'blue' };
+
+    it('carries the custom agent of a file-level suggestion', () => {
+        expect(
+            toRecord(makeSuggestion({ customAgent: agent } as any))
+                .customAgentId,
+        ).toBe('ag-1');
+        expect(toRecord(makeSuggestion()).customAgentId).toBeUndefined();
+    });
+
+    it('carries the custom agent of a PR-level suggestion', () => {
+        expect(
+            toRecordFromPrLevel({
+                id: 'p1',
+                suggestionContent: 'x',
+                oneSentenceSummary: 'x',
+                label: 'custom_agent',
+                deliveryStatus: DeliveryStatus.SENT,
+                customAgent: agent,
+            } as any).customAgentId,
+        ).toBe('ag-1');
+    });
+});
+
 describe('toRecord', () => {
     it('maps every field a consumer needs, deriving outcome from implementationStatus', () => {
         const record = toRecord(
