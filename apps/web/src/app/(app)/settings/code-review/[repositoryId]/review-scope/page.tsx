@@ -109,7 +109,11 @@ function ReviewScopeContent() {
 
             toast({ description: "Settings saved", variant: "success" });
         } catch (error) {
-            logCustomAgentsSaveError("Error saving settings:", error);
+            logCustomAgentsSaveError("Error saving settings:", error, {
+                teamId,
+                repositoryId,
+                directoryId,
+            });
             toast(
                 customAgentsSaveErrorToast(
                     error,
