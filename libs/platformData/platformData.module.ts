@@ -22,6 +22,10 @@ import {
 import { CodeAreaRiskMapService } from './infrastructure/adapters/services/code-area-risk-map.service';
 import { RefreshCodeAreaRiskMapService } from './infrastructure/adapters/services/refresh-code-area-risk-map.service';
 import {
+    CODE_AREA_RISK_MAP_SERVICE_TOKEN,
+    REFRESH_CODE_AREA_RISK_MAP_SERVICE_TOKEN,
+} from './domain/code-area-risk/code-area-risk-map.contract';
+import {
     CodeAreaHistoryPrModel,
     CodeAreaHistoryPrSchema,
     CodeAreaHistorySyncModel,
@@ -64,16 +68,22 @@ import {
         },
         SavePullRequestUseCase,
         BackfillHistoricalPRsUseCase,
-        CodeAreaRiskMapService,
-        RefreshCodeAreaRiskMapService,
+        {
+            provide: CODE_AREA_RISK_MAP_SERVICE_TOKEN,
+            useClass: CodeAreaRiskMapService,
+        },
+        {
+            provide: REFRESH_CODE_AREA_RISK_MAP_SERVICE_TOKEN,
+            useClass: RefreshCodeAreaRiskMapService,
+        },
     ],
     exports: [
         PULL_REQUESTS_REPOSITORY_TOKEN,
         PULL_REQUESTS_SERVICE_TOKEN,
         SavePullRequestUseCase,
         BackfillHistoricalPRsUseCase,
-        CodeAreaRiskMapService,
-        RefreshCodeAreaRiskMapService,
+        CODE_AREA_RISK_MAP_SERVICE_TOKEN,
+        REFRESH_CODE_AREA_RISK_MAP_SERVICE_TOKEN,
     ],
 })
 export class PlatformDataModule {}

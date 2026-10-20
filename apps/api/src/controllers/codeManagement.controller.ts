@@ -62,8 +62,12 @@ import {
     CodeManagementWebhookStatusResponseDto,
 } from '../dtos/code-management.response.dto';
 import { TenantScopeGuard } from '../guards/tenant-scope.guard';
-import { CodeAreaRiskMapService } from '@libs/platformData/infrastructure/adapters/services/code-area-risk-map.service';
-import { RefreshCodeAreaRiskMapService } from '@libs/platformData/infrastructure/adapters/services/refresh-code-area-risk-map.service';
+import {
+    CODE_AREA_RISK_MAP_SERVICE_TOKEN,
+    ICodeAreaRiskMapService,
+    IRefreshCodeAreaRiskMapService,
+    REFRESH_CODE_AREA_RISK_MAP_SERVICE_TOKEN,
+} from '@libs/platformData/domain/code-area-risk/code-area-risk-map.contract';
 import { rankCodeAreas } from '@libs/platformData/domain/code-area-risk/build-area-risk-map';
 @ApiTags('Code Management')
 @ApiBearerAuth('jwt')
@@ -86,8 +90,10 @@ export class CodeManagementController {
         private readonly getWebhookStatusUseCase: GetWebhookStatusUseCase,
         private readonly searchCodeManagementUsersUseCase: SearchCodeManagementUsersUseCase,
         private readonly getCurrentCodeManagementUserUseCase: GetCurrentCodeManagementUserUseCase,
-        private readonly codeAreaRiskMaps: CodeAreaRiskMapService,
-        private readonly codeAreaRiskRefresh: RefreshCodeAreaRiskMapService,
+        @Inject(CODE_AREA_RISK_MAP_SERVICE_TOKEN)
+        private readonly codeAreaRiskMaps: ICodeAreaRiskMapService,
+        @Inject(REFRESH_CODE_AREA_RISK_MAP_SERVICE_TOKEN)
+        private readonly codeAreaRiskRefresh: IRefreshCodeAreaRiskMapService,
 
         @Inject(REQUEST)
         private readonly request: UserRequest,

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import type { Model } from 'mongoose';
 
@@ -14,7 +14,10 @@ import {
     CodeAreaHistoryPrModel,
     CodeAreaHistorySyncModel,
 } from '../repositories/schemas/code-area-history.model';
-import { CodeAreaRiskMapService } from './code-area-risk-map.service';
+import {
+    CODE_AREA_RISK_MAP_SERVICE_TOKEN,
+    ICodeAreaRiskMapService,
+} from '@libs/platformData/domain/code-area-risk/code-area-risk-map.contract';
 
 const WINDOW_DAYS = 7;
 const LOOKBACK_DAYS = 365;
@@ -39,7 +42,8 @@ interface SyncState {
 export class RefreshCodeAreaRiskMapService {
     constructor(
         private readonly codeManagement: CodeManagementService,
-        private readonly maps: CodeAreaRiskMapService,
+        @Inject(CODE_AREA_RISK_MAP_SERVICE_TOKEN)
+        private readonly maps: ICodeAreaRiskMapService,
         @InjectModel(CodeAreaHistoryPrModel.name)
         private readonly history: Model<CodeAreaHistoryPrModel>,
         @InjectModel(CodeAreaHistorySyncModel.name)

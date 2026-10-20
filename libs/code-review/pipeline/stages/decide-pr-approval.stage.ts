@@ -1,9 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
 import { createLogger } from '@libs/core/log/logger';
 import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
-import { CodeAreaRiskMapService } from '@libs/platformData/infrastructure/adapters/services/code-area-risk-map.service';
+import {
+    CODE_AREA_RISK_MAP_SERVICE_TOKEN,
+    ICodeAreaRiskMapService,
+} from '@libs/platformData/domain/code-area-risk/code-area-risk-map.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import {
     approvalPolicyFromConfig,
@@ -23,7 +26,8 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
 
     constructor(
         private readonly codeManagement: CodeManagementService,
-        private readonly areaMaps: CodeAreaRiskMapService,
+        @Inject(CODE_AREA_RISK_MAP_SERVICE_TOKEN)
+        private readonly areaMaps: ICodeAreaRiskMapService,
     ) {
         super();
     }

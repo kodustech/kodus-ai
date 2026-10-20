@@ -15,7 +15,10 @@ import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
-import { RefreshCodeAreaRiskMapService } from '@libs/platformData/infrastructure/adapters/services/refresh-code-area-risk-map.service';
+import {
+    IRefreshCodeAreaRiskMapService,
+    REFRESH_CODE_AREA_RISK_MAP_SERVICE_TOKEN,
+} from '@libs/platformData/domain/code-area-risk/code-area-risk-map.contract';
 
 const MAX_REPOSITORIES_PER_RUN = 20;
 const RUN_INTERVAL_MS = 2 * 60 * 60 * 1000;
@@ -29,7 +32,8 @@ export class RefreshCodeAreaRiskMapCron {
         private readonly teams: ITeamService,
         @Inject(PARAMETERS_SERVICE_TOKEN)
         private readonly parameters: IParametersService,
-        private readonly refresh: RefreshCodeAreaRiskMapService,
+        @Inject(REFRESH_CODE_AREA_RISK_MAP_SERVICE_TOKEN)
+        private readonly refresh: IRefreshCodeAreaRiskMapService,
         private readonly locks: DistributedLockService,
     ) {}
 
