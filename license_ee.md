@@ -24,7 +24,7 @@ You may view, modify, and test the Enterprise Code locally for evaluation withou
 
 ## Contributions
 
-You may fork this repository on a public code hosting service and modify the Enterprise Code in that fork in order to submit the changes to Kodus as a pull request or patch. This permission does not cover deploying the modified Enterprise Code or using it outside the evaluation permission above.
+You may fork this repository on a public code hosting service and modify the Enterprise Code in that fork in order to submit the changes to Kodus as a pull request or patch. A fork may contain Enterprise Code only while it is used to prepare or submit contributions to Kodus. This permission does not cover deploying the modified Enterprise Code or using it outside the evaluation permission above.
 
 By submitting a contribution that changes the Enterprise Code, you grant Kodus a perpetual, worldwide, non-exclusive, royalty-free, irrevocable license to use, modify, distribute, sublicense, and license that contribution under any terms, including this license.
 
