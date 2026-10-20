@@ -1,0 +1,200 @@
+{
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims any email error (e.g. uniqueness) is pushed into rejectedEmails; no rejected issue covers the over-broad guard."
+  }
+ ],
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Docs caution claims operator fails without the feature but no code enforces it; no rejected issue covers this."
+  },
+  {
+   "id": "V2",
+   "match": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Same claim: recreate exit code changed 4->3 with 4 reused for feature-disabled, breaking scripts."
+  }
+ ],
+ "authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "authzservice-improve-authz-caching-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Same claim: List now serves stale cached permissions where it previously always queried the DB."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Denial cache key omits identity type so anonymous and render service (both UID 0) collide; distinct cause from listed denial-cache claims."
+  }
+ ],
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+  {
+   "id": "V2",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#prod-01",
+   "newGroup": null,
+   "reason": "Same claim: Delete cached data offered for delegation credentials because hasCache lacks delegationCredentialId check."
+  }
+ ],
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": [
+  {
+   "id": "V1",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#10",
+   "newGroup": null,
+   "reason": "Empty comment asserts no problem, same as the rejected no-problem comments."
+  }
+ ],
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims the exception handler completes the offset and drops the message (data loss); #08 claims the opposite (offset leaked, commits blocked)."
+  }
+ ],
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": [
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Missing login guard on unsubscribe -> NoMethodError for anonymous users; no rejected issue covers it."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Explicit render :show runs before canonical_url is set, dropping the canonical tag; different problem."
+  }
+ ],
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "V1",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#04",
+   "newGroup": null,
+   "reason": "Same claim: raw recovery codes serialized and sent to user storage in cleartext instead of hashed."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "disableCredentialType ignores recovery-codes type so removal is a no-op; no rejected issue covers it."
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "V2",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#13",
+   "newGroup": null,
+   "reason": "Same claim: hasPermission(client, scope) lacks resourceId filter, accepting permissions on other resources."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "getResourceName has no CLIENTS branch so client resources get null display names; not among rejected issues."
+  }
+ ],
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#23",
+   "newGroup": null,
+   "reason": "Same claim: `<%- end if %>` is invalid Ruby, template raises SyntaxError."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims the NOT NULL default column add rewrites/locks the posts table; #28 is about the default value meaning, different problem."
+  }
+ ],
+ "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": [
+  {
+   "id": "V2",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#opa-01",
+   "newGroup": null,
+   "reason": "Same claim: expected occurrence uses group_key val1 vs evaluated group_key, fingerprint mismatch fails the test."
+  }
+ ],
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "V4",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#12",
+   "newGroup": null,
+   "reason": "Same claim: plural *_ids hydration crashes on non-array values and keeps undefined entries for missing ids."
+  }
+ ],
+ "feature-localization-fallbacks-server-side-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Same claim: nil default_locale makes FallbackLocaleList#[] raise NoMethodError."
+  },
+  {
+   "id": "V2",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: ensure_loaded! reads/initializes @loaded_locales outside LOAD_MUTEX, racing with load_locale."
+  }
+ ],
+ "fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "V3",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Same claim: add_members/remove_member read params[:group_id] while the route supplies :id, ParameterMissing."
+  }
+ ],
+ "fixing-re-authentication-with-passkeys-keycloak": [
+  {
+   "id": "V1",
+   "match": "fixing-re-authentication-with-passkeys-keycloak#07",
+   "newGroup": null,
+   "reason": "Same claim: password page leaks the typed user's passkey credential IDs to unauthenticated visitors (enumeration)."
+  }
+ ],
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#14",
+   "newGroup": null,
+   "reason": "Same claim: metrics middleware fails the request with ErrPluginNotRegistered when plugin not in registry."
+  }
+ ],
+ "replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "V2",
+   "match": "replays-self-serve-bulk-delete-system-sentry#21",
+   "newGroup": null,
+   "reason": "Same claim: get_environment_info fetches recommended event per issue in the PR comment loop (N+1)."
+  },
+  {
+   "id": "V5",
+   "match": "replays-self-serve-bulk-delete-system-sentry#21",
+   "newGroup": null,
+   "reason": "Same claim: per-issue get_recommended_event in comment body is an N+1 query."
+  }
+ ],
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
+  {
+   "id": "V1",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#11",
+   "newGroup": null,
+   "reason": "Same claim: CLI default of 1 for flusher-processes makes per-shard auto mode unreachable."
+  },
+  {
+   "id": "V4",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#09",
+   "newGroup": null,
+   "reason": "Same claim: per-process buffer makes max-flush-segments scale with process count."
+  }
+ ]
+}

@@ -1,0 +1,388 @@
+{
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Length checked against total input size rather than remaining bytes; no rejected issue covers this."
+  },
+  {
+   "id": "V2",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: -1 from readLength reaches readInteger and causes NegativeArraySizeException / mishandled indefinite length."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Same as V1: readLength compares against total size instead of remaining bytes."
+  },
+  {
+   "id": "V4",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#03",
+   "newGroup": null,
+   "reason": "Same claim: indefinite-length -1 from readLength is mishandled (sequence parsed as empty)."
+  }
+ ],
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "rejectedEmails checked before OAuth email_valid; no rejected issue covers this ordering."
+  },
+  {
+   "id": "V3",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#kimi-01",
+   "newGroup": null,
+   "reason": "Same claim: nil email reaches email_in_restriction_setting? and raises NoMethodError."
+  }
+ ],
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": [
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Override-end boundary with strict isAfter claimed to let slots at the end through; not among rejected issues."
+  },
+  {
+   "id": "V8",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Opposite claim at the same boundary: slot at override end wrongly treated as unavailable; not among rejected issues."
+  }
+ ],
+ "advanced-sql-analytics-framework-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "advanced-sql-analytics-framework-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Same claim: enableSqlExpressions always returns false regardless of the flag."
+  }
+ ],
+ "authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "authzservice-improve-authz-caching-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Same claim: cached denial keeps blocking access granted within the TTL."
+  },
+  {
+   "id": "V3",
+   "match": "authzservice-improve-authz-caching-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Same claim: List serves stale cached permissions without requery."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Duplicate GetUserIdentifiers calls in Check; not among rejected issues."
+  }
+ ],
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+  {
+   "id": "V1",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#oph-02",
+   "newGroup": null,
+   "reason": "Same claim: immediate email reminder cancel on reschedule leaves the WorkflowReminder row undeleted/unflagged."
+  },
+  {
+   "id": "V6",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#12",
+   "newGroup": null,
+   "reason": "Same claim: immediateDelete branch cancels in SendGrid without deleting or marking the row."
+  }
+ ],
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+  {
+   "id": "V1",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#kimip-01",
+   "newGroup": null,
+   "reason": "Same claim: lookup restricted to userId rejects team-owned credentials."
+  }
+ ],
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": [
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "_is_error_focused_query reads request.GET instead of the executed query; not among rejected issues."
+  }
+ ],
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "join() ignores timeout and calls close(); not among rejected issues (19 is about commit threads after factory shutdown)."
+  },
+  {
+   "id": "V3",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#prod-01",
+   "newGroup": null,
+   "reason": "Same claim: committable-offset computation scans the whole offset window, costly on large gaps."
+  }
+ ],
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": [
+  {
+   "id": "V4",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Same claim: per-topic unsubscribe URL in emails is relative."
+  },
+  {
+   "id": "V5",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#kimi-01",
+   "newGroup": null,
+   "reason": "Same claim: unsubscribe response serializes the stale notification level because the TopicView was built before the update."
+  }
+ ],
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "V1",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#04",
+   "newGroup": null,
+   "reason": "Same claim: recovery codes stored raw/unhashed in user storage."
+  },
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "hasRecoveryCodes skips translateUserName; not among rejected issues."
+  }
+ ],
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "V1",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#opa-02",
+   "newGroup": null,
+   "reason": "Same claim: getForLogin accumulates all organizationIds in one entry per mode, rebuilt/copied on each new org."
+  },
+  {
+   "id": "V2",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#opa-02",
+   "newGroup": null,
+   "reason": "Same claim as V1: per-mode entry grows with organizations and is copied on each new searchKey."
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "V1",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02",
+   "newGroup": null,
+   "reason": "Same claim: with V1 and V2 enabled, ClientRemovedEvent calls throwing setPermissionsEnabled, failing client deletion."
+  }
+ ],
+ "anonymous-add-configurable-device-limit-grafana-codex": [
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Missing panic recovery around synchronous TagDevice; not among rejected issues."
+  },
+  {
+   "id": "V5",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#opa-03",
+   "newGroup": null,
+   "reason": "Same claim: RowsAffected()==0 on MySQL for unchanged rows wrongly denies existing devices."
+  },
+  {
+   "id": "V6",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: ProvideAnonDBStore int64 parameter still wired in wire.go breaks wire generation."
+  }
+ ],
+ "dual-storage-architecture-grafana-codex": [
+  {
+   "id": "V6",
+   "match": "dual-storage-architecture-grafana-codex#kimi-01",
+   "newGroup": null,
+   "reason": "Same claim: unbounded goroutine per mode-3 write."
+  },
+  {
+   "id": "V13",
+   "match": "dual-storage-architecture-grafana-codex#kimi-01",
+   "newGroup": null,
+   "reason": "Same claim: unbounded goroutine per mode-3 write."
+  }
+ ],
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: `end if` in best.html.erb is invalid Ruby."
+  },
+  {
+   "id": "V4",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#20",
+   "newGroup": null,
+   "reason": "Same claim: import_remote passes unvalidated URL to Kernel#open, allowing command execution."
+  },
+  {
+   "id": "V6",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Same claim: embed.js appendChild on null when #discourse-comments is missing."
+  },
+  {
+   "id": "V7",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#26",
+   "newGroup": null,
+   "reason": "Same claim: postMessage targetOrigin is the full referer URL, dropping the resize message."
+  }
+ ],
+ "feat-2fa-backup-codes-cal-com": [
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Fully used backup codes (array of nulls) never trigger MissingBackupCodes; not among rejected issues."
+  },
+  {
+   "id": "V8",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "useState([]) infers never[] causing a type error; not among rejected issues."
+  }
+ ],
+ "feature-automatically-downsize-large-images-discourse-cursor": [
+  {
+   "id": "V5",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Same claim: API URL download limit hardcoded to 10 MB instead of max_image_size_kb."
+  },
+  {
+   "id": "V6",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#kimi-01",
+   "newGroup": null,
+   "reason": "Same claim: downsize uses the same path as input and output, corrupting the upload."
+  }
+ ],
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "save_host dereferences missing embeddable_host param; not among rejected issues."
+  },
+  {
+   "id": "V6",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-02",
+   "newGroup": null,
+   "reason": "Same claim: nil category passed when no embeddable host matches, dropping embed_category default."
+  }
+ ],
+ "feature-localization-fallbacks-server-side-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Same claim: nil default_locale makes FallbackLocaleList#[] raise NoMethodError."
+  },
+  {
+   "id": "V3",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Same claim: nil default_locale makes FallbackLocaleList#[] raise NoMethodError."
+  }
+ ],
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Calendar interface createEvent signature not updated in implementers; not among rejected issues."
+  }
+ ],
+ "fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "remove_member deletes then group.save may fail returning 422; not among rejected issues."
+  },
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "removeMember confirm callback does not return/handle the promise; not among rejected issues."
+  },
+  {
+   "id": "V6",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "addMembers does not clear usernames after success; not among rejected issues."
+  }
+ ],
+ "github-oauth-security-enhancement-sentry": [
+  {
+   "id": "V1",
+   "match": "github-oauth-security-enhancement-sentry#prod-01",
+   "newGroup": null,
+   "reason": "Same claim: token exchange omits redirect_uri."
+  }
+ ],
+ "implement-access-token-context-encoding-framework-keycloak": [
+  {
+   "id": "V3",
+   "match": "implement-access-token-context-encoding-framework-keycloak#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: getShouldUseLightweightToken dereferences the session context client, NPE when unset."
+  }
+ ],
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": [
+  {
+   "id": "V9",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#05",
+   "newGroup": null,
+   "reason": "Same claim: team branch only checks membership, not admin rights."
+  }
+ ],
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Same claim: factory mutates a shared instance next field, racing between chains."
+  },
+  {
+   "id": "V2",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#09",
+   "newGroup": null,
+   "reason": "Same claim: integer division truncates millisecond durations before float conversion."
+  }
+ ],
+ "sms-workflow-reminder-retry-count-tracking-cal-com": [
+  {
+   "id": "V2",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#kimi-01",
+   "newGroup": null,
+   "reason": "Same claim: catch increments retryCount for any error in the try block, not only send failures."
+  },
+  {
+   "id": "V7",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#kimi-01",
+   "newGroup": null,
+   "reason": "Same claim: catch increments retryCount for any error, including post-send DB update failures."
+  }
+ ],
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Subset SpansBuffer changes the shard modulus so routing breaks; not among rejected issues."
+  },
+  {
+   "id": "V5",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#09",
+   "newGroup": null,
+   "reason": "Same claim: per-process buffers make max-flush-segments a per-process cap."
+  }
+ ]
+}

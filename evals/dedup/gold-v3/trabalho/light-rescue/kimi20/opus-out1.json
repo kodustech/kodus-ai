@@ -1,0 +1,828 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "id": "V1",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Missing optional chaining on mainHostDestinationCalendar.integration throws for null/empty destinationCalendar in the Meet fallback."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims non-updated createEvent implementations break compilation; TS allows fewer parameters, and this is not the Office365/Lark ignored-credentialId issue."
+  },
+  {
+   "id": "V3",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#12",
+   "newGroup": null,
+   "reason": "updateLocation stores externalId/credentialId from updateEvent results that never carry them."
+  },
+  {
+   "id": "V4",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#04",
+   "newGroup": null,
+   "reason": "Inverted IS_TEAM_BILLING_ENABLED condition for organization slug."
+  },
+  {
+   "id": "V5",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#13",
+   "newGroup": null,
+   "reason": "Recurring cancellation deletes only the first _calendar reference per booking, leaving other hosts events."
+  },
+  {
+   "id": "V6",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#10",
+   "newGroup": null,
+   "reason": "Per-host credential findUnique inside the loop instead of one batched query."
+  },
+  {
+   "id": "V7",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "newGroup": null,
+   "reason": "destinationCalendar null makes the optional push drop team members destination calendars."
+  },
+  {
+   "id": "V8",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#15",
+   "newGroup": null,
+   "reason": "Fallback createEvent call omits destination.externalId, so reference stores undefined externalCalendarId."
+  }
+ ],
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "join() ignoring its timeout and delegating to close() is a different problem from the shutdown ordering issue."
+  },
+  {
+   "id": "V2",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#muse13-02",
+   "newGroup": null,
+   "reason": "FilteredPayload passed to decode_payload raises via assert and goes through the error path."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Linear O(window) scan under lock in get_committable_offsets is a performance concern not in the golden set."
+  },
+  {
+   "id": "V4",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10",
+   "newGroup": null,
+   "reason": "close() stops the commit thread before workers drain, so finished work is not committed and is replayed."
+  },
+  {
+   "id": "V5",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "newGroup": null,
+   "reason": "Unbounded queues with no backpressure let memory grow without limit."
+  }
+ ],
+ "add-guest-management-functionality-to-existing-bookings-cal-com": [
+  {
+   "id": "V1",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "newGroup": null,
+   "reason": "isTeamAdminOrOwner uses && so team admins are rejected."
+  },
+  {
+   "id": "V2",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "newGroup": null,
+   "reason": "Lowercased blacklist compared against raw guest emails lets case variants bypass it."
+  },
+  {
+   "id": "V3",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#03",
+   "newGroup": null,
+   "reason": "No server-side dedup of guests array inserts duplicate attendees."
+  },
+  {
+   "id": "V4",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "newGroup": null,
+   "reason": "Unfiltered guests list passed to sendAddGuestsEmails sends existing attendees a scheduled confirmation."
+  },
+  {
+   "id": "V5",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#08",
+   "newGroup": null,
+   "reason": "EventManager built from requesting user credentials, so organizer calendar is not updated when a non-organizer adds guests."
+  },
+  {
+   "id": "V6",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#kimip-02",
+   "newGroup": null,
+   "reason": "Adding guests ignores seatsPerTimeSlot and can exceed seat capacity."
+  }
+ ],
+ "dual-storage-architecture-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage.Create failure recorded with recordLegacyDuration."
+  },
+  {
+   "id": "V2",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage.Update failure recorded with recordLegacyDuration."
+  },
+  {
+   "id": "V3",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Legacy DeleteCollection goroutine records recordStorageDuration instead of legacy."
+  },
+  {
+   "id": "V4",
+   "match": "dual-storage-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Delete installs base d.Log instead of the enriched logger in context."
+  },
+  {
+   "id": "V5",
+   "match": "dual-storage-architecture-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Legacy.Update gets raw objInfo instead of wrapper with the stored object, so legacy can diverge."
+  },
+  {
+   "id": "V6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Unbounded goroutine spawning for async legacy writes; no golden issue covers goroutine count/resource exhaustion."
+  },
+  {
+   "id": "V7",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage.Create failure recorded with recordLegacyDuration."
+  },
+  {
+   "id": "V8",
+   "match": "dual-storage-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Delete installs base d.Log instead of the enriched logger in context."
+  },
+  {
+   "id": "V9",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Delete success path uses the object name as the kind label."
+  },
+  {
+   "id": "V10",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage.Update failure recorded with recordLegacyDuration."
+  },
+  {
+   "id": "V11",
+   "match": "dual-storage-architecture-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Legacy.Update gets raw objInfo instead of wrapper with the stored object."
+  },
+  {
+   "id": "V12",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Legacy DeleteCollection recorded with recordStorageDuration."
+  },
+  {
+   "id": "V13",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Unbounded goroutines for async legacy writes, same as V6."
+  }
+ ],
+ "feat-2fa-backup-codes-cal-com": [
+  {
+   "id": "V1",
+   "match": "feat-2fa-backup-codes-cal-com#01",
+   "newGroup": null,
+   "reason": "Backup-code login skips password check when any totpCode is sent."
+  },
+  {
+   "id": "V2",
+   "match": "feat-2fa-backup-codes-cal-com#04",
+   "newGroup": null,
+   "reason": "BackupCode.tsx default export named TwoFactor (copy-paste)."
+  },
+  {
+   "id": "V3",
+   "match": "feat-2fa-backup-codes-cal-com#17",
+   "newGroup": null,
+   "reason": "Backup codes compared case-sensitively against lowercase hex at login."
+  },
+  {
+   "id": "V4",
+   "match": "feat-2fa-backup-codes-cal-com#17",
+   "newGroup": null,
+   "reason": "Same case-sensitive backup-code matching, in the disable endpoint."
+  },
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Consumed codes become null so MissingBackupCodes is never raised; not in the golden set."
+  },
+  {
+   "id": "V6",
+   "match": "feat-2fa-backup-codes-cal-com#01",
+   "newGroup": null,
+   "reason": "Backup-code branch bypasses password verification with a dummy totpCode."
+  },
+  {
+   "id": "V7",
+   "match": "feat-2fa-backup-codes-cal-com#07",
+   "newGroup": null,
+   "reason": "Non-atomic read-modify-write lets a backup code be used twice concurrently."
+  },
+  {
+   "id": "V8",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Claims useState([]) infers never[] and breaks the build; not a golden issue."
+  },
+  {
+   "id": "V9",
+   "match": "feat-2fa-backup-codes-cal-com#17",
+   "newGroup": null,
+   "reason": "Case-sensitive backup-code comparison at login."
+  },
+  {
+   "id": "V10",
+   "match": "feat-2fa-backup-codes-cal-com#17",
+   "newGroup": null,
+   "reason": "Case-sensitive backup-code comparison in disable endpoint."
+  }
+ ],
+ "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "desktop topic-post .topic-meta-data h5 a light value inverted to 70%."
+  },
+  {
+   "id": "V2",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "mobile modal .custom-message-length light value inverted to 30%."
+  },
+  {
+   "id": "V3",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "mobile topic-post h3 light value changed from 20% to 50%."
+  },
+  {
+   "id": "V4",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "desktop user.scss .name light value changed from 30% to 50%."
+  },
+  {
+   "id": "V5",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "mobile user.scss .name light value changed from 30% to 50%."
+  },
+  {
+   "id": "V6",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "desktop topic-post line 291 light value inverted."
+  },
+  {
+   "id": "V7",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "mobile modal line 102 light value inverted."
+  },
+  {
+   "id": "V8",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "mobile topic-post line 182 light value changed 20%->50%."
+  },
+  {
+   "id": "V9",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "desktop user.scss line 522 light value 30%->50%."
+  },
+  {
+   "id": "V10",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "mobile user.scss line 497 light value 30%->50%."
+  }
+ ],
+ "github-oauth-security-enhancement-sentry": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Missing redirect_uri in token exchange; not in the golden set."
+  },
+  {
+   "id": "V2",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "Unchecked metadata[sender][login] raises KeyError."
+  },
+  {
+   "id": "V3",
+   "match": "github-oauth-security-enhancement-sentry#05",
+   "newGroup": null,
+   "reason": "Token exchange network errors not handled, surface as 500."
+  },
+  {
+   "id": "V4",
+   "match": "github-oauth-security-enhancement-sentry#05",
+   "newGroup": null,
+   "reason": "get_user_info errors not handled in the new OAuth step, surface as 500."
+  },
+  {
+   "id": "V5",
+   "match": "github-oauth-security-enhancement-sentry#03",
+   "newGroup": null,
+   "reason": "OAuth state is static pipeline.signature, no CSRF protection."
+  }
+ ],
+ "fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Pager uses floor(count/limit)+1, extra empty page at exact multiples."
+  },
+  {
+   "id": "V2",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02",
+   "newGroup": null,
+   "reason": "Unbounded client-controlled limit on members endpoint."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Unnecessary group.save after delete returning 422 is not a golden issue."
+  },
+  {
+   "id": "V4",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#12",
+   "newGroup": null,
+   "reason": "remove_member spec uses PUT while route maps DELETE."
+  },
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "removeMember callback does not return/handle the promise; not in golden set."
+  },
+  {
+   "id": "V6",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Client not clearing usernames after add; distinct from server-side duplicate-member handling."
+  },
+  {
+   "id": "V7",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "findMembers returns undefined on some paths (inconsistent return)."
+  },
+  {
+   "id": "V8",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-01",
+   "newGroup": null,
+   "reason": "add_members does not skip existing members, hits unique index."
+  },
+  {
+   "id": "V9",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#musep-01",
+   "newGroup": null,
+   "reason": "group.users.delete skips callbacks so user_count is not decremented."
+  },
+  {
+   "id": "V10",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#kimip-01",
+   "newGroup": null,
+   "reason": "One User query per username in add_members."
+  }
+ ],
+ "sms-workflow-reminder-retry-count-tracking-cal-com": [
+  {
+   "id": "V1",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "retryCount>1 deleteMany branch not scoped to SMS."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Catch increments retryCount for DB-update failures in the try block; distinct from the unguarded update in catch (04)."
+  },
+  {
+   "id": "V3",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#e2b-01",
+   "newGroup": null,
+   "reason": "SMS lock (undefined return) counted as failure and reminders deleted after two runs."
+  },
+  {
+   "id": "V4",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#07",
+   "newGroup": null,
+   "reason": "No index supporting the retryCount OR arm of cleanup delete."
+  },
+  {
+   "id": "V5",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "retryCount branch deletes reminders of any method."
+  },
+  {
+   "id": "V6",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#e2b-01",
+   "newGroup": null,
+   "reason": "Lock return treated as scheduling failure, reminders deleted."
+  },
+  {
+   "id": "V7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Catch increments retryCount when the post-send DB update fails, same as V2."
+  },
+  {
+   "id": "V8",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#07",
+   "newGroup": null,
+   "reason": "retryCount filter has no supporting index."
+  }
+ ],
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "readLength validates against total array size instead of remaining bytes; not in golden set."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Indefinite-length (-1) not rejected by readLength; not in golden set."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Same readLength vs remaining bytes check as V1."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Same indefinite-length handling as V2."
+  }
+ ],
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": [
+  {
+   "id": "V1",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+   "newGroup": null,
+   "reason": "OptimizedCursorPaginator numeric key handling with datetime order_by raises TypeError / wrong cursor type."
+  },
+  {
+   "id": "V2",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Negative offset passed into Django queryset slicing raises."
+  },
+  {
+   "id": "V3",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+   "newGroup": null,
+   "reason": "math.floor/ceil on datetime in audit log paginator."
+  },
+  {
+   "id": "V4",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+   "newGroup": null,
+   "reason": "Negative-offset branch slices queryset with negative start."
+  },
+  {
+   "id": "V5",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#07",
+   "newGroup": null,
+   "reason": "member.has_global_access dereferenced when member is None."
+  }
+ ],
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "immediateDelete path leaves orphaned WorkflowReminder rows on reschedule; the golden naming issue 11 is a different problem."
+  },
+  {
+   "id": "V2",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+   "newGroup": null,
+   "reason": "Reminder cancel helpers called in forEach without await on cancellation."
+  },
+  {
+   "id": "V3",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+   "newGroup": null,
+   "reason": "Reminder cancel helpers called in forEach without await on reschedule."
+  },
+  {
+   "id": "V4",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+   "newGroup": null,
+   "reason": "Un-awaited cancel helpers in handleCancelBooking."
+  },
+  {
+   "id": "V5",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+   "newGroup": null,
+   "reason": "Un-awaited cancel helpers in handleNewBooking reschedule."
+  },
+  {
+   "id": "V6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "immediateDelete branch never updates/deletes the reminder row, same as V1."
+  }
+ ],
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "id": "V1",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+   "newGroup": null,
+   "reason": "max_segment_spans accepted but no longer enforced; hardcoded 1000 in Lua."
+  },
+  {
+   "id": "V2",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#05",
+   "newGroup": null,
+   "reason": "zpopmin can evict the root span while has_root flag remains set."
+  },
+  {
+   "id": "V3",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#03",
+   "newGroup": null,
+   "reason": "ZUNIONSTORE without AGGREGATE sums duplicate scores."
+  },
+  {
+   "id": "V4",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#05",
+   "newGroup": null,
+   "reason": "Timestamp-only zpopmin eviction can drop root/ancestor spans."
+  },
+  {
+   "id": "V5",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+   "newGroup": null,
+   "reason": "max_segment_spans silently ignored."
+  }
+ ],
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Plaintext storage of recovery codes in test provider; not in golden set."
+  },
+  {
+   "id": "V2",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#01",
+   "newGroup": null,
+   "reason": "Recovery code validated without consuming it, allowing replay."
+  },
+  {
+   "id": "V3",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#02",
+   "newGroup": null,
+   "reason": "Reconstructed recovery credential lacks the stored id."
+  },
+  {
+   "id": "V4",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#06",
+   "newGroup": null,
+   "reason": "removeStoredCredentialById does not remove the externally stored recovery credential."
+  },
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "hasRecoveryCodes skips translateUserName; not in golden set."
+  }
+ ],
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "website_name not untrusted, leaks TL0 website to anonymous viewers."
+  },
+  {
+   "id": "V2",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Label-based domain comparison treats hosts under multi-label public suffixes as same domain."
+  }
+ ],
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "should_block? read-modify-write of match_count loses concurrent increments."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "rejectedEmails check before OAuth email_valid; not in golden set."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "nil email raises in email_in_restriction_setting?; not in golden set."
+  },
+  {
+   "id": "V4",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Case-sensitive BlockedEmail lookup bypassable by case changes."
+  },
+  {
+   "id": "V5",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Stats update in validator inflates match_count on double validation."
+  }
+ ],
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "getForLogin cache entry grows unbounded with organizations; not in golden set."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Same unbounded per-org searchKey growth as V1."
+  },
+  {
+   "id": "V3",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Cleanup registers literal alias \"alias\" instead of created aliases."
+  },
+  {
+   "id": "V4",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#snapi-01",
+   "newGroup": null,
+   "reason": "remove() always queries getByAlias, extra DB lookup."
+  }
+ ],
+ "unified-storage-performance-optimizations-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "unified-storage-performance-optimizations-grafana-codex#01",
+   "newGroup": null,
+   "reason": "BuildIndex locks only the assignment, so concurrent builds of the same key overwrite each other."
+  },
+  {
+   "id": "V2",
+   "match": "unified-storage-performance-optimizations-grafana-codex#02",
+   "newGroup": null,
+   "reason": "TotalDocs iterates cache without lock concurrently with map writes."
+  },
+  {
+   "id": "V3",
+   "match": "unified-storage-performance-optimizations-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Concurrent BuildIndex for the same key overwrites the first index."
+  },
+  {
+   "id": "V4",
+   "match": "unified-storage-performance-optimizations-grafana-codex#02",
+   "newGroup": null,
+   "reason": "TotalDocs unlocked iteration races with map write (incl. the startup log call)."
+  }
+ ],
+ "authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Stale denial cache not cleared after a grant; not in golden set."
+  },
+  {
+   "id": "V2",
+   "match": "authzservice-improve-authz-caching-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Denial cache key joins name/parent with _ so keys collide."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "List uses cached permissions without requery fallback; not in golden set."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "GetUserIdentifiers can be called twice on failure; differs from per-resource DB reload (05)."
+  },
+  {
+   "id": "V5",
+   "match": "authzservice-improve-authz-caching-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Unescaped _ separators make denial cache keys collide."
+  }
+ ],
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "-ms-align-items is not a real property."
+  },
+  {
+   "id": "V2",
+   "match": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "-ms-align-items emitted by align-items mixin is invalid."
+  },
+  {
+   "id": "V3",
+   "match": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#pf-gpt-C1",
+   "newGroup": null,
+   "reason": "Flex conversion of .small-action makes the edit/delete buttons lose right alignment."
+  }
+ ],
+ "async-import-of-the-appstore-packages-cal-com": [
+  {
+   "id": "V1",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Async forEach in handleCancelBooking recurring branch not awaited."
+  },
+  {
+   "id": "V2",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Async forEach callbacks after async getCalendar not awaited in reschedule handler (bookings.tsx)."
+  },
+  {
+   "id": "V3",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "reschedule.ts async forEach not awaited, errors escape try/catch."
+  },
+  {
+   "id": "V4",
+   "match": "async-import-of-the-appstore-packages-cal-com#02",
+   "newGroup": null,
+   "reason": "Same fire-and-forget forEach in reschedule.ts."
+  }
+ ],
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": [
+  {
+   "id": "V1",
+   "match": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#kimi-03",
+   "newGroup": null,
+   "reason": "Widened public options let team scope without teamId silently yield empty results."
+  }
+ ],
+ "frontend-asset-optimization-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "frontend-asset-optimization-grafana-codex#sncc-02",
+   "newGroup": null,
+   "reason": "Dev mode bypasses cache but every request serializes on the global write lock."
+  },
+  {
+   "id": "V2",
+   "match": "frontend-asset-optimization-grafana-codex#01",
+   "newGroup": null,
+   "reason": "No cache re-check after acquiring the write lock; concurrent callers reload manifest."
+  }
+ ]
+}

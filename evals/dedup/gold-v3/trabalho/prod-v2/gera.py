@@ -76,9 +76,11 @@ lin = []
 for m, k2, nome, via, _ in MODELOS:
     v1 = Q1[f'{m}|producao']; v2 = Q2.get(k2); b = best(v1, v2); base = v2 if b == 'v2' else v1
     rows = [('Produção V1', v1, b == 'v1', False), ('Produção V2', v2, b == 'v2', False), ('Novo light', Q1[f'{m}|light'], False, True)]
-    if m != 'sonnet-sdk': rows.append(('Novo light + rescue', Q3.get(k2), False, True))
+    if m != 'sonnet-sdk': rows.append(('Novo light + rescue <span class="tag t12">12</span>', Q3.get(k2), False, True))
+    if m in ('deepseek', 'kimi'): rows.append(('Novo light + rescue <span class="tag t20">20</span>', Q3.get(k2 + '20'), False, True))
     rows.append(('Novo heavy', Q1[f'{m}|heavy'], False, True))
-    if m != 'sonnet-sdk': rows.append(('Novo heavy + rescue', Q4.get(k2), False, True))
+    if m != 'sonnet-sdk': rows.append(('Novo heavy + rescue <span class="tag t12">12</span>', Q4.get(k2), False, True))
+    if m in ('deepseek', 'kimi'): rows.append(('Novo heavy + rescue <span class="tag t20">20</span>', Q4.get(k2 + '20'), False, True))
     for j, (vn, q, destaque, cmp) in enumerate(rows):
         cls = ' '.join(x for x in ('gtop' if j == 0 else '', 'best' if destaque else '') if x)
         head = f'<th rowspan="{len(rows)}" class="mod">{nome}<span class="via">{via}</span></th>' if j == 0 else ''
@@ -211,6 +213,8 @@ html = f'''<title>Finder no gold v3</title>
 <div><b>FP hallucination</b><p>O fato que o comentário alega é falso.</p></div>
 </div>
 <p class="leg"><span class="sw"></span>Melhor produção de cada modelo: a de maior recall (F2 desempata). As variações do novo light e do novo heavy são contra ela.</p>
+<p class="leg"><span class="tag t12">12</span><span>Limite de passos do novo light padrão: no máximo 12 passos por passada, em todo PR, sem exceção.</span></p>
+<p class="leg"><span class="tag t20">20</span><span>Mesma regra de passos da produção: 20 passos, mais 0,5 por arquivo alterado acima de 8, até 100.</span></p>
 <h2>Resultado do finder</h2>
 <div class="scroll"><table class="t1"><thead><tr><th>Modelo</th><th>Versão</th><th>Recall</th><th>Precisão</th><th>F1</th><th>F2</th><th>TPs achados / total</th><th>Comentários</th><th>FP nit / alucinação</th></tr></thead><tbody>
 {placar}

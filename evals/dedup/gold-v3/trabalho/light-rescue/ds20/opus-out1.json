@@ -1,0 +1,532 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "id": "V1",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Meet fallback dereferences mainHostDestinationCalendar.integration without optional chaining; throws when destinationCalendar is null/empty."
+  },
+  {
+   "id": "V2",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "updateEvent find compares externalId against the absent externalCalendarId, so the destination calendar is never found."
+  },
+  {
+   "id": "V3",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Same self-referential externalCalendarId lookup in deleteEvent, so the destination calendar is never used."
+  },
+  {
+   "id": "V4",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#prod-01",
+   "newGroup": null,
+   "reason": "Hangout-link events.patch receives an undefined calendarId when no destination calendar is selected."
+  },
+  {
+   "id": "V5",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "newGroup": null,
+   "reason": "Optional push on a null destinationCalendar drops the other hosts' destination calendars in collective events."
+  },
+  {
+   "id": "V6",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#04",
+   "newGroup": null,
+   "reason": "Inverted IS_TEAM_BILLING_ENABLED condition for the organization slug."
+  },
+  {
+   "id": "V7",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#09",
+   "newGroup": null,
+   "reason": "Video booking references lose their credentialId, so cancellation cannot delete the meeting."
+  }
+ ],
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+  {
+   "id": "V1",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "newGroup": null,
+   "reason": "Unbounded work queues give no backpressure, memory grows without limit."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Submit-path exception handler completes the offset of a message that failed before enqueueing; distinct from the worker finally block (#03) and the dead-pool lifecycle (#11)."
+  },
+  {
+   "id": "V3",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#05",
+   "newGroup": null,
+   "reason": "Error-handling test sleeps 0.2s while commits run every 1s, so it never observes whether the failed offset is committed."
+  },
+  {
+   "id": "V4",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03",
+   "newGroup": null,
+   "reason": "Worker finally block completes the offset even when processing raised, committing failed messages."
+  }
+ ],
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "record_for_host lowercases the column but not the bound URI host, so mixed-case hosts fail."
+  },
+  {
+   "id": "V2",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "update/destroy do not nil-check where(id:).first, giving NoMethodError/500."
+  },
+  {
+   "id": "V3",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Migration dereferences execute(...)[0] without guarding empty results."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "store.js _hydrateEmbedded maps *_ids without array check; unrelated to any golden issue."
+  }
+ ],
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "--flusher-processes defaults to 1 so per-shard fallback is unreachable; #06 is about 0 being treated as falsy, a different problem."
+  },
+  {
+   "id": "V2",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "newGroup": null,
+   "reason": "join() breaks on deadline and skips terminating remaining processes."
+  },
+  {
+   "id": "V3",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08",
+   "newGroup": null,
+   "reason": "Cluster-wide memory INFO queried once per flusher buffer on every submit."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Per-process SpansBuffer changes the effective max-flush-segments cap; no golden issue covers it."
+  },
+  {
+   "id": "V5",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "isinstance(process, multiprocessing.Process) is false for SpawnProcess, so hung flushers are never killed."
+  }
+ ],
+ "notification-rule-processing-engine-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "notification-rule-processing-engine-grafana-codex#07",
+   "newGroup": null,
+   "reason": "GrafanaRuleListItem rendered without key prop."
+  },
+  {
+   "id": "V2",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "Silence drawer still gated on ruler rule, so Silence does nothing in list view."
+  },
+  {
+   "id": "V3",
+   "match": "notification-rule-processing-engine-grafana-codex#04",
+   "newGroup": null,
+   "reason": "isFederated hardcoded false; federated rules become editable/deletable."
+  },
+  {
+   "id": "V4",
+   "match": "notification-rule-processing-engine-grafana-codex#03",
+   "newGroup": null,
+   "reason": "useAllGrafanaPromRuleAbilities with skipToken reports Duplicate supported, ORed into canDuplicate for datasource rules."
+  },
+  {
+   "id": "V5",
+   "match": "notification-rule-processing-engine-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Delete menu item still requires rulerRule, which list-view rules lack."
+  }
+ ],
+ "add-html-sanitizer-for-translated-message-resources-keycloak": [
+  {
+   "id": "V1",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Lithuanian TOTP step replaced with Italian text."
+  },
+  {
+   "id": "V2",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+   "newGroup": null,
+   "reason": "zh_CN totpStep1 written in Traditional Chinese."
+  },
+  {
+   "id": "V3",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+   "newGroup": null,
+   "reason": "Overlapping prefix/suffix trimming makes substring throw StringIndexOutOfBoundsException."
+  },
+  {
+   "id": "V4",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#10",
+   "newGroup": null,
+   "reason": "error-invalid-multivalued-size switched to MessageFormat syntax in admin bundle; i18next shows literal placeholders."
+  },
+  {
+   "id": "V5",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#10",
+   "newGroup": null,
+   "reason": "Same MessageFormat-vs-i18next placeholder break in the account bundle."
+  }
+ ],
+ "github-oauth-security-enhancement-sentry": [
+  {
+   "id": "V1",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "metadata[\"sender\"][\"login\"] indexed without checking sender exists, KeyError."
+  },
+  {
+   "id": "V2",
+   "match": "github-oauth-security-enhancement-sentry#03",
+   "newGroup": null,
+   "reason": "OAuth state is static pipeline.signature, no CSRF protection."
+  },
+  {
+   "id": "V3",
+   "match": "github-oauth-security-enhancement-sentry#05",
+   "newGroup": null,
+   "reason": "Token exchange and user lookup not wrapped in error handling, 500s."
+  }
+ ],
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": [
+  {
+   "id": "V1",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03",
+   "newGroup": null,
+   "reason": "Date-override branch returns true before busy-times check, allowing double booking."
+  },
+  {
+   "id": "V2",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "Working-hours end computed from slotStartTime instead of slotEndTime."
+  },
+  {
+   "id": "V3",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "newGroup": null,
+   "reason": "Dayjs objects compared with ===, always false."
+  },
+  {
+   "id": "V4",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-03",
+   "newGroup": null,
+   "reason": "Multiple same-day overrides: slot rejected when outside any one of them."
+  },
+  {
+   "id": "V5",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#04",
+   "newGroup": null,
+   "reason": "Working-hours check rejects when outside any block, breaking split schedules."
+  }
+ ],
+ "feature-automatically-downsize-large-images-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Second downsize definition overrides the width/height one; ResizeEmoji raises ArgumentError."
+  },
+  {
+   "id": "V2",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Five 80% reductions do not guarantee reaching the size limit."
+  },
+  {
+   "id": "V3",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Up to five synchronous ImageMagick runs per upload on the request thread (CPU/DoS)."
+  },
+  {
+   "id": "V4",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Same downsize redefinition breaking ResizeEmoji."
+  }
+ ],
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Empty comment with no file or text; describes no problem."
+  },
+  {
+   "id": "V2",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#15",
+   "newGroup": null,
+   "reason": "Rewritten upsampled_count() column breaks transformAliasToInputFormat serialization reading count()."
+  }
+ ],
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+  {
+   "id": "V1",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+   "newGroup": null,
+   "reason": "updateManyByCredentialId with empty data does not bump updatedAt."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Delete-cache action shown for delegation calendars the user does not own; not in golden set."
+  },
+  {
+   "id": "V3",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#07",
+   "newGroup": null,
+   "reason": "macOS-only sed -i '' fails on GNU sed."
+  }
+ ],
+ "sms-workflow-reminder-retry-count-tracking-cal-com": [
+  {
+   "id": "V1",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#e2b-01",
+   "newGroup": null,
+   "reason": "Locked SMS sending counted as failure, reminder deleted after two runs."
+  },
+  {
+   "id": "V2",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#06",
+   "newGroup": null,
+   "reason": "Transient/rate-limit errors in catch increment retryCount, so reminders are deleted after two runs."
+  },
+  {
+   "id": "V3",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "retryCount > 1 OR arm not scoped to SMS method."
+  },
+  {
+   "id": "V4",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#07",
+   "newGroup": null,
+   "reason": "retryCount OR arm has no supporting index, cleanup may scan the table."
+  }
+ ],
+ "fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "totalPages floor(+1) adds phantom page when user_count is a multiple of limit."
+  },
+  {
+   "id": "V2",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-01",
+   "newGroup": null,
+   "reason": "add_members re-adds existing members, hitting the unique index."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Controller requires :group_id while routes provide :id; not in golden set."
+  }
+ ],
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "website_name bypasses the untrusted/restrict_user_fields guard, exposing TL0 website."
+  },
+  {
+   "id": "V2",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "include_website_name lacks the ? suffix AMS requires."
+  }
+ ],
+ "implement-access-token-context-encoding-framework-keycloak": [
+  {
+   "id": "V1",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Constructor null-checks grantType twice instead of rawTokenId."
+  },
+  {
+   "id": "V2",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "isAccessTokenId wrong substring offset and inverted comparison."
+  },
+  {
+   "id": "V3",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Same requireNonNull copy-paste defect."
+  },
+  {
+   "id": "V4",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Same inverted equals and substring(3,5) vs (4,6)."
+  }
+ ],
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "id": "V1",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#05",
+   "newGroup": null,
+   "reason": "zpopmin eviction can drop the root span."
+  },
+  {
+   "id": "V2",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+   "newGroup": null,
+   "reason": "max_segment_spans no longer enforced; cap hardcoded to 1000 in Lua."
+  },
+  {
+   "id": "V3",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#04",
+   "newGroup": null,
+   "reason": "Set-typed keys from previous release cause WRONGTYPE with sorted-set commands during rollout."
+  }
+ ],
+ "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": [
+  {
+   "id": "V1",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "MetricAlertDetectorHandler lacks abstract method implementations, TypeError on instantiation."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Test expected occurrence built with group key \"val1\" vs \"group_key\" fingerprint mismatch; different from #04 (mock ignores value)."
+  }
+ ],
+ "unified-storage-performance-optimizations-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "unified-storage-performance-optimizations-grafana-codex#01",
+   "newGroup": null,
+   "reason": "BuildIndex locks only cache assignment; concurrent builds of the same key."
+  },
+  {
+   "id": "V2",
+   "match": "unified-storage-performance-optimizations-grafana-codex#02",
+   "newGroup": null,
+   "reason": "TotalDocs iterates cache unlocked after event goroutine starts, concurrent map read/write."
+  }
+ ],
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": [
+  {
+   "id": "V1",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#01",
+   "newGroup": null,
+   "reason": "getSubGroupsCount returns null, violating never-null contract."
+  },
+  {
+   "id": "V2",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#03",
+   "newGroup": null,
+   "reason": "Stop flag skipped when a delete fails, leaving non-daemon thread polling."
+  },
+  {
+   "id": "V3",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "Test asserts without joining the reader thread, can pass despite NPE."
+  }
+ ],
+ "advanced-query-processing-architecture-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "advanced-query-processing-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "applyTemplateVariables before splitting and again on execution; ad hoc filters applied twice."
+  },
+  {
+   "id": "V2",
+   "match": "advanced-query-processing-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Same double interpolation in the shard split path."
+  }
+ ],
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#pf-gpt-C1",
+   "newGroup": null,
+   "reason": ".small-action-desc not flex:1, right-floated buttons no longer at the row edge."
+  },
+  {
+   "id": "V2",
+   "match": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Header flex item can not shrink, so long topic titles are not truncated and overflow."
+  }
+ ],
+ "feature-localization-fallbacks-server-side-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "nil default_locale.to_sym before compact; not in golden set."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "ensure_loaded! reads @loaded_locales outside the mutex; not in golden set."
+  }
+ ],
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Docs caution claims operator fails without rolling-updates feature, but no code enforces it."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "RECREATE_UPGRADE_EXIT_CODE renumbered 4->3, breaking scripts; golden issues are about tests."
+  }
+ ],
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Metrics middleware returns ErrPluginNotRegistered without calling next; not in golden set."
+  }
+ ],
+ "advanced-sql-analytics-framework-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "enableSqlExpressions returns false on both branches, rejecting all SQL expressions."
+  }
+ ]
+}

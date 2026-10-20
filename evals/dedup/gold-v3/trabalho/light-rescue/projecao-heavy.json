@@ -70,5 +70,29 @@
   "precisao": 15.1,
   "f1": 21.6,
   "f2": 29.2
+ },
+ "ds20": {
+  "comentarios": 566,
+  "comentariosLentes": 404,
+  "tp": 92,
+  "fpNit": 409,
+  "fpAlucinacao": 65,
+  "totalTp": 192,
+  "recall": 47.9,
+  "precisao": 16.3,
+  "f1": 24.3,
+  "f2": 34.5
+ },
+ "kimi20": {
+  "comentarios": 492,
+  "comentariosLentes": 253,
+  "tp": 83,
+  "fpNit": 360,
+  "fpAlucinacao": 49,
+  "totalTp": 192,
+  "recall": 43.2,
+  "precisao": 16.9,
+  "f1": 24.3,
+  "f2": 32.9
  }
 }

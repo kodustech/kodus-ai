@@ -10,6 +10,8 @@ TOTAL = sum(1 for v in cr.values() if v == 'TP')
 HV = {'ds': ('deepseek-v4.1-flash', 'deepseek-v4.1-flash', 'hv'), 'gpt': ('gpt-6.1-sol', 'gpt-6.1-sol', 'hv'),
       'sonnet': ('sonnet-5.5', 'sonnet-5.5@loop', 'hvsnloop'), 'opus': ('opus-5.5', 'opus-5.5@api', 'hvopa'),
       'muse': ('muse-spark-1.3', 'muse-spark-1.3@novo', 'hvmuse'), 'kimi': ('kimi-k2.7-code', 'kimi-k2.7-code@novo', 'hvkimi')}
+# <chave>20: a mesma rodada com a regra de passos da producao (RECALL_PROD_STEPS=1); as lentes M3 sao as mesmas.
+HV.update({'ds20': HV['ds'], 'kimi20': HV['kimi']})
 out = {}
 for k, (model, mapa, hv) in HV.items():
     W = f'{AQUI}/{k}'

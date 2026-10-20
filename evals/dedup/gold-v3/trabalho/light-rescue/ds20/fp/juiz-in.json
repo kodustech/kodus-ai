@@ -1,0 +1,1613 @@
+{
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "5f8a130277dbddc95d133cd2832be639baf89213",
+  "base": "e25638dab0d4b98f99c8fe8976ccaae8f4fb9db3",
+  "sugestoes": [
+   {
+    "id": "V3",
+    "file": "app/assets/javascripts/discourse/controllers/create_account_controller.js",
+    "lines": [
+     274,
+     276
+    ],
+    "texto": "WHAT: the guard `if (result.errors && result.errors.email && result.values)` is true for any error on the email attribute, not just a blocked one. WHY: the server returns `errors: user.errors.to_hash`, which includes the uniqueness error ('has already been taken'), so signing up with an already-registered but otherwise valid email pushes that email into `rejectedEmails`; every future attempt with that address then fails `emailValidation` with reason 'user.email.invalid', permanently showing a misleading validation error on a valid email. HOW: only add to `rejectedEmails` when the failure is actually a block (e.g. check the block message, or have the server return a specific flag/error code for blocked emails)."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#01",
+    "descricao": "Claims the rejected-email memory stores the server-normalised email, so it never matches the raw input on retry.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#03",
+    "descricao": "Claims the 'rejectedEmails.@each' dependent key does not observe pushes of plain strings, so the rejection is not shown until the email changes.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#06",
+    "descricao": "BlockedEmail.should_block? returns nil instead of false when the email has no record.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#09",
+    "descricao": "Claims EmailValidator dropped the email format check that the old User#email_validator performed, allowing invalid emails.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#kimi-01",
+    "descricao": "Claims EmailValidator#email_in_restriction_setting? raises NoMethodError when the email is nil.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#kimi-02",
+    "descricao": "Claims the blocked-email validator specs would still pass if the blocked-email branch were removed.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#kimip-01",
+    "descricao": "`rejectedEmails` is declared as an array literal on the controller prototype, so it is shared across instances and modal sessions; emails rejected once keep failing validation later. Initialize it per instance in `init`.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "62bf98939eda58f0d0a1a41a58aa6d4ecdc24dba",
+  "base": "8671f860469d6d95e54df3e13f77ebc401249489",
+  "sugestoes": [
+   {
+    "id": "V1",
+    "file": "docs/guides/operator/advanced-configuration.adoc",
+    "lines": [
+     446,
+     450
+    ],
+    "texto": "WHAT: The new CAUTION block tells users the Keycloak Operator will fail unless the preview feature `rolling-updates` is enabled, but no operator code enforces that feature. WHY: Grepping operator/src/main for ROLLING_UPDATES / isFeatureEnabled / Profile.Feature finds nothing \u2014 the only FeatureSpec usage is KeycloakDistConfigurator mapping `features` to the Keycloak container config, and UpgradeLogicFactory/UpdateSpec.findUpdateStrategy never read the feature \u2014 so the documented failure can never occur and users who omit the feature get no error, contradicting the caution (and the UpgradeTest had to enable the feature even though the operator does not require it). HOW: Add an explicit check in the operator upgrade path (e.g. in UpgradeLogicFactory/KeycloakController) that rejects the rolling strategy when the feature is disabled, or correct the documentation so it matches actual behavior."
+   },
+   {
+    "id": "V2",
+    "file": "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/compatibility/CompatibilityResult.java",
+    "lines": [
+     34,
+     35
+    ],
+    "texto": "WHAT: RECREATE_UPGRADE_EXIT_CODE is changed from 4 to 3 (its former value is reused for the new FEATURE_DISABLED code). WHY: The update-compatibility guide explicitly instructs users to build automation around the command's exit code, so any existing script that keys off exit code 4 to mean 'recreate upgrade required' will now see 3 and misinterpret the result (or miss that the feature is disabled and get 4). This is a silent break of a documented scriptable contract. HOW: Preserve backward compatibility by keeping the recreate code stable and allocating FEATURE_DISABLED a previously-unused value, or version/announce the exit-code change explicitly rather than silently renumbering."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#01",
+    "descricao": "Claims the rolling-updates feature is not enabled for the null update strategy in UpgradeTest, so that case tests the operator without the gated feature.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#02",
+    "descricao": "Claims RECREATE_UPGRADE_EXIT_CODE changed from 4 to 3 and 4 now means feature disabled, a breaking change that needs release notes.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#05",
+    "descricao": "Claims calling picocli.exit() for the disabled-feature exit code is incorrect because it calls System.exit directly.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#kimip-01",
+    "descricao": "Claims `Profile.isFeatureEnabled` in UpdateCompatibilityCheck can hit a null profile and throw NullPointerException because initProfile is skipped for update-compatibility.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "authzservice-improve-authz-caching-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "7562f37880367411a62304bcdcdc178bced23906",
+  "base": "5634ca44f799a82161f0401dadc286452f3bdbf8",
+  "sugestoes": [
+   {
+    "id": "V1",
+    "file": "pkg/services/authz/rbac/service.go",
+    "lines": [
+     180,
+     192
+    ],
+    "texto": "List now returns cached permissions on a cache hit and never falls back to the database when the requested resource is absent from the cached map, whereas Check requeries in that case. WHAT: getCachedIdentityPermissions returns the cached scope map with err==nil on a hit, so the `else` branch (the only path that calls the DB) is skipped entirely for List. WHY: before this PR List always called getIdentityPermissions (which never reads permCache \u2014 grep shows the only production permCache.Get callers are the new function), so List was always fresh; now a newly created dashboard/folder is missing from List and a revoked permission keeps being returned for up to shortCacheTTL (30s), contradicting the PR's stated goal of letting users fetch newly created resources. HOW: for List, when the cached permissions exist but are incomplete/outdated, fall back to the DB \u2014 mirror the requery logic added to Check (e.g. requery whenever the cache-hit result cannot prove freshness, or seed the response from a DB refresh after a hit)."
+   },
+   {
+    "id": "V2",
+    "file": "pkg/services/authz/rbac/service.go",
+    "lines": [
+     116,
+     121
+    ],
+    "texto": "The denial-cache key is built from the raw subject UID only (`userPermDenialCacheKey(ns, checkReq.UserUID, action, name, parent)`) and omits the identity type, while both the anonymous and render-service identities use UID \"0\" (pkg/services/user/identity.go:296,298) and share the same namespace. As a result an anonymous denial (anonymous only has public-dashboard perms) writes `.perm_0_<action>_<name>_<parent>`, and a later render-service Check for the same dashboard hits that entry at line 117 and returns Allowed:false even though getRendererPermissions grants read on all dashboards \u2014 a render-service request is wrongly denied for up to the cache TTL (fail-closed regression). Include the identity type (or key on the same resolved identity used by permCache) in the denial-cache key so different subject types cannot share denial entries."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#02",
+    "descricao": "Claims a cached denial blocks access granted within the TTL window; denials are TTL-bounded like the existing permission cache.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#03",
+    "descricao": "Claims trusting cached grants while re-checking cached denials lets stale grants keep access to revoked resources; cached grants were already served for the TTL before this PR.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#06",
+    "descricao": "Claims per-resource denial entries cause unbounded cache memory growth; entries expire after the short TTL.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#07",
+    "descricao": "Claims List now serves stale cached permissions whereas it previously always queried the DB; List was already cache-backed before the change.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#oph-01",
+    "descricao": "Claims the new denial cache is checked before any permission source and never invalidated, so a Check that ran before a resource was created or a grant was added keeps returning Allowed:false for the whole short cache TTL.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#oph-02",
+    "descricao": "Claims the remote authz client still wraps results in a 30s LocalCache, so in remote deployments new dashboards, folders and grants stay invisible for up to 30s.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "authzservice-improve-authz-caching-grafana-codex#kimi-01",
+    "descricao": "Claims permissionCacheUsage counts a cache hit that did not grant access as a cache miss.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "5fd11f9faa79c4aefd39975d1b0e963e5034f793",
+  "base": "30a92a4d66b417f7c19dee2b343099adc6e88aa6",
+  "sugestoes": [
+   {
+    "id": "V2",
+    "file": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+    "lines": [
+     82,
+     111
+    ],
+    "texto": "WHAT: the \"Delete cached data\" action is rendered for every Google calendar with a cache, including delegation calendars (`hasCache = isGoogleCalendar && cacheUpdatedAt`, with no `delegationCredentialId` guard). WHY: `deleteCacheHandler` only deletes when `credential.userId === user.id`; delegation credentials are not owned by the current user (the same component refuses to disconnect them via `canDisconnect = !delegationCredentialId`), so for delegated calendars this action always throws \"Credential not found or access denied\" and the user sees the error toast instead of a successful delete. HOW: gate the delete-cache affordance on `!delegationCredentialId` (matching the disconnect affordance), or make `deleteCacheHandler` authorize delegation credentials explicitly."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#02",
+    "descricao": "Claims the cache refresh writes SelectedCalendar.updatedAt while the UI reads CalendarCache.updatedAt, so the displayed 'last updated' is never what the refresh sets.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#prod-01",
+    "descricao": "The Delete cached data action is offered for delegation credentials that the component otherwise treats as non-modifiable, because hasCache does not check delegationCredentialId.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#snloop-01",
+    "descricao": "The session user query now selects the internal googleChannelId of selected calendars, which could be exposed to the client if the result is returned (e.g. by the me handler).",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#kimi-01",
+    "descricao": "States that CredentialActionsDropdown.tsx has no data-exposure issue.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#kimi-02",
+    "descricao": "States that calendar-cache.repository.ts has no data-exposure issue.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#kimi-03",
+    "descricao": "States that selectedCalendar.ts has no data-exposure issue.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#kimi-04",
+    "descricao": "States that deleteCache.handler.ts has no data-exposure issue.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#kimi-05",
+    "descricao": "States that test-gcal-webhooks.sh has no data-exposure issue.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#kimip-01",
+    "descricao": "Claims restricting the credential lookup to `userId: user.id` wrongly rejects team-owned or delegated credentials when deleting the calendar cache.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#pf-muse-C1",
+    "descricao": "Claims getCacheStatusByCredentialIds should ignore expired cache rows, otherwise the UI shows a cache timestamp and delete action when no usable cache remains.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "71826eb08fc7ea35a5925ad223296feadd5c5e29",
+  "base": "e805e472f4a80017957e2fbec975ea78c6ee45ed",
+  "sugestoes": [
+   {
+    "id": "V1",
+    "file": "",
+    "lines": [
+     0,
+     0
+    ],
+    "texto": ""
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#01",
+    "descricao": "The test factory helper uses a truthiness check on client_sample_rate, so a rate of 0.0 is not copied to sample_rate (claimed to silently drop a legitimate value).",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#02",
+    "descricao": "Claims cache keys for upsampling eligibility are built with Python's hash() and cannot be invalidated across workers; no such cache exists.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#07",
+    "descricao": "Claims changing the topEvents validation message breaks consumers asserting the old 'If topEvents needs to be at least 1' text; none exist.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#10",
+    "descricao": "Comment reports no problem.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#11",
+    "descricao": "Comment reports no problem.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#12",
+    "descricao": "Comment reports no problem.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#13",
+    "descricao": "Comment reports no problem.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#17",
+    "descricao": "Claims the factory writes sample_rate while upsampled_count reads sample_weight, so the upsampled count would be 1 instead of 10.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#sncc-01",
+    "descricao": "upsampled_count is registered only in DiscoverDatasetConfig, so if the errors dataset resolves functions through another config, the upsampled_count() query fails as an unknown function.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#snloop-01",
+    "descricao": "Inline test comments say each bucket has 1 event while the assertions expect count == 10, contradicting the upsampled value.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "9966ec5a13e331659c3ea00981f9b11b0faf821f",
+  "base": "fd358e8a388939959369f08f616e29552cdaf96e",
+  "sugestoes": [
+   {
+    "id": "V2",
+    "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "lines": [
+     317,
+     325
+    ],
+    "texto": "WHAT: In `submit`, the `except Exception` handler unconditionally calls `add_offset` + `complete_offset` for the failing message. WHY: This marks the message as successfully processed and lets the commit loop persist its offset, so any exception thrown after decoding (e.g. `grouping_fn` raising before the item is enqueued, or `work_queue.put` failing) silently drops the message while advancing the committed offset \u2014 the message is never processed but a restart will not re-read it, causing permanent data loss that contradicts the class's 'Only commits offsets after successful processing' guarantee. HOW: Only complete the offset in the None/filtered case; in the exception handler, re-raise (or leave the offset outstanding) so the item is retried/not committed, or route the failed item back to a retry/bookkeeping path before completing it."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#02",
+    "descricao": "Claims queue.ShutDown and Queue.shutdown() are unavailable on Python < 3.13, so workers never exit on shutdown.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#07",
+    "descricao": "Claims Python's randomized str hash makes group-to-queue assignment differ across processes, breaking per-subscription ordering and letting two processes handle the same subscription concurrently.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#08",
+    "descricao": "Claims FixedQueuePool.submit leaks an outstanding offset when put() raises after add_offset, permanently blocking commits for the partition.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#09",
+    "descricao": "Claims get_stats/wait_until_empty report empty while items are still in flight because qsize drops when a worker takes an item.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#13",
+    "descricao": "Claims metrics.incr receives len(committable) as the instance argument instead of the amount, so the commit count is always 1.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#14",
+    "descricao": "The offsets_committed metric is incremented by the number of partitions being committed rather than the number of offsets, so its name misdescribes the value.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#19",
+    "descricao": "Claims factory shutdown leaves SimpleQueueProcessingStrategy commit threads running and committing after shutdown.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#prod-01",
+    "descricao": "Claims the committable-offset loop iterates the whole numeric span max_offset - start, burning CPU on large offset gaps every commit cycle.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#muse13-01",
+    "descricao": "_get_partition_lock reads and writes partition_locks without a global lock, claimed to let two threads create different locks for one partition and break offset tracking.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#kimi-01",
+    "descricao": "States review of queue_consumer.py is incomplete with no issue found.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#kimi-02",
+    "descricao": "States review of result_consumer.py is incomplete with no issue found.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "6669a2d94d76eea3b99b8c476d12b1eb66726b07",
+  "base": "56abd247e1829cb6de82dfcc8ce04deb5f0d1e91",
+  "sugestoes": [
+   {
+    "id": "V2",
+    "file": "app/controllers/topics_controller.rb",
+    "lines": [
+     105,
+     105
+    ],
+    "texto": "WHAT: the new `unsubscribe` action has no login guard, so `current_user` is nil for anonymous requests and `current_user.id` raises NoMethodError. WHY: `ensure_logged_in` (line 8) does not list `:unsubscribe`, and `redirect_to_login_if_required` only redirects when `SiteSetting.login_required?`; clicking the emailed per-topic unsubscribe link while logged out therefore produces a 500 instead of a login/redirect. HOW: add `:unsubscribe` to the `ensure_logged_in` only-list (and/or redirect anonymous users to login)."
+   },
+   {
+    "id": "V4",
+    "file": "app/controllers/topics_controller.rb",
+    "lines": [
+     500,
+     500
+    ],
+    "texto": "Adding `render :show` inside perform_show_response renders the topic page (application layout) immediately, so `canonical_url` set at line 87 of the `show` action now runs AFTER the response/layout has already been rendered and never reaches `<%= canonical_link_tag %>` in layouts/_head.html.erb:9. Previously the html branch had no explicit render, so the implicit render happened after canonical_url was assigned. Impact: every topic page (and the unsubscribe page) loses its canonical <link> tag, breaking canonical-URL handling for SEO and for duplicate/paged/posts URLs. Fix: set the canonical URL before rendering (move the `canonical_url ...` call into perform_show_response before `render :show`, or keep the implicit render for `show` and only render explicitly for the new action)."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#04",
+    "descricao": "Claims other mailers using add_unsubscribe_link do not pass unsubscribe_url, so rendering unsubscribe_link raises I18n::MissingInterpolationArgument.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#05",
+    "descricao": "Claims the unsubscribe page renders the topic title unescaped through triple braces, allowing HTML injection.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#06",
+    "descricao": "Claims the per-topic unsubscribe URL in emails is relative and cannot be resolved by email clients.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#07",
+    "descricao": "Claims the topicUnsubscribe route cannot find its template because the template lives at topic/unsubscribe.hbs.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#sncc-01",
+    "descricao": "The per-topic unsubscribe link in notification emails is built from a relative topic URL, so it has no scheme or host and cannot be opened from mail clients.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#oph-02",
+    "descricao": "The unsubscribe_link string now requires unsubscribe_url, so any MessageBuilder caller that sets add_unsubscribe_link without it would raise a missing-interpolation error.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#kimi-01",
+    "descricao": "Claims unsubscribe serializes the stale notification level because TopicView memoized topic_user before the update.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "ce2dcc537b4b1f98a335e88cfe8e0b804483252a",
+  "base": "85737f52b59aa2e3403c9b8e48acf71ccc5bfae3",
+  "sugestoes": [
+   {
+    "id": "V1",
+    "file": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+    "lines": [
+     118,
+     125
+    ],
+    "texto": "WHAT: createRecoveryCodesCredential serializes the raw generated recovery codes (JsonSerialization.writeValueAsString(generatedCodes)) and passes them as the UserCredentialModel challengeResponse to user.credentialManager().updateCredential(...), so recovery codes are handed to user storage in cleartext. WHY: recovery-authentication-codes are backup-password-equivalent secrets; local storage deliberately hashes them (RecoveryAuthnCodesCredentialModel.createFromValues hashes each code), but a user-storage provider that persists the input verbatim (as the accompanying test provider does at BackwardsCompatibilityUserStorage.java:197/334) stores them unhashed, exposing reusable second-factor secrets if the storage backend leaks. HOW: pass the already-hashed credentialModel (or its secret data) to user storage and have the provider validate by hashing the input, instead of shipping the raw code list."
+   },
+   {
+    "id": "V4",
+    "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+    "lines": [
+     110,
+     120
+    ],
+    "texto": "WHAT: supportsCredentialType now returns true for RecoveryAuthnCodesCredentialModel.TYPE, but disableCredentialType (lines 217-223) only handles isOTPType(credentialType) and logs 'Unsupported to disable credential' for anything else, so disabling recovery codes is a silent no-op. WHY: this PR makes federated users able to hold recovery codes, and CredentialDeleteHelper removes a federated credential by calling user.credentialManager().disableCredentialType(type) (CredentialDeleteHelper.java:68 and :78); because the storage ignores the recovery-codes type, the credential is never cleared and the user's old recovery codes remain valid after 'removing' them in the account console. HOW: add an `else if (RecoveryAuthnCodesCredentialModel.TYPE.equals(credentialType))` branch that clears myUser.recoveryCodes (mirroring the OTP branch)."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#03",
+    "descricao": "Claims the recovery-code validator uses non-constant-time String.equals, leaking timing information about stored codes.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#04",
+    "descricao": "Claims raw recovery codes are serialized and persisted in cleartext in user storage instead of hashed.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#07",
+    "descricao": "Claims Optional.get() on RecoveryAuthnCodesUtils.getCredential(user) without isPresent() can throw NoSuchElementException.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#sncc-01",
+    "descricao": "Plaintext recovery codes are serialized and sent to user storage providers via updateCredential, while the local path stores only hashed codes.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-02",
+    "descricao": "Recovery codes are sent to user storage providers in plaintext instead of hashed, so a provider may persist working second-factor codes.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-04",
+    "descricao": "The test user storage accepts any of the user's recovery codes rather than the specific requested code number, unlike the local provider.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#prod-01",
+    "descricao": "BackwardsCompatibilityUserStorage.getCredentials dereferences getMyUser(user) without a null check, so it throws NullPointerException for a user missing from the provider's map.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#kimi-01",
+    "descricao": "Claims recovery code verification compares hashes with String.equals, enabling timing attacks.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "1950a511026d520a7329c7b6b9ee60a4af8f8b55",
+  "base": "b8c1cd410f4499c77a8b372decfe1718b80ccfd2",
+  "sugestoes": [
+   {
+    "id": "V2",
+    "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+    "lines": [
+     224,
+     234
+    ],
+    "texto": "WHAT: hasPermission(ClientModel, scope) iterates the evaluated permissions and checks only their scopes, omitting the resourceId guard that the parallel implementation uses (UserPermissionsV2.java:134-142 checks permission.getResourceId().equals(resource.getId()) before matching scopes). WHY: Permission evaluation can return Permission entries belonging to other resources; without the guard a scope granted on a different resource (e.g. an all-clients grant while evaluating a specific client) is treated as granted for the client under evaluation, yielding false-positive canManage/canConfigure/canView and potential authorization over-granting. HOW: add `if (!permission.getResourceId().equals(resource.getId())) continue;` inside the permission loop, matching UserPermissionsV2."
+   },
+   {
+    "id": "V3",
+    "file": "server-spi-private/src/main/java/org/keycloak/authorization/AdminPermissionsSchema.java",
+    "lines": [
+     68,
+     68
+    ],
+    "texto": "WHAT: The CLIENTS resource type was added to the schema, but AdminPermissionsSchema.getResourceName (lines 304-326) only special-cases USERS and returns resource.getDisplayName() for any other type. WHY: Client resources are created by getOrCreateResource without a display name (JPAResourceStore.create sets only name/owner), so listing a Clients-type scope permission via PolicyResourceService.getResources() (line 218) sets displayName=null for every client, whereas USERS resources are mapped to their username \u2014 the new Clients resource type has no human-readable name mapping. HOW: add a `CLIENTS.getType().equals(resourceType)` branch in getResourceName that resolves the resource name (client id) back to the client's clientId (mirroring the USERS branch)."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+    "descricao": "Claims the per-client resource lookup uses server.getId() as owner while resources are created with server.getClientId(), so client-specific permissions are never found.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+    "descricao": "Claims that with both fine-grained features enabled, client deletion calls ClientPermissionsV2.setPermissionsEnabled and throws UnsupportedOperationException.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#07",
+    "descricao": "Claims the all-clients resource lookup in hasPermission(String) cannot find the resource (owner mismatch or not lazily created), so global client permissions are ignored.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#12",
+    "descricao": "Claims the client management-permissions endpoint returns a 500 under V2 because it calls ClientPermissionsV2 methods that throw UnsupportedOperationException.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#13",
+    "descricao": "Claims hasPermission(client, scope) accepts permissions granted on other resources because it does not filter by resource id, allowing privilege escalation across clients.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#14",
+    "descricao": "Claims getClientsWithPermission runs a separate policy evaluation for every client resource, causing O(N) slowdowns.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-01",
+    "descricao": "ClientPermissionsV2.getClientsWithPermission runs a full policy evaluation for every client resource of type Clients, so listing clients costs one evaluation per client resource.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02",
+    "descricao": "On ClientRemovedEvent the AdminPermissions listener calls clients().setPermissionsEnabled(client, false), which throws UnsupportedOperationException in ClientPermissionsV2 when V1 and V2 are both enabled, so client deletion fails.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-01",
+    "descricao": "Claims that with both fine-grained authz V1 and V2 enabled, the ClientRemovedEvent listener calls ClientPermissionsV2.setPermissionsEnabled, which now throws, so client deletion fails.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-03",
+    "descricao": "Claims the test grants CONFIGURE together with MAP_ROLES_COMPOSITE, so addComposites may succeed because of CONFIGURE and the test would pass even if canMapCompositeRoles were broken.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-04",
+    "descricao": "Claims that under FGAP V2 the client management-permissions GET/PUT endpoints call the throwing ClientPermissionsV2 overrides and return 500.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#muse13-01",
+    "descricao": "ClientPermissionsV2 canMapRoles/canMapCompositeRoles/canMapClientScopeRoles check only fine-grained permissions and not the manage-clients role, claimed to deny role mapping to realm admins unlike V1.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#kimi-01",
+    "descricao": "Claims the canView(ClientModel) Javadoc is misleading because V2 never evaluates the per-client VIEW_SCOPE permission.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#kimi-02",
+    "descricao": "Claims the tests index getDefaultClientScopes() without size checks and could throw IndexOutOfBoundsException.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "4f8aed295a29954023b2849c060ef4fb299d1b5d",
+  "base": "62db063e1e1abe691313ab42682a68f796d63769",
+  "sugestoes": [
+   {
+    "id": "V1",
+    "file": "app/views/embed/best.html.erb",
+    "lines": [
+     6,
+     6
+    ],
+    "texto": "WHAT: The if/else opened on line 2 is closed with `<%- end if %>`, which serializes to the Ruby token sequence `end if`. WHY: `end` closes the if/else and the trailing `if` is a modifier with no receiver/condition, so the template raises a Ruby syntax error (unexpected modifier_if) whenever best.html.erb is compiled \u2014 the embed page returns a 500 in production; controller specs don't render views so this is not caught by the suite. HOW: replace line 6 with `<%- end %>`."
+   },
+   {
+    "id": "V4",
+    "file": "db/migrate/20131219203905_add_cook_method_to_posts.rb",
+    "lines": [
+     3,
+     3
+    ],
+    "texto": "WHAT: The migration adds `cook_method` to the large `posts` table via `add_column :posts, :cook_method, :integer, default: 1, null: false`. WHY: On the PostgreSQL versions this app targets, adding a NOT NULL column WITH a default rewrites the entire `posts` table while holding an ACCESS EXCLUSIVE lock, blocking every read and write to posts for the duration of the deploy on a forum with a large posts table. HOW: Add the column nullable (no default), backfill existing rows in batches, then set the default and NOT NULL in a separate step (or use the nullable-column + application default pattern)."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#02",
+    "descricao": "Claims embed.js throws a TypeError when the page lacks the #discourse-comments element because comments.appendChild is called on null.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#03",
+    "descricao": "Claims the embed controller spec fails because EmbedController#best only enqueues a Sidekiq job and never constructs TopicRetriever during the request.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#05",
+    "descricao": "The hourly PollFeed job always fetches and processes the full feed without a conditional GET; the feed_key helper meant for that is defined but never used.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#07",
+    "descricao": "States that the link fallback in PollFeed is correct; no problem is reported.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#10",
+    "descricao": "States the raw_html cook_method comparison in Post#cook is safe; no problem is reported.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#11",
+    "descricao": "States the cook_method assignment in PostCreator is correct; no problem is reported.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#12",
+    "descricao": "States the `if topic_id` check in EmbedController is safe; no problem is reported.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#13",
+    "descricao": "Describes the host checks in ensure_embeddable without reporting a problem.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#14",
+    "descricao": "States content_sha1 and absolutize_urls in TopicEmbed are correct; no problem is reported.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#15",
+    "descricao": "States the TopicRetriever throttle uses setnx and an explicit no_throttle check; no problem is reported.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#20",
+    "descricao": "Claims import_remote passes an unvalidated user-supplied URL to Kernel#open, allowing command execution with '|' or local file reads.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#21",
+    "descricao": "Claims PollFeed fetches SiteSetting.feed_polling_url without validation, letting whoever controls that setting make the server request arbitrary internal or external URLs.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#23",
+    "descricao": "Claims the embed best.html.erb template closes its if block with `end if`, which is invalid Ruby, so every render raises a SyntaxError.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#25",
+    "descricao": "The embed layout interpolates request.referer into an inline JavaScript string with only HTML escaping, so a referer containing a quote can break out of the string and run script.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#26",
+    "descricao": "Claims postMessage drops the resize message because targetOrigin is the full referer URL rather than just the origin, breaking iframe auto-resize.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#27",
+    "descricao": "Claims setting X-Frame-Options: ALLOWALL on the embed endpoint disables clickjacking protection and that the referer check can be spoofed.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#28",
+    "descricao": "Claims the cook_method migration default of 1 equals raw_html, so every post would skip cooking and sanitization.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#31",
+    "descricao": "Claims the 'not a url' TopicRetriever spec passes regardless of the InvalidURIError rescue because embeddable_host is blank.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-01",
+    "descricao": "`<%- end if %>` in embed/best.html.erb is not valid Ruby, so the template raises a SyntaxError and the embed page fails to render.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-02",
+    "descricao": "Claims `<%- end if %>` leaves a dangling if modifier that makes the logo output the condition, so the logo renders before the header button.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-03",
+    "descricao": "Claims the embed best action builds the view for current_user and then marks it publicly cacheable, so a staff member's view could be served to anonymous visitors.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-01",
+    "descricao": "fetch_http calls SiteSetting.embed_by_username.downcase without a presence check, raising NoMethodError when the setting is blank.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-02",
+    "descricao": "poll_feed opens the feed URL without a timeout and imports every item without a cap, so a slow or huge feed can tie up a worker.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-03",
+    "descricao": "The TopicRetriever specs mock perform_retrieve, so a bug in invalid_host? would not make them fail.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-04",
+    "descricao": "The EmbedController success tests only assert that mocks are called and would pass even if the controller logic were removed.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-05",
+    "descricao": "poll_feed has no test of feed parsing or TopicEmbed.import; the specs only check the execute guards.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "8422030ef456e3a898415e96475b4d8ddfc7640f",
+  "base": "bdd229e3f22e307fe40b30ef99e92ff3f6723da4",
+  "sugestoes": [
+   {
+    "id": "V2",
+    "file": "tests/sentry/workflow_engine/processors/test_detector.py",
+    "lines": [
+     536,
+     559
+    ],
+    "texto": "The expected IssueOccurrence is built with group_key \"val1\" (`build_mock_occurrence_and_event(handler, \"val1\", 6, PriorityLevel.HIGH)`), but the assertion calls `handler.evaluate_group_key_value(expected_result.group_key, 10, ...)` where `expected_result.group_key == \"group_key\"`. Since `build_fingerprint` embeds the group_key and DetectorEvaluationResult/IssueOccurrence are frozen dataclasses with field-based equality, the handler produces a fingerprint `<id>:group_key` while the expected occurrence has `<id>:val1`, so the equality assertion fails. This test passed before the PR only because `result` was None (the occurrence hook did not exist); the new hook makes the mismatch observable. Fix by building the expected occurrence with `expected_result.group_key` (or setting the expected group_key to \"val1\") so both sides use the same group key."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#opa-01",
+    "descricao": "Claims test_dedupe in TestEvaluateGroupKeyValue fails because the expected occurrence is built with group_key \"val1\" while evaluation uses \"group_key\", and IssueOccurrence compares fingerprints in __eq__.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#opa-02",
+    "descricao": "Asks to verify that PriorityLevel(new_status) in evaluate_group_key_value is safe, i.e. that non-OK DetectorPriorityLevel values match PriorityLevel values.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "d1c69189f3c90ecf56013a8da904da9bff9a8e19",
+  "base": "913c3d6f636d02b3dd6c2c022ca1af2bec95d752",
+  "sugestoes": [
+   {
+    "id": "V4",
+    "file": "app/assets/javascripts/discourse/models/store.js.es6",
+    "lines": [
+     196,
+     201
+    ],
+    "texto": "In the plural branch, `obj[k].map(...)` is invoked without verifying that `obj[k]` is an array. A payload containing a `*_ids` key whose value is null or a scalar (e.g. `tag_ids: null`) throws a TypeError inside _hydrateEmbedded, aborting hydration of the entire object. Additionally, ids that are absent from the side-loaded collection produce `undefined` entries in the resulting array. Guard with `Array.isArray(obj[k])` before mapping (and filter out unresolved ids)."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#08",
+    "descricao": "Claims expandable_first_post? lost its 'embeddable hosts configured' guard and now expands first posts when no EmbeddableHost exists.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#12",
+    "descricao": "Claims the plural *_ids hydration branch crashes on non-array values and keeps undefined entries for missing ids.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#13",
+    "descricao": "Claims Admin::EmbeddingController#update persists nothing, so the client's saveChanges appears to succeed without saving.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#15",
+    "descricao": "Claims EmbeddingSerializer emits only embeddable_host_ids without sideloading the host records, so the admin host table renders empty.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#opa-01",
+    "descricao": "_hydrateEmbedded now treats every `_ids` key as an embedded collection: it calls `.map` without a null/array check (TypeError on null) and always deletes the original key, replacing real id arrays with undefined lookups when the root has no matching collection.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#musep-01",
+    "descricao": "RestAdapter.basePath replaces only the first underscore of the model type, so an admin model type with several underscores would not match ADMIN_MODELS and would use the wrong base path.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#muse13-01",
+    "descricao": "EmbeddableHost.record_for_host returns false on bad input and TopicEmbed.import calls eh.try(:category_id), which is claimed to raise on FalseClass and crash the import for malformed URLs.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#muse13-02",
+    "descricao": "Embed host checks now issue a database query via EmbeddableHost.record_for_host on every embed request instead of the previous in-memory site-setting check.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-02",
+    "descricao": "TopicEmbed.import passes a nil category when no embeddable host matches the URL, dropping the old embed_category default.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-03",
+    "descricao": "save_host replaces category_id 0 with the uncategorized category because it uses blank? instead of nil?.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-05",
+    "descricao": "The host input placeholder 'example.com' is hard-coded instead of using I18n.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-06",
+    "descricao": "The EmbeddableHostsController spec only checks inheritance and does not exercise create, update or destroy.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-07",
+    "descricao": "The EmbeddingController spec only checks inheritance and does not exercise show or update.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feature-localization-fallbacks-server-side-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "ecfa17b5a79dfdc91e7a4d50b42ae78a35d0a293",
+  "base": "728845d008f06828630a632e5c7d67e11bf15deb",
+  "sugestoes": [
+   {
+    "id": "V1",
+    "file": "config/initializers/i18n.rb",
+    "lines": [
+     17,
+     17
+    ],
+    "texto": "WHAT: `SiteSetting.default_locale.to_sym` is called before `.compact`, so a nil `default_locale` raises `NoMethodError: undefined method 'to_sym' for nil`. WHY: `SiteSetting.default_locale` can be nil (the codebase guards for this at db.rake:3/28 and jobs/base.rb:151), and `FallbackLocaleList#[]` runs on every request via `I18n.fallbacks.ensure_loaded!` in `set_locale`, so a nil value crashes all requests instead of degrading. HOW: symbolize defensively after the nil filter, e.g. `.compact.map(&:to_sym).uniq` or `(SiteSetting.default_locale || :en).to_sym`, so nils are removed before conversion."
+   },
+   {
+    "id": "V2",
+    "file": "lib/freedom_patches/translate_accelerator.rb",
+    "lines": [
+     63,
+     64
+    ],
+    "texto": "WHAT: `ensure_loaded!` reads the shared `@loaded_locales` array (`||= []` and `.include?`) without acquiring `LOAD_MUTEX`, while `load_locale` mutates the same array (`<<`) under that mutex from other threads. WHY: concurrent translation requests can read the array during another thread's mutation (unsynchronized read/write on shared state), and the pre-check is redundant since `load_locale` already re-checks under the lock. HOW: drop the outer check and let `load_locale` handle the guard, and initialize the array safely under the mutex (e.g. `load_locale(locale)`; move `@loaded_locales ||= []` inside the synchronized block or into `reload!`)."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#02",
+    "descricao": "Claims a fallback value cached for a not-yet-loaded locale stays stale after that locale's file is loaded, because ensure_loaded! does not invalidate the translation cache.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#03",
+    "descricao": "Suggests normalizing the locale because a String locale mixed with Symbol fallback entries defeats uniq and causes double lookups or double loading.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#04",
+    "descricao": "Claims a nil default_locale makes FallbackLocaleList#[] raise NoMethodError on every missing translation.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#05",
+    "descricao": "Claims every fallback lookup hits the database or Redis through SiteSetting.default_locale, amplifying per-request load.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#07",
+    "descricao": "Claims a user-controlled locale with regex metacharacters reaches load_locale's Regexp and forces loading of unintended locale files.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#08",
+    "descricao": "Claims @loaded_locales is lazily initialized and shared across threads without synchronization.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#sncc-01",
+    "descricao": "I18n.ensure_loaded! reads and initializes @loaded_locales outside LOAD_MUTEX, racing with reload!/load_locale under concurrent requests.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#prod-01",
+    "descricao": "Claims set_locale's `I18n.fallbacks.ensure_loaded!` (application_controller.rb:159) raises NoMethodError on every request if I18n.fallbacks is not the custom FallbackLocaleList.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#kimi-01",
+    "descricao": "FallbackLocaleList subclasses Hash but leaves it empty, so iterating I18n.fallbacks returns nothing.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "fix-proper-handling-of-group-memberships-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "060cda77729cb1c4a827560e09e89a7b22078ba9",
+  "base": "4975fc28903a84418f546b2809370f19abf10e08",
+  "sugestoes": [
+   {
+    "id": "V3",
+    "file": "app/controllers/admin/groups_controller.rb",
+    "lines": [
+     65,
+     66
+    ],
+    "texto": "WHAT: `add_members` (and identically `remove_member` at line 85) read the group via `params.require(:group_id)`, but the new routes `put \"members\"`/`delete \"members\"` declared inside `resources :groups` (config/routes.rb:49-50) generate a member route `/admin/groups/:id/members` whose dynamic segment is `:id`, not `:group_id`. WHY: `params[:group_id]` is always nil on these requests, so `params.require(:group_id)` raises ActionController::ParameterMissing and returns 400 \u2014 adding/removing a group member from the admin UI can never succeed; the controller specs don't catch this because they pass `group_id:` directly and bypass routing. HOW: use `params.require(:id)` in both `add_members` and `remove_member` (consistent with `update`, which uses `params[:id]` for the same resource)."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#02",
+    "descricao": "Claims the now-unawaited findMembers() call creates a race where the controller has no member data available when it needs it.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#05",
+    "descricao": "Claims the public group members template iterates a bare members property that resolves to undefined because the controller's model is now the Group object.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#08",
+    "descricao": "Claims add_members/remove_member read params[:group_id] while the route supplies the group id as params[:id], so the actions always fail with ParameterMissing.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#09",
+    "descricao": "Claims add_members does not strip whitespace around comma-separated usernames, so entries like 'alice, bob' silently fail to add members.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#11",
+    "descricao": "Claims the public members endpoint accepts an unbounded or negative limit/offset, letting a caller force loading and serializing the whole membership of a large group.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#kimi-01",
+    "descricao": "params[:alias_level].present? is false for 0, so choosing the 'nobody' alias level is ignored.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "fixing-re-authentication-with-passkeys-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "25bf964a844ea0bc64dc838bff038345048cb1fa",
+  "base": "744e031019af8dbaacf407e792fbb3756364e2b4",
+  "sugestoes": [
+   {
+    "id": "V1",
+    "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/PasswordForm.java",
+    "lines": [
+     52,
+     54
+    ],
+    "texto": "WHAT: PasswordForm.authenticate now calls webauthnAuth.fillContextForm(context) whenever isConditionalPasskeysEnabled(context.getUser()) is true, i.e. for the user merely named by an unauthenticated username submission (the username typed on the prior username-only step, or on the combined form), and fillContextForm for an identified user sets ALLOWED_AUTHENTICATORS, which causes the new authn_select form (passkeys.ftl) to render the user's credential IDs (authn_use_chk). WHY: an attacker can submit an arbitrary username and observe whether the passkey block/credential IDs appear, disclosing whether that account has a registered passkey (user enumeration) and its WebAuthn credential IDs before any credential is verified \u2014 the same broadened condition is reached via UsernamePasswordForm.challenge (UsernamePasswordForm.java:137-140). HOW: only emit the conditional-UI/authenticators block when the current request corresponds to a genuine re-authentication (e.g. gate on isUserAlreadySetBeforeUsernamePasswordAuth(context) / the existing USER_SET_BEFORE_USERNAME_PASSWORD_AUTH note) instead of any resolved context.getUser(), so passkey data is not exposed for a user identified only from an unverified username."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#01",
+    "descricao": "Claims PasswordForm.authenticate can fill passkey context data for a null user because isConditionalPasskeysEnabled returns true when no user is set, producing an inconsistent password page.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#02",
+    "descricao": "Claims configuredFor marks PasswordForm as configured for passkey-only users, so they land on a password form they cannot satisfy.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#05",
+    "descricao": "Claims action() processes a passkey assertion for a different userHandle during re-authentication, letting another user's passkey satisfy re-auth of the fixed user.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#07",
+    "descricao": "Claims the password page leaks the typed user's passkey credential IDs to an unauthenticated visitor, disclosing whether the account has passkeys.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#08",
+    "descricao": "Claims a Kotlin state manager should use ViewModel + StateFlow for UI state.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#09",
+    "descricao": "Claims UsernameForm.authenticate calls isConditionalPasskeysEnabled() without the required UserModel argument.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#10",
+    "descricao": "Claims isConditionalPasskeysEnabled requires a non-null user, so the initial login page no longer sets up conditional passkey UI for ID-less login.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#11",
+    "descricao": "Reports that widening USER_SET_BEFORE_USERNAME_PASSWORD_AUTH and the reauth form helper expose no sensitive data.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#12",
+    "descricao": "Reports that setupReauthenticationInUsernamePasswordFormError only toggles UI flags and leaks nothing.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#13",
+    "descricao": "Reports that the passkey conditional-UI data is non-secret; no exposure.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#14",
+    "descricao": "Reports that the added error-path calls leak no credential information.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#15",
+    "descricao": "Reports that emitting WebAuthn credential IDs in passkeys.ftl is not sensitive.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#16",
+    "descricao": "Reports that the auth note writer and reader use the same key; refactor is behaviour-preserving.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#17",
+    "descricao": "Reports that the helper reads the same auth note key.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#18",
+    "descricao": "Reports that the constant's value is unchanged by the visibility change.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#19",
+    "descricao": "Reports that isConditionalPasskeysEnabled is reused consistently.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#20",
+    "descricao": "Reports no issue at UsernamePasswordForm.authenticate.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#21",
+    "descricao": "Reports no issue at UsernamePasswordForm.challenge.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#22",
+    "descricao": "Reports no issue at PasswordForm.authenticate.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#23",
+    "descricao": "Reports no issue at PasswordForm.configuredFor.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#24",
+    "descricao": "Reports no unreachable branch in action().",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#25",
+    "descricao": "Reports no NPE in PasswordForm.authenticate because the helper checks webauthnAuth != null.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#26",
+    "descricao": "Reports no computed-then-ignored values.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#27",
+    "descricao": "States the authn_use_chk field name could not be checked against the JavaScript; no problem asserted.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#sncc-01",
+    "descricao": "The password page now renders an identified user's passkey credential IDs as hidden inputs in the username-first flow before authentication, disclosing credential metadata to anyone who knows a username.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#opa-01",
+    "descricao": "After a username-only step, PasswordForm fills WebAuthn context for the user and passkeys.ftl renders their credential IDs as hidden inputs, letting an unauthenticated visitor learn whether an account has a passkey and its credential IDs.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#opa-02",
+    "descricao": "No test exercises a passkey failure during re-authentication, so the new setupReauthenticationInUsernamePasswordFormError call in WebAuthnConditionalUIAuthenticator is never covered.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#muse13-01",
+    "descricao": "setupReauthenticationInUsernamePasswordFormError sets attributes on a fresh context.form() instance that is claimed to be discarded, so the re-authentication error page loses the hidden-username state.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#kimi-01",
+    "descricao": "Claims the USER_SET_BEFORE_USERNAME_PASSWORD_AUTH comment is stale because the flag no longer governs user clearing.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "303cdc2caf256aa5df660611120c2e3f7392365d",
+  "base": "58ba11ecbd60863e2bfc6e32f0399ed4feb3927a",
+  "sugestoes": [
+   {
+    "id": "V1",
+    "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+    "lines": [
+     104,
+     108
+    ],
+    "texto": "WHAT: instrumentPluginRequest (and instrumentPluginRequestSize at lines 94-98) returns early with plugins.ErrPluginNotRegistered from pluginTarget(ctx, pluginCtx.PluginID) without ever invoking the wrapped call m.next / fn, so the actual plugin request is never executed when the plugin is not found in the registry. WHY: a metrics-only concern now gates request execution \u2014 any request whose plugin is not resolvable (or whose ID is empty/unknown) is aborted and the caller receives ErrPluginNotRegistered instead of the plugin's real response/error, breaking request semantics for that path. HOW: resolve the target once and fall back to an \"unknown\" label value (still forward to m.next) instead of returning the lookup error, e.g. capture target via pluginTarget but proceed with fn(ctx) and only skip/annotate the metric when it is unavailable."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#01",
+    "descricao": "Claims ContextualLoggerMiddleware panics on nil requests because it reads req.PluginContext without a nil guard.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#02",
+    "descricao": "Claims the refactor dropped traceID from the 'Plugin Request Completed' log lines.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#04",
+    "descricao": "Claims the metrics middleware factory mutates a shared instance's next field, causing a data race between chains.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#05",
+    "descricao": "Claims the request-size histogram's HELP text says 'returned' though it measures request sizes.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#07",
+    "descricao": "Claims the test never asserts that request size is not instrumented for CheckHealth/CollectMetrics.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#08",
+    "descricao": "Claims checkHistogram carries foundLabels across metrics and returns errors prematurely.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#09",
+    "descricao": "Claims millisecond durations are truncated by integer division before conversion to float.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#10",
+    "descricao": "Claims the request-size test cases use empty payloads and would not detect a broken size calculation.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#11",
+    "descricao": "Claims the duration metric checks only labels and sample counts, not the observed values.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#12",
+    "descricao": "Claims the duration-seconds histogram check omits status and source labels.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#13",
+    "descricao": "Claims LoggerMiddleware depends on ContextualLoggerMiddleware running first and would log without plugin identity if reordered.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#14",
+    "descricao": "Claims the metrics middleware now fails the request when the plugin is not in the registry.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#sncc-01",
+    "descricao": "The metrics middleware test never asserts that request size is not recorded for CheckHealth and CollectMetrics.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#muse13-01",
+    "descricao": "MetricsMiddleware dereferences req (req.Queries, req.Body, req.PluginContext) without a nil-request guard, unlike LoggerMiddleware, so a nil request would panic.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#kimi-01",
+    "descricao": "QueryData and CallResource look up the plugin in the registry twice per request.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#pf-kimi-C1",
+    "descricao": "Claims ContextualLoggerMiddleware is wasted work when backend request logging is disabled because only LoggerMiddleware consumes its context attributes.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "replays-self-serve-bulk-delete-system-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "ea188e2d736fd6ed27c1dba8aae63b7268e2a7a9",
+  "base": "49a275847631e231672d01b5dcd66558c069d25b",
+  "sugestoes": [
+   {
+    "id": "V2",
+    "file": "src/sentry/integrations/source_code_management/commit_context.py",
+    "lines": [
+     584,
+     597
+    ],
+    "texto": "get_environment_info calls issue.get_recommended_event() (which issues a Snuba get_events_snql query \u2014 models/group.py:305) plus recommended_event.get_environment() (a DB Environment.objects.get \u2014 eventstore/models.py:180) once per issue. It is invoked inside the per-issue loop in GitHubPRCommentWorkflow.get_comment_body (integration.py:406-410) and GitlabPRCommentWorkflow.get_comment_body (integration.py:254-258), which iterate the top 5 issues, adding up to 5 extra Snuba queries and 5 DB lookups to every PR-comment workflow that previously performed no such lookups. Batch the environment resolution (e.g. resolve recommended events/environments for all issue ids in one query, or drop the per-issue lookup) so the comment workflow does not amplify its query count 6x."
+   },
+   {
+    "id": "V5",
+    "file": "src/sentry/integrations/source_code_management/commit_context.py",
+    "lines": [
+     584,
+     597
+    ],
+    "texto": "get_environment_info calls issue.get_recommended_event() once per issue; it is invoked inside the per-issue list comprehension in both the GitHub and GitLab PRCommentWorkflow.get_comment_body. get_recommended_event issues a Snuba get_events_snql query, so rendering a comment with N issues triggers N additional Snuba queries (N+1). Consider resolving recommended events in one batched query or skipping environment lookup when not needed."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#03",
+    "descricao": "Claims the unauthenticated endpoint iterates an unbounded array of reports, allowing CPU/metric-spam DoS.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#04",
+    "descricao": "Claims BrowserReportingCollectorEndpoint returns Django HttpResponse objects although its Endpoint base expects DRF Response objects.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#05",
+    "descricao": "The assemble analytics event is recorded before the feature-flag check, so requests rejected with 404 are still counted as assemble events, skewing analytics.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#08",
+    "descricao": "BaseDetectorTypeValidator.update() reads validated_data.get('detector_type') instead of 'type', so detector type changes are silently ignored.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#09",
+    "descricao": "Claims get_condition_query_groups indexes dcg_to_slow_conditions[dcg.id] and may KeyError for a DCG missing from the precomputed map.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#10",
+    "descricao": "Claims the triggered_actions log now writes the full event payload with user data because event_data was switched to workflow_event_data.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#11",
+    "descricao": "Claims the success path dereferences data.summary without guarding undefined data when the query is disabled or errored.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#14",
+    "descricao": "Claims the column fallback crashes when tableData is defined but meta is missing.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#15",
+    "descricao": "Claims ExploreParams still reads visualize.yAxes after the Visualize class switched to yAxis, producing undefined saved-query params.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#16",
+    "descricao": "Asks to verify that no caller passes Visualize instances instead of BaseVisualize to updateLocationWithAggregateFields.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#17",
+    "descricao": "Claims the number-type test's mock matches query.query instead of substringMatch, so its not-called assertion can never fail.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#18",
+    "descricao": "Claims the attribute key is interpolated into the request path without encodeURIComponent, enabling path confusion.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#21",
+    "descricao": "get_environment_info fetches the recommended event per issue while building the merged-PR comment, an N+1 lookup on the comment path.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#sncc-02",
+    "descricao": "The number-type test mock matches on query.query while the hook sends substringMatch, so the mock can never match and the not-called assertion cannot fail.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#prod-01",
+    "descricao": "Claims _truncate_title is defined on CommitContextIntegration, so PRCommentWorkflow._truncate_title raises AttributeError.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#snapi-01",
+    "descricao": "Claims the hook now returns undefined attributes before the first fetch instead of {}, which can crash consumers that access keys on the TagCollection.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#snapi-02",
+    "descricao": "Claims the default of sentry:autofix_automation_tuning changed from low to off, silently disabling automatic autofix for projects that never set it, unrelated to the replays bulk delete feature.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#kimi-01",
+    "descricao": "get_request_data sorts the caller's error_events list in place, mutating its argument as a side effect.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#kimi-02",
+    "descricao": "Claims get_environment_info swallows all exceptions with an info log, hiding real failures.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#kimi-03",
+    "descricao": "_truncate_title appends an ellipsis after slicing to max_length, so truncated titles exceed ISSUE_TITLE_MAX_LENGTH by three characters.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "3162ad68a5c87666788b27a44eb31235025091a9",
+  "base": "de11fb0166a7244115bb066edd65ec0d6b7e365c",
+  "sugestoes": [
+   {
+    "id": "V1",
+    "file": "src/sentry/consumers/__init__.py",
+    "lines": [
+     434,
+     437
+    ],
+    "texto": "The `--flusher-processes` click option defaults to 1, so the consumer always constructs SpanFlusher with max_processes=1. Combined with `self.max_processes = max_processes or len(buffer.assigned_shards)` and `min(self.max_processes, ...)`, production always runs a single flusher process for all shards, making the intended per-shard fallback (`None` -> all shards) unreachable and the PR's parallelism inert unless operators explicitly override. Set the default to 0/None so the constructor's fallback (one process per shard) takes effect, or document that operators must pass the flag."
+   },
+   {
+    "id": "V4",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     93,
+     93
+    ],
+    "texto": "Creating a separate `SpansBuffer(shards)` per process changes the meaning of `spans.buffer.max-flush-segments`. `flush_segments` computes `max_segments_per_shard = ceil(max_flush_segments / len(self.assigned_shards))` (buffer.py:382-384); since each process now holds only a subset of shards, shard_factor shrinks and the per-shard fetch cap grows, so the effective global per-cycle flush cap scales roughly with the number of flusher processes (and the `any_shard_at_limit` backpressure threshold becomes shard-count dependent). Divide the cap by the total number of shards (or the process count) so the documented global per-cycle limit and backpressure semantics are preserved."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#09",
+    "descricao": "Splitting the buffer per process makes spans.buffer.max-flush-segments a per-process cap, so with P flusher processes up to P times the configured segments are loaded and flushed per cycle.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#11",
+    "descricao": "Claims the CLI default of 1 makes the one-process-per-shard auto mode unreachable.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ }
+}
