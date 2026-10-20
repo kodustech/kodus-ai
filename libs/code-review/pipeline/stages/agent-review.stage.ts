@@ -75,6 +75,7 @@ import {
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { analyzerFindingsToSuggestions } from '@libs/code-review/infrastructure/analyzers/analyzer-findings-to-suggestions';
 import { preferAnalyzerKeep } from '@libs/code-review/infrastructure/agents/engine/prefer-analyzer-keep';
+import { normalizeSuggestionSeverity } from '@libs/code-review/infrastructure/agents/engine/normalize-severity';
 import {
     capCustomAgentComments,
     collectSingleComments,
@@ -348,21 +349,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     }
 
     private normalizeSeverity(severity?: string): string {
-        switch ((severity || '').toLowerCase()) {
-            case 'critical':
-            case SeverityLevel.CRITICAL:
-                return SeverityLevel.CRITICAL;
-            case 'high':
-            case SeverityLevel.HIGH:
-                return SeverityLevel.HIGH;
-            case 'medium':
-                return SeverityLevel.MEDIUM;
-            case 'low':
-            case SeverityLevel.LOW:
-                return SeverityLevel.LOW;
-            default:
-                return SeverityLevel.MEDIUM;
-        }
+        return normalizeSuggestionSeverity(severity);
     }
 
     constructor(

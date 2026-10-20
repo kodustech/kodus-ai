@@ -590,6 +590,44 @@ describe('buildTryTrace — a run that stopped early', () => {
 });
 
 describe('buildTryTrace — repeated findings', () => {
+    it('keeps the more severe copy, reading a severity off the scale as the review does', () => {
+        const copy = (severity: string, summary: string) => ({
+            relevantFile: 'src/trace.ts',
+            relevantLinesStart: 2,
+            relevantLinesEnd: 2,
+            severity,
+            oneSentenceSummary: summary,
+            suggestionContent: summary,
+        });
+        const trace = buildTryTrace({
+            agent: agent(),
+            output: {
+                suggestions: [
+                    copy(
+                        'low',
+                        'Use the shared logger instead of console.log in trace',
+                    ),
+                    copy(
+                        'major',
+                        'Use the shared logger instead of console.log here',
+                    ),
+                ],
+                agentName: 'x',
+                turnsUsed: 1,
+                durationMs: 1,
+            } as any,
+            events: [],
+            startedAt: Date.now(),
+        });
+
+        expect(
+            trace.findings.map((f) => [f.severity, f.verdict, f.wouldPost]),
+        ).toEqual([
+            ['medium', 'kept', true],
+            ['low', 'dropped', false],
+        ]);
+    });
+
     it('shows a second finding on the same lines as a repeat, not as another post', () => {
         // Try it skips the review's dedup: two near-identical findings on one
         // line both read "would post", while the review would post one.

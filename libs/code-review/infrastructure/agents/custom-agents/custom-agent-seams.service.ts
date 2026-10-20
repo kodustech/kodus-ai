@@ -1,3 +1,4 @@
+import { normalizeSuggestionSeverity } from '@libs/code-review/infrastructure/agents/engine/normalize-severity';
 import {
     BadRequestException,
     Inject,
@@ -403,10 +404,17 @@ export function buildTryTrace(params: {
     // The agent's own floor, else the team's, as the review applies them.
     const floor = agent.presentation?.minSeverity || params.teamMinSeverity;
     const minRank = floor ? rankOf(floor) : Infinity;
+    // Severities on the review's scale before anything ranks them: an answer
+    // outside it ("major") ranked below low, passed any floor unset and lost
+    // the repeat check to a weaker copy.
+    const onScale = <T extends Partial<CodeSuggestion>>(s: T): T => ({
+        ...s,
+        severity: normalizeSuggestionSeverity(s.severity),
+    });
     // The review's order: the agent's severity floor and comment limit, then
     // the dedup. Deduping first let a finding under the floor mark a severe
     // one on the same lines as its repeat, so neither read "would post".
-    const suggestions = output.suggestions ?? [];
+    const suggestions = (output.suggestions ?? []).map(onScale);
     const eligible = suggestions
         .map((s, i) => ({ s, i }))
         .filter(({ s }) => rankOf(s.severity) <= minRank)
@@ -469,19 +477,23 @@ export function buildTryTrace(params: {
             ...[...repeats].map((s) =>
                 finding(s, 'dropped', 'repeats a finding on the same lines'),
             ),
-            ...(output.discardedByVerify ?? []).map((s) =>
-                finding(
-                    s,
-                    'dropped',
-                    s.discardReason ?? 'refuted by the check',
+            ...(output.discardedByVerify ?? [])
+                .map(onScale)
+                .map((s) =>
+                    finding(
+                        s,
+                        'dropped',
+                        s.discardReason ?? 'refuted by the check',
+                    ),
                 ),
-            ),
-            ...(output.discardedBySeverity ?? []).map((s) =>
-                finding(s, 'dropped', 'below the severity floor'),
-            ),
-            ...(output.discardedByVerifyError ?? []).map((s) =>
-                finding(s, 'unverified', 'the check could not run'),
-            ),
+            ...(output.discardedBySeverity ?? [])
+                .map(onScale)
+                .map((s) => finding(s, 'dropped', 'below the severity floor')),
+            ...(output.discardedByVerifyError ?? [])
+                .map(onScale)
+                .map((s) =>
+                    finding(s, 'unverified', 'the check could not run'),
+                ),
         ],
         durationMs: Date.now() - params.startedAt,
     };
