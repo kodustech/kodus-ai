@@ -8,7 +8,6 @@ import { CodeManagementService } from '@libs/platform/infrastructure/adapters/se
 import {
     approvalPolicyFromConfig,
     evaluateApproval,
-    matchesApprovalScope,
 } from '@libs/code-review/domain/approval/approval-decision';
 import { assessApprovalRisk } from '@libs/code-review/domain/approval/assess-approval-risk';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
@@ -60,15 +59,6 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
                 };
             });
         }
-        const paths = [
-            ...new Set(
-                [
-                    ...(context.preliminaryFiles ?? []),
-                    ...(context.changedFiles ?? []),
-                    ...(context.ignoredFileChanges ?? []),
-                ].map((file) => file.filename),
-            ),
-        ];
         const headSha = pullRequest.head?.sha ?? '';
         let labels = pullRequest.tags ?? [];
         let author =
@@ -93,11 +83,33 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
         labels = livePr.labels ?? labels;
         author = livePr.user?.login ?? author;
 
-        const scope = matchesApprovalScope({ policy, author, labels });
+        // Incremental reviews may contain only files changed since Kody's last
+        // run. Approval and team path vetoes apply to the entire current PR.
+        const fullFiles = await this.codeManagement.getFilesByPullRequestId({
+            organizationAndTeamData,
+            repository,
+            prNumber: pullRequest.number,
+            headSha,
+        });
+        if (
+            !fullFiles?.length ||
+            fullFiles.some((file) => typeof file.filename !== 'string')
+        ) {
+            return this.updateContext(context, (draft) => {
+                draft.approvalDecision = {
+                    kind: 'hold',
+                    reason: 'Kody could not verify the complete PR diff.',
+                };
+            });
+        }
+        const paths = fullFiles.map((file) => file.filename);
+
         const sensitive = paths.some((path) =>
             isFileMatchingGlob(path, policy.sensitivePaths ?? []),
         );
         let risk = undefined;
+        // Preserve the assessment even if the required label arrives after
+        // review; the cron can then reconsider this exact reviewed head.
         if (policy.assessRisk && !sensitive && headSha) {
             let areaMap = null;
             try {
@@ -111,6 +123,12 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
                     context: this.stageName,
                     error,
                 });
+                return this.updateContext(context, (draft) => {
+                    draft.approvalDecision = {
+                        kind: 'hold',
+                        reason: 'Kody could not load historical risk evidence.',
+                    };
+                });
             }
             risk = await assessApprovalRisk({
                 organizationId,
@@ -118,10 +136,7 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
                 title: pullRequest.title,
                 body: pullRequest.body,
                 headSha,
-                files: [
-                    ...(context.changedFiles ?? []),
-                    ...(context.ignoredFileChanges ?? []),
-                ],
+                files: fullFiles,
                 teamInstructions: policy.riskInstructions,
                 language: config.languageResultPrompt,
                 areaMap,

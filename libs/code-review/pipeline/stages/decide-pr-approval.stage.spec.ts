@@ -9,7 +9,10 @@ jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({ log: jest.fn(), warn: jest.fn(), error: jest.fn() }),
 }));
 
-const codeManagement = { getPullRequest: jest.fn() };
+const codeManagement = {
+    getPullRequest: jest.fn(),
+    getFilesByPullRequestId: jest.fn(),
+};
 const areaMaps = { read: jest.fn() };
 const stage = new DecidePrApprovalStage(
     codeManagement as unknown as CodeManagementService,
@@ -53,6 +56,15 @@ beforeEach(() => {
         head: { sha: 'head-1' },
         user: { login: 'alice' },
     });
+    codeManagement.getFilesByPullRequestId.mockResolvedValue([
+        {
+            filename: 'src/auth/login.ts',
+            status: 'modified',
+            patch: '@@ -1 +1 @@\n-old\n+new',
+            additions: 1,
+            deletions: 1,
+        },
+    ]);
 });
 
 it('preserves the old path without extra calls when no policy is configured', async () => {
@@ -94,6 +106,28 @@ it('vetoes a sensitive path before paying for a model call', async () => {
             approvalSensitivePaths: ['src/auth/**'],
         }),
     );
+    expect(result.approvalDecision?.kind).toBe('hold');
+    expect(LLM.run).not.toHaveBeenCalled();
+});
+
+it('checks sensitive paths across the complete PR on an incremental review', async () => {
+    codeManagement.getFilesByPullRequestId.mockResolvedValueOnce([
+        { filename: 'src/auth/login.ts' },
+        { filename: 'secrets/rotation.ts' },
+    ]);
+    const result = await stage.execute(
+        context({
+            approvalRiskActive: true,
+            approvalSensitivePaths: ['secrets/**'],
+        }),
+    );
+    expect(result.approvalDecision?.kind).toBe('hold');
+    expect(LLM.run).not.toHaveBeenCalled();
+});
+
+it('holds when the complete PR diff cannot be loaded', async () => {
+    codeManagement.getFilesByPullRequestId.mockResolvedValueOnce(null);
+    const result = await stage.execute(context({ approvalRiskActive: true }));
     expect(result.approvalDecision?.kind).toBe('hold');
     expect(LLM.run).not.toHaveBeenCalled();
 });

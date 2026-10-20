@@ -53,6 +53,9 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             findPullRequestsWithDeliveredSuggestions: jest
                 .fn()
                 .mockResolvedValue([]),
+            findPullRequestsWithoutDeliveredSuggestionsForApproval: jest
+                .fn()
+                .mockResolvedValue([]),
         } as any;
 
         const codeBaseConfigService = {
@@ -556,6 +559,83 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             });
         }
     });
+
+    it('discovers zero-suggestion PRs when approval labels come from kodus-config.yml', async () => {
+        const { cron, deps } = makeCron();
+        deps.automationExecutionService.findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId.mockResolvedValue(
+            [{ repositoryId: 'repo-a', pullRequestNumber: 7 }],
+        );
+        deps.pullRequestService.findPullRequestsWithoutDeliveredSuggestionsForApproval.mockResolvedValue(
+            [makeOpenPr(7, 'repo-a')],
+        );
+        deps.codeBaseConfigService.getConfig.mockResolvedValue({
+            pullRequestApprovalActive: true,
+            approvalLabels: ['ready'],
+        });
+        const shouldApproveSpy = jest
+            .spyOn(cron as any, 'shouldApprovePR')
+            .mockResolvedValue(false);
+
+        await cron.handleCron();
+
+        expect(
+            deps.pullRequestService
+                .findPullRequestsWithoutDeliveredSuggestionsForApproval,
+        ).toHaveBeenCalled();
+        expect(shouldApproveSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                codeReviewConfig: expect.objectContaining({
+                    approvalLabels: ['ready'],
+                }),
+            }),
+        );
+    });
+
+    it('resolves directory policy from each PR complete file list', async () => {
+        const { cron, deps } = makeCron();
+        deps.parametersService.findOne.mockResolvedValue({
+            team: { uuid: 'team-1' },
+            configValue: {
+                repositories: [
+                    {
+                        id: 'repo-a',
+                        name: 'Repo A',
+                        directories: [{ path: 'src/auth', configs: {} }],
+                    },
+                ],
+            },
+        });
+        deps.automationExecutionService.findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId.mockResolvedValue(
+            [
+                { repositoryId: 'repo-a', pullRequestNumber: 1 },
+                { repositoryId: 'repo-a', pullRequestNumber: 2 },
+            ],
+        );
+        deps.pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+            [makeOpenPr(1, 'repo-a'), makeOpenPr(2, 'repo-a')],
+        );
+        deps.codeManagementService.getFilesByPullRequestId.mockImplementation(
+            async ({ prNumber }) => [
+                { filename: `src/auth/file-${prNumber}.ts` },
+            ],
+        );
+        jest.spyOn(cron as any, 'shouldApprovePR').mockResolvedValue(false);
+
+        await cron.handleCron();
+
+        expect(deps.codeBaseConfigService.getConfig).toHaveBeenCalledTimes(2);
+        expect(deps.codeBaseConfigService.getConfig).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ id: 'repo-a' }),
+            [{ filename: 'src/auth/file-1.ts' }],
+        );
+        expect(deps.codeBaseConfigService.getConfig).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ id: 'repo-a' }),
+            [{ filename: 'src/auth/file-2.ts' }],
+        );
+    });
+
     it("approves none of a repository's PRs when its config turns approval off", async () => {
         const { cron, deps } = makeCron();
 

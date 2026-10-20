@@ -354,25 +354,16 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                 automationExecutionsPRs,
                                 PullRequestState.OPENED,
                             );
-                        const hasLabelScope = !!(
-                            codeReviewConfig.configs?.approvalLabels?.length ||
-                            codeReviewConfig.repositories.some(
-                                (repo) =>
-                                    repo.configs?.approvalLabels?.length ||
-                                    repo.directories?.some(
-                                        (directory) =>
-                                            directory.configs?.approvalLabels
-                                                ?.length,
-                                    ),
-                            )
-                        );
-                        const noSuggestionPrs = hasLabelScope
-                            ? await this.pullRequestService.findPullRequestsWithoutDeliveredSuggestionsForApproval(
-                                  organizationId,
-                                  automationExecutionsPRs,
-                                  PullRequestState.OPENED,
-                              )
-                            : [];
+                        // A repository's kodus-config.yml may define the
+                        // label scope even when the stored team config does
+                        // not. Resolve each candidate before deciding whether
+                        // a clean, zero-suggestion PR can be approved.
+                        const noSuggestionPrs =
+                            (await this.pullRequestService.findPullRequestsWithoutDeliveredSuggestionsForApproval(
+                                organizationId,
+                                eligiblePullRequestRefs,
+                                PullRequestState.OPENED,
+                            )) ?? [];
                         const openPullRequests = [
                             ...(openPullRequestsWithSuggestions ?? []),
                             ...noSuggestionPrs,
@@ -434,27 +425,54 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                         return;
                                     }
 
+                                    let resolvedConfig:
+                                        CodeReviewConfig | undefined;
                                     if (
-                                        !configByRepository.has(
-                                            codeReviewConfigFromRepo.id,
-                                        )
+                                        codeReviewConfigFromRepo.directories
+                                            ?.length
                                     ) {
-                                        configByRepository.set(
-                                            codeReviewConfigFromRepo.id,
-                                            this.codeBaseConfigService.getConfig(
-                                                organizationAndTeamData,
+                                        const files =
+                                            await this.codeManagementService.getFilesByPullRequestId(
                                                 {
-                                                    id: codeReviewConfigFromRepo.id,
-                                                    name: codeReviewConfigFromRepo.name,
+                                                    organizationAndTeamData,
+                                                    repository: {
+                                                        id: repository.id,
+                                                        name: repository.name,
+                                                    },
+                                                    prNumber: pr.number,
                                                 },
-                                                [],
-                                            ),
-                                        );
+                                                pr.provider as PlatformType,
+                                            );
+                                        if (!files?.length) return;
+                                        resolvedConfig =
+                                            await this.codeBaseConfigService.getConfig(
+                                                organizationAndTeamData,
+                                                repository,
+                                                files,
+                                            );
+                                    } else {
+                                        if (
+                                            !configByRepository.has(
+                                                codeReviewConfigFromRepo.id,
+                                            )
+                                        ) {
+                                            configByRepository.set(
+                                                codeReviewConfigFromRepo.id,
+                                                this.codeBaseConfigService.getConfig(
+                                                    organizationAndTeamData,
+                                                    {
+                                                        id: codeReviewConfigFromRepo.id,
+                                                        name: codeReviewConfigFromRepo.name,
+                                                    },
+                                                    [],
+                                                ),
+                                            );
+                                        }
+                                        resolvedConfig =
+                                            await configByRepository.get(
+                                                codeReviewConfigFromRepo.id,
+                                            );
                                     }
-                                    const resolvedConfig =
-                                        await configByRepository.get(
-                                            codeReviewConfigFromRepo.id,
-                                        );
 
                                     if (
                                         resolvedConfig?.pullRequestApprovalActive ===

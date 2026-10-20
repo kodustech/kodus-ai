@@ -76,6 +76,7 @@ async function runCase(item, slot, withMap = true) {
     };
     const host = {
         getPullRequest: async () => ({ ...pr, labels: item.labels || [] }),
+        getFilesByPullRequestId: async () => item.files,
     };
     const maps = { read: async () => (withMap ? item.areaMap || null : null) };
     const stage = new DecidePrApprovalStage(host, maps);

@@ -376,12 +376,12 @@ export class PullRequestsService implements IPullRequestsService {
 
     async findPullRequestsWithoutDeliveredSuggestionsForApproval(
         organizationId: string,
-        prNumbers: number[],
+        prRefs: Array<{ repositoryId: string; pullRequestNumber: number }>,
         status: string,
     ): Promise<IPullRequestWithDeliveredSuggestions[]> {
         return this.pullRequestsRepository.findPullRequestsWithoutDeliveredSuggestionsForApproval(
             organizationId,
-            prNumbers,
+            prRefs,
             status,
         );
     }
