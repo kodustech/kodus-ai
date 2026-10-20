@@ -200,7 +200,7 @@
     }
   },
   {
-    "route": "/settings/code-review/x/business-logic",
+    "route": "/settings/code-review/x/agents/x",
     "expected": {
       "billing_manager": "allow",
       "repo_admin": "allow",
@@ -208,7 +208,7 @@
     }
   },
   {
-    "route": "/settings/code-review/x/agents/x",
+    "route": "/settings/code-review/x/business-logic",
     "expected": {
       "billing_manager": "allow",
       "repo_admin": "allow",
