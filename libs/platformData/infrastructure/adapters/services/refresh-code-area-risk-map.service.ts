@@ -47,9 +47,20 @@ export class RefreshCodeAreaRiskMapService {
     ) {}
 
     async readStatus(organizationId: string, repositoryId: string) {
+        if (
+            typeof organizationId !== 'string' ||
+            !organizationId ||
+            typeof repositoryId !== 'string' ||
+            !repositoryId
+        ) {
+            throw new Error('Invalid code-area map key');
+        }
         const state = await this.sync
             .findOne(
-                { organizationId, repositoryId },
+                {
+                    organizationId: { $eq: organizationId },
+                    repositoryId: { $eq: repositoryId },
+                },
                 {
                     source: 1,
                     windowStart: 1,
@@ -79,7 +90,14 @@ export class RefreshCodeAreaRiskMapService {
     }): Promise<{ complete: boolean; processed: number; cursorEnd: string }> {
         const { organizationAndTeamData, repository } = params;
         const organizationId = organizationAndTeamData.organizationId;
-        if (!organizationId || !repository.id || !repository.name) {
+        if (
+            typeof organizationId !== 'string' ||
+            !organizationId ||
+            typeof repository.id !== 'string' ||
+            !repository.id ||
+            typeof repository.name !== 'string' ||
+            !repository.name
+        ) {
             throw new Error(
                 'Organization and repository are required for area history',
             );

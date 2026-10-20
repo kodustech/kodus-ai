@@ -15,14 +15,25 @@ it('scopes map reads and writes to organization and repository', async () => {
 
     expect(await service.read('org-a', 'repo-b')).toBe(snapshot);
     expect(findOne).toHaveBeenCalledWith(
-        { organizationId: 'org-a', repositoryId: 'repo-b' },
+        {
+            organizationId: { $eq: 'org-a' },
+            repositoryId: { $eq: 'repo-b' },
+        },
         { snapshot: 1 },
     );
 
     await service.save('org-a', 'repo-b', snapshot as any);
     expect(updateOne).toHaveBeenCalledWith(
-        { organizationId: 'org-a', repositoryId: 'repo-b' },
+        {
+            organizationId: { $eq: 'org-a' },
+            repositoryId: { $eq: 'repo-b' },
+        },
         { $set: { snapshot } },
         { upsert: true },
     );
+
+    await expect(
+        service.read('org-a', { $ne: 'repo-b' } as any),
+    ).rejects.toThrow('Invalid code-area map key');
+    expect(findOne).toHaveBeenCalledTimes(1);
 });

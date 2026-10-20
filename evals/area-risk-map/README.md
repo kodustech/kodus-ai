@@ -4,6 +4,8 @@
 
 **Runs:** `node evals/area-risk-map/run.js --set=development` for the tuning period; `node evals/area-risk-map/run.js --set=holdout-2026 --output=/tmp/area-risk-map-result.json` for the verified later period. The deterministic runner calls production's map builder and ranking function; it makes no model calls.
 
+**Run it:** `node evals/area-risk-map/run.js --set=holdout-2026 --output=/tmp/area-risk-map-result.json` after `python3 evals/area-risk-map/collect.py --holdout-2026` and `python3 evals/area-risk-map/verify-target-links.py cases-holdout-2026.json` when rebuilding the corpus.
+
 **Gate:** `targets.json` remains unset until an acceptance floor is chosen. Exit 2 means fewer than 200 held-out PRs with linked bug-labeled issues and complete file listings.
 
 **Cost:** Zero model tokens. `collect.py` makes GitHub API calls when refreshing the frozen public corpus.
