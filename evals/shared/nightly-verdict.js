@@ -21,12 +21,12 @@
 // with (an unmeasured night keeps the last one), and, under GitHub Actions,
 // outputs for the message. Exit 0 always: the verdict travels in the outputs.
 const fs = require('fs');
-const { poolCases } = require('./eval-result');
+const { poolCases, poolTokens } = require('./eval-result');
 const { STAGES } = require('../stages');
 const { byId } = require('../nightly-evals');
 
 const WORSE = 0.04;
-const INFRA_BUDGET = 0.05; // evals/AGENTS.md: up to 5% of cases may go unmeasured
+const INFRA_BUDGET = 0.05; // evals/README.md: up to 5% of cases may go unmeasured
 
 function measured(result) {
     const infra = result?.infra || {};
@@ -44,7 +44,7 @@ function pool(a, b) {
         runs: (a.runs || 1) + (b.runs || 1),
         metric: { ...a.metric, value: total ? hits / total : null },
         cases,
-        tokens: Object.fromEntries(Object.keys(a.tokens || {}).map((k) => [k, (a.tokens[k] || 0) + ((b.tokens || {})[k] || 0)])),
+        tokens: poolTokens(a.tokens, b.tokens),
         infra: { errored: (a.infra?.errored || 0) + (b.infra?.errored || 0), total: (a.infra?.total || 0) + (b.infra?.total || 0) },
         pooled: true,
     };

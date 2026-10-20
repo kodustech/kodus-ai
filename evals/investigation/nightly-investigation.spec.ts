@@ -19,8 +19,7 @@ const row = (caseId: string, recall: number, found: string[], missed: string[] =
         precision: 0.5,
         tpFindings: 1,
         fpFindings: 0,
-        totalCalls: 20,
-        hitRate: 0.8,
+        toolCalls: 20,
         goldenResults: [...found.map((golden) => ({ golden, found: true })), ...missed.map((golden) => ({ golden, found: false }))],
     },
 });
@@ -130,7 +129,7 @@ describe('confirmation of a run below the floor', () => {
         model: 'm',
         metrics: { recall_mean: recall, precision_mean: 0.5, f1_mean: recall / 2 },
         tokens: { prompt: 10, completion: 1 },
-        rows: [{ caseId: 'a', status: 'pass', metadata: { recall, precision: 0.5, tpFindings: 1, fpFindings: 0, totalCalls: 20, goldenResults: [{ golden: 'bug', found }] } }],
+        rows: [{ caseId: 'a', status: 'pass', metadata: { recall, precision: 0.5, tpFindings: 1, fpFindings: 0, toolCalls: 20, goldenResults: [{ golden: 'bug', found }] } }],
     });
 
     it('decides on the mean of both runs and counts a bug found by either as found', () => {
@@ -194,7 +193,7 @@ describe('confirmation of a run below the floor', () => {
 });
 
 describe('gate refuses a judge it was not calibrated with', () => {
-    const run = { metrics: { recall_mean: 0.4 }, rows: [{ caseId: 'a', status: 'pass', metadata: { recall: 0.4, tpFindings: 2, fpFindings: 1, totalCalls: 40 } }] };
+    const run = { metrics: { recall_mean: 0.6 }, rows: [{ caseId: 'a', status: 'pass', metadata: { recall: 0.6, tpFindings: 2, fpFindings: 1, toolCalls: 90 } }] };
     const gateUnder = (env: Record<string, string | undefined>) => {
         const saved = { JUDGE_MODEL: process.env.JUDGE_MODEL, JUDGE_REASONING_EFFORT: process.env.JUDGE_REASONING_EFFORT };
         Object.assign(process.env, env);

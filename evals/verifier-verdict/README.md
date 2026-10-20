@@ -6,8 +6,8 @@
 > - **Gate:** exit 1 on a delivered verdict the extractor lost, or on a final step that can end with no verdict.
 > - **Cost:** none (no model). `capture.js` reads Langfuse only.
 
-Not [promotion](../promotion/README.md): that one asks whether the keep/drop
-_judgment_ is right on frozen evidence, with a model. This one asks whether the
+Not [funnel/verify](../funnel/verify/README.md): that one asks whether the
+keep/drop _judgment_ keeps the known bugs, on frozen candidates, with a model. This one asks whether the
 judgment the model already made survives the plumbing. A verdict can be perfect
 and still be thrown away.
 
@@ -117,7 +117,7 @@ carries the same shapes rewritten against a neutral codebase.
 ### What production delivers
 
 The counts live in [observed.json](observed.json) — capture writes them, nothing
-is typed by hand, and `evals/AGENTS.md` forbids restating them here. Refresh:
+is typed by hand, and `evals/README.md` forbids restating them here. Refresh:
 
 ```bash
 node evals/verifier-verdict/capture.js --days 10 --limit 200 --write-observed

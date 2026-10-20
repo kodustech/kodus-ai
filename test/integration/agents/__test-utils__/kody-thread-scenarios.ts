@@ -9,6 +9,7 @@
  * Reference: https://github.com/kodustech/kodus-ai/issues/1761
  */
 
+
 export interface ThreadScenario {
     id: string;
     /** What the thread reveals, in one line. */
@@ -33,6 +34,15 @@ const REPOSITORY = {
 
 const GIT_USER = { id: 44444444, username: 'dev-one' };
 
+/** The rule a `kody_rules` finding in these scenarios points at. */
+export const SCENARIO_RULE_ID = 'rule-5555aaaa';
+
+/**
+ * The thread as GitHub returns it, and the context the use case builds from it
+ * (reply-thread.ts: the same functions ChatWithKodyFromGitUseCase runs): Kody's
+ * comment, the other replies, the reply being answered, and what production
+ * fills from the stored finding (suggestionId, label, brokenKodyRulesIds).
+ */
 function thread(params: {
     userMessage: string;
     suggestionText: string;
@@ -40,31 +50,84 @@ function thread(params: {
     replies?: string[];
     suggestionCommentId?: number;
 }): Record<string, unknown> {
-    return {
+    // Built on first read: evals/catalogs/thread-*.js reads the scenarios'
+    // ids and signals in plain node, where the @libs aliases do not resolve.
+    let built: Record<string, unknown> | undefined;
+    return new Proxy({} as Record<string, unknown>, {
+        get: (_t, key) => (built ??= buildThread(params))[key as string],
+        ownKeys: () => Reflect.ownKeys((built ??= buildThread(params))),
+        getOwnPropertyDescriptor: (_t, key) => ({
+            enumerable: true,
+            configurable: true,
+            value: (built ??= buildThread(params))[key as string],
+        }),
+    });
+}
+
+function buildThread(params: {
+    userMessage: string;
+    suggestionText: string;
+    suggestionFilePath?: string;
+    replies?: string[];
+    suggestionCommentId?: number;
+}): Record<string, unknown> {
+    const rootId = params.suggestionCommentId ?? 5150;
+    const path = params.suggestionFilePath ?? 'src/worker/invoice.ts';
+    /* eslint-disable @typescript-eslint/no-var-requires */
+    const { PlatformType } = require('@libs/core/domain/enums/platform-type.enum');
+    const {
+        getOriginalKodyComment,
+        getOthersReplies,
+        prepareContext,
+    } = require('@libs/platform/application/use-cases/codeManagement/reply-thread');
+    const at = (n: number) => new Date(Date.UTC(2026, 9, 16, 10, n)).toISOString();
+    const comments = [
+        {
+            id: rootId,
+            body: `${params.suggestionText}\n\n<!-- kody-codereview -->&#8203;`,
+            path,
+            diff_hunk:
+                '@@ -12,6 +12,9 @@\n+    await retry(() => this.charge(invoice), { attempts: 3 });',
+            user: { login: 'kody-ai[bot]', type: 'Bot' },
+            created_at: at(0),
+        },
+        ...(params.replies ?? []).map((body, i) => ({
+            id: rootId + 1 + i,
+            body,
+            path,
+            in_reply_to_id: rootId,
+            user: { login: 'dev-two', type: 'User' },
+            created_at: at(1 + i),
+        })),
+        {
+            id: rootId + 100,
+            body: params.userMessage,
+            path,
+            in_reply_to_id: rootId,
+            user: { login: GIT_USER.username, type: 'User' },
+            created_at: at(9),
+        },
+    ];
+    const reply = comments[comments.length - 1];
+    const isRule = params.suggestionText.includes('kody_rules');
+    return prepareContext({
+        comment: reply,
+        originalKodyComment: getOriginalKodyComment(reply, comments, PlatformType.GITHUB),
+        originalSuggestion: {
+            suggestionId: `sugg-${rootId}`,
+            label: isRule ? 'kody_rules' : 'bug',
+            brokenKodyRulesIds: isRule ? [SCENARIO_RULE_ID] : [],
+        },
         gitUser: GIT_USER,
-        userQuestion: params.userMessage,
-        platformType: 'GITHUB',
-        repository: { ...REPOSITORY, defaultBranch: 'main' },
+        othersReplies: getOthersReplies(reply, comments, PlatformType.GITHUB),
+        pullRequestNumber: 812,
+        repository: REPOSITORY,
         pullRequestDescription: 'Adds retry handling to the invoice worker.',
-        pullRequest: {
-            pullRequestNumber: 812,
-            headRef: 'feat/invoice-retry',
-            baseRef: 'main',
-        },
-        codeManagementContext: {
-            originalComment: {
-                suggestionCommentId: params.suggestionCommentId ?? 5150,
-                suggestionFilePath:
-                    params.suggestionFilePath ?? 'src/worker/invoice.ts',
-                suggestionText: params.suggestionText,
-                diffHunk:
-                    '@@ -12,6 +12,9 @@\n+    await retry(() => this.charge(invoice), { attempts: 3 });',
-            },
-            othersReplies: (params.replies ?? []).map((body) => ({
-                historyConversationText: body,
-            })),
-        },
-    };
+        platformType: PlatformType.GITHUB,
+        headRef: 'feat/invoice-retry',
+        baseRef: 'main',
+        defaultBranch: 'main',
+    });
 }
 
 export const ORGANIZATION_AND_TEAM_DATA = ORG;
@@ -106,6 +169,18 @@ export const THREAD_SCENARIOS: ThreadScenario[] = [
             userMessage: 'rule too broad',
             suggestionText:
                 '![kody_rules](shield) Validate the request body before using it.',
+        }),
+    },
+    {
+        id: 'new-rule-requested',
+        signal: 'developer asks for a new rule after a finding that no rule covers',
+        userMessage:
+            '@kody can you turn that into a rule? Every handler that calls the payment provider should go through the retry wrapper.',
+        expectedOffer: 'KODUS_CREATE_KODY_RULE',
+        prepareContext: thread({
+            userMessage: 'new rule',
+            suggestionText:
+                'The charge call is not wrapped in the retry helper the other handlers use.',
         }),
     },
     {

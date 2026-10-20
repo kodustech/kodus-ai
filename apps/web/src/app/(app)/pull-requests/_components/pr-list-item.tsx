@@ -476,7 +476,8 @@ export const PrListItem = ({ group }: PrListItemProps) => {
     };
 
     return (
-        <div className={cn("border-card-lv3/30 border-b border-l-2", rowAccent)}>
+        <div
+            className={cn("border-card-lv3/30 border-b border-l-2", rowAccent)}>
             <div
                 role="button"
                 tabIndex={0}
@@ -1232,6 +1233,20 @@ const WARNING_KIND_LABEL: Record<ReviewWarningKind, string> = {
     SUGGESTIONS_DROPPED_PATH_MISMATCH:
         "Findings dropped (file not in the pull request)",
     KODY_RULES_PARTIAL: "Some Kody Rules checks failed to run",
+    VERIFY_UNAVAILABLE: "Findings not posted (verification failed to run)",
+    SKILL_NOT_FOUND: "Linked skill not found on the target branch",
+    SKILL_INVALID: "Linked skill skipped (invalid skill format)",
+    SKILL_CHANGED_IN_PR:
+        "Skill or doc edited in this PR (target-branch version used)",
+    DOC_NOT_FOUND: "Linked doc not found on the target branch",
+    KNOWLEDGE_TRUNCATED: "Skills or docs cut to fit their budget",
+    KNOWLEDGE_UNAVAILABLE: "Reviewed without skills and docs (could not be read)",
+    SKILL_COMPATIBILITY: "Skill requirements may not be met by the reviewer",
+    CLI_INSTALL_FAILED: "Custom agent ran without a CLI",
+    CROSS_REPO_UNAVAILABLE:
+        "Linked repositories not read (repository not checked out)",
+    AST_GREP_UNAVAILABLE: "Custom agent ran without ast-grep",
+    CONFIG_FILE_KEY_IGNORED: "kodus-config.yml key ignored (set in the app)",
 };
 
 /**

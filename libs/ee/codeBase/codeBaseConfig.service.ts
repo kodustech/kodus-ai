@@ -29,6 +29,7 @@ import * as yaml from 'js-yaml';
 import { decrypt } from '@libs/common/utils/crypto';
 import { ValidateCodeManagementIntegration } from '@libs/common/utils/decorators/validate-code-management-integration.decorator';
 import { deepMerge } from '@libs/common/utils/deep';
+import { withDirectoryAgentLists } from '@libs/code-review/domain/custom-agents/directory-cascade';
 import {
     buildDefaultGlobalCodeReviewConfig,
     getDefaultKodusConfigFile,
@@ -247,11 +248,19 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
 
             const directoryDelta = directoryConfig?.configs;
 
-            const merged = deepMerge(
-                this.DEFAULT_CONFIG,
-                globalDelta || {},
-                repoDelta || {},
-                directoryDelta || {},
+            const merged = withDirectoryAgentLists(
+                deepMerge(
+                    this.DEFAULT_CONFIG,
+                    globalDelta || {},
+                    repoDelta || {},
+                    directoryDelta || {},
+                ),
+                deepMerge(
+                    this.DEFAULT_CONFIG,
+                    globalDelta || {},
+                    repoDelta || {},
+                ),
+                directoryDelta,
             );
 
             let configLevel = ConfigLevel.GLOBAL;
@@ -422,11 +431,18 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
 
         const directoryDelta = directoryConfig?.configs;
 
+        // Keys the file loader dropped, kept so the review can name the ones
+        // a team writes expecting them to work (customAgents, knowledge).
+        const droppedFileKeys = new Set<string>();
+        const onDroppedKeys = (keys: string[]) =>
+            keys.forEach((key) => droppedFileKeys.add(key));
+
         const repositoryFileDelta = await this.getKodusConfigFile({
             organizationAndTeamData,
             repository,
             defaultBranch,
             overrideConfig: this.getFileOverridePreference(repoConfig),
+            onDroppedKeys,
         });
 
         // Without a directory config this read has no directory to resolve and
@@ -441,16 +457,29 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                       repoConfig,
                       directoryConfig,
                   ),
+                  onDroppedKeys,
               })
             : undefined;
 
-        const merged = deepMerge(
-            this.DEFAULT_CONFIG,
-            globalDelta || {},
-            repoDelta || {},
-            repositoryFileDelta || {},
-            directoryDelta || {},
-            directoryFileDelta || {},
+        // kodus-config.yml never carries customAgents or knowledge (the file
+        // loader drops them), so the directory's stored delta is their only
+        // directory-level source.
+        const merged = withDirectoryAgentLists(
+            deepMerge(
+                this.DEFAULT_CONFIG,
+                globalDelta || {},
+                repoDelta || {},
+                repositoryFileDelta || {},
+                directoryDelta || {},
+                directoryFileDelta || {},
+            ),
+            deepMerge(
+                this.DEFAULT_CONFIG,
+                globalDelta || {},
+                repoDelta || {},
+                repositoryFileDelta || {},
+            ),
+            directoryDelta,
         );
 
         let configLevel = ConfigLevel.GLOBAL;
@@ -470,6 +499,9 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
             directoryId,
             directoryPath,
             directoryFolders: this.getDirectoryFolders(directoryConfig),
+            ...(droppedFileKeys.size && {
+                kodusConfigFileDroppedKeys: [...droppedFileKeys],
+            }),
         } as CodeReviewConfigWithoutLLMProvider;
     }
 
@@ -710,6 +742,8 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         directoryId?: string;
         defaultBranch?: string;
         removeProperties?: boolean;
+        /** Told the top-level keys stripped from the file as unknown. */
+        onDroppedKeys?: (keys: string[]) => void;
     }): Promise<KodusConfigFile | undefined> {
         const {
             organizationAndTeamData,
@@ -754,11 +788,14 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                 : ({} as KodusConfigFile);
 
         // strip properties not in default config
+        const droppedKeys: string[] = [];
         for (const key in kodusConfigYMLfile) {
             if (!(key in this.DEFAULT_CONFIG)) {
+                droppedKeys.push(key);
                 delete kodusConfigYMLfile[key as keyof KodusConfigFile];
             }
         }
+        if (droppedKeys.length) params.onDroppedKeys?.(droppedKeys);
 
         if (removeProperties) {
             delete kodusConfigYMLfile.version;

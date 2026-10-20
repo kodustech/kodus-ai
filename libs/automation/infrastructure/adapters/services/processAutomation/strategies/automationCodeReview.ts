@@ -27,6 +27,7 @@ import {
     PrReviewInProgressError,
 } from '@libs/code-review/domain/errors/pr-review-in-progress.error';
 import { describePipelineError } from '@libs/code-review/utils/describe-pipeline-error';
+import { EnqueueImplementationCheckUseCase } from '@libs/code-review/application/use-cases/enqueue-implementation-check.use-case';
 
 /**
  * Messages the pipeline sets before it knows the outcome. Reporting one of
@@ -40,6 +41,16 @@ import { describePipelineError } from '@libs/code-review/utils/describe-pipeline
  * retrying — past it, a retry sees no holder and starts a second review.
  */
 const ACTIVE_EXECUTION_LOOKBACK_MINUTES = 30;
+
+/**
+ * A running review rewrites its row's `updatedAt` every interval; a row
+ * not touched within the stale window belongs to a process that died
+ * (deploy, OOM, SIGKILL) without a terminal update, and must stop holding
+ * the PR. The window spans several missed beats so one slow or failed
+ * write does not let a second review start next to a live one.
+ */
+const ACTIVE_EXECUTION_HEARTBEAT_INTERVAL_MS = 60_000;
+const ACTIVE_EXECUTION_HEARTBEAT_STALE_MINUTES = 5;
 
 const STALE_STARTUP_MESSAGES = new Set([
     'pipeline started',
@@ -74,6 +85,7 @@ export class AutomationCodeReviewService implements Omit<
         private readonly organizationService: IOrganizationService,
         private readonly codeReviewHandlerService: CodeReviewHandlerService,
         private readonly distributedLockService: DistributedLockService,
+        private readonly enqueueImplementationCheckUseCase: EnqueueImplementationCheckUseCase,
     ) {}
 
     async setup(payload?: any): Promise<any> {
@@ -121,6 +133,7 @@ export class AutomationCodeReviewService implements Omit<
             triggerCommentId,
             reviewDirective,
             heavy,
+            onlyCustomAgent,
             userGitId,
             signal,
         } = payload as Record<string, any>;
@@ -218,6 +231,7 @@ export class AutomationCodeReviewService implements Omit<
         }
 
         let execution: IAutomationExecution | null = null;
+        let stopHeartbeat: (() => void) | undefined;
 
         try {
             const existingExecution = await this.getActiveExecution(
@@ -263,6 +277,8 @@ export class AutomationCodeReviewService implements Omit<
                 });
                 return 'Could not create code review execution';
             }
+
+            stopHeartbeat = this.startExecutionHeartbeat(execution.uuid);
 
             // Check for pre-validation error passed from UseCase
             if (payload.validationError) {
@@ -317,6 +333,7 @@ export class AutomationCodeReviewService implements Omit<
                     signal, // parentSignal — forwarded to pipeline context
                     reviewDirective, // @kody review <directive> steering text
                     heavy, // @kody review --heavy — extra critic pass
+                    onlyCustomAgent, // @kody -v <slug> — that custom agent only
                 );
 
             await this._handleExecutionCompletion(
@@ -336,6 +353,7 @@ export class AutomationCodeReviewService implements Omit<
             await this._handleExecutionError(execution, error, payload);
             return 'Error executing automation';
         } finally {
+            stopHeartbeat?.();
             if (lock) {
                 try {
                     await lock.release();
@@ -408,6 +426,25 @@ export class AutomationCodeReviewService implements Omit<
         });
     }
 
+    private startExecutionHeartbeat(executionUuid: string): () => void {
+        const timer = setInterval(() => {
+            this.automationExecutionService
+                .touchInProgress(executionUuid)
+                .catch((error) => {
+                    this.logger.warn({
+                        message: 'Failed to heartbeat code review execution',
+                        context: AutomationCodeReviewService.name,
+                        error: error instanceof Error ? error : undefined,
+                        metadata: { executionUuid },
+                    });
+                });
+        }, ACTIVE_EXECUTION_HEARTBEAT_INTERVAL_MS);
+        // Never keep the process alive just to heartbeat.
+        timer.unref?.();
+
+        return () => clearInterval(timer);
+    }
+
     private async getActiveExecution(
         teamAutomationId: string,
         pullRequestNumber: number,
@@ -419,6 +456,11 @@ export class AutomationCodeReviewService implements Omit<
                 cutoffTime.getMinutes() - ACTIVE_EXECUTION_LOOKBACK_MINUTES,
             );
 
+            // A row whose heartbeat went quiet is a dead run, not a holder.
+            const heartbeatCutoff = new Date(
+                Date.now() - ACTIVE_EXECUTION_HEARTBEAT_STALE_MINUTES * 60_000,
+            );
+
             const activeExecutions = await this.automationExecutionService.find(
                 {
                     teamAutomation: { uuid: teamAutomationId },
@@ -426,6 +468,7 @@ export class AutomationCodeReviewService implements Omit<
                     repositoryId: repositoryId,
                     status: AutomationStatus.IN_PROGRESS,
                     createdAt: MoreThanOrEqual(cutoffTime),
+                    updatedAt: MoreThanOrEqual(heartbeatCutoff),
                 } as any,
             );
 
@@ -524,7 +567,7 @@ export class AutomationCodeReviewService implements Omit<
         message: string,
         data: any,
         stageName?: string,
-    ) {
+    ): Promise<boolean> {
         try {
             const errorMessage = [
                 AutomationStatus.ERROR,
@@ -543,6 +586,7 @@ export class AutomationCodeReviewService implements Omit<
                 message,
                 stageName,
             );
+            return true;
         } catch (error) {
             this.logger.error({
                 message: 'Error updating automation execution',
@@ -550,6 +594,7 @@ export class AutomationCodeReviewService implements Omit<
                 error: error instanceof Error ? error : undefined,
                 metadata: { executionUuid: entity.uuid, status },
             });
+            return false;
         }
     }
 
@@ -577,13 +622,17 @@ export class AutomationCodeReviewService implements Omit<
             lastExecutionData,
         );
 
-        await this.updateAutomationExecution(
+        const persisted = await this.updateAutomationExecution(
             execution,
             finalStatus,
             finalMessage,
             newData,
             'Kody Review Finished',
         );
+
+        if (persisted) {
+            await this.enqueueImplementationCheck(payload, finalStatus, result);
+        }
 
         this.logger.log({
             message: `Successfully handled pull request for PR#${payload.pullRequest?.number}`,
@@ -593,6 +642,58 @@ export class AutomationCodeReviewService implements Omit<
                 ...result,
             },
         });
+    }
+
+    /**
+     * The push webhook checks suggestions only once they are stored, so a
+     * commit pushed while this review was running was checked against an
+     * empty set (#2182). Checking again once the review is persisted covers
+     * it; without a new commit the check finds no diff and stops before the
+     * LLM call.
+     */
+    private async enqueueImplementationCheck(
+        payload: any,
+        finalStatus: AutomationStatus,
+        result: any,
+    ): Promise<void> {
+        const commitSha = result?.lastAnalyzedCommit?.sha;
+
+        if (
+            !commitSha ||
+            (finalStatus !== AutomationStatus.SUCCESS &&
+                finalStatus !== AutomationStatus.PARTIAL_ERROR)
+        ) {
+            return;
+        }
+
+        const {
+            organizationAndTeamData,
+            repository,
+            pullRequest,
+            platformType,
+        } = payload;
+
+        try {
+            await this.enqueueImplementationCheckUseCase.execute({
+                organizationAndTeamData,
+                repository: { id: repository?.id, name: repository?.name },
+                pullRequestNumber: pullRequest?.number,
+                commitSha,
+                trigger: 'review_completed',
+                platformType,
+            });
+        } catch (error) {
+            this.logger.error({
+                message: `Failed to enqueue implementation check after review of PR#${pullRequest?.number}`,
+                context: AutomationCodeReviewService.name,
+                error: error instanceof Error ? error : undefined,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryId: repository?.id,
+                    pullRequestNumber: pullRequest?.number,
+                },
+            });
+        }
     }
 
     /**

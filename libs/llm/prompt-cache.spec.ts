@@ -27,8 +27,10 @@
 import type { ModelMessage } from 'ai';
 import {
     applyCacheBreakpoints,
+    CACHE_PREFIX_BOUNDARY,
     markLastToolForCache,
     markLatestUserForCache,
+    withoutPrefixBoundary,
     type CacheHint,
 } from './prompt-cache';
 
@@ -664,5 +666,71 @@ describe('E. provider/model policy (real registry)', () => {
         expect(out.callMessages.every((m) => !(m as any).providerOptions)).toBe(
             true,
         );
+    });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// Shared-prefix boundary (#2172) — the custom agents of one review send the
+// same system prefix; the marker gives it its own breakpoint and never
+// reaches a model.
+// ───────────────────────────────────────────────────────────────────────────
+describe('shared-prefix boundary', () => {
+    const SYSTEM = `SHARED RULES${CACHE_PREFIX_BOUNDARY}AGENT ROLE`;
+
+    it('splits the system prompt at the marker into two cached parts', () => {
+        const out = runHit({ system: SYSTEM });
+
+        expect(out.systemArg).toEqual([
+            {
+                role: 'system',
+                content: 'SHARED RULES',
+                providerOptions: EPHEMERAL,
+            },
+            {
+                role: 'system',
+                content: 'AGENT ROLE',
+                providerOptions: EPHEMERAL,
+            },
+        ]);
+        // 4 breakpoints in all: tool + 2 system parts + latest user.
+        expect((out.callTools as any).listDir.providerOptions).toEqual(
+            EPHEMERAL,
+        );
+        expect((out.callMessages[0] as any).providerOptions).toEqual(EPHEMERAL);
+    });
+
+    it('removes the marker when the provider takes no inline hint', () => {
+        const out = runHit({
+            system: SYSTEM,
+            provider: 'openai',
+            model: 'gpt-4o',
+        });
+
+        expect(out.systemArg).toBe('SHARED RULESAGENT ROLE');
+    });
+
+    it('removes the marker on a single-step call', () => {
+        expect(runHit({ system: SYSTEM, maxSteps: 1 }).systemArg).toBe(
+            'SHARED RULESAGENT ROLE',
+        );
+    });
+
+    it('keeps one cached part when a side of the marker is empty', () => {
+        const out = runHit({ system: `${CACHE_PREFIX_BOUNDARY}AGENT ROLE` });
+
+        expect(out.systemArg).toEqual({
+            role: 'system',
+            content: 'AGENT ROLE',
+            providerOptions: EPHEMERAL,
+        });
+    });
+
+    it('leaves a system prompt without the marker exactly as before', () => {
+        expect(runHit({}).systemArg).toEqual({
+            role: 'system',
+            content: 'SYS',
+            providerOptions: EPHEMERAL,
+        });
+        expect(withoutPrefixBoundary('SYS')).toBe('SYS');
     });
 });

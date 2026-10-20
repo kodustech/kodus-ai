@@ -60,574 +60,124 @@ function summarizeInput(value) {
     return { type: typeof value };
 }
 
-function normalizePath(value) {
-    return String(value || '')
-        .replace(/^\/+/, '')
-        .replace(/\\/g, '/')
-        .replace(/\/+/g, '/');
+const { resolveRoute, evalPermissionService, NotAProductionRoute } = require('../shared/model-route');
+const { reviewPullRequest } = require('../shared/review-stage');
+const { filesBetween } = require('../shared/repo-mirror');
+
+// RECALL_CATEGORIES=bug,security: the team's category toggles (reviewOptions),
+// for an experiment. Without it the team set none, so production runs all three.
+function reviewOptionsFromEnv() {
+    const raw = process.env.RECALL_CATEGORIES;
+    if (!raw) return undefined;
+    const on = new Set(raw.split(',').map((c) => c.trim()).filter(Boolean));
+    return { bug: on.has('bug'), security: on.has('security'), performance: on.has('performance') };
 }
 
-function normalizeChangedFiles(files) {
-    return (files || []).map((file) => ({
-        filename: normalizePath(file.filename || file.path || file.filePath),
-        patchWithLinesStr:
-            file.patchWithLinesStr || file.patch || file.diff || '',
-        patch: file.patch || file.patchWithLinesStr || file.diff || '',
-    }));
-}
-
-function normalizeRequestedCategories(value) {
-    const parsed = parseMaybeJson(value);
-
-    if (Array.isArray(parsed)) {
-        return parsed.filter(Boolean).map(String);
+// What the team set, from the case's data: its language, its memories as a
+// member writes them (stored by production's write, shared/review-stage.js
+// teamStore), and the review options and prompt overrides it saved. A run's
+// `--team-config` (run-recall.js, shared/team-config.js) is saved over the
+// case's own keys, as a team saving those keys would.
+function teamOf(caseData, teamConfig = null) {
+    if (process.env.RECALL_HEAVY === '1') {
+        throw new NotAProductionRoute('RECALL_HEAVY asks for a mode the review enables behind a release gate the eval has no org for');
     }
-
-    if (typeof parsed === 'string' && parsed.trim()) {
-        return [parsed.trim()];
-    }
-
-    return undefined;
-}
-
-function defaultApiKeyEnv(provider) {
-    switch (provider) {
-        case 'openai':
-            return 'API_OPEN_AI_API_KEY';
-        case 'openai-compatible':
-            return 'API_OPEN_AI_API_KEY';
-        case 'anthropic':
-            return 'API_ANTHROPIC_API_KEY';
-        case 'openrouter':
-            return 'API_OPENROUTER_KEY';
-        case 'google':
-        default:
-            return 'API_GOOGLE_AI_API_KEY';
-    }
-}
-
-function buildOpenRouterProviderRouting(config) {
-    const providerOrder = Array.isArray(config.providerOrder)
-        ? config.providerOrder.filter(Boolean)
-        : [];
-
-    if (
-        providerOrder.length === 0 &&
-        typeof config.allowFallbacks !== 'boolean' &&
-        typeof config.requireParameters !== 'boolean'
-    ) {
-        return null;
-    }
-
+    const memories = parseMaybeJson(caseData.memoryRules) || [];
+    const reviewOptions = reviewOptionsFromEnv();
+    const v2PromptOverrides = parseMaybeJson(caseData.v2PromptOverrides);
+    const configs = {
+        ...(reviewOptions ? { reviewOptions } : {}),
+        ...(v2PromptOverrides ? { v2PromptOverrides } : {}),
+        ...(caseData.reviewMode ? { reviewMode: caseData.reviewMode } : {}),
+        ...(teamConfig || {}),
+    };
     return {
-        ...(providerOrder.length > 0 ? { order: providerOrder } : {}),
-        ...(typeof config.allowFallbacks === 'boolean'
-            ? { allow_fallbacks: config.allowFallbacks }
-            : {}),
-        ...(typeof config.requireParameters === 'boolean'
-            ? { require_parameters: config.requireParameters }
-            : {}),
+        language: caseData.languageResultPrompt || undefined,
+        memories: memories.map((m) => ({ title: m.title, rule: m.rule, path: m.path ?? null })),
+        codeReviewConfig: Object.keys(configs).length ? { configs, repositories: [] } : null,
     };
 }
 
-function buildOpenAICompatibleConfig(config, apiKey, defaultName) {
-    const openRouterProviderRouting =
-        config.provider === 'openrouter'
-            ? buildOpenRouterProviderRouting(config)
-            : null;
-
+// The PR as the platform returns it: the adapter output recorded for a real PR
+// (evals/investigation/fetch-pr-data.js), or, for a repository written for the
+// eval (repoFiles over repoBase), what the platform computes between the two.
+function prOf(caseData) {
+    const repoFiles = parseMaybeJson(caseData.repoFiles);
+    const repoBase = parseMaybeJson(caseData.repoBase) || {};
+    const files = repoFiles ? filesBetween(repoBase, repoFiles) : parseMaybeJson(caseData.prFiles);
+    if (!files) throw new Error(`case ${caseData.caseId} has no prFiles: run evals/investigation/fetch-pr-data.js`);
     return {
-        name: config.providerName || defaultName,
-        apiKey,
-        baseURL:
-            config.baseURL ||
-            (config.provider === 'openrouter'
-                ? 'https://openrouter.ai/api/v1'
-                : undefined),
-        ...(config.headers ? { headers: config.headers } : {}),
-        ...(config.queryParams ? { queryParams: config.queryParams } : {}),
-        ...(openRouterProviderRouting
-            ? {
-                  transformRequestBody: (body) => ({
-                      ...body,
-                      provider: {
-                          ...(body.provider || {}),
-                          ...openRouterProviderRouting,
-                      },
-                  }),
-              }
-            : {}),
+        repo: repoFiles ? undefined : caseData.repositoryFullName,
+        number: caseData.prNumber ?? undefined,
+        title: caseData.prTitle,
+        body: caseData.prBody,
+        headRef: caseData.prHead?.ref,
+        headSha: caseData.prHead?.sha,
+        baseRef: caseData.prBase?.ref || caseData.baseBranch || 'main',
+        baseSha: caseData.prBase?.sha,
+        files,
+        commits: parseMaybeJson(caseData.prCommits) || [],
+        repoFiles,
+        repoBase: repoFiles ? repoBase : undefined,
     };
 }
 
-
-/**
- * Injeta esforco de raciocinio explicito nas chamadas do modelo.
- *
- * POR QUE: o caminho self-hosted monta o modelo sem providerOptions, e o eval
- * nunca seta config.main.reasoningEffort — entao TODO modelo roda no default do
- * fornecedor. Isso nao e neutro: medimos gemini-3.7-flash gastando 5.2k tokens
- * de saida por caso, contra ~107k que o mesmo modelo gasta em bench publico com
- * thinking alto. O default e um eixo experimental, nao uma constante, e comparar
- * modelos com defaults diferentes compara configuracoes, nao capacidades.
- *
- * Ativa com RECALL_REASONING_EFFORT=low|medium|high. Sem a env, nada muda.
- * O valor escolhido vai para o artefato via runMetaOf(), senao o numero fica
- * sem regime declarado.
- */
-function withReasoningEffort(model, modelId) {
-    const effort = process.env.RECALL_REASONING_EFFORT;
-    if (!effort) return model;
-
-    const { buildReasoningProviderOptions } = require('../../libs/llm/reasoning-options.ts');
-    // provider derivado do id: o mapeamento nativo difere por fornecedor
-    // (thinkingLevel no Gemini 3+, reasoningEffort na OpenAI, thinking.type nos
-    // OpenAI-compativeis).
-    // valores do enum BYOKProvider (byokProvider.service.ts), nao os nomes
-    const provider = /^gemini/i.test(modelId)
-        ? 'google_gemini'
-        : /^claude/i.test(modelId)
-          ? 'anthropic'
-          : /^gpt|^o\d/i.test(modelId)
-            ? 'openai'
-            : 'openai_compatible';
-    const injected = buildReasoningProviderOptions(provider, effort, modelId);
-    if (!injected || !Object.keys(injected).length) {
-        console.warn(`[reasoning] ${modelId}: nenhuma opcao mapeada para effort=${effort}`);
-        return model;
-    }
-    console.log(`[reasoning] ${modelId} effort=${effort} -> ${JSON.stringify(injected)}`);
-
-    const merge = (options) => ({
-        ...options,
-        providerOptions: { ...(options?.providerOptions || {}), ...injected },
-    });
-    return new Proxy(model, {
-        get(target, prop, receiver) {
-            if (prop === 'doGenerate' || prop === 'doStream') {
-                return async (options) => target[prop](merge(options));
-            }
-            return Reflect.get(target, prop, receiver);
+// The loops of one review as one row: one loop, or one per batch in the order
+// production ran them, findings concatenated and counts summed. An account of
+// what was observed, not a step of the review.
+function combineLoops(loops) {
+    const results = loops.map((l) => l.result);
+    if (results.length === 1) return results[0];
+    const sum = (key) => results.reduce((n, r) => n + Number(r.usage?.[key] || 0), 0);
+    return {
+        findings: {
+            reasoning: results.map((r) => r.findings?.reasoning || '').filter(Boolean).join('\n\n'),
+            suggestions: results.flatMap((r) => r.findings?.suggestions || []),
         },
-    });
-}
-
-async function createModel(config) {
-    if (config.provider === 'tier0') {
-        const modelId = process.env.RECALL_MODEL || config.model;
-        const { applyModelEnv, TIER0 } = require('../shared/tier0-models');
-
-        // Assinatura: nao passa por buildModelFromSlot (que espera chave de API).
-        // Fala com chatgpt.com/backend-api via token OAuth do Codex; o wrapper
-        // resolve o streaming-only + store:false.
-        const spec = TIER0[modelId];
-        if (spec && spec.provider === 'codex_subscription') {
-            const { buildCodexSubscriptionModel } = require('../../libs/llm/codex-subscription-model.ts');
-            return buildCodexSubscriptionModel(spec.codexModel || modelId);
-        }
-
-        const { buildEvalModel } = require('../shared/build-model');
-        applyModelEnv(modelId);
-        return withReasoningEffort(buildEvalModel({}), modelId);
-    }
-
-    // Env overrides so ANY model runs from one yaml (no per-provider config):
-    //   RECALL_MODEL, RECALL_PROVIDER, RECALL_BASEURL, RECALL_APIKEY_ENV.
-    if (process.env.RECALL_PROVIDER || process.env.RECALL_BASEURL) {
-        config = {
-            ...config,
-            ...(process.env.RECALL_PROVIDER ? { provider: process.env.RECALL_PROVIDER } : {}),
-            ...(process.env.RECALL_BASEURL ? { baseURL: process.env.RECALL_BASEURL } : {}),
-        };
-    }
-    const provider = config.provider || 'google';
-    const model = process.env.RECALL_MODEL || config.model;
-    const apiKeyEnv = process.env.RECALL_APIKEY_ENV || config.apiKeyEnv || defaultApiKeyEnv(provider);
-    const apiKey = config.apiKey || process.env[apiKeyEnv];
-
-    if (!model) {
-        throw new Error('Missing provider config.model');
-    }
-    if (!apiKey) {
-        throw new Error(`Missing API key for ${provider} in ${apiKeyEnv}`);
-    }
-
-    if (provider === 'google') {
-        const { createGoogleGenerativeAI } = await import('@ai-sdk/google');
-        return createGoogleGenerativeAI({ apiKey })(model);
-    }
-
-    if (provider === 'anthropic') {
-        const { createAnthropic } = await import('@ai-sdk/anthropic');
-        return createAnthropic({
-            apiKey,
-            ...(config.baseURL ? { baseURL: config.baseURL } : {}),
-        })(model);
-    }
-
-    if (provider === 'openai') {
-        const { createOpenAI } = await import('@ai-sdk/openai');
-        return createOpenAI({
-            apiKey,
-            ...(config.headers ? { headers: config.headers } : {}),
-            ...(config.baseURL ? { baseURL: config.baseURL } : {}),
-        })(model);
-    }
-
-    if (provider === 'openrouter' || provider === 'openai-compatible') {
-        const { createOpenAICompatible } = await import(
-            '@ai-sdk/openai-compatible'
-        );
-        return createOpenAICompatible(
-            buildOpenAICompatibleConfig(
-                config,
-                apiKey,
-                provider === 'openrouter' ? 'openrouter' : 'openai-compatible',
-            ),
-        )(model);
-    }
-
-    throw new Error(`Unsupported provider: ${provider}`);
-}
-
-function fixtureMatches(match, actual) {
-    return Object.entries(match || {}).every(([key, expectedValue]) => {
-        if (expectedValue === undefined || expectedValue === null) return true;
-
-        if (key === 'pathEndsWith') {
-            return normalizePath(actual.path).endsWith(normalizePath(expectedValue));
-        }
-
-        if (key === 'patternIncludes') {
-            return String(actual.pattern || '').includes(String(expectedValue));
-        }
-
-        const actualValue = actual[key];
-        if (key.toLowerCase().includes('path')) {
-            return normalizePath(expectedValue) === normalizePath(actualValue);
-        }
-        return expectedValue === actualValue;
-    });
-}
-
-class ReplayRemoteCommands {
-    constructor(replay) {
-        this.replay = replay || {};
-        this.calls = [];
-        this.unexpectedCalls = [];
-        this.readFileCorpus = Array.isArray(this.replay.readFile)
-            ? this.replay.readFile
-                  .map((entry) => ({
-                      path: normalizePath(entry?.match?.path),
-                      content: String(entry?.result || ''),
-                  }))
-                  .filter((entry) => entry.path && entry.content)
-            : [];
-    }
-
-    _findFixture(kind, actual) {
-        const entries = this.replay[kind] || [];
-        return (
-            entries.find((entry) =>
-                fixtureMatches(entry.match || {}, actual),
-            ) || null
-        );
-    }
-
-    _recordCall(kind, actual, matched) {
-        this.calls.push({ kind, actual, matched });
-        if (!matched) {
-            this.unexpectedCalls.push({ kind, actual });
-        }
-    }
-
-    _lookup(kind, actual) {
-        const match = this._findFixture(kind, actual);
-        this._recordCall(kind, actual, !!match);
-        if (!match) {
-            return null;
-        }
-
-        return match.result || '';
-    }
-
-    _matchesPathScope(filePath, searchPath) {
-        const normalizedFilePath = normalizePath(filePath);
-        const normalizedSearchPath = normalizePath(searchPath || '.');
-
-        if (!normalizedSearchPath || normalizedSearchPath === '.') return true;
-        return (
-            normalizedFilePath === normalizedSearchPath ||
-            normalizedFilePath.startsWith(`${normalizedSearchPath}/`)
-        );
-    }
-
-    _matchesGlob(filePath, glob) {
-        if (!glob) return true;
-        const normalizedFilePath = normalizePath(filePath);
-
-        if (/^\*\.[^*]+$/.test(glob)) {
-            return normalizedFilePath.endsWith(glob.slice(1));
-        }
-
-        return true;
-    }
-
-    _compilePattern(pattern) {
-        try {
-            return new RegExp(String(pattern || ''));
-        } catch {
-            const escaped = String(pattern || '').replace(
-                /[.*+?^${}()|[\]\\]/g,
-                '\\$&',
-            );
-            return new RegExp(escaped);
-        }
-    }
-
-    _searchReadFileCorpus(actual) {
-        const regex = this._compilePattern(actual.pattern);
-        const matches = [];
-
-        for (const entry of this.readFileCorpus) {
-            if (!this._matchesPathScope(entry.path, actual.path)) continue;
-            if (!this._matchesGlob(entry.path, actual.glob)) continue;
-
-            const lines = entry.content.split('\n');
-            for (let index = 0; index < lines.length; index += 1) {
-                const line = lines[index];
-                regex.lastIndex = 0;
-                if (!regex.test(line)) continue;
-
-                matches.push(`${entry.path}:${index + 1}:${line}`);
-                if (matches.length >= 40) {
-                    return matches.join('\n');
-                }
-            }
-        }
-
-        return matches.length ? matches.join('\n') : null;
-    }
-
-    async grep(pattern, searchPath, glob) {
-        const actual = {
-            pattern: pattern || '',
-            path: normalizePath(searchPath || '.'),
-            glob: glob || '',
-        };
-
-        const fixture = this._findFixture('grep', actual);
-        if (fixture) {
-            this._recordCall('grep', actual, true);
-            return fixture.result || '';
-        }
-
-        const synthesized = this._searchReadFileCorpus(actual);
-        if (synthesized !== null) {
-            this.calls.push({
-                kind: 'grep',
-                actual,
-                matched: 'synthetic-readfile-corpus',
-            });
-            return synthesized;
-        }
-
-        this._recordCall('grep', actual, false);
-        return 'No matches found.';
-    }
-
-    async read(filePath, start, end) {
-        const actual = {
-            path: normalizePath(filePath),
-            startLine: start || 0,
-            endLine: end || 0,
-        };
-        const result = this._lookup('readFile', actual);
-        if (result !== null) return result;
-        return `No replay fixture matched readFile(${actual.path}, ${actual.startLine}, ${actual.endLine}).`;
-    }
-
-    async listDir(dirPath, maxDepth) {
-        const actual = {
-            path: normalizePath(dirPath || '.'),
-            maxDepth: maxDepth || 2,
-        };
-        const exact = this._findFixture('listDir', actual);
-        if (exact) {
-            this._recordCall('listDir', actual, true);
-            return exact.result || '';
-        }
-
-        const relaxed = (this.replay.listDir || []).find(
-            (entry) =>
-                normalizePath(entry?.match?.path || '.') === actual.path,
-        );
-        if (relaxed) {
-            this.calls.push({
-                kind: 'listDir',
-                actual,
-                matched: 'relaxed-path-only',
-            });
-            return relaxed.result || '';
-        }
-
-        this._recordCall('listDir', actual, false);
-        return '';
-    }
-}
-
-function buildCurrentPrompts(caseData) {
-    const { GeneralistAgentProvider } = require(
-        path.join(
-            __dirname,
-            '../../libs/code-review/infrastructure/agents/providers/generalist-agent.provider.ts',
-        ),
-    );
-
-    const provider = new GeneralistAgentProvider({}, {}, {});
-    const input = {
-        organizationAndTeamData: {
-            organizationId: 'eval-org',
-            teamId: 'eval-team',
+        steps: results.reduce((n, r) => n + Number(r.steps || 0), 0),
+        finishReason: results[results.length - 1]?.finishReason,
+        source: results.map((r) => r.source).join(','),
+        usage: {
+            inputTokens: sum('inputTokens'),
+            outputTokens: sum('outputTokens'),
+            totalTokens: sum('totalTokens'),
+            reasoningTokens: sum('reasoningTokens'),
+            cacheReadTokens: sum('cacheReadTokens'),
+            cacheWriteTokens: sum('cacheWriteTokens'),
         },
-        changedFiles: normalizeChangedFiles(parseMaybeJson(caseData.changedFiles)),
-        remoteCommands: {},
-        prNumber: caseData.prNumber || 1,
-        repositoryFullName: caseData.repositoryFullName || 'eval/repo',
-        languageResultPrompt: caseData.languageResultPrompt || '',
-        memoryRules: parseMaybeJson(caseData.memoryRules) || [],
-        traceDecisions: parseMaybeJson(caseData.traceDecisions) || undefined,
-        v2PromptOverrides: parseMaybeJson(caseData.v2PromptOverrides),
-        generationMain: caseData.generationMain,
-        prTitle: caseData.prTitle,
-        prBody: caseData.prBody,
-        reviewMode: caseData.reviewMode || 'normal',
-        maxSteps: caseData.maxSteps || 12,
-        requestedCategories:
-            normalizeRequestedCategories(caseData.requestedCategories),
-        callGraph: parseMaybeJson(caseData.callGraph),
-        baseBranch: caseData.baseBranch || 'main',
-    };
-
-    return {
-        input,
-        systemPrompt: provider.buildSystemPrompt(input),
-        userPrompt: provider.buildUserPrompt(input),
-    };
-}
-
-// The grep, read and listDir production's local sandbox (the self-hosted path)
-// hands the agent, over a prepared worktree: the same output and the same
-// errors for those three. Built by the sandbox's own method, so they cannot
-// drift from production. exec is left out for now, as in the replay, so the
-// exec-gated tools (checkTypes, findNearestProjectFile, findFile's fd/find
-// path) are not registered: a smaller tool set than production's, recorded as
-// `sandboxExec` in each row. Wrapped only to count calls for the fidelity
-// metric: a real answer, empty or not, is never an unserved call.
-function sandboxCommands(repoDir) {
-    const { LocalSandboxService } = require(
-        path.join(
-            __dirname,
-            '../../libs/sandbox/infrastructure/providers/local-sandbox.service.ts',
-        ),
-    );
-    // buildRemoteCommands is private in TypeScript; it reads no instance
-    // state, and the constructor ignores its ConfigService.
-    const inner = new LocalSandboxService(undefined).buildRemoteCommands(
-        repoDir,
-    );
-    const commands = { calls: [], unexpectedCalls: [] };
-    for (const name of ['grep', 'read', 'listDir']) {
-        const fn = inner[name];
-        const kind = name === 'read' ? 'readFile' : name;
-        commands[name] = (...args) => {
-            commands.calls.push({ kind, actual: args, matched: true });
-            return fn(...args);
-        };
-    }
-    return commands;
-}
-
-function serializeResult(caseId, agentResult, remoteCommands, repoHandle) {
-    return {
-        caseId,
-        reasoning: agentResult.findings?.reasoning || '',
-        findings: agentResult.findings?.suggestions || [],
-        trace: {
-            steps: agentResult.steps,
-            finishReason: agentResult.finishReason,
-            source: agentResult.source,
-            usage: agentResult.usage,
-            coverage: agentResult.coverage,
-            anomalies: agentResult.anomalies,
-            verification: agentResult.verification,
-            toolCalls: (agentResult.toolCalls || []).map((call) => ({
-                tool: call.toolName || call.tool,
-                args: call.args || {},
-            })),
-            unexpectedToolCalls: remoteCommands.unexpectedCalls,
-            // Total calls the replay actually fielded (served + unserved) — the
-            // correct denominator for the replay hit-rate. The agent's toolCalls
-            // array undercounts (no retries/internal reads), so don't use it.
-            replayCalls: Array.isArray(remoteCommands.calls)
-                ? remoteCommands.calls.length
-                : null,
-            repoPrepared: !!repoHandle,
-            headSha: repoHandle ? repoHandle.sha : null,
-            // false: the exec-gated tools were not registered for this case.
-            sandboxExec: typeof remoteCommands.exec === 'function',
-        },
+        coverage: results.map((r) => r.coverage),
+        anomalies: results.map((r) => r.anomalies),
+        verification: results.map((r) => r.verification),
+        toolCalls: results.flatMap((r) => r.toolCalls || []),
     };
 }
 
 function agentRunFailure(agentResult) {
-    if (!agentResult || typeof agentResult !== 'object') {
-        return 'agent loop returned no result';
-    }
-
+    if (!agentResult || typeof agentResult !== 'object') return 'agent loop returned no result';
     const finishReason = agentResult.finishReason || 'unknown';
-    const usage = agentResult.usage || {};
-    const totalTokens = Number(usage.totalTokens || 0);
+    const totalTokens = Number(agentResult.usage?.totalTokens || 0);
     const steps = Number(agentResult.steps || 0);
-    const trace = Array.isArray(agentResult.debugTrace)
-        ? agentResult.debugTrace
-        : [];
-    const errorEvent = [...trace]
-        .reverse()
-        .find((event) => event && event.kind === 'error');
-    const errorMessage =
-        errorEvent?.detail && typeof errorEvent.detail.message === 'string'
-            ? errorEvent.detail.message
-            : '';
-
+    const trace = Array.isArray(agentResult.debugTrace) ? agentResult.debugTrace : [];
+    const errorEvent = [...trace].reverse().find((event) => event && event.kind === 'error');
+    const errorMessage = errorEvent?.detail && typeof errorEvent.detail.message === 'string' ? errorEvent.detail.message : '';
     if (finishReason === 'error') {
-        return errorMessage
-            ? `agent loop finished with error: ${errorMessage}`
-            : 'agent loop finished with error';
+        return errorMessage ? `agent loop finished with error: ${errorMessage}` : 'agent loop finished with error';
     }
-
-    if (steps === 0 && totalTokens === 0) {
-        return 'agent loop produced zero steps and zero tokens';
-    }
-
+    if (steps === 0 && totalTokens === 0) return 'agent loop produced zero steps and zero tokens';
     return null;
 }
 
 function writeResultArtifact(filename, payload) {
     try {
-        fs.writeFileSync(
-            path.join(__dirname, 'results', filename),
-            JSON.stringify(payload, null, 2),
-        );
+        fs.writeFileSync(path.join(__dirname, 'results', filename), JSON.stringify(payload, null, 2));
     } catch {}
 }
 
 class InvestigationAgentProvider {
     constructor(options) {
         this.config = options.config || {};
-        this.providerId =
-            this.config.label ||
-            `${this.config.provider || 'google'}:${this.config.model || 'unknown'}`;
+        this.teamConfig = options.teamConfig || null;
+        this.providerId = this.config.label || `${this.config.provider || 'google'}:${this.config.model || 'unknown'}`;
     }
 
     id() {
@@ -636,107 +186,74 @@ class InvestigationAgentProvider {
 
     async callApi(prompt, context, options) {
         let stage = 'parse-prompt';
-        // Declared outside the try so the finally below can always release it.
-        let repoHandle = null;
         try {
-            const rawPrompt =
-                typeof prompt === 'string'
-                    ? prompt
-                    : prompt && typeof prompt === 'object' && 'prompt' in prompt
-                      ? prompt.prompt
-                      : prompt;
+            const rawPrompt = typeof prompt === 'string' ? prompt : prompt && typeof prompt === 'object' && 'prompt' in prompt ? prompt.prompt : prompt;
             const caseData = parseMaybeJson(rawPrompt);
             if (!caseData || typeof caseData !== 'object') {
+                throw new Error(`Expected prompt loader to provide a JSON object, got ${JSON.stringify(summarizeInput(caseData))}`);
+            }
+
+            stage = 'resolve-model';
+            const route = resolveRoute(this.config);
+            const permissionService = evalPermissionService(route.storedConfig);
+
+            stage = 'run-review';
+            const review = await reviewPullRequest({ pr: prOf(caseData), team: teamOf(caseData, this.teamConfig), route, permissionService });
+            if (review.skipped) throw new Error(`production skipped the review: ${review.skipped}`);
+            // The stage records a failed agent or step and goes on with what it has:
+            // a review that failed measured the failure, not the finder.
+            const failure = review.context?.lastReviewError;
+            if (failure) throw new Error(`production review failed: ${failure.category} ${String(failure.providerMessage || failure.friendlyMessage || '').slice(0, 200)}`);
+            const failedAgents = (review.context?.errors || []).filter((e) => /agent|review/i.test(String(e?.stage || e?.message || '')));
+            if (!review.loops.length) {
                 throw new Error(
-                    `Expected prompt loader to provide a JSON object, got ${JSON.stringify(
-                        summarizeInput(caseData),
-                    )}`,
+                    `production ran no finder loop the eval could observe${failedAgents.length ? `: ${failedAgents.map((e) => e.message).join('; ').slice(0, 300)}` : ''}`,
                 );
             }
-
-            stage = 'load-agent-loop';
-            // The legacy runAgentLoop (agent-loop.ts) was deleted in the
-            // agent-harness refactor. runAgentLoopViaCore is the drop-in seam:
-            // same (input, secrets) signature, threads secrets.remoteCommands
-            // into buildFinderToolRegistry for deterministic tool replay, and
-            // runs the finder+verify on the new harness.
-            const { runAgentLoopViaCore: runAgentLoop } = require(
-                path.join(
-                    __dirname,
-                    '../../libs/code-review/infrastructure/agents/core/core-agent-loop.adapter.ts',
-                ),
-            );
-
-            stage = 'create-model';
-            const model = await createModel(this.config);
-            stage = 'build-prompts';
-            const { input, systemPrompt, userPrompt } =
-                buildCurrentPrompts(caseData);
-            stage = 'build-replay-commands';
-            // RECALL_REAL_REPO=1: answer the tools from a git worktree at the
-            // PR's head instead of replaying recorded tool calls. The replay
-            // only answers calls captured when the dataset was built; any other
-            // call gets an empty answer the real repository would not give.
-            // Falls back to replay when the commit can't be fetched;
-            // `repoPrepared` in the trace says which one ran.
-            let remoteCommands;
-            if (process.env.RECALL_REAL_REPO === '1') {
-                const { prepareRepo } = require('./prepare-repo');
-                repoHandle = await prepareRepo(caseData, caseData.caseId);
-                if (repoHandle) remoteCommands = sandboxCommands(repoHandle.dir);
+            // A review with every loop failed measured nothing, whatever production made of it.
+            const loopFailures = review.loops.map((l) => agentRunFailure(l.result));
+            if (loopFailures.every(Boolean)) {
+                const r = review.loops[0].result;
+                throw new Error(`${loopFailures[0]} (finishReason=${r?.finishReason || 'unknown'}, steps=${r?.steps ?? 'n/a'}, tokens=${r?.usage?.totalTokens ?? 'n/a'})`);
             }
-            if (!remoteCommands) {
-                remoteCommands = new ReplayRemoteCommands(
-                    parseMaybeJson(caseData.toolReplay) || {},
-                );
-            }
-
-            stage = 'run-agent-loop';
-            // runAgentLoop(input, secrets): `secrets` was split out of `input` so
-            // span I/O never records keys/services. The deterministic tool replay
-            // (remoteCommands) lives in `secrets` now — passing it in `input` (the
-            // old single-arg shape) left the agent tool-less and crashed on
-            // `secrets.byokErrorReporter`.
-            const agentResult = await runAgentLoop(
-                {
-                    model,
-                    systemPrompt,
-                    userPrompt,
-                    changedFiles: input.changedFiles,
-                    prNumber: input.prNumber,
-                    repositoryFullName: input.repositoryFullName,
-                    baseBranch: input.baseBranch,
-                    reviewMode: input.reviewMode,
-                    maxSteps: input.maxSteps,
-                    // heavy força as passadas de resample (mais recall via
-                    // reamostragem). É EIXO DE REGIME: comparar heavy com normal
-                    // é o mesmo erro que comparar assinatura com API.
-                    ...(process.env.RECALL_HEAVY === '1' ? { heavy: true } : {}),
-                    agentName: `investigation-eval:${this.providerId}`,
-                },
-                {
-                    remoteCommands,
-                    byokConfig: undefined,
-                    byokErrorReporter: undefined,
-                },
-            );
-
-            const failure = agentRunFailure(agentResult);
-            if (failure) {
-                throw new Error(
-                    `${failure} (finishReason=${agentResult?.finishReason || 'unknown'}, ` +
-                        `steps=${agentResult?.steps ?? 'n/a'}, ` +
-                        `tokens=${agentResult?.usage?.totalTokens ?? 'n/a'})`,
-                );
-            }
+            const agentResult = combineLoops(review.loops.filter((_, i) => !loopFailures[i]));
 
             stage = 'serialize-result';
-            const output = serializeResult(
-                caseData.caseId || 'unknown-case',
-                agentResult,
-                remoteCommands,
-                repoHandle,
-            );
+            const first = review.loops[0].params;
+            const output = {
+                caseId: caseData.caseId || 'unknown-case',
+                reasoning: agentResult.findings?.reasoning || '',
+                // What the stage ships: after the mapper, anchoring, repeat drop,
+                // dedup, severity and the formatter. The gated metric scores these.
+                findings: review.shipped,
+                // What the finder's loops returned, before those steps: reported next to it.
+                loopFindings: agentResult.findings?.suggestions || [],
+                discarded: review.discarded.map((d) => ({ relevantFile: d.relevantFile, relevantLinesStart: d.relevantLinesStart, priorityStatus: d.priorityStatus })),
+                trace: {
+                    steps: agentResult.steps,
+                    finishReason: agentResult.finishReason,
+                    source: agentResult.source,
+                    usage: agentResult.usage,
+                    coverage: agentResult.coverage,
+                    anomalies: agentResult.anomalies,
+                    verification: agentResult.verification,
+                    toolCalls: (agentResult.toolCalls || []).map((call) => ({ tool: call.toolName || call.tool, args: call.args || {} })),
+                    production: {
+                        route: route.route,
+                        model: first.modelName ?? null,
+                        reasoningEffort: first.reasoningEffort ?? null,
+                        contextWindowTokens: first.contextWindowTokens ?? null,
+                        prFiles: review.context.changedFiles?.length ?? null,
+                        batches: review.loops.map((l) => ({
+                            files: l.params.changedFiles?.length ?? null,
+                            tiered: !!l.params.fileTiers,
+                            maxSteps: l.params.maxSteps ?? null,
+                            steps: l.result?.steps ?? null,
+                        })),
+                        failedBatches: loopFailures.filter(Boolean),
+                    },
+                },
+            };
             writeResultArtifact('last-output.json', output);
 
             return {
@@ -749,40 +266,24 @@ class InvestigationAgentProvider {
             };
         } catch (error) {
             const payload = {
-                error:
-                    error instanceof Error ? error.message : String(error),
+                error: error instanceof Error ? error.message : String(error),
                 metadata: {
                     stage,
                     providerId: this.providerId,
                     prompt: summarizeInput(prompt),
                     context: summarizeInput(context),
                     options: summarizeInput(options),
-                    stack:
-                        error instanceof Error
-                            ? error.stack?.split('\n').slice(0, 20).join('\n')
-                            : undefined,
+                    stack: error instanceof Error ? error.stack?.split('\n').slice(0, 20).join('\n') : undefined,
                 },
             };
             try {
-                fs.writeFileSync(
-                    path.join(__dirname, 'results', 'last-error.json'),
-                    JSON.stringify(payload, null, 2),
-                );
+                fs.writeFileSync(path.join(__dirname, 'results', 'last-error.json'), JSON.stringify(payload, null, 2));
             } catch {}
-
-            return {
-                ...payload,
-            };
-        } finally {
-            // Always drop the worktree: cases run in parallel and each one adds
-            // a full checkout to disk.
-            if (repoHandle) {
-                try {
-                    await repoHandle.cleanup();
-                } catch {}
-            }
+            return { ...payload };
         }
     }
 }
 
 module.exports = InvestigationAgentProvider;
+// For the specs: how a case reaches production's review.
+module.exports.internals = { resolveRoute, evalPermissionService, reviewOptionsFromEnv, combineLoops, teamOf, prOf, NotAProductionRoute };

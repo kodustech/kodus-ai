@@ -16,12 +16,14 @@ HEAD_REF="${2:?usage: up-profile.sh <cloud|self-hosted> <branch>}"
 case "$PROFILE" in
     cloud)
         RECIPE=.kodus/workspace.preview.yaml
+        BILLING_OVERLAY="-f docker-compose.billing.yml"
         OVERLAY=docker-compose.preview.cloud.yml
         # billing runs from its own repository; MCP's health is the other optional probe
         READY="curl -fsS http://127.0.0.1:3101/health >/dev/null && curl -fsS http://127.0.0.1:3992/health/ready >/dev/null"
         ;;
     self-hosted)
         RECIPE=.kodus/workspace.preview.selfhosted.yaml
+        BILLING_OVERLAY=""
         OVERLAY=docker-compose.preview.selfhosted.yml
         READY="curl -fsS http://127.0.0.1:3101/health >/dev/null"
         ;;
@@ -34,7 +36,11 @@ runo() {
     while [ $# -gt 0 ] && [ "$1" != "--" ]; do own+=("$1"); shift; done
     $RUNO "${own[@]}" --branch "$HEAD_REF" --profile "$PROFILE" "$@"
 }
-compose="docker compose -f docker-compose.dev.yml -f docker-compose.preview.yml -f $OVERLAY --profile mcp"
+compose="docker compose -f docker-compose.dev.yml $BILLING_OVERLAY -f docker-compose.preview.yml -f $OVERLAY --profile mcp"
+# `runo exec` carries no RUNO_* values, and compose refuses to read the files
+# without them (RUNO_URL_WEBHOOKS is required). A build never uses them, so
+# placeholders are enough there; services must not be (re)created this way.
+compose_build="RUNO_PUBLIC_URL=build RUNO_PUBLIC_HOST=build RUNO_URL_WEBHOOKS=build $compose build"
 
 {
     echo "::group::preview [$PROFILE] up"
@@ -58,13 +64,20 @@ compose="docker compose -f docker-compose.dev.yml -f docker-compose.preview.yml 
         # The billing context tracks its own repository. Rebuild its pinned
         # local image before restarting, otherwise compose can keep serving
         # the image baked by the previous PR push.
-        runo exec -- "$compose build kodus-service-billing" ||
+        runo exec -- "$compose_build kodus-service-billing" ||
             echo "::warning::[$PROFILE] kodus-service-billing image rebuild failed — keeping the previous image"
     fi
     # `up` only uploads code when it CREATES the VM; on every later push the
     # environment already exists and the new commit travels with push
     # (compose watch reloads it)
     runo push --restart --recipe "$RECIPE"
+    # The web hot-reloads, but api, worker and webhooks run `nest build
+    # --watch` with autoRestart off (webpack.config.js): the bundle rebuilds
+    # and the running process keeps serving the previous commit. Restart them
+    # so they start on the synced code. By container name: `runo exec` has no
+    # RUNO_* values, so compose cannot interpolate the files there.
+    runo exec -- "docker restart kodus_api kodus_worker kodus_webhooks" ||
+        echo "::warning::[$PROFILE] restarting api/worker/webhooks failed — they may still run the previous commit"
     # Runo's data step retries automatically. Keep optional service readiness
     # outside it so one failed MCP/billing probe does not hide the real
     # container logs for 15min. A cold MCP manager runs its seeds under

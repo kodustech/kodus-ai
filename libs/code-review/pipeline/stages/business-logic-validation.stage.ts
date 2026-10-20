@@ -22,6 +22,7 @@ import {
     PULL_REQUEST_MANAGER_SERVICE_TOKEN,
 } from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
 
+import { reviewsOnlyIgnoredFiles } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 
 /**
@@ -276,6 +277,13 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
                 reason: 'option_off',
                 message:
                     'Business logic validation is disabled in the code review configuration.',
+            };
+        }
+        if (reviewsOnlyIgnoredFiles(context)) {
+            return {
+                reason: 'no_reviewed_files',
+                message:
+                    'Every changed file is ignored; only custom agents review this pull request.',
             };
         }
         // `@kody review --force` revalidates a PR that already got a message,

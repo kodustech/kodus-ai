@@ -1,0 +1,111 @@
+---
+title: "使用 jscpd 的重复代码智能体"
+description: "一个在沙箱中运行 jscpd 的自定义智能体，标记拉取请求中复制而非复用的代码。"
+icon: "clone"
+---
+
+## 为什么用 CLI
+
+模型阅读 diff 时，无法知道刚读到的 30 行代码其实在三个文件夹之外已经存在。[jscpd](https://github.com/kucherenko/jscpd) 可以：它扫描检出的代码，报告每一处克隆及其两个位置。这个智能体运行 jscpd，保留由拉取请求引入的克隆，并以 jscpd 自己的输出作为证据逐条发布。
+
+示例是一个 TypeScript 计费服务。请根据您的代码库调整路径和阈值。
+
+## 步骤 1 — 创建智能体
+
+在 **Code review → What to review → Custom agents** 中，点击 **New agent → Templates → Blank**。在其页面中填写 **Instructions**：
+
+```text Name
+Duplicate code
+```
+
+```text Instructions
+Find code this pull request adds or changes that duplicates code already in the repository.
+
+Run jscpd on the directories the pull request changes, then read both copies of each clone it reports.
+
+Report a clone only when:
+- one of its copies is in a file this pull request changes, and
+- both copies do the same thing (same logic, not just similar boilerplate), and
+- the duplicated block is at least 10 lines.
+
+Ignore tests, fixtures, migrations, generated code, imports and type declarations.
+
+For each finding, name both locations and say what to extract or reuse: an existing function when one copy already is one, or a new shared helper otherwise.
+```
+
+## 步骤 2 — 设置文件
+
+在 **Files & knowledge** 下：
+
+| 字段 | 值 |
+| --- | --- |
+| **Files** | `src/**` |
+| **Except** | `**/*.test.ts`、`**/*.spec.ts`、`**/__fixtures__/**`、`**/generated/**`、`src/db/migrations/**` |
+
+## 步骤 3 — 添加 CLI
+
+在 **Tools → CLIs** 下，点击 **Add CLI**：
+
+| 字段 | 值 |
+| --- | --- |
+| **Name** | `jscpd` |
+| **Binary** | `jscpd` |
+| **Install** | `npm i -g jscpd@5.4.1` |
+| **Allowed command prefixes** | `jscpd --reporters console` |
+| **Allowed domains** | *（留空：jscpd 不需要网络）* |
+| **Runs project code** | 关闭：jscpd 只读取文件，不执行它们 |
+| **Secrets** | *（无）* |
+
+**Usage**：
+
+```markdown
+jscpd finds copy-pasted code across the repository.
+
+Call it with the console reporter, the thresholds, and the directories the pull request changes:
+
+--reporters console --min-lines 10 --min-tokens 70 --ignore **/*.test.ts,**/generated/** src/billing src/invoices
+
+There is no shell: do not quote arguments. Each clone prints both copies as `path [startLine:col - endLine:col]`.
+Read both copies before reporting a clone.
+```
+
+## 步骤 4 — 评论
+
+在 **Comments & model** 下：
+
+| 字段 | 值 | 原因 |
+| --- | --- | --- |
+| **Format** | Inline comments | 每处克隆都落在被复制的行上。 |
+| **Minimum severity** | Team minimum | |
+| **Max comments per pull request** | `5` | 一次大规模复制粘贴可能产生许多克隆；保留最严重的那些。 |
+| **Suggested fix** | Never | 修复是跨文件的重构，而不是改一行。 |
+| **How it writes** | `Two sentences: where the other copy is, and what to reuse or extract.` | |
+
+点击 **Save**。
+
+## 步骤 5 — Try it
+
+粘贴一个复制了函数的拉取请求链接，点击 **Run agent**。检查：
+
+- **Tool calls** 显示了 `jscpd` 调用及其输出。
+- 每条保留的发现的 **Comment** 末尾都有一个 **Evidence** 块，引用 jscpd 输出中提到该文件的行：
+
+```markdown
+**Evidence** (`jscpd`):
+> - src/billing/invoice.ts [12:1 - 41:2] (29 lines, 212 tokens)
+> src/billing/credit-note.ts [8:1 - 37:2]
+```
+
+如果 **Warnings** 提示 CLI 无法安装，请检查安装命令。CLI 需要 E2B 沙箱；没有它时，智能体会在没有 jscpd 的情况下运行。
+
+当发现正是您想要的内容时，开启该智能体。
+
+## 检查清单
+
+- [ ] 安装固定到确切版本
+- [ ] 允许的前缀以参数开头，而不只是二进制名
+- [ ] 测试和生成的代码同时写进 **Except** 和 jscpd 的 `--ignore`
+- [ ] 已设置 **Max comments per pull request**
+- [ ] 已在一个已知包含复制代码的拉取请求上试运行
+
+所有字段的说明，请参阅 [Skills、docs 和工具](/zh/how_to_use/code_review/custom_agents_knowledge_and_tools#team-clis)。

@@ -23,7 +23,9 @@ import {
 } from "src/app/(app)/settings/_hooks";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { cn } from "src/core/utils/components";
+import { CustomAgentsSectionGate } from "src/features/ee/custom-agents/custom-agents-plan-gate";
 
+import { CustomAgentsSection } from "../../_custom-agents/custom-agents-section";
 import { OverrideIndicatorForm } from "../../../_components/override";
 import { type CodeReviewFormType } from "../../../_types";
 import { useDefaultCodeReviewConfig } from "../../../../_components/context";
@@ -323,7 +325,7 @@ export const CategoryList = ({
         );
     }
 
-    return (
+    const categories = (
         <Controller
             name="reviewOptions"
             control={form.control}
@@ -412,5 +414,14 @@ export const CategoryList = ({
                 );
             }}
         />
+    );
+
+    return (
+        <div className="flex flex-col gap-8">
+            {categories}
+            <CustomAgentsSectionGate>
+                <CustomAgentsSection canEdit={canEdit} />
+            </CustomAgentsSectionGate>
+        </div>
     );
 };

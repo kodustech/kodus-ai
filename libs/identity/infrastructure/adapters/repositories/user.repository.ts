@@ -4,7 +4,6 @@ import {
     DataSource,
     FindManyOptions,
     FindOneOptions,
-    FindOptionsWhere,
     In,
     Repository,
 } from 'typeorm';
@@ -195,12 +194,32 @@ export class UserDatabaseRepository implements IUserRepository {
             const queryBuilder =
                 this.userRepository.createQueryBuilder('users');
 
-            // Join with the 'organization' relation and select only the 'uuid'
-            queryBuilder
+            // Exact match first. This is the ONLY lookup on the hot path (the
+            // JWT strategy resolves the user by email on every authenticated
+            // request, and normal logins pass the stored casing), and it uses
+            // the btree index IDX_users_email — `LOWER(email)` would not, so a
+            // case-folding predicate here would force a seq scan on every call.
+            let userSelected = await queryBuilder
                 .leftJoinAndSelect('users.organization', 'organization')
-                .where('users.email = :email', { email });
+                .where('users.email = :email', { email })
+                .getOne();
 
-            const userSelected = await queryBuilder.getOne();
+            // Only when the exact lookup misses, fall back to a case-insensitive
+            // match: historical rows were stored with mixed case and there is no
+            // case-folding index, so a user typing a different case (or an OAuth
+            // provider returning one) would otherwise miss their account — and
+            // OAuth would then sign them up a second, empty one. This scans, but
+            // runs only on a genuine case drift, never on the hot path. Oldest
+            // row wins so the result is deterministic if variants coexist.
+            if (!userSelected) {
+                userSelected = await this.userRepository
+                    .createQueryBuilder('users')
+                    .leftJoin('users.organization', 'organization')
+                    .addSelect('organization.uuid')
+                    .where('LOWER(users.email) = LOWER(:email)', { email })
+                    .orderBy('users.createdAt', 'ASC')
+                    .getOne();
+            }
 
             if (userSelected) {
                 userSelected.organization = {
@@ -273,25 +292,26 @@ export class UserDatabaseRepository implements IUserRepository {
                 .createQueryBuilder('user')
                 .update(UserModel)
                 .set(data)
-                .where(filter);
+                .where(filter)
+                .returning(['uuid']);
 
             const result = await queryBuilder.execute();
 
-            if (result.affected && result.affected > 0) {
-                const findOneOptions: FindOptionsWhere<UserModel> = {
-                    ...(filter as unknown as FindOptionsWhere<UserModel>),
-                };
-
-                const updatedUser = await this.userRepository.findOne({
-                    where: findOneOptions,
-                });
-
-                if (updatedUser) {
-                    return mapSimpleModelToEntity(updatedUser, UserEntity);
-                }
+            // Re-read by the key the UPDATE returned, not by `filter`: a
+            // filter on a column the update changes (e.g. `status: PENDING`
+            // while setting ACTIVE) no longer matches the row it just wrote.
+            const updatedUuid: string | undefined = result.raw[0]?.uuid;
+            if (!updatedUuid) {
+                return undefined;
             }
 
-            return undefined;
+            const updatedUser = await this.userRepository.findOne({
+                where: { uuid: updatedUuid },
+            });
+
+            return updatedUser
+                ? mapSimpleModelToEntity(updatedUser, UserEntity)
+                : undefined;
         } catch (error) {
             // Logging the error and throwing an exception
             console.error('Error updating user:', error);

@@ -143,6 +143,42 @@ const secrets: any = {
 };
 
 describe('runAgentLoopViaCore (harness + agent integration)', () => {
+    it('verifies on the check slot when one differs from the run slot', async () => {
+        const { model } = makeModel();
+        const input = makeInput(model);
+        const runSlot = { provider: 'openai', model: 'run-model' };
+        const checkSlot = { provider: 'anthropic', model: 'check-model' };
+
+        const out = await runAgentLoopViaCore(input, {
+            ...secrets,
+            byokConfig: runSlot,
+            verifyByokConfig: checkSlot,
+        });
+
+        expect(out.droppedByVerify.map((s: any) => s.relevantFile)).toEqual([
+            'b.ts',
+        ]);
+        const slotsCalled = mockResolve.mock.calls.map(([slot]) => slot?.model);
+        expect(slotsCalled).toContain('run-model');
+        expect(slotsCalled).toContain('check-model');
+    });
+
+    it('keeps verify on the run slot when the check slot is the same model', async () => {
+        const { model } = makeModel();
+        const input = makeInput(model);
+        mockResolve.mockClear();
+        const runSlot = { provider: 'openai', model: 'run-model' };
+
+        await runAgentLoopViaCore(input, {
+            ...secrets,
+            byokConfig: runSlot,
+            verifyByokConfig: { ...runSlot },
+        });
+
+        const slotsCalled = mockResolve.mock.calls.map(([slot]) => slot);
+        expect(slotsCalled.every((slot) => slot === runSlot)).toBe(true);
+    });
+
     it('runs finder + verify end-to-end and maps RunState -> AgentLoopOutput', async () => {
         const { model } = makeModel();
         const out = await runAgentLoopViaCore(makeInput(model), secrets);
@@ -335,15 +371,27 @@ const verdictArtifact = (payload: unknown) => ({
 /** A model that finalizes with EXACTLY the given submitResult payload object
  *  (drives the off-schema shape through the real harness end-to-end). */
 function modelReturningFindings(payload: unknown) {
+    // The verifier gets a verdict: one that never answers ends unverified, and
+    // its findings are not published (#2171).
     return new MockLanguageModelV3({
-        doGenerate: (async () => ({
+        doGenerate: (async (opts: any) => ({
             content: [
-                {
-                    type: 'tool-call',
-                    toolCallId: 'f',
-                    toolName: 'submitResult',
-                    input: JSON.stringify(payload),
-                },
+                /REFUTE|verdict/.test(JSON.stringify(opts?.prompt ?? ''))
+                    ? {
+                          type: 'tool-call',
+                          toolCallId: 'v',
+                          toolName: 'submitVerdict',
+                          input: JSON.stringify({
+                              keep: true,
+                              rationale: 'ok',
+                          }),
+                      }
+                    : {
+                          type: 'tool-call',
+                          toolCallId: 'f',
+                          toolName: 'submitResult',
+                          input: JSON.stringify(payload),
+                      },
             ],
             finishReason: 'tool-calls',
             usage: { inputTokens: 1, outputTokens: 1 },
@@ -1142,6 +1190,52 @@ describe('contract matrix — E. N-model policy (strict json_schema vs fallback)
     // (the runner uses the SAME LLM.run door), so the contract is pinned at the
     // recovery unit above rather than duplicated as a flaky e2e assertion.
 
+    // Team systems (#2172): AgentLoopInput.teamSystemTools reaches the
+    // synthesis rescue, which asks about requirements a consulted system states.
+    it('threads teamSystemTools to the recall pass prompt, and nothing without them', async () => {
+        const recallPrompts = async (over: Record<string, unknown>) => {
+            const prompts: string[] = [];
+            const doGenerate = (async (opts: any) => {
+                prompts.push(JSON.stringify(opts?.prompt ?? ''));
+                return {
+                    content: [
+                        {
+                            type: 'tool-call',
+                            toolCallId: 'f',
+                            toolName: 'submitResult',
+                            input: JSON.stringify({
+                                reasoning: 'nothing',
+                                suggestions: [],
+                            }),
+                        },
+                    ],
+                    finishReason: 'tool-calls',
+                    usage: { inputTokens: 5, outputTokens: 5 },
+                    warnings: [],
+                };
+            }) as any;
+            await runAgentLoopViaCore(
+                makeInput(new MockLanguageModelV3({ doGenerate }), {
+                    reviewMode: undefined,
+                    ...over,
+                }),
+                secrets,
+            );
+            return prompts;
+        };
+        const question =
+            'Did a team system you consulted state a requirement this change breaks?';
+
+        const withSystems = await recallPrompts({
+            teamSystemTools: ['Tracker__get_issue'],
+        });
+        const without = await recallPrompts({});
+
+        expect(withSystems.length).toBeGreaterThan(1);
+        expect(withSystems.some((p) => p.includes(question))).toBe(true);
+        expect(without.some((p) => p.includes(question))).toBe(false);
+    });
+
     // Previous review decisions (issue #1313): proves the REAL wiring end to
     // end — AgentLoopInput.previousDecisions -> runFinderWithVerify ->
     // LlmVerifier -> verifierPromptFor — not just the unit-level forwarding
@@ -1237,6 +1331,84 @@ describe('contract matrix — E. N-model policy (strict json_schema vs fallback)
         expect(out.droppedByVerify.map((s: any) => s.relevantFile)).toEqual([
             'a.ts',
         ]);
+    });
+
+    // Lane check (#2172): AgentLoopInput.laneFocus reaches the verifier, which
+    // drops a custom agent's finding outside its focus in the verify run the
+    // finding already takes; it is counted with the verify drops.
+    it('threads laneFocus to the verifier, which drops a finding outside the focus', async () => {
+        const runWith = async (over: Record<string, unknown>) => {
+            const doGenerate = (async (opts: any) => {
+                const sys = JSON.stringify(opts?.prompt ?? opts ?? '');
+                if (sys.includes('REFUTE')) {
+                    const outOfFocus =
+                        sys.includes('AgentFocus') &&
+                        sys.includes('end-to-end test');
+                    return {
+                        content: [
+                            {
+                                type: 'tool-call',
+                                toolCallId: 'v',
+                                toolName: 'submitVerdict',
+                                input: JSON.stringify(
+                                    outOfFocus
+                                        ? {
+                                              keep: false,
+                                              rationale:
+                                                  'OUT OF FOCUS: a pagination bug',
+                                          }
+                                        : { keep: true, rationale: 'kept' },
+                                ),
+                            },
+                        ],
+                        finishReason: 'tool-calls',
+                        usage: { inputTokens: 5, outputTokens: 5 },
+                        warnings: [],
+                    };
+                }
+                return {
+                    content: [
+                        {
+                            type: 'tool-call',
+                            toolCallId: 'f',
+                            toolName: 'submitResult',
+                            input: JSON.stringify({
+                                reasoning: 'one candidate',
+                                suggestions: [
+                                    {
+                                        relevantFile: 'a.ts',
+                                        suggestionContent:
+                                            'The last page is skipped.',
+                                        existingCode: 'const x=1;',
+                                        improvedCode: 'const x=2;',
+                                        severity: 'high',
+                                    },
+                                ],
+                            }),
+                        },
+                    ],
+                    finishReason: 'tool-calls',
+                    usage: { inputTokens: 5, outputTokens: 5 },
+                    warnings: [],
+                };
+            }) as any;
+            return runAgentLoopViaCore(
+                makeInput(new MockLanguageModelV3({ doGenerate }), over),
+                secrets,
+            );
+        };
+
+        const lane = await runWith({
+            laneFocus:
+                'Reviewer: "Booking E2E"\nInstructions:\nEvery booking screen needs an end-to-end test.',
+        });
+        const noLane = await runWith({});
+
+        expect(lane.findings.suggestions).toHaveLength(0);
+        expect(lane.droppedByVerify.map((s: any) => s.relevantFile)).toEqual([
+            'a.ts',
+        ]);
+        expect(noLane.findings.suggestions).toHaveLength(1);
     });
 
     // The evidence gate's forceFull re-verify (finder.agent.ts's second,

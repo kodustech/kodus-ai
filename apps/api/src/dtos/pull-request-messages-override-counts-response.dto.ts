@@ -24,3 +24,8 @@ export class PullRequestMessagesOverrideCountsResponseDto extends ApiResponseBas
     @ApiProperty({ type: PullRequestMessagesOverrideCountsDto })
     data: PullRequestMessagesOverrideCountsDto;
 }
+
+export class PullRequestMessagesAllOverrideCountsResponseDto extends ApiResponseBaseDto {
+    @ApiProperty({ type: [PullRequestMessagesOverrideCountsDto] })
+    data: PullRequestMessagesOverrideCountsDto[];
+}

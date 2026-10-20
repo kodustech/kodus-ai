@@ -122,7 +122,7 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
             commentManagerService.updateOverallComment,
         ).toHaveBeenCalledTimes(1);
         const args = commentManagerService.updateOverallComment.mock.calls[0];
-        expect(args[args.length - 1]).toEqual(reviewWarnings);
+        expect(args[args.length - 2]).toEqual(reviewWarnings);
     });
 
     // The stage forwards the warnings from THREE call sites, one per message
@@ -154,7 +154,7 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
         await (stage as any).executeStage(context);
 
         const args = commentManagerService.updateOverallComment.mock.calls[0];
-        expect(args[args.length - 1]).toEqual(reviewWarnings);
+        expect(args[args.length - 2]).toEqual(reviewWarnings);
     });
 
     it('forwards context.reviewWarnings on the createComment branch (KRC-16)', async () => {
@@ -450,6 +450,45 @@ describe('UpdateCommentsAndGenerateSummaryStage - frozen-context error recording
         // generateSummaryPR takes no byokConfig arg and routes prSummary itself.
         expect(generateSummaryPR.mock.calls[0]).not.toContainEqual(
             ctx.codeReviewConfig.byokConfig,
+        );
+    });
+
+    it('writes no summary when only a custom agent reviewed the ignored files (#2172)', async () => {
+        const { stage, commentManagerService } = makeStage();
+        const ignoredFileChanges = [
+            { filename: 'package.json', status: 'modified' },
+        ];
+        const config = (customAgents: unknown[]) => ({
+            languageResultPrompt: 'en-US',
+            summary: { generatePRSummary: true },
+            customAgents,
+        });
+
+        await (stage as any).executeStage(
+            frozenContext({
+                ...summaryFailContext(),
+                ignoredFileChanges,
+                codeReviewConfig: config([
+                    {
+                        id: 'agent-1',
+                        name: 'Manifest',
+                        enabled: true,
+                        scope: { include: ['package.json'] },
+                    },
+                ]),
+            } as any),
+        );
+        expect(commentManagerService.generateSummaryPR).not.toHaveBeenCalled();
+
+        await (stage as any).executeStage(
+            frozenContext({
+                ...summaryFailContext(),
+                ignoredFileChanges,
+                codeReviewConfig: config([]),
+            } as any),
+        );
+        expect(commentManagerService.generateSummaryPR).toHaveBeenCalledTimes(
+            1,
         );
     });
 });

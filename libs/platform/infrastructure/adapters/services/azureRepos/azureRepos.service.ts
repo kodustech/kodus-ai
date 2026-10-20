@@ -58,7 +58,7 @@ import {
 import { createLogger } from '@libs/core/log/logger';
 import { hasKodyMarker } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { getCodeReviewBadge } from '@libs/common/utils/codeManagement/codeReviewBadge';
-import { getLabelShield } from '@libs/common/utils/codeManagement/labels';
+import { getSuggestionShield } from '@libs/common/utils/codeManagement/labels';
 import { getSeverityLevelShield } from '@libs/common/utils/codeManagement/severityLevel';
 import {
     formatFixBlock,
@@ -4912,7 +4912,7 @@ export class AzureReposService implements Omit<
             [
                 getCodeReviewBadge(),
                 lineComment?.suggestion
-                    ? getLabelShield(lineComment.suggestion.label)
+                    ? getSuggestionShield(lineComment.suggestion)
                     : '',
                 severityShield,
             ].join(' ') + '\n\n';
@@ -5307,7 +5307,7 @@ export class AzureReposService implements Omit<
 
             const badges = [
                 getCodeReviewBadge(),
-                suggestion?.label ? getLabelShield(suggestion.label) : '',
+                getSuggestionShield(suggestion),
                 severityShield,
             ]
                 .filter(Boolean)

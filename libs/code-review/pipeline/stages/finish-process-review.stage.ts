@@ -81,8 +81,12 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
                     e?.severity === 'partial'),
         );
 
+        // `@kody -v <agent>` runs one custom agent and none of the built-in
+        // ones (#2172): finding nothing there says nothing about the PR as a
+        // whole, so it never approves.
         const approved = await this.approvePullRequest(
-            codeReviewConfig.pullRequestApprovalActive,
+            codeReviewConfig.pullRequestApprovalActive &&
+                !context.onlyCustomAgent,
             lineComments.length,
             organizationAndTeamData,
             pullRequest.number,
@@ -246,8 +250,7 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
             const { pullRequest, organizationAndTeamData, repository } =
                 context;
             const author = pullRequest?.user as
-                | { email?: string; username?: string }
-                | undefined;
+                { email?: string; username?: string } | undefined;
 
             const recipient = await this.prAuthorRecipientResolver.resolve(
                 { email: author?.email, login: author?.username },
@@ -268,7 +271,8 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
         } catch (error) {
             this.logger.error({
                 message: 'Failed to emit review.auto_approved notification',
-                error: error instanceof Error ? error : new Error(String(error)),
+                error:
+                    error instanceof Error ? error : new Error(String(error)),
                 context: this.stageName,
             });
         }

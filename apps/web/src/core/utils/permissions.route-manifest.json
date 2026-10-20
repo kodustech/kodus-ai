@@ -208,6 +208,14 @@
     }
   },
   {
+    "route": "/settings/code-review/x/agents/x",
+    "expected": {
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
     "route": "/settings/code-review/x/custom-messages",
     "expected": {
       "billing_manager": "allow",
@@ -281,6 +289,14 @@
   },
   {
     "route": "/settings/code-review/x/review-scope",
+    "expected": {
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "route": "/settings/code-review/x/skills",
     "expected": {
       "billing_manager": "allow",
       "repo_admin": "allow",

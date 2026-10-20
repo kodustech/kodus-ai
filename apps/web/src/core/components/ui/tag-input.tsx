@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Plus, X } from "lucide-react";
 
 import { Badge } from "./badge";
+import { Button } from "./button";
 import { Input } from "./input";
 
 interface TagInputProps {
@@ -66,14 +67,19 @@ const TagInput: React.FC<TagInputProps> = ({
             {tags.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                     {tags?.map((tag) => (
-                        <Badge
+                        // A real button: a Badge renders a span, which a
+                        // keyboard or a screen reader cannot use to remove.
+                        <Button
                             key={tag}
+                            type="button"
+                            size="xs"
                             variant="helper"
                             disabled={disabled}
+                            aria-label={`Remove ${tag}`}
                             onClick={() => removeTag(tag)}>
                             {tag}
                             <X className="text-danger -mr-1 h-4 w-4" />
-                        </Badge>
+                        </Button>
                     ))}
                 </div>
             )}

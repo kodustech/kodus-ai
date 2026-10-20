@@ -17,7 +17,7 @@ const run = (caught: number, extra: { falseAlarmFiles?: number; errored?: number
         linePrecision: 1,
         counts: { sites, caught, flagged: extra.flagged ?? caught, offSite: extra.offSite ?? 0, cleanFiles, falseAlarmFiles },
         cases: [{ id: 'repo#1::rule', checks: 'Flags every line that breaks "rule" in repo#1', hits: caught, total: sites, detail: [{ what: 'a.ts:1', ok: caught === sites }] }],
-        tokens: { in: 100, out: 10, cacheRead: 0, cacheWrite: 0 },
+        tokens: { in: 100, out: 10, cacheRead: 0, cacheWrite: 0, calls: 2, ms: 300, callMs: [100, 200] },
         infra: { errored: extra.errored ?? 0, total: 14 },
     };
 };
@@ -25,6 +25,13 @@ const run = (caught: number, extra: { falseAlarmFiles?: number; errored?: number
 describe('kody-rules nightly verdict', () => {
     it('passes a first run at or above both floors, without a second run', () => {
         expect(decide({ first: run(40) })).toMatchObject({ verdict: 'pass', mention: false });
+    });
+
+    // A model the weekly run measures before its floor is calibrated (real-agent.js writes none).
+    it('never reports a model without a floor as a pass', () => {
+        const noFloor = run(10);
+        noFloor.metric.floor = null as unknown as number;
+        expect(decide({ first: noFloor })).toMatchObject({ verdict: 'ungated', mention: false });
     });
 
     it('calls a dip that the pooled runs do not confirm an oscillation', () => {
@@ -75,7 +82,7 @@ describe('kody-rules nightly verdict', () => {
         const pooled = pool(run(43), run(30, { flagged: 32, offSite: 2 }));
         expect(pooled.metric.value).toBeCloseTo(73 / 86);
         expect(pooled.linePrecision).toBeCloseTo((75 - 2) / 75);
-        expect(pooled.tokens.in).toBe(200);
+        expect(pooled.tokens).toMatchObject({ in: 200, calls: 4, ms: 600, callMs: [100, 200, 100, 200] });
         expect(pooled.cases[0].detail[0].ok).toBe(false);
     });
 });

@@ -77,6 +77,40 @@ describe('LoadExternalContextStage previous review decisions (issue #1313, uncon
         expect(buildPreviousReviewDecisionsUseCase.execute).not.toHaveBeenCalled();
     });
 
+    it('loads them when every changed file is ignored and a custom agent names one (#2172)', async () => {
+        const { stage, buildPreviousReviewDecisionsUseCase } = makeStage();
+        const allIgnored = {
+            ...context,
+            changedFiles: [],
+            ignoredFileChanges: [
+                { filename: 'package.json', status: 'modified' },
+            ],
+        };
+
+        const named = await (stage as any).loadPreviousReviewDecisions({
+            ...allIgnored,
+            codeReviewConfig: {
+                customAgents: [
+                    {
+                        id: 'agent-1',
+                        name: 'Manifest',
+                        enabled: true,
+                        scope: { include: ['package.json'] },
+                    },
+                ],
+            },
+        });
+        const unnamed = await (stage as any).loadPreviousReviewDecisions(
+            allIgnored,
+        );
+
+        expect(named).toEqual([decision]);
+        expect(unnamed).toBeUndefined();
+        expect(buildPreviousReviewDecisionsUseCase.execute).toHaveBeenCalledTimes(
+            1,
+        );
+    });
+
     it('returns undefined without querying when the repository full name cannot be resolved', async () => {
         const { stage, buildPreviousReviewDecisionsUseCase } = makeStage();
 

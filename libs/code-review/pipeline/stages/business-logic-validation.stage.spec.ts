@@ -233,6 +233,27 @@ describe('BusinessLogicValidationStage', () => {
                 },
             },
         ],
+        [
+            // #2172: only a custom agent reviews the ignored files.
+            'no_reviewed_files',
+            {
+                changedFiles: [],
+                ignoredFileChanges: [
+                    { filename: 'package.json', status: 'modified' },
+                ],
+                codeReviewConfig: {
+                    reviewOptions: { business_logic: true },
+                    customAgents: [
+                        {
+                            id: 'agent-1',
+                            name: 'Manifest',
+                            enabled: true,
+                            scope: { include: ['package.json'] },
+                        },
+                    ],
+                },
+            },
+        ],
     ])('skips without calling the service: %s', async (reason, overrides) => {
         const { stage, service, publisher } = build(validated(true));
 

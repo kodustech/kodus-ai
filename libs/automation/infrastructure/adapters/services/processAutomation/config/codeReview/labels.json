@@ -73,5 +73,10 @@
         "type": "deterministic",
         "name": "Deterministic",
         "description": "Findings a scanner proved rather than a model inferred \u2014 committed credentials, dependencies with known advisories."
+    },
+    {
+        "type": "custom_agent",
+        "name": "Custom Agent",
+        "description": "Findings from a review agent your team defined, with its own instructions and scope."
     }
 ]

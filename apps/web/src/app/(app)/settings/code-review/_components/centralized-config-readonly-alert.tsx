@@ -10,11 +10,8 @@ import {
 import { AlertCircleIcon } from "lucide-react";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 
-import { useCodeReviewRouteParams } from "../../_hooks";
-
 export function CentralizedConfigReadOnlyAlert() {
     const { teamId } = useSelectedTeamId();
-    const { pageName } = useCodeReviewRouteParams();
 
     const centralizedConfig = useOptionalParameterQuery<CentralizedConfigValue>(
         ParametersConfigKey.CENTRALIZED_CONFIG,
@@ -47,9 +44,10 @@ export function CentralizedConfigReadOnlyAlert() {
         <Alert variant="warning">
             <AlertCircleIcon />
             <AlertDescription className="text-pretty">
-                Centralized config is enabled. Changes on this page are proposed
-                through pull requests in the {repositoryName} repository and
-                applied after merge.
+                Centralized config is enabled. Changes on this page are saved
+                immediately and proposed through pull requests in the{" "}
+                {repositoryName} repository. Synchronization reapplies the
+                configuration from that repository.
                 {activePullRequestUrl ? (
                     <>
                         {" "}

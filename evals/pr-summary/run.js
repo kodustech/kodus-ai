@@ -1,32 +1,31 @@
 /**
- * PR-SUMMARY matrix eval — guards the "generate PR summary on open" feature.
+ * PR-SUMMARY eval — guards the "generate PR summary on open" feature.
  *
  * WHY THIS EXISTS: a prod incident where the summary path silently routed to a
  * hardcoded Google Gemini default with no BYOK/key and every client lost their
  * PR summary — and NO eval caught it. The review agents kept working (they
  * resolve BYOK themselves), so the model matrix stayed green while summaries
- * were dead. This eval closes that gap: it drives the REAL
- * CommentManagerService.generateSummaryPR + updateSummarizationInPR end-to-end
- * and asserts the three things that incident violated:
- *   1. a NON-EMPTY summary is produced,
- *   2. it is POSTED back to the PR description (adapter receives a body),
- *   3. the summary model ROUTES to the expected provider — never a silent
- *      keyless-Gemini degrade.
- * Plus the client-facing contract: REPLACE / CONCATENATE / COMPLEMENT compose
- * the final description correctly.
+ * were dead.
  *
- *   node evals/pr-summary/run.js [--model=gpt-5.4-mini] [--mock] [--gate]
- *                                [--behaviour=replace|concatenate|complement]
- *                                [--dataset=cases]
+ * Each case runs production's summary step itself: the pipeline stage
+ * (UpdateCommentsAndGenerateSummaryStage) with the real CommentManagerService,
+ * on a pipeline context that carries the case's PR, its review's comments
+ * (lineComments, prLevelCommentResults) and the team's summary config. The
+ * model is the org's, routed by production's PermissionValidationService
+ * (resolveTaskSlot for the prSummary task) over the case's stored BYOK config,
+ * or the org's route for the run's model (evals/shared/model-route.js). The only stand-ins are the code host: the PR
+ * body it returns and the description it receives (recorded after the GitHub
+ * adapter's own fitPRDescription), and the full PR diff a commit run fetches
+ * (the case's files).
  *
- * MODES
- *   --mock : deterministic. The model call returns a fixed summary text (no
- *            network, no key). Validates routing + composition + posting. This
- *            is the local / harness path — zero flake, no API key needed.
- *   live   : (default, needs a key for --model) runs the real model. Asserts the
- *            SAME binary properties (summary non-empty, posted, composed, routed)
- *            — pass/fail is independent of the exact words the model picks, so a
- *            green run means the feature works, not that the prose was lucky.
+ * Checks: a non-empty summary when the config asks for one and none when it
+ * does not, posted back to the PR, composed per behaviour, sent to the model the
+ * org's routing picks (read off the call itself), and on a real model about what
+ * the diff does.
+ *
+ *   node evals/pr-summary/run.js [--model=<id>] [--gate] [--output=<file>]
+ *                                [--behaviour=replace|concatenate|complement|none]
+ *                                [--dataset=cases] [--limit=N]
  *
  * EXIT CODES (suite contract): 0 = pass, 1 = gate-fail, 2 = infra
  *   (missing key / model-construction crash / all-cases-errored network).
@@ -58,17 +57,25 @@ const args = Object.fromEntries(
     }),
 );
 const MODEL = args.model || 'gpt-5.4-mini';
-const MOCK = !!args.mock;
 const GATE = !!args.gate;
 const DATASET = String(args.dataset || 'cases').replace(/\.json$/, '');
 const BEHAVIOUR_FILTER = args.behaviour ? String(args.behaviour) : null;
+const LIMIT = args.limit ? Number(args.limit) : undefined;
+if (args.mock) {
+    console.error('--mock was removed: the scripted model (--model=eval-fake) runs the real route without a key');
+    process.exit(2);
+}
+const REAL_MODEL = MODEL !== 'eval-fake';
+// The contract is binary: with no floor set for a model, any failed check fails the gate.
+const TARGET = (require('./targets.json').models || {})[MODEL] || {};
+const FLOOR = TARGET.floor ?? 1;
 
 const START = '<!-- kody-pr-summary:start -->';
 const END = '<!-- kody-pr-summary:end -->';
-const MOCK_SUMMARY = 'MOCK_GENERATED_SUMMARY_BODY';
 
-const { applyModelEnv, TIER0 } = require('../shared/tier0-models');
-const { buildEvalModel } = require('../shared/build-model');
+const { TIER0 } = require('../shared/tier0-models');
+const { evalQuestion, resultProblems } = require('../shared/eval-result');
+const { countTokens, tokensUsed } = require('../shared/eval-kit');
 
 // exit-2 helper — infra errors ALWAYS fail (a broken model must never look green).
 function infra(msg) {
@@ -76,14 +83,30 @@ function infra(msg) {
     process.exit(2);
 }
 
-// ── Route the model env the same way prod's self-hosted path does. In mock mode
-//    we skip this so no key is required. ────────────────────────────────────
-if (!MOCK) {
-    try {
-        applyModelEnv(MODEL);
-    } catch (e) {
-        infra(`cannot route model '${MODEL}': ${e.message}`);
-    }
+// ── The org's model, routed as production routes it (evals/shared/model-route.js):
+//    a stored BYOK config holding the model. ──
+const { resolveRoute, EVAL_ORG, storedByokConfigOf, tier0ModelEntry, evalPermissionService } = require('../shared/model-route');
+let ROUTE;
+try {
+    ROUTE = resolveRoute({ provider: 'tier0', model: MODEL });
+} catch (e) {
+    infra(`cannot route model '${MODEL}': ${e.message}`);
+}
+countTokens();
+
+// Every model call the summary makes, as production's LLM port reports it
+// (model, routed task, the BYOK model id it came from). Observed, not changed.
+const { getLlmObservability, setLlmObservability } = require('../../libs/llm/llm-observability.ts');
+let modelCalls = [];
+{
+    const port = getLlmObservability();
+    setLlmObservability({
+        ...port,
+        runAiSdkLLMInSpan: (params) => {
+            modelCalls.push({ model: params.model, route: params.route, byokModelId: params.byokModelId, runName: params.runName });
+            return port.runAiSdkLLMInSpan(params);
+        },
+    });
 }
 
 // Prompt seen by the model + the last model-call error, captured via the
@@ -112,58 +135,69 @@ const { BehaviourForExistingDescription } = require(
 const { PlatformType } = require(
     '../../libs/core/domain/enums/platform-type.enum.ts',
 );
+const { UpdateCommentsAndGenerateSummaryStage } = require(
+    '../../libs/code-review/pipeline/stages/finish-comments.stage.ts',
+);
+const { frozenContext } = require(
+    '../../test/fixtures/frozen-pipeline-context.ts',
+);
+const { PullRequestMessageStatus } = require(
+    '../../libs/core/infrastructure/config/types/general/pullRequestMessages.type.ts',
+);
+const { fitPRDescription } = require('../../libs/code-review/utils/fit-pr-description.ts');
 
-// ── Build the real service with thin stubs. generateSummaryPR only touches
-//    codeManagementService (read body + write description), permissionValidation
-//    (getBYOKConfig), and observability (span wrapper). Everything else is
-//    unused by this code path — matches commentManager.service.spec.ts. ───────
-function buildService(existingBody, postedRef) {
+const REPOSITORY = { name: 'sample', id: 'repo-id' };
+
+// ── The real CommentManagerService. On the summary path it reads only the code
+//    host (PR body in, description out) and the org's permission service; the
+//    other injected services are not reached there, so none is supplied. The
+//    code host is the eval's: it returns the case's PR body and records what
+//    the GitHub adapter would post (github.service.ts runs fitPRDescription on
+//    it first). ──────────────────────────────────────────────────────────────
+function buildService(existingBody, postedRef, storedConfig) {
     const codeManagementService = {
         getPullRequestByNumber: async () => ({ body: existingBody }),
         updateDescriptionInPullRequest: async (params) => {
             postedRef.calls += 1;
-            postedRef.body = params?.summary;
+            postedRef.body = fitPRDescription(params?.summary, PlatformType.GITHUB);
         },
     };
-    const permissionValidationService = {
-        // No BYOK in the eval → default env routing (the incident's exact path).
-        getBYOKConfig: async () => null,
-        validateBasicLicense: async () => ({ allowed: true }),
-    };
-    const observabilityService = {
-        runLLMInSpan: async ({ exec }) => ({ result: await exec(() => {}) }),
-        runAiSdkLLMInSpan: async ({ exec }) => exec(),
-    };
     const service = new CommentManagerService(
-        /* parametersService          */ {},
-        /* messageProcessor           */ {},
-        /* observabilityService       */ observabilityService,
-        /* permissionValidationService*/ permissionValidationService,
+        /* parametersService          */ undefined,
+        /* messageProcessor           */ undefined,
+        /* observabilityService       */ undefined,
+        /* permissionValidationService*/ evalPermissionService(storedConfig),
         /* codeManagementService      */ codeManagementService,
     );
 
-    // Intercept the LLM at the service's own private seam: runSummaryPromptV5
-    // receives the fully-built {systemPrompt, userPrompt} and returns the raw
-    // model text. Overriding it on the instance (a) captures the exact prompt —
-    // so we can assert COMPLEMENT injected the existing description — and (b) in
-    // mock mode returns a fixed string with NO network / NO key. In live mode we
-    // delegate to the real method, so buildModelFromSlot + the real model run.
+    // Observe the prompt and the model error at the service's own seam: the
+    // wrapper records and delegates. generateSummaryPR swallows model errors
+    // (retries, then returns null), so the error is kept here to tell a
+    // transient infra failure apart from a genuine empty-summary bug.
     const realRunSummaryPromptV5 = service.runSummaryPromptV5.bind(service);
     service.runSummaryPromptV5 = async (params) => {
         lastPromptSeen = {
             system: params?.systemPrompt ?? '',
             prompt: params?.userPrompt ?? '',
         };
-        if (MOCK) return MOCK_SUMMARY;
         try {
             return await realRunSummaryPromptV5(params);
         } catch (e) {
-            lastModelError = e; // generateSummaryPR will swallow this; we keep it
+            lastModelError = e;
             throw e;
         }
     };
+    // And what the stage got back from it (the description before posting).
+    const realGenerate = service.generateSummaryPR.bind(service);
+    service.generateSummaryPR = async (...a) => {
+        generated.calls += 1;
+        generated.isCommitRun = a[6];
+        generated.description = await realGenerate(...a);
+        return generated.description;
+    };
     return service;
 }
+let generated = { calls: 0, description: null, isCommitRun: null };
 
 const BEHAVIOUR_ENUM = {
     replace: BehaviourForExistingDescription.REPLACE,
@@ -177,11 +211,36 @@ const blockContent = (s) => {
     return m ? m[1].trim() : '';
 };
 
+// A review comment as the pipeline carries it (CommentResult): the finding and
+// whether it reached the PR.
+const commentResult = (f) => ({ comment: { suggestion: f }, deliveryStatus: f.deliveryStatus || 'sent' });
+
+// The case's stored BYOK config: its models (each a tier-0 model id, or another
+// model id on the same route) and routing. None: the org's route for the run's
+// model.
+function storedConfigOf(c) {
+    if (!c.storedConfig) return ROUTE.storedConfig;
+    const models = c.storedConfig.models.map((m) => {
+        const entry = tier0ModelEntry(m.id, MODEL);
+        return m.model ? { ...entry, model: m.model } : entry;
+    });
+    return storedByokConfigOf(models, c.storedConfig.routing);
+}
+
+// The model the org's routing should pick for the summary, as the call names it.
+function expectedModelOf(c) {
+    if (!c.storedConfig) return { model: TIER0[MODEL]?.doModel || MODEL, byokModelId: ROUTE.storedConfig?.routing.defaultModelId };
+    const routing = c.storedConfig.routing || {};
+    const id = routing.taskOverrides?.prSummary || routing.defaultModelId || c.storedConfig.models[0].id;
+    const m = c.storedConfig.models.find((x) => x.id === id);
+    return { model: m.model || TIER0[MODEL]?.doModel || MODEL, byokModelId: id };
+}
+
 async function runCase(c) {
     // mode 'open' (first-open, default) drives behaviourForExistingDescription;
     // mode 'commit' (new push on an already-open PR) drives behaviourForNewCommits.
     const isCommitRun = c.mode === 'commit';
-    const summaryConfig = { generatePRSummary: true };
+    const summaryConfig = { generatePRSummary: c.generatePRSummary !== false };
     if (isCommitRun) {
         // Enum values equal the lowercase strings (replace/concatenate/none).
         summaryConfig.behaviourForNewCommits = c.behaviour;
@@ -192,36 +251,58 @@ async function runCase(c) {
     }
 
     const posted = { calls: 0, body: null };
-    const service = buildService(c.existingBody || '', posted);
+    generated = { calls: 0, description: null, isCommitRun: null };
+    const service = buildService(c.existingBody || '', posted, storedConfigOf(c));
     lastPromptSeen = null;
     lastModelError = null;
+    modelCalls = [];
 
-    const finalDescription = await service.generateSummaryPR(
-        c.pr,
-        { name: 'sample', id: 'repo-id' },
-        c.changedFiles,
-        { organizationId: 'org-1', teamId: 'team-1' },
-        'en-US',
-        summaryConfig,
-        // No byokConfig arg — generateSummaryPR owns its model resolution now
-        // (matches finish-comments.stage.ts). isCommitRun is the 7th param.
-        isCommitRun,
-        /* prPreview */ false,
-        /* externalPromptContext */ undefined,
-        PlatformType.GITHUB,
+    // Production's summary step on the case's pipeline context. A commit run
+    // with REPLACE fetches the PR's full diff from the code host: the case's
+    // files are that diff.
+    const pullRequestManagerService = {
+        getChangedFilesMetadata: async () => c.changedFiles,
+    };
+    const stage = new UpdateCommentsAndGenerateSummaryStage(service, pullRequestManagerService, undefined);
+    const after = await stage.executeStage(
+        frozenContext({
+            lastExecution: isCommitRun ? { id: 'previous-review' } : undefined,
+            errors: [],
+            codeReviewConfig: { languageResultPrompt: 'en-US', summary: summaryConfig },
+            repository: REPOSITORY,
+            pullRequest: c.pr,
+            organizationAndTeamData: EVAL_ORG,
+            platformType: PlatformType.GITHUB,
+            initialCommentData: { commentId: 1, noteId: 2, threadId: 3 },
+            changedFiles: c.changedFiles,
+            dryRun: { enabled: false },
+            externalPromptContext: undefined,
+            lineComments: (c.review?.lineComments || []).map(commentResult),
+            prLevelCommentResults: (c.review?.prLevelComments || []).map(commentResult),
+            // The end-review message is another step; the stage returns right
+            // after the summary when it is inactive.
+            pullRequestMessagesConfig: {
+                endReviewMessage: { status: PullRequestMessageStatus.INACTIVE },
+            },
+        }),
     );
-
-    // Post it back — the step the incident silently skipped.
-    await service.updateSummarizationInPR(
-        { organizationId: 'org-1', teamId: 'team-1' },
-        c.pr.number,
-        { name: 'sample', id: 'repo-id' },
-        finalDescription,
-        /* dryRun */ undefined,
-    );
+    const stageError = (after?.errors || []).find((e) => e?.stage === stage.stageName);
+    if (stageError && !lastModelError) lastModelError = stageError.error;
+    const finalDescription = generated.description;
 
     const exp = c.expect || {};
-    const failures = [];
+    const checks = [];
+    // `quality`: a check on the model's prose, not on the contract (see the gate).
+    const check = (what, ok, quality = false) => checks.push({ what, ok: !!ok, ...(quality ? { quality: true } : {}) });
+    const done = (contentLen, extra = {}) => ({ caseId: c.caseId, behaviour: c.behaviour, contentLen, checks, failures: checks.filter((x) => !x.ok).map((x) => x.what), ...extra });
+
+    // 0) A config that asks for no summary: the stage makes no call and posts
+    // nothing (summary off, or a new commit with behaviourForNewCommits NONE).
+    if (exp.generates === false) {
+        check('no summary generated when the config asks for none (no model call)', generated.calls === 0 && modelCalls.length === 0);
+        check('nothing posted to the PR', posted.calls === 0);
+        return done(0);
+    }
 
     // 1) generated + non-empty. Empty ⇒ return NOW — every later assertion
     // dereferences finalDescription, which is null here.
@@ -231,196 +312,120 @@ async function runCase(c) {
         // INFRA (bad key / quota / network / access), not a quality regression —
         // don't turn eval-env noise into a red gate. A genuine empty result (no
         // model error, or a non-infra crash) stays a real failure.
-        if (!MOCK && lastModelError && isInfraErr(lastModelError)) {
-            return { caseId: c.caseId, behaviour: c.behaviour, contentLen: 0, failures: [`infra: ${String(lastModelError.message).slice(0, 120)}`], infra: true };
+        if (lastModelError && isInfraErr(lastModelError)) {
+            return { caseId: c.caseId, behaviour: c.behaviour, contentLen: 0, checks: [], failures: [`infra: ${String(lastModelError.message).slice(0, 120)}`], infra: true };
         }
-        failures.push(`summary block empty / not generated${lastModelError ? ` (model error: ${String(lastModelError.message).slice(0, 120)})` : ''}`);
-        return { caseId: c.caseId, behaviour: c.behaviour, contentLen: 0, failures };
+        check(`summary generated${lastModelError ? ` (model error: ${String(lastModelError.message).slice(0, 120)})` : ''}`, false);
+        return done(0);
+    }
+    check('summary generated', true);
+
+    // The model the call went to, read off the call: the one the org's routing
+    // picks for the prSummary task, never a silent swap to one nobody chose
+    // (the incident). With a stored config, the routed model id too.
+    const want = expectedModelOf(c);
+    const named = (m) => (m.byokModelId ? `${m.byokModelId}: ${m.model}` : m.model);
+    const wrong = modelCalls.filter((m) => !String(m.model || '').includes(want.model) || (want.byokModelId !== undefined && m.byokModelId !== want.byokModelId));
+    check(
+        `summary sent to the model the org's routing picks (${named(want)})${wrong.length ? ` — got ${wrong.map(named).join(', ')}` : ''}`,
+        modelCalls.length > 0 && !wrong.length,
+    );
+    if (want.byokModelId) check('routed as the prSummary task', modelCalls.length > 0 && modelCalls.every((m) => m.route === 'prSummary'));
+    if (isCommitRun) check('the stage runs it as a commit run', generated.isCommitRun === true);
+
+    // The review's findings reach the prompt as production writes them: each
+    // delivered one listed, or the review reported as having found nothing.
+    const seenPrompt = `${lastPromptSeen?.system || ''}\n${lastPromptSeen?.prompt || ''}`;
+    const delivered = [...(c.review?.lineComments || []), ...(c.review?.prLevelComments || [])].filter((f) => (f.deliveryStatus || 'sent') === 'sent');
+    if (delivered.length) {
+        check(`the prompt lists the review's ${delivered.length} delivered finding(s)`, delivered.every((f) => seenPrompt.includes(f.oneSentenceSummary)));
+    } else if (!(c.review?.lineComments || []).length && !(c.review?.prLevelComments || []).length) {
+        check('the prompt says the review found no issues', /found no issues/.test(seenPrompt));
     }
 
     // 2) posted to the PR (adapter received a non-empty body)
     if (exp.postsSummary) {
-        if (posted.calls < 1) failures.push('summary was NOT posted (updateDescriptionInPullRequest never called)');
-        else if (!posted.body || !posted.body.includes(START)) failures.push('posted body missing the summary block');
+        check('summary posted to the PR (updateDescriptionInPullRequest called)', posted.calls >= 1);
+        check('posted body carries the summary block', posted.calls >= 1 && posted.body && posted.body.includes(START));
     }
 
     // 3) composition per behaviour
-    if (exp.exactlyOneBlock && countBlocks(finalDescription) !== 1) {
-        failures.push(`expected exactly 1 summary block, got ${countBlocks(finalDescription)}`);
-    }
+    if (exp.exactlyOneBlock) check(`exactly 1 summary block (got ${countBlocks(finalDescription)})`, countBlocks(finalDescription) === 1);
     if (exp.bodyPreserved === true) {
         const author = (c.existingBody || '').split('\n').find((l) => l.trim() && !l.includes('kody-pr-summary'));
-        if (author && !finalDescription.includes(author.trim())) {
-            failures.push(`${c.behaviour} dropped the author-written description (expected it kept)`);
-        }
+        if (author) check(`${c.behaviour} keeps the author-written description`, finalDescription.includes(author.trim()));
     }
     if (exp.bodyPreserved === false && c.existingBody) {
         const author = c.existingBody.split('\n').find((l) => l.trim() && !l.includes('kody-pr-summary'));
-        if (author && finalDescription.includes(author.trim())) {
-            failures.push('REPLACE did not drop the existing author description');
-        }
+        if (author) check('REPLACE drops the existing author description', !finalDescription.includes(author.trim()));
     }
-    if (exp.staleContentGone && finalDescription.includes(exp.staleContentGone)) {
-        failures.push('stale prior summary block was not stripped on re-run');
-    }
+    if (exp.staleContentGone) check('stale prior summary block stripped on re-run', !finalDescription.includes(exp.staleContentGone));
     // commit-run CONCATENATE accumulates INSIDE the block: the prior summary
     // content is kept and the new one appended within the same markers.
     if (exp.blockAccumulates) {
-        if (!content.includes(exp.blockAccumulates)) {
-            failures.push('CONCATENATE (new commit) dropped the prior summary content instead of accumulating it');
-        }
-        if (content === exp.blockAccumulates) {
-            failures.push('CONCATENATE (new commit) did not append the new summary to the block');
-        }
+        check('CONCATENATE (new commit) keeps the prior summary content', content.includes(exp.blockAccumulates));
+        check('CONCATENATE (new commit) appends the new summary to the block', content !== exp.blockAccumulates);
     }
 
     // 4) COMPLEMENT must feed the existing description into the model prompt
     if (exp.promptContainsExistingBody) {
         const seen = `${lastPromptSeen?.system || ''}\n${lastPromptSeen?.prompt || ''}`;
-        if (!seen.includes((c.existingBody || '').slice(0, 30))) {
-            failures.push('COMPLEMENT did not inject the existing description into the prompt');
-        }
+        check('COMPLEMENT injects the existing description into the prompt', seen.includes((c.existingBody || '').slice(0, 30)));
     }
 
-    return { caseId: c.caseId, behaviour: c.behaviour, contentLen: content.length, failures };
+    // 5) On a real model, the summary says what the diff does: it uses at least
+    // one word only the diff holds (parts of the changed files' and code names
+    // that the title and the existing description do not carry). A summary
+    // written from the title alone has none. The scripted and mock texts name
+    // nothing, so the check runs on real models only. With fewer than three such
+    // words a good summary can miss them all (a tax-rounding fix whose only one
+    // is `rate`), so the check needs three.
+    if (REAL_MODEL) {
+        // Every line of the title and the description, each as an added line:
+        // diffWords reads only those.
+        const saidBefore = `${c.pr?.title || ''}\n${c.existingBody || ''}`.split('\n').map((l) => `+${l}`).join('\n');
+        const known = new Set(diffWords([{ filename: '', patch: saidBefore }]));
+        const only = diffWords(c.changedFiles).filter((w) => !known.has(w));
+        const said = only.filter((w) => content.toLowerCase().includes(w));
+        if (only.length >= 3) check(`says what the diff does (uses ${said.length ? said.slice(0, 4).join(', ') : 'none'} of: ${only.slice(0, 6).join(', ')})`, said.length >= 1, true);
+    }
+
+    return done(content.length);
 }
 
-// ── Deterministic routing guard — the incident's root cause. Runs in every
-//    mode; needs no network (just constructs the SDK model object). Asserts the
-//    POSITIVE invariant (summary resolves to the model it SHOULD), not a
-//    provider blocklist — Gemini is a legit configured model, the bug was
-//    silent degradation to a model nobody chose. ──────────────────────────────
-const SUMMARY_DEFAULT = 'kimi-k2.7-code'; // the defaultModelOverride the summary path passes
-
-function routingChecks() {
-    const failures = [];
-
-    // 1) Cloud default (no BYOK, no self-hosted env model): the summary must
-    //    resolve to the SAME working default the review engine uses — never
-    //    silently swap to some other/keyless model (the prod-incident shape).
-    const savedEnvModel = process.env.API_LLM_PROVIDER_MODEL;
-    try {
-        delete process.env.API_LLM_PROVIDER_MODEL;
-        const cloud = buildEvalModel({}, SUMMARY_DEFAULT);
-        if (cloud.modelId !== SUMMARY_DEFAULT) {
-            failures.push(`cloud-default summary resolved to '${cloud.modelId}', expected '${SUMMARY_DEFAULT}' — silent model swap`);
+// The words of a diff a summary of it would use: the parts of the changed
+// files' names and of the code names on added lines (camelCase and snake_case
+// split), lowercase, four letters or more, minus words of any code.
+// Words any summary of any change may use: code keywords and the generic
+// vocabulary of change (a summary written without the diff still says "update").
+const CODE_WORDS = new Set([
+    'this', 'that', 'with', 'from', 'const', 'return', 'async', 'await', 'function', 'export', 'import', 'string', 'number', 'value', 'true', 'false', 'null', 'undefined', 'void', 'type', 'interface', 'class', 'else', 'promise', 'catch', 'throw', 'error', 'errors',
+    'create', 'update', 'delete', 'remove', 'find', 'list', 'item', 'items', 'data', 'result', 'results', 'message', 'handler', 'store', 'total', 'amount', 'limit', 'round', 'math', 'date', 'time', 'second', 'seconds', 'user', 'users', 'option', 'options', 'opts', 'existing', 'change', 'changes', 'check', 'logic', 'method', 'service', 'file', 'files', 'code', 'test', 'tests',
+]);
+function diffWords(files) {
+    const words = new Set();
+    const add = (name) => {
+        for (const part of String(name).split(/(?=[A-Z])|[_\W\d]+/)) {
+            const w = part.toLowerCase();
+            if (w.length >= 4 && !CODE_WORDS.has(w)) words.add(w);
         }
-    } finally {
-        if (savedEnvModel === undefined) delete process.env.API_LLM_PROVIDER_MODEL;
-        else process.env.API_LLM_PROVIDER_MODEL = savedEnvModel;
-    }
-
-    // 2) Self-hosted routing (live only — env is routed by applyModelEnv): the
-    //    model the client CONFIGURED must be exactly what the summary uses, not
-    //    silently overridden by the kimi default. This is the per-model matrix
-    //    assertion: gpt-mini stays gpt-mini, gemini-flash stays gemini-flash.
-    if (!MOCK) {
-        const m = buildEvalModel({}, SUMMARY_DEFAULT);
-        // A route served by another host (`@fireworks`) configures its
-        // doModel; that is the id the summary must use.
-        const configured = TIER0[MODEL]?.doModel || MODEL;
-        if (m.modelId !== configured) {
-            failures.push(`self-hosted summary routed to '${m.modelId}', expected the configured '${configured}'`);
+    };
+    for (const f of files || []) {
+        add(String(f.filename || '').split('/').pop().replace(/\.[^.]+$/, ''));
+        for (const line of String(f.patch || '').split('\n').filter((l) => l.startsWith('+') && !l.startsWith('+++'))) {
+            for (const m of line.matchAll(/[A-Za-z_][\w]*/g)) add(m[0]);
         }
     }
-    return failures;
-}
-
-// ── Commit-run gate: drives the REAL pipeline stage (no model — generateSummaryPR
-//    is spied) to assert the generate/post DECISION per (mode × behaviour). This
-//    is where behaviourForNewCommits=NONE lives: the gate that stops regenerating
-//    the summary on a new push, and the incident-class risk that a config flip
-//    silently kills posting. Deterministic → runs in every mode, always gates. ──
-const StageMod = require(
-    '../../libs/code-review/pipeline/stages/finish-comments.stage.ts',
-);
-const { frozenContext } = require(
-    '../../test/fixtures/frozen-pipeline-context.ts',
-);
-const { PullRequestMessageStatus } = require(
-    '../../libs/core/infrastructure/config/types/general/pullRequestMessages.type.ts',
-);
-
-async function commitGateChecks() {
-    const UpdateCommentsAndGenerateSummaryStage =
-        StageMod.UpdateCommentsAndGenerateSummaryStage;
-    const scenarios = [
-        { name: 'open → generate + post', last: undefined, summary: { generatePRSummary: true }, call: true, commit: false },
-        { name: 'open → summary OFF → skip', last: undefined, summary: { generatePRSummary: false }, call: false },
-        { name: 'commit + NONE → no regen/post', last: { id: 'prev' }, summary: { generatePRSummary: true, behaviourForNewCommits: 'none' }, call: false },
-        { name: 'commit + REPLACE → generate + post', last: { id: 'prev' }, summary: { generatePRSummary: true, behaviourForNewCommits: 'replace' }, call: true, commit: true },
-        { name: 'commit + CONCATENATE → generate + post', last: { id: 'prev' }, summary: { generatePRSummary: true, behaviourForNewCommits: 'concatenate' }, call: true, commit: true },
-        { name: 'commit + summary OFF → skip', last: { id: 'prev' }, summary: { generatePRSummary: false, behaviourForNewCommits: 'replace' }, call: false },
-    ];
-
-    const failures = [];
-    for (const s of scenarios) {
-        const spy = { gen: 0, post: 0, isCommit: null };
-        const commentManagerService = {
-            // isCommitRun is the 7th param of generateSummaryPR → index 6.
-            generateSummaryPR: async (...a) => { spy.gen += 1; spy.isCommit = a[6]; return 'GENERATED'; },
-            updateSummarizationInPR: async () => { spy.post += 1; },
-            updateOverallComment: async () => {},
-            processEndReviewMessageTemplate: async () => 'body',
-        };
-        const pullRequestManagerService = { getChangedFilesMetadata: async () => [] };
-        const stage = new UpdateCommentsAndGenerateSummaryStage(
-            commentManagerService,
-            pullRequestManagerService,
-        );
-        const ctx = frozenContext({
-            lastExecution: s.last,
-            errors: [],
-            codeReviewConfig: { languageResultPrompt: 'en-US', summary: s.summary },
-            repository: { id: 'r', name: 'sample' },
-            pullRequest: { number: 7 },
-            organizationAndTeamData: { organizationId: 'o', teamId: 't' },
-            platformType: undefined,
-            initialCommentData: { commentId: 1, noteId: 2, threadId: 3 },
-            changedFiles: [],
-            dryRun: { enabled: false },
-            externalPromptContext: undefined,
-            lineComments: [],
-            // INACTIVE end-review message → stage returns right after the summary
-            // decision, so only the generate/post spies matter here.
-            pullRequestMessagesConfig: {
-                endReviewMessage: { status: PullRequestMessageStatus.INACTIVE },
-            },
-        });
-        try {
-            await stage.executeStage(ctx);
-        } catch (e) {
-            failures.push(`${s.name}: stage threw — ${String(e && e.message).slice(0, 120)}`);
-            continue;
-        }
-        const called = spy.gen > 0;
-        const posted = spy.post > 0;
-        if (called !== s.call) failures.push(`${s.name}: generateSummaryPR called=${called}, expected ${s.call}`);
-        if (posted !== s.call) failures.push(`${s.name}: posted=${posted}, expected ${s.call}`);
-        if (s.call && s.commit !== undefined && spy.isCommit !== s.commit) {
-            failures.push(`${s.name}: isCommitRun=${spy.isCommit}, expected ${s.commit}`);
-        }
-    }
-    return failures;
+    return [...words];
 }
 
 async function main() {
-    const cases = require(`./datasets/${DATASET}.json`).filter(
-        (c) => !BEHAVIOUR_FILTER || c.behaviour === BEHAVIOUR_FILTER,
-    );
+    const cases = require(`./datasets/${DATASET}.json`)
+        .filter((c) => !BEHAVIOUR_FILTER || c.behaviour === BEHAVIOUR_FILTER)
+        .slice(0, LIMIT);
     if (!cases.length) infra(`no cases in dataset '${DATASET}'${BEHAVIOUR_FILTER ? ` for behaviour '${BEHAVIOUR_FILTER}'` : ''}`);
 
-    console.log(`════ PR-summary eval · model=${MODEL} · ${MOCK ? 'MOCK' : 'LIVE'} · ${cases.length} cases ════\n`);
-
-    // Routing guard first — a routing regression is the whole reason this exists.
-    const routeFailures = routingChecks();
-    console.log(`routing guard: ${routeFailures.length ? '❌ ' + routeFailures.length + ' failure(s)' : '✅ ok'}`);
-    for (const f of routeFailures) console.log(`   · ${f}`);
-
-    // Commit-run gate (stage-level generate/post decision, incl. NONE).
-    const gateFailures = await commitGateChecks();
-    console.log(`commit-run gate: ${gateFailures.length ? '❌ ' + gateFailures.length + ' failure(s)' : '✅ ok'}`);
-    for (const f of gateFailures) console.log(`   · ${f}`);
+    console.log(`════ PR-summary eval · model=${MODEL} · ${cases.length} cases ════\n`);
 
     const results = [];
     let errored = 0;
@@ -436,7 +441,7 @@ async function main() {
             const msg = String(e && e.message ? e.message : e);
             const isInfra = isInfraErr(e);
             console.log(`${isInfra ? '⚠️ ' : '❌'} ${c.caseId.padEnd(26)} [${c.behaviour}] ${isInfra ? 'INFRA' : 'ERROR'}: ${msg.slice(0, 160)}`);
-            results.push({ caseId: c.caseId, behaviour: c.behaviour, failures: [msg], infra: isInfra });
+            results.push({ caseId: c.caseId, behaviour: c.behaviour, checks: [], failures: [msg], infra: isInfra, errored: true });
         }
     }
 
@@ -445,26 +450,70 @@ async function main() {
     const infraCases = results.filter((r) => r.infra);
 
     console.log(`\n════ SUMMARY (${MODEL}) ════`);
-    console.log(`  routing:     ${routeFailures.length ? 'FAIL' : 'ok'}`);
-    console.log(`  commit-gate: ${gateFailures.length ? 'FAIL' : 'ok'}`);
     console.log(`  cases:       ${results.length - caseFailures.length - infraCases.length}/${results.length} clean · ${caseFailures.length} failed · ${infraCases.length} infra`);
 
     // Every case failing to network in live mode = infra (broken key/model), not a
     // quality result — exit 2 so the suite fails loudly rather than silently green.
-    if (!MOCK && infraCases.length === cases.length && cases.length > 0) {
+    if (infraCases.length === cases.length && cases.length > 0) {
         infra(`all ${cases.length} cases hit infra errors (key/quota/network) — nothing measured`);
     }
 
-    const hardFail = routeFailures.length > 0 || gateFailures.length > 0 || caseFailures.length > 0;
-    if (hardFail) {
+    // The shared result (evals/shared/eval-result.js): every dataset case with its checks.
+    const asCase = (id, checks, what) => ({ id, checks: what, hits: checks.filter((x) => x.ok).length, total: checks.length, detail: checks });
+    const evalCases = [
+        ...results.map((r) => {
+            const c = cases.find((x) => x.caseId === r.caseId) || {};
+            const what = String(c.description || `${r.behaviour} summary`).slice(0, 160);
+            return r.infra || r.errored ? { id: r.caseId, checks: what, hits: 0, total: 0, unmeasured: true } : asCase(r.caseId, r.checks, what);
+        }),
+    ];
+    const hits = evalCases.reduce((n, x) => n + x.hits, 0);
+    const total = evalCases.reduce((n, x) => n + x.total, 0);
+    // A model with a floor of its own was calibrated with the diff check in the
+    // number. One without is gated on the contract alone (routing, posting,
+    // composition): the diff check reads the model's prose and is reported only,
+    // and the result publishes the number the gate read, so whoever reads the
+    // result (evals/shared/nightly-verdict.js) judges what the exit code did.
+    const calibrated = TARGET.floor !== undefined;
+    const gated = evalCases.flatMap((x) => x.detail || []).filter((d) => calibrated || !d.quality);
+    const gatedHits = gated.filter((d) => d.ok).length;
+    const result = {
+        eval: 'pr-summary',
+        question: evalQuestion('evals/pr-summary'),
+        model: MODEL,
+        runs: 1,
+        metric: calibrated
+            ? { name: 'of PR-summary checks passed', value: total ? hits / total : null, floor: FLOOR, baseline: TARGET.observed ?? null }
+            : { name: 'of PR-summary contract checks passed (the diff check reported only)', value: gated.length ? gatedHits / gated.length : null, floor: FLOOR, baseline: null },
+        cases: evalCases,
+        tokens: tokensUsed(),
+        infra: { errored: infraCases.length + results.filter((r) => r.errored && !r.infra).length, total: cases.length },
+    };
+    if (args.output) {
+        fs.mkdirSync(path.dirname(path.resolve(args.output)), { recursive: true });
+        fs.writeFileSync(args.output, `${JSON.stringify(result, null, 2)}\n`);
+    }
+    const problems = resultProblems(result);
+    if (problems.length) infra(`the result breaks the shared shape — ${problems.join('; ')}`);
+    // A case that crashed is out of the number: past the 5% budget the run did
+    // not measure (evals/README.md), engine break or not.
+    if (result.infra.errored > cases.length * 0.05) {
+        infra(`${result.infra.errored} of ${cases.length} cases did not run (see above)`);
+    }
+
+    if (!calibrated && gated.length < total) {
+        console.log(`  diff check: ${hits - gatedHits}/${total - gated.length} passed — reported, not gated (no floor for ${MODEL} in targets.json)`);
+    }
+
+    if (result.metric.value < FLOOR) {
         if (GATE) {
-            console.error(`\n❌ GATE FAILED (${MODEL}): ${routeFailures.length} routing + ${gateFailures.length} commit-gate + ${caseFailures.length} case failure(s)`);
+            console.error(`\n❌ GATE FAILED (${MODEL}): ${gatedHits}/${gated.length} gated checks, below the floor — ${caseFailures.length} case failure(s)`);
             process.exit(1);
         }
-        console.log(`\n⚠️  ${MODEL}: ${routeFailures.length + gateFailures.length + caseFailures.length} failure(s) — advisory (no --gate)`);
+        console.log(`\n⚠️  ${MODEL}: ${total - hits} failed check(s) — advisory (no --gate)`);
         return;
     }
-    console.log(`\n✅ PASS (${MODEL})${infraCases.length ? ` — ${infraCases.length} case(s) skipped on infra` : ''}`);
+    console.log(`\n✅ PASS (${MODEL}): ${hits}/${total} checks${infraCases.length ? ` — ${infraCases.length} case(s) skipped on infra` : ''}`);
 }
 
 // Exit explicitly: the engine services it loads can leave a handle open, and a

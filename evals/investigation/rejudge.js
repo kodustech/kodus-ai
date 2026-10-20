@@ -38,15 +38,15 @@ function datasetVars() {
 
 // Submission findings keep summary+content joined in `description`; label and
 // file come back as the extra fields recall-assertion appends. The trace isn't
-// re-derived: scoring doesn't read it, and the fidelity fields are copied from
-// the source row (FIDELITY).
+// re-derived: scoring doesn't read it, and what the run did is copied from the
+// source row (FROM_THE_RUN).
 function agentOutputOf(result) {
     return JSON.stringify({
         findings: (result.findings || []).map((f) => ({ oneSentenceSummary: f.description, label: f.category, relevantFile: f.path })),
     });
 }
 
-const FIDELITY = ['totalCalls', 'hitRate', 'unserved'];
+const FROM_THE_RUN = ['toolCalls'];
 
 async function main() {
     const [summaryFile, submissionFile] = process.argv.slice(2);
@@ -61,7 +61,7 @@ async function main() {
     const submission = new Map(readJson(submissionFile).results.map((r) => [r.caseId, r]));
     const vars = datasetVars();
     // PRs the source run couldn't measure stay unmeasured here, so the output
-    // describes the same 30 PRs as the run it re-scores.
+    // describes the same PRs as the run it re-scores.
     const rows = (original.rows || []).filter((row) => row.status === 'infra').map((row) => ({ caseId: row.caseId, status: 'infra', reason: `infra in the source run: ${row.reason || 'unknown'}` }));
     let infraFailures = rows.length;
     const queue = (original.rows || []).filter((row) => row.status !== 'infra');
@@ -79,8 +79,8 @@ async function main() {
             }
             try {
                 const assertion = await recallAssertion(agentOutputOf(result), { vars: caseVars });
-                const fidelity = Object.fromEntries(FIDELITY.map((key) => [key, row.metadata?.[key] ?? null]));
-                rows.push({ caseId: row.caseId, status: assertion.pass ? 'pass' : 'fail', score: assertion.score, metadata: { ...assertion.metadata, ...fidelity }, judgedBefore: row.metadata?.recall ?? null });
+                const fromTheRun = Object.fromEntries(FROM_THE_RUN.map((key) => [key, row.metadata?.[key] ?? null]));
+                rows.push({ caseId: row.caseId, status: assertion.pass ? 'pass' : 'fail', score: assertion.score, metadata: { ...assertion.metadata, ...fromTheRun }, judgedBefore: row.metadata?.recall ?? null });
             } catch (error) {
                 infraFailures += 1;
                 rows.push({ caseId: row.caseId, status: 'infra', reason: error.message });
@@ -100,6 +100,9 @@ async function main() {
         startedAt: original.startedAt,
         finishedAt: original.finishedAt,
         tokens: original.tokens,
+        // The model calls' tokens and time (run-recall.js summary.usage): a
+        // rejudge scores again, it does not run the finder again.
+        ...(original.usage ? { usage: original.usage } : {}),
         cases: rows.length,
         infraFailures,
         metrics: {

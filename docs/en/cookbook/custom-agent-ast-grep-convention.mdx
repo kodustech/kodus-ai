@@ -1,0 +1,107 @@
+---
+title: "Enforce a convention with ast-grep"
+description: "A custom agent that enforces a team convention with ast-grep rules, so every finding is a proven match."
+icon: "code"
+---
+
+## Why ast-grep
+
+Some conventions are structural: "never call this function here", "always pass this option". A model can spot them, but it can also miss one or imagine one. An [ast-grep](https://ast-grep.github.io) rule matches the syntax tree, so a match is proof. A finding that cites a rule the run matched skips the model check and posts.
+
+The example is a checkout service with one convention: **amounts are integer cents handled by the `Money` helper, never floats.**
+
+## Step 1 — Write the rules in the repository
+
+Commit a rule file on your default branch. Kodus reads it from each pull request's target branch, so a pull request can't loosen the rules it is checked against.
+
+```yaml rules/money.yml
+id: no-parsefloat-amount
+language: typescript
+message: Parse amounts with Money.parse; parseFloat turns cents into a float.
+severity: error
+rule:
+  pattern: parseFloat($A)
+---
+id: no-tofixed-amount
+language: typescript
+message: Format amounts with Money.format; toFixed formats a float, not an amount.
+severity: error
+rule:
+  pattern: $A.toFixed($N)
+```
+
+Each rule's `message` is what the comment quotes as the rule, so write it for the person reading the pull request.
+
+Write the reasoning down once in a doc too, for the cases a pattern can't catch:
+
+```markdown docs/money.md
+# Money
+
+Amounts are integers in cents, wrapped in `Money`. Never store, add or compare an amount as a float.
+Convert at the edges only: `Money.parse` on input, `Money.format` on output.
+```
+
+## Step 2 — Create the agent
+
+**New agent → Templates → Blank**, then:
+
+```text Name
+Money handling
+```
+
+```text Instructions
+Enforce the money convention in checkout and billing code: amounts are integer cents in Money, never floats.
+
+First run the team's ast-grep rules on the changed files. Report every match as its own finding on the matched line, citing its rule.
+
+Beyond the rules, flag arithmetic or comparison on amounts held as plain numbers only when docs/money.md states the rule; quote it.
+
+Ignore tests and amounts that are not money (percentages, durations, counts).
+```
+
+| Field | Value |
+| --- | --- |
+| **Files** | `src/checkout/**`, `src/billing/**` |
+| **Except** | `**/*.test.ts` |
+| **Skills & docs** | `docs/money.md` (**Add skill or doc → Add by path**) |
+
+## Step 3 — Point it at the rules
+
+Under **Tools → Advanced → Structural search (ast-grep rules)**, enter the path on a single line:
+
+```text
+rules/money.yml
+```
+
+The hint lists the rules it found: `2 rules in rules/money.yml: no-parsefloat-amount, no-tofixed-amount`. You can paste the YAML inline instead of a path; the rules then live in the agent, not in the repository.
+
+## Step 4 — Comments
+
+| Field | Value |
+| --- | --- |
+| **Format** | Inline comments |
+| **Minimum severity** | Team minimum |
+| **Suggested fix** | When confident |
+
+Click **Save**.
+
+## Step 5 — Try it
+
+Run **Try it** on a pull request that adds a `parseFloat` on a price. The finding is **kept**, and its comment cites the rule:
+
+```markdown
+**Rule** (`ast-grep:no-parsefloat-amount`):
+> Parse amounts with Money.parse; parseFloat turns cents into a float.
+```
+
+A finding the agent raised from `docs/money.md` quotes the doc instead, and is dropped if the quote isn't in the doc on the target branch.
+
+## Checklist
+
+- [ ] Rule file committed on the default branch
+- [ ] Each rule has an `id`, a `rule` and a readable `message`
+- [ ] The field's hint lists every rule
+- [ ] Globs cover only the code the convention applies to
+- [ ] Tried on a pull request with a known violation
+
+See [ast-grep rules](/en/how_to_use/code_review/custom_agents_knowledge_and_tools#ast-grep-rules) for the field's details.

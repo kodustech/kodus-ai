@@ -1,3 +1,8 @@
+import { cliInstallProblem } from './cli-install';
+import {
+    cliBinaryExposureProblem,
+    cliPrefixExposureProblem,
+} from './cli-env-guard';
 import type {
     ContextLayer,
     ContextPack,
@@ -218,6 +223,30 @@ export type CodeSuggestion = {
     kodyRuleOtherLocations?: string[];
     /** Merged finding locations, rendered after the content formatter. */
     alsoFoundIn?: string[];
+    /** The custom agent that produced the finding (#2172); drives its tag. */
+    customAgent?: {
+        id: string;
+        name: string;
+        color?: string;
+    };
+    /** `convention` findings apply a guide and go through the convention check. */
+    kind?: 'bug' | 'convention';
+    /** The guide passage a convention finding applies, checked on the base branch. */
+    source?: {
+        file: string;
+        section?: string;
+        quote: string;
+    };
+    /**
+     * Why a finding the review kept was not posted, when `priorityStatus`
+     * alone does not say: one past its custom agent's `maxComments` (#2172).
+     */
+    notSentReason?: 'custom-agent-max-comments';
+    /**
+     * Why the check set a finding aside: the verifier's rationale, or what
+     * the quote gate could not find. Only on discarded findings.
+     */
+    discardReason?: string;
 
     isCommittable?: boolean;
     validatedData?: {
@@ -308,6 +337,294 @@ export const reviewOptionsSchema = z.object({
     cross_file: z.boolean().optional(), // Legacy — no longer shown in UI but kept for backward compat
     business_logic: z.boolean().optional(),
 });
+
+/**
+ * Custom review agents (#2172): team-defined reviewers that run next to the
+ * generalist with their own instructions, scope, tools and presentation.
+ * Limits are enforced on save (DTO) and again when the config is resolved.
+ */
+export const CUSTOM_AGENT_LIMITS = {
+    /** CLI tools per agent. */
+    maxCliTools: 3,
+    /** Skills linked per target (main review or one agent). */
+    maxSkills: 20,
+    /** Docs linked per target (main review or one agent). */
+    maxDocs: 10,
+    /** Token budget for the docs a target loads whole. */
+    maxDocTokens: 20000,
+    maxInstructionsLength: 8000,
+    maxWritingLength: 2000,
+    /** UTF-8 bytes of ast-grep rule YAML (inline or a rule file); anything
+     *  larger is not a rule file, and the tool refuses to run it. */
+    maxAstGrepRuleBytes: 64_000,
+} as const;
+
+/** UTF-8 size of a string, the same in Node and the browser. */
+export function utf8ByteLength(value: string): number {
+    return new TextEncoder().encode(value).length;
+}
+
+/**
+ * `tools.astGrepConfig` holds either the rule YAML itself or the repository
+ * path of a rule file. A single line naming a `.yml`/`.yaml` file is a path,
+ * read from the pull request's TARGET branch so a PR cannot rewrite the rules
+ * it is judged by; anything else is inline YAML. Returns the path, if any.
+ */
+export function astGrepRulesPath(
+    value: string | undefined,
+): string | undefined {
+    const trimmed = value?.trim();
+    if (!trimmed || /\s/.test(trimmed)) return undefined;
+    return /^[^:#'"{}[\]]+\.ya?ml$/i.test(trimmed) ? trimmed : undefined;
+}
+
+/**
+ * A CLI install command must pin every package it installs (`pkg@1.2.3`,
+ * `pkg==1.2.3`, or a sha256 digest): an unpinned install would let a moving
+ * registry tag decide what runs next to the team's secrets. The full rule is
+ * `checkCliInstallCommand` in `./cli-install`.
+ */
+
+/** Environment variable name a CLI secret is exposed under. */
+export const CLI_SECRET_ENV_PATTERN = /^[A-Z_][A-Z0-9_]*$/;
+
+/** `KnowledgeItem.linkedTo` entry that links a skill or doc to the generalist. */
+export const KNOWLEDGE_MAIN_REVIEW_TARGET = 'main-review' as const;
+
+export const cliToolSecretSchema = z.object({
+    env: z.string().regex(CLI_SECRET_ENV_PATTERN),
+    /** Encrypted at rest; decrypted only into the CLI process env. */
+    ciphertext: z.string().min(1),
+});
+
+export const cliToolConfigSchema = z
+    .object({
+        name: z.string().min(1),
+        install: z
+            .string()
+            .min(1)
+            .superRefine((install, ctx) => {
+                const problem = cliInstallProblem(install);
+                if (problem) ctx.addIssue({ code: 'custom', message: problem });
+            }),
+        binary: z.string().min(1),
+        /** argv must start with one of these (no shell is involved). */
+        allowedPrefixes: z.array(z.string().min(1)).min(1),
+        /** Markdown the agent reads to learn how to call the CLI. */
+        usage: z.string(),
+        /** True when the CLI executes project code (tests, builds): no secrets then. */
+        runsProjectCode: z.boolean(),
+        secrets: z.array(cliToolSecretSchema).optional(),
+        /** Hosts the CLI may reach; everything else is blocked. */
+        allowedDomains: z.array(z.string().min(1)),
+        timeoutSec: z.number().int().positive().optional(),
+    })
+    .superRefine((cli, ctx) => {
+        // With secrets, nothing configured may print the env or a stored token.
+        if (!cli.secrets?.length) return;
+        const binary = cliBinaryExposureProblem(cli.binary);
+        if (binary) {
+            ctx.addIssue({ code: 'custom', path: ['binary'], message: binary });
+        }
+        cli.allowedPrefixes.forEach((prefix, index) => {
+            const problem = cliPrefixExposureProblem(prefix);
+            if (problem) {
+                ctx.addIssue({
+                    code: 'custom',
+                    path: ['allowedPrefixes', index],
+                    message: problem,
+                });
+            }
+        });
+    });
+
+/** In `tools.mcp[].tools`: every read-only tool the plugin offers, now or later. */
+export const MCP_ALL_READ_TOOLS = '*';
+
+export const customAgentMcpToolsSchema = z.object({
+    integrationId: z.string().min(1),
+    tools: z.array(z.string().min(1)),
+});
+
+export const customAgentPresentationSchema = z.object({
+    tag: z.object({ color: z.string().min(1) }),
+    format: z.enum(['inline', 'single-comment']),
+    minSeverity: z.enum(SeverityLevel).optional(),
+    maxComments: z.number().int().positive().optional(),
+    suggestedFix: z.enum(['when-confident', 'never']),
+    writing: z.string().max(CUSTOM_AGENT_LIMITS.maxWritingLength).optional(),
+});
+
+export const customAgentConfigSchema = z.object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    enabled: z.boolean(),
+    instructions: z.string().max(CUSTOM_AGENT_LIMITS.maxInstructionsLength),
+    /** Globs over the changed files; the agent runs only when one matches. */
+    scope: z.object({
+        include: z.array(z.string()).optional(),
+        exclude: z.array(z.string()).optional(),
+    }),
+    tools: z.object({
+        /** ast-grep rule YAML the agent may run, or the repository path of a
+         *  rule file read from the target branch (see `astGrepRulesPath`). */
+        astGrepConfig: z
+            .string()
+            .refine(
+                (value) =>
+                    utf8ByteLength(value) <=
+                    CUSTOM_AGENT_LIMITS.maxAstGrepRuleBytes,
+                {
+                    message: `ast-grep rules allow at most ${CUSTOM_AGENT_LIMITS.maxAstGrepRuleBytes} bytes`,
+                },
+            )
+            .optional(),
+        mcp: z.array(customAgentMcpToolsSchema).optional(),
+        cli: z
+            .array(cliToolConfigSchema)
+            .max(CUSTOM_AGENT_LIMITS.maxCliTools)
+            .superRefine((clis, ctx) => {
+                const duplicate = firstDuplicate(clis.map((c) => c.name));
+                if (duplicate !== undefined) {
+                    ctx.addIssue({
+                        code: 'custom',
+                        message: `CLI name "${duplicate}" is used twice`,
+                    });
+                }
+            })
+            .optional(),
+    }),
+    /** BYOK model id overriding the `customAgent` task. */
+    models: z
+        .object({
+            run: z.string().optional(),
+        })
+        .optional(),
+    presentation: customAgentPresentationSchema,
+});
+
+/** The agent's name as a command and run-name token: `Data Contracts` → `data-contracts`. */
+export function customAgentSlug(name: string): string {
+    const slug = (name || '')
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    return slug || 'agent';
+}
+
+/**
+ * The first two agents whose names give the same slug. `@kody -v <slug>`,
+ * run names and usage attribution all name an agent by its slug, so two
+ * agents sharing one cannot be told apart.
+ */
+export function customAgentSlugClash(
+    agents: readonly { name?: string }[],
+): { slug: string; names: [string, string] } | undefined {
+    const firstBySlug = new Map<string, string>();
+    for (const agent of agents ?? []) {
+        // A malformed name is left to the field's own validation.
+        if (agent?.name != null && typeof agent.name !== 'string') continue;
+        const name = agent?.name ?? '';
+        const slug = customAgentSlug(name);
+        const earlier = firstBySlug.get(slug);
+        if (earlier !== undefined) {
+            return { slug, names: [earlier, name] };
+        }
+        firstBySlug.set(slug, name);
+    }
+    return undefined;
+}
+
+/** The save error for a slug clash, or undefined when every slug is unique. */
+export function customAgentSlugClashMessage(
+    agents: readonly { name?: string }[],
+): string | undefined {
+    const clash = customAgentSlugClash(agents);
+    return clash
+        ? `agents "${clash.names[0]}" and "${clash.names[1]}" share the command name "${clash.slug}"; rename one`
+        : undefined;
+}
+
+/** The agents of one config level: ids are unique, since findings, links,
+ *  secrets and model overrides all name an agent by its id; slugs are
+ *  unique, since `@kody -v` and run names name an agent by its slug. */
+export const customAgentsSchema = z
+    .array(customAgentConfigSchema)
+    .superRefine((agents, ctx) => {
+        const duplicate = firstDuplicate(agents.map((a) => a.id));
+        if (duplicate !== undefined) {
+            ctx.addIssue({
+                code: 'custom',
+                message: `agent id "${duplicate}" is used twice`,
+            });
+        }
+        const slugClash = customAgentSlugClashMessage(agents);
+        if (slugClash) {
+            ctx.addIssue({ code: 'custom', message: slugClash });
+        }
+    });
+
+export const knowledgeItemSchema = z.object({
+    /** Path in the repository, read from the PR's target branch. */
+    path: z.string().min(1),
+    kind: z.enum(['skill', 'doc']),
+    linkedTo: z.array(
+        z.union([
+            z.literal(KNOWLEDGE_MAIN_REVIEW_TARGET),
+            z.object({ agentId: z.string().min(1) }),
+        ]),
+    ),
+});
+
+/** The first value that appears twice, if any. */
+export function firstDuplicate<T>(values: readonly T[]): T | undefined {
+    const seen = new Set<T>();
+    for (const value of values) {
+        if (seen.has(value)) return value;
+        seen.add(value);
+    }
+    return undefined;
+}
+
+/**
+ * Knowledge links that name none of `agents` (the agents the saved level
+ * runs). A dangling link would never load, and would silently start loading if an
+ * agent with that id were created later.
+ */
+export function knowledgeLinkProblems(
+    knowledge:
+        | ReadonlyArray<{ path?: string; linkedTo?: readonly unknown[] }>
+        | undefined,
+    agents: ReadonlyArray<{ id?: string }> | undefined,
+): string[] {
+    const ids = new Set((agents ?? []).map((agent) => agent?.id));
+    const problems: string[] = [];
+    for (const item of knowledge ?? []) {
+        for (const target of item?.linkedTo ?? []) {
+            const agentId =
+                target && typeof target === 'object'
+                    ? (target as { agentId?: unknown }).agentId
+                    : undefined;
+            if (typeof agentId === 'string' && !ids.has(agentId)) {
+                problems.push(
+                    `${item.path} links to unknown agent "${agentId}"`,
+                );
+            }
+        }
+    }
+    return problems;
+}
+
+export type CliToolSecret = z.infer<typeof cliToolSecretSchema>;
+export type CliToolConfig = z.infer<typeof cliToolConfigSchema>;
+export type CustomAgentPresentation = z.infer<
+    typeof customAgentPresentationSchema
+>;
+export type CustomAgentConfig = z.infer<typeof customAgentConfigSchema>;
+export type KnowledgeItem = z.infer<typeof knowledgeItemSchema>;
+export type KnowledgeLinkTarget = KnowledgeItem['linkedTo'][number];
 
 export interface ReviewOptions {
     bug?: boolean;
@@ -430,6 +747,9 @@ export type CodeReviewConfig = {
     directoryId?: string;
     directoryPath?: string;
     directoryFolders?: Array<{ id: string; name: string; path: string }>;
+    /** Top-level keys of the repository's kodus-config.yml that the review
+     *  ignored (not settings of the file); set only when there were some. */
+    kodusConfigFileDroppedKeys?: string[];
     runOnDraft?: boolean;
     codeReviewVersion?: CodeReviewVersion;
     byokConfig?: NormalizedModel;
@@ -521,6 +841,13 @@ export type CodeReviewConfig = {
      * ```
      */
     linkedRepositories?: LinkedRepositoryConfig[];
+    /**
+     * Team-defined review agents (#2172), same cascade as `reviewOptions`.
+     * `level` records where an entry was declared once the cascade merged it.
+     */
+    customAgents?: Array<CustomAgentConfig & { level?: ConfigLevel }>;
+    /** Skills and docs in the repository, linked to the main review or to agents. */
+    knowledge?: KnowledgeItem[];
     // This is the default branch of the repository, used only during the review process
     // This field is populated dynamically from the API (GitHub/GitLab) and should NOT be saved to the database
     // It represents the repository's default branch (e.g., 'main', 'develop') that comes from the code management platform

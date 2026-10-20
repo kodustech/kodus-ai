@@ -54,6 +54,7 @@ import { KodyRulesTools } from '@libs/mcp-server/tools/kodyRules.tools';
 import {
     CONFIRMATION_TURN,
     ORGANIZATION_AND_TEAM_DATA,
+    SCENARIO_RULE_ID,
     THREAD_GIT_USER,
     THREAD_SCENARIOS,
     type ThreadScenario,
@@ -342,6 +343,15 @@ describe('@kody proactive actions in PR threads (issue #1761)', () => {
                 );
             },
         );
+
+        it('puts the finding the thread answers, with the rule it broke, in front of the agent', async () => {
+            const turn = await runTurn(scenarioById('rule-too-broad'));
+            const prompt = `${turn.systemPrompt}\n${turn.userPrompt}`;
+            expect(prompt).toContain('Validate the request body before using it.');
+            expect(prompt).toContain(SCENARIO_RULE_ID);
+            const plain = await runTurn(scenarioById('already-fixed'));
+            expect(`${plain.systemPrompt}\n${plain.userPrompt}`).not.toContain(SCENARIO_RULE_ID);
+        });
 
         it('instructs the agent to evaluate whether the exchange is worth persisting', async () => {
             const turn = await runTurn(

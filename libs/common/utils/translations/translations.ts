@@ -105,6 +105,12 @@ interface PullRequestFinishSummaryMarkdown {
      */
     partialErrorsNotice?: string;
     /**
+     * Shown instead of `withoutComments` when the review produced findings
+     * but none could be posted (e.g. the platform rate-limited every post).
+     * Must include `{{count}}`. Optional; the resolver falls back to en-US.
+     */
+    withUndeliveredComments?: string;
+    /**
      * Collapsible notice appended to the end-review comment when Kody Rules
      * were not judged because the repository context they declared they need
      * could not be retrieved (issue #1826). Must include the `{{count}}` and

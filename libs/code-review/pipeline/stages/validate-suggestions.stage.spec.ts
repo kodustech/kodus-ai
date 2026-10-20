@@ -84,6 +84,38 @@ describe('ValidateSuggestionsStage — input contract', () => {
         ]);
     });
 
+    it('validates against the ignored files a custom agent reviewed when every changed file is ignored (#2172)', async () => {
+        jest.spyOn(stage as any, 'filterSuggestions').mockResolvedValue([{ id: 's1' }]);
+        const prepare = jest
+            .spyOn(stage as any, 'prepareValidationCandidates')
+            .mockResolvedValue([]);
+        const manifest = { filename: 'package.json', status: 'modified' };
+
+        await stage.execute(
+            buildContext({
+                changedFiles: [],
+                ignoredFileChanges: [
+                    manifest,
+                    { filename: 'pnpm-lock.yaml', status: 'modified' },
+                ],
+                codeReviewConfig: {
+                    enableCommittableSuggestions: true,
+                    resolvedModelSlot: { maxInputTokens: 12345 },
+                    customAgents: [
+                        {
+                            id: 'agent-1',
+                            name: 'Manifest',
+                            enabled: true,
+                            scope: { include: ['package.json'] },
+                        },
+                    ],
+                },
+            } as any),
+        );
+
+        expect(prepare).toHaveBeenCalledWith([{ id: 's1' }], [manifest], 12345);
+    });
+
     it('returns the context untouched when everything is filtered out', async () => {
         jest.spyOn(stage as any, 'filterSuggestions').mockResolvedValue([]);
         const full = jest.spyOn(stage as any, 'performFullValidation');

@@ -10,7 +10,7 @@
   "runs": [
     {
       "sequence": "rules-fixed-three-rounds",
-      "action": "Trinio-shaped synthetic: corrected rule violation, three nearby commits while status remains pending, then a new violation of the same rule in another function.",
+      "action": "Customer-report-shaped synthetic: corrected rule violation, three nearby commits while status remains pending, then a new violation of the same rule in another function.",
       "rep": 1,
       "rounds": [
         {
@@ -326,7 +326,7 @@
     },
     {
       "sequence": "rules-fixed-three-rounds",
-      "action": "Trinio-shaped synthetic: corrected rule violation, three nearby commits while status remains pending, then a new violation of the same rule in another function.",
+      "action": "Customer-report-shaped synthetic: corrected rule violation, three nearby commits while status remains pending, then a new violation of the same rule in another function.",
       "rep": 2,
       "rounds": [
         {
@@ -642,7 +642,7 @@
     },
     {
       "sequence": "rules-fixed-three-rounds",
-      "action": "Trinio-shaped synthetic: corrected rule violation, three nearby commits while status remains pending, then a new violation of the same rule in another function.",
+      "action": "Customer-report-shaped synthetic: corrected rule violation, three nearby commits while status remains pending, then a new violation of the same rule in another function.",
       "rep": 3,
       "rounds": [
         {

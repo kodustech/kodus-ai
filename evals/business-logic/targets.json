@@ -1,0 +1,30 @@
+{
+    "__doc": [
+        "Floors per model for the share of PRs the stage answered right on cases.json (run.js --gate), as ratios.",
+        "eval-fake (the wiring smoke, every PR): deterministic. The scripted judge's answer reads as a task too thin to judge on both PRs whose ticket it reads (skipped, weak_task_context), and the unreadable ticket is skipped: 1 of 3. floor = observed.",
+        "2026-10-19, the business-validation redesign (#2086: BusinessValidationService, the verdict as data, #2019 fixed): deepseek-v4-flash@fireworks 3 of 3 in 3 local runs on the cloud route, one of them with --verify; gpt-6-sol 3 of 3 in one run. With the stage's verdict broken to call every PR a pass, deepseek scores 2 of 3 (missing-requirement published as a success), so a floor of 3 of 3 tells a broken stage from a good one: any miss fails, and the nightly measures again before alerting.",
+        "Before the redesign (BusinessRulesValidationAgentProvider), deepseek scored 1 and 2 of 3 and had no floor: fully-implemented failed on '**Status:** Compliant' (#2019).",
+        "A judge call that fails (a key, a quota, a timeout) is not measured (exit 2), never scored as a miss. claude-sonnet-5-5 not measured on 2026-10-19 (the local key is invalid); its observed is the old stage's.",
+        "RATCHET: a PR that moves the value on purpose (the stage's classification, the skill, the cases) recalibrates here in the same PR, with its runs as evidence."
+    ],
+    "models": {
+        "eval-fake": {
+            "floor": 0.333,
+            "observed": 0.333
+        },
+        "deepseek-v4-flash@fireworks": {
+            "floor": 1.0,
+            "observed": 1.0
+        },
+        "gpt-6-sol": {
+            "floor": null,
+            "observed": 1.0,
+            "noFloor": "One run on the redesigned stage: measured every week, a floor after a second run (__doc)."
+        },
+        "claude-sonnet-5-5": {
+            "floor": null,
+            "observed": 0.667,
+            "noFloor": "Not measured on the redesigned stage yet (__doc)."
+        }
+    }
+}

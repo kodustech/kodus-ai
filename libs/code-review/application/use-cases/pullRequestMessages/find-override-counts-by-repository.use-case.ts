@@ -14,11 +14,25 @@ import {
 } from '@libs/core/infrastructure/config/types/general/codeReviewConfig.type';
 import { ConfigLevel } from '@libs/core/infrastructure/config/types/general/pullRequestMessages.type';
 import { DeepPartial } from 'typeorm';
+import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
+import {
+    Action,
+    ResourceType,
+} from '@libs/identity/domain/permissions/enums/permissions.enum';
+import {
+    AUTHORIZATION_SERVICE_TOKEN,
+    IAuthorizationService,
+} from '@libs/identity/domain/permissions/contracts/authorization.service.contract';
 import { FormattedCustomMessagesConfig } from './find-by-repo-or-directory.use-case';
 
 type CustomMessagesConfig = ReturnType<
     typeof getDefaultKodusConfigFile
 >['customMessages'];
+
+type RepositoryMessages = {
+    repository?: PullRequestMessagesEntity;
+    directories: PullRequestMessagesEntity[];
+};
 
 @Injectable()
 export class FindOverrideCountsByRepositoryPullRequestMessagesUseCase {
@@ -29,6 +43,8 @@ export class FindOverrideCountsByRepositoryPullRequestMessagesUseCase {
     constructor(
         @Inject(PULL_REQUEST_MESSAGES_SERVICE_TOKEN)
         private readonly pullRequestMessagesService: IPullRequestMessagesService,
+        @Inject(AUTHORIZATION_SERVICE_TOKEN)
+        private readonly authorizationService: IAuthorizationService,
     ) {}
 
     async execute(organizationId: string, repositoryId: string) {
@@ -41,14 +57,10 @@ export class FindOverrideCountsByRepositoryPullRequestMessagesUseCase {
                 throw new Error('Repository ID is required');
             }
 
-            const { customMessages: defaultConfig } =
-                getDefaultKodusConfigFile();
-
             const globalEntity = await this.pullRequestMessagesService.findOne({
                 organizationId,
                 configLevel: ConfigLevel.GLOBAL,
             });
-            const globalConfig = this.getConfigs(globalEntity);
 
             const repositoryEntity =
                 await this.pullRequestMessagesService.findOne({
@@ -56,7 +68,6 @@ export class FindOverrideCountsByRepositoryPullRequestMessagesUseCase {
                     repositoryId,
                     configLevel: ConfigLevel.REPOSITORY,
                 });
-            const repositoryConfig = this.getConfigs(repositoryEntity);
 
             const directoryEntities =
                 await this.pullRequestMessagesService.find({
@@ -65,65 +76,12 @@ export class FindOverrideCountsByRepositoryPullRequestMessagesUseCase {
                     configLevel: ConfigLevel.DIRECTORY,
                 });
 
-            const resolvedGlobalConfig = deepMerge(defaultConfig, globalConfig);
-            const resolvedRepositoryConfig = deepMerge(
-                resolvedGlobalConfig,
-                repositoryConfig,
-            );
-
-            const globalDelta = deepDifference(defaultConfig, globalConfig);
-            const repositoryDelta = deepDifference(
-                resolvedGlobalConfig,
-                repositoryConfig,
-            );
-
-            const formattedDefaultConfig =
-                this.formatDefaultConfig(defaultConfig);
-            const formattedGlobalConfig = this.formatLevel(
-                formattedDefaultConfig,
-                globalDelta,
-                FormattedConfigLevel.GLOBAL,
-            );
-            const formattedRepositoryConfig = this.formatLevel(
-                formattedGlobalConfig,
-                repositoryDelta,
-                FormattedConfigLevel.REPOSITORY,
-            );
-
-            const repositoryOverrideCount = this.countOverridesRecursive(
-                formattedRepositoryConfig,
-                FormattedConfigLevel.REPOSITORY,
-            );
-
-            const directoryOverrideCounts = (directoryEntities ?? []).map(
-                (entity) => {
-                    const directoryConfig = this.getConfigs(entity);
-                    const directoryDelta = deepDifference(
-                        resolvedRepositoryConfig,
-                        directoryConfig,
-                    );
-
-                    const formattedDirectoryConfig = this.formatLevel(
-                        formattedRepositoryConfig,
-                        directoryDelta,
-                        FormattedConfigLevel.DIRECTORY,
-                    );
-
-                    return {
-                        directoryId: entity.directoryId,
-                        overrideCount: this.countOverridesRecursive(
-                            formattedDirectoryConfig,
-                            FormattedConfigLevel.DIRECTORY,
-                        ),
-                    };
-                },
-            );
-
-            return {
+            return this.countForRepository(
                 repositoryId,
-                repositoryOverrideCount,
-                directoryOverrideCounts,
-            };
+                globalEntity,
+                repositoryEntity,
+                directoryEntities,
+            );
         } catch (error) {
             this.logger.error({
                 message:
@@ -138,7 +96,132 @@ export class FindOverrideCountsByRepositoryPullRequestMessagesUseCase {
         }
     }
 
-    private getConfigs(entity: PullRequestMessagesEntity | undefined) {
+    async executeAll(user: UserRequest['user']) {
+        const organizationId = user?.organization?.uuid;
+        if (!organizationId) {
+            throw new Error('Organization ID is required');
+        }
+
+        const allowedScope = await this.authorizationService.getRepositoryScope(
+            {
+                user,
+                action: Action.Read,
+                resource: ResourceType.CodeReviewSettings,
+            },
+        );
+        const allowed = Array.isArray(allowedScope)
+            ? new Set(allowedScope)
+            : null;
+        if (allowed?.size === 0) return [];
+
+        // Read the organization's messages once, including the shared parent.
+        // Repositories without message documents have no message overrides.
+        const entities =
+            (await this.pullRequestMessagesService.find({ organizationId })) ??
+            [];
+        const globalEntity = entities.find(
+            (entity) => entity.configLevel === ConfigLevel.GLOBAL,
+        );
+        const repositories = new Map<string, RepositoryMessages>();
+        for (const entity of entities) {
+            const repositoryId = entity.repositoryId;
+            if (
+                entity.configLevel === ConfigLevel.GLOBAL ||
+                !repositoryId ||
+                repositoryId === 'global' ||
+                (allowed && !allowed.has(repositoryId))
+            )
+                continue;
+            const entry: RepositoryMessages = repositories.get(
+                repositoryId,
+            ) ?? { directories: [] };
+            if (entity.configLevel === ConfigLevel.REPOSITORY) {
+                entry.repository = entity;
+            } else if (entity.configLevel === ConfigLevel.DIRECTORY) {
+                entry.directories.push(entity);
+            }
+            repositories.set(repositoryId, entry);
+        }
+        return [...repositories].map(([repositoryId, entry]) =>
+            this.countForRepository(
+                repositoryId,
+                globalEntity,
+                entry.repository,
+                entry.directories,
+            ),
+        );
+    }
+
+    private countForRepository(
+        repositoryId: string,
+        globalEntity: PullRequestMessagesEntity | null | undefined,
+        repositoryEntity: PullRequestMessagesEntity | null | undefined,
+        directoryEntities: PullRequestMessagesEntity[],
+    ) {
+        const { customMessages: defaultConfig } = getDefaultKodusConfigFile();
+        const globalConfig = this.getConfigs(globalEntity);
+        const repositoryConfig = this.getConfigs(repositoryEntity);
+        const resolvedGlobalConfig = deepMerge(defaultConfig, globalConfig);
+        const resolvedRepositoryConfig = deepMerge(
+            resolvedGlobalConfig,
+            repositoryConfig,
+        );
+
+        const globalDelta = deepDifference(defaultConfig, globalConfig);
+        const repositoryDelta = deepDifference(
+            resolvedGlobalConfig,
+            repositoryConfig,
+        );
+
+        const formattedDefaultConfig = this.formatDefaultConfig(defaultConfig);
+        const formattedGlobalConfig = this.formatLevel(
+            formattedDefaultConfig,
+            globalDelta,
+            FormattedConfigLevel.GLOBAL,
+        );
+        const formattedRepositoryConfig = this.formatLevel(
+            formattedGlobalConfig,
+            repositoryDelta,
+            FormattedConfigLevel.REPOSITORY,
+        );
+
+        const repositoryOverrideCount = this.countOverridesRecursive(
+            formattedRepositoryConfig,
+            FormattedConfigLevel.REPOSITORY,
+        );
+
+        const directoryOverrideCounts = (directoryEntities ?? []).map(
+            (entity) => {
+                const directoryConfig = this.getConfigs(entity);
+                const directoryDelta = deepDifference(
+                    resolvedRepositoryConfig,
+                    directoryConfig,
+                );
+
+                const formattedDirectoryConfig = this.formatLevel(
+                    formattedRepositoryConfig,
+                    directoryDelta,
+                    FormattedConfigLevel.DIRECTORY,
+                );
+
+                return {
+                    directoryId: entity.directoryId,
+                    overrideCount: this.countOverridesRecursive(
+                        formattedDirectoryConfig,
+                        FormattedConfigLevel.DIRECTORY,
+                    ),
+                };
+            },
+        );
+
+        return {
+            repositoryId,
+            repositoryOverrideCount,
+            directoryOverrideCounts,
+        };
+    }
+
+    private getConfigs(entity: PullRequestMessagesEntity | null | undefined) {
         const json = entity?.toJson();
         return {
             globalSettings: {

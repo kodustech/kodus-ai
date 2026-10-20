@@ -1,3 +1,4 @@
+import { reviewsOnlyIgnoredFiles } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import { Injectable, Inject } from '@nestjs/common';
 import {
     COMMENT_MANAGER_SERVICE_TOKEN,
@@ -166,11 +167,14 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
             codeReviewConfig?.summary?.behaviourForNewCommits ??
             BehaviourForNewCommits.NONE;
 
+        // A review only custom agents ran on ignored files (#2172) has no
+        // changes of its own to summarize.
         const shouldGenerateOrUpdateSummary =
-            (!isCommitRun && codeReviewConfig?.summary?.generatePRSummary) ||
-            (isCommitRun &&
-                codeReviewConfig?.summary?.generatePRSummary &&
-                commitBehaviour !== BehaviourForNewCommits.NONE);
+            !reviewsOnlyIgnoredFiles(context) &&
+            ((!isCommitRun && codeReviewConfig?.summary?.generatePRSummary) ||
+                (isCommitRun &&
+                    codeReviewConfig?.summary?.generatePRSummary &&
+                    commitBehaviour !== BehaviourForNewCommits.NONE));
 
         if (
             !initialCommentData &&
@@ -360,6 +364,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 reviewErrorCustomMessage,
                 context.linkedRepositoriesMetadata,
                 context.reviewWarnings,
+                !!context.onlyCustomAgent,
             );
             return context;
         }
@@ -431,6 +436,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 reviewErrorCustomMessage,
                 context.linkedRepositoriesMetadata,
                 context.reviewWarnings,
+                !!context.onlyCustomAgent,
             );
             return context;
         }

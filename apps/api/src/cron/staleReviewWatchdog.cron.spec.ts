@@ -177,6 +177,40 @@ describe('StaleReviewWatchdogCronProvider', () => {
         expect(checksAdapter.updateCheckRun).not.toHaveBeenCalled();
     });
 
+    it('reaps a PR review whose heartbeat went quiet long before the 180-min fallback', async () => {
+        const now = Date.now();
+        jest.spyOn(Date, 'now').mockReturnValue(now);
+
+        await provider.handleCron();
+
+        // Heartbeated pass: PR reviews beat every 60s, so 15 quiet minutes
+        // means the owning process is gone. CLI rows have no heartbeat and
+        // are left to the long fallback.
+        expect(
+            automationExecutionService.findStaleInProgress,
+        ).toHaveBeenCalledWith(new Date(now - 15 * 60 * 1000), 100, {
+            excludeOrigins: ['cli'],
+        });
+        // Fallback pass for every IN_PROGRESS row, CLI included.
+        expect(
+            automationExecutionService.findStaleInProgress,
+        ).toHaveBeenCalledWith(new Date(now - 180 * 60 * 1000), 100);
+
+        (Date.now as jest.Mock).mockRestore();
+    });
+
+    it('reaps a row returned by both passes only once', async () => {
+        automationExecutionService.findStaleInProgress.mockResolvedValue([
+            staleExecutionWithoutCheck,
+        ]);
+
+        await provider.handleCron();
+
+        expect(
+            automationExecutionService.updateCodeReview,
+        ).toHaveBeenCalledTimes(1);
+    });
+
     it('keeps reaping remaining executions when one fails', async () => {
         automationExecutionService.findStaleInProgress.mockResolvedValue([
             staleExecutionWithCheck,

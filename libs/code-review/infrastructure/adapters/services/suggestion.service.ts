@@ -1901,6 +1901,11 @@ export class SuggestionService implements ISuggestionService {
                         label: suggestion.label as LabelType,
                         severity: suggestion.severity as SeverityLevel,
                         brokenKodyRulesIds: suggestion.brokenKodyRulesIds || [],
+                        // A single-comment custom agent posts at PR level;
+                        // without it the agent's status line never counts them.
+                        ...(suggestion.customAgent && {
+                            customAgent: suggestion.customAgent,
+                        }),
                         priorityStatus: PriorityStatus.PRIORITIZED, // Default para PR level
                         deliveryStatus: result.deliveryStatus as DeliveryStatus,
                         comment: result.codeReviewFeedbackData

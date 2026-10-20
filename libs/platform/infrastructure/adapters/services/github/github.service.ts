@@ -22,7 +22,7 @@ import {
 } from '@libs/code-review/domain/codeReviewFeedback/enums/codeReviewCommentReaction.enum';
 import { fitPRDescription } from '@libs/code-review/utils/fit-pr-description';
 import { getCodeReviewBadge } from '@libs/common/utils/codeManagement/codeReviewBadge';
-import { getLabelShield } from '@libs/common/utils/codeManagement/labels';
+import { getSuggestionShield } from '@libs/common/utils/codeManagement/labels';
 import { getSeverityLevelShield } from '@libs/common/utils/codeManagement/severityLevel';
 import {
     resolveAgentPrompt,
@@ -567,9 +567,16 @@ export class GithubService
                     ? 'user'
                     : 'organization';
 
-            const authDetails = {
+            const installationToken: string | undefined =
                 // @ts-expect-error property not found in type
-                authToken: installationAuthentication?.token,
+                installationAuthentication?.token;
+
+            const authDetails = {
+                // Encrypt at rest like the PAT path (authenticateWithToken):
+                // the installation token is a live credential and must not be
+                // persisted in clear. Every
+                // reader already decrypt()s authToken.
+                authToken: installationToken ? encrypt(installationToken) : null,
                 installationId:
                     // @ts-expect-error property not found in type
                     installationAuthentication?.installationId || null,
@@ -3578,9 +3585,16 @@ export class GithubService
                 platform: PlatformType.GITHUB,
             });
 
-            const authDetails = {
+            const installationToken: string | undefined =
                 // @ts-expect-error property not found in type
-                authToken: installationAuthentication?.token,
+                installationAuthentication?.token;
+
+            const authDetails = {
+                // Encrypt at rest like the PAT path (authenticateWithToken):
+                // the installation token is a live credential and must not be
+                // persisted in clear. Every
+                // reader already decrypt()s authToken.
+                authToken: installationToken ? encrypt(installationToken) : null,
                 installationId:
                     // @ts-expect-error property not found in type
                     installationAuthentication?.installationId || null,
@@ -4333,7 +4347,7 @@ export class GithubService
             [
                 getCodeReviewBadge(),
                 lineComment?.suggestion
-                    ? getLabelShield(lineComment.suggestion.label)
+                    ? getSuggestionShield(lineComment.suggestion)
                     : '',
                 severityShield,
             ].join(' ') + '\n\n';
@@ -8054,7 +8068,7 @@ This is an experimental feature that generates committable changes. Review the d
 
             const badges = [
                 getCodeReviewBadge(),
-                suggestion?.label ? getLabelShield(suggestion.label) : '',
+                getSuggestionShield(suggestion),
                 severityShield,
             ]
                 .filter(Boolean)
