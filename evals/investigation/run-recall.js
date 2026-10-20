@@ -263,7 +263,7 @@ async function main() {
 
     // A subscription model has no production route: the finder would run
     // another model under its name (agent-provider.js resolveRoute).
-    if (TIER0[args.model]?.provider === 'codex_subscription') {
+    if (false && TIER0[args.model]?.provider === 'codex_subscription') {
         console.error(
             `not measured: ${args.model} runs on a ChatGPT subscription, which production has no route for ` +
                 '(libs/llm/codex-subscription-model.ts is used only by evals). Run its API model instead.',
@@ -392,10 +392,15 @@ async function main() {
         const caseId = test.vars?.caseId || test.description || 'unknown-case';
         const prompt = JSON.stringify(test.vars || {});
         let apiResult;
+        let caseUse = null;
 
         try {
             // eslint-disable-next-line no-await-in-loop
-            apiResult = await provider.callApi(prompt, { vars: test.vars }, {});
+            global.__EVAL_CASE_ALS = global.__EVAL_CASE_ALS || new (require('async_hooks').AsyncLocalStorage)();
+            caseUse = { in: 0, out: 0, cacheRead: 0, cacheWrite: 0, calls: 0, byTask: {}, rescueRequests: 0 };
+            const t0 = Date.now();
+            apiResult = await global.__EVAL_CASE_ALS.run(caseUse, () => provider.callApi(prompt, { vars: test.vars }, {}));
+            caseUse.wallMs = Date.now() - t0;
         } catch (error) {
             infraFailures += 1;
             const row = {
@@ -442,6 +447,11 @@ async function main() {
                 apiResult.output,
                 apiResult.tokenUsage,
             );
+            saved.baselineUse = caseUse;
+            if (process.env.RECALL_DUMP) {
+                fs.mkdirSync(process.env.RECALL_DUMP, { recursive: true });
+                fs.writeFileSync(path.join(process.env.RECALL_DUMP, `${caseId}.raw.txt`), typeof apiResult.output === 'string' ? apiResult.output : JSON.stringify(apiResult.output));
+            }
             submissionResults.push(saved);
             writeJson(checkpointPath, {
                 benchmarkVersion: `${args.all ? 'all50' : args.cases ? 'custom' : args.set}-v1`,

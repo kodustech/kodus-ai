@@ -147,11 +147,23 @@ function resolveRoute(config) {
         const modelId = process.env.RECALL_MODEL || config.model;
         const { applyPlatformEnv, TIER0 } = require('./tier0-models');
         const spec = TIER0[modelId];
+        // LOCAL BASELINE ONLY (#1821): the ChatGPT subscription as the transport of
+        // production's openai BYOK slot; the review code and route are production's.
         if (spec && spec.provider === 'codex_subscription') {
-            throw new NotAProductionRoute(
-                `${modelId} runs on a ChatGPT subscription, which production has no route for ` +
-                    '(libs/llm/codex-subscription-model.ts is used only by evals): the finder would run another model',
-            );
+            const { REGISTRY } = require('../../libs/llm/providers/index.ts');
+            const { buildCodexSubscriptionModel } = require('../../libs/llm/codex-subscription-model.ts');
+            const mod = REGISTRY.get('openai');
+            if (!mod.__codexHook) {
+                const orig = mod.build.bind(mod);
+                mod.build = (cfg, opts) => (cfg.apiKey === 'codex-subscription' ? buildCodexSubscriptionModel(cfg.model) : orig(cfg, opts));
+                mod.__codexHook = true;
+            }
+            return {
+                storedConfig: storedByokConfig({ provider: 'openai', model: spec.codexModel, apiKey: 'codex-subscription', reasoningEffort: effort }),
+                route: 'byok',
+                modelId,
+                reasoningEffort: effort,
+            };
         }
         applyPlatformEnv();
         if (!spec) throw new Error(`unknown tier-0 model '${modelId}'`);

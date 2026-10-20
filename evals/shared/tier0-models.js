@@ -32,6 +32,7 @@ const TIER0 = {
     'gpt-6-sol': { tier0: true, provider: 'openai', keyEnvs: ['BYOK_OPENAI_API_KEY', 'API_OPEN_AI_API_KEY'] },
     'claude-sonnet-4-6': { provider: 'anthropic', keyEnvs: ['API_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY', 'BYOK_ANTHROPIC_API_KEY'] },
     'claude-sonnet-5-5': { tier0: true, provider: 'anthropic', keyEnvs: ['API_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY', 'BYOK_ANTHROPIC_API_KEY'] },
+    'claude-opus-5-5': { provider: 'anthropic', keyEnvs: ['API_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY', 'BYOK_ANTHROPIC_API_KEY'] },
     'claude-opus-4-7': { provider: 'anthropic', keyEnvs: ['API_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY', 'BYOK_ANTHROPIC_API_KEY'] },
     'gemini-3.1-pro-preview-customtools': { provider: 'google', keyEnvs: ['BYOK_GOOGLE_API_KEY', 'API_GOOGLE_AI_API_KEY'] },
     'gemini-3-flash-preview': { provider: 'google', keyEnvs: ['BYOK_GOOGLE_API_KEY', 'API_GOOGLE_AI_API_KEY'] },
@@ -61,9 +62,22 @@ const TIER0 = {
     // FIREWORKS, not DeepSeek-native — different transport + build. Measured as an
     // org's BYOK model, like every other; the managed route is `kodus-managed`.
     'deepseek-v4-flash@fireworks': { tier0: true, provider: 'openai_compatible', doModel: 'accounts/fireworks/models/deepseek-v4p1-flash', keyEnvs: ['API_FIREWORKS_API_KEY', 'FIREWORKS_API_KEY', 'BYOK_FIREWORKS_API_KEY'], baseURL: 'https://api.fireworks.ai/inference/v1' },
+    // Matches the codereviewbench.com published submission's exact model
+    // (finder-recall-deepseek-v4.1-flash.submission.json, runAt 2026-09-10) —
+    // added to reproduce that run's config, not the trial default.
+    'deepseek-v4.1-flash@fireworks': { provider: 'openai_compatible', doModel: 'accounts/fireworks/models/deepseek-v4p1-flash', keyEnvs: ['API_FIREWORKS_API_KEY', 'FIREWORKS_API_KEY'], baseURL: 'https://api.fireworks.ai/inference/v1' },
+    // Mesmo modelo pela Together. Em 26/09 a conta do Fireworks passou a
+    // devolver limite de taxa com 2+ PRs de DeepSeek em paralelo (#1821).
+    // GLM 5.3 via Together (27/09), serverless.
+    'glm-5.3@together': { provider: 'openai_compatible', doModel: 'zai-org/GLM-5.3', keyEnvs: ['BYOK_TOGETHER_API_KEY'], baseURL: 'https://api.together.xyz/v1' },
+    // Kimi K2.7 Code via Together (27/09): mesma chave do DeepSeek@together.
+    'kimi-k2.7-code@together': { provider: 'openai_compatible', doModel: 'moonshotai/Kimi-K2.7-Code', keyEnvs: ['BYOK_TOGETHER_API_KEY'], baseURL: 'https://api.together.xyz/v1' },
+    // Kimi K3 via Together (01/10): a Moonshot ficou sem saldo no meio da fase 1.
+    'kimi-k3@together': { provider: 'openai_compatible', doModel: 'moonshotai/Kimi-K3', keyEnvs: ['BYOK_TOGETHER_API_KEY'], baseURL: 'https://api.together.xyz/v1' },
+    'deepseek-v4.1-flash@together': { provider: 'openai_compatible', doModel: 'deepseek-ai/DeepSeek-V4.1-Flash', keyEnvs: ['BYOK_TOGETHER_API_KEY'], baseURL: 'https://api.together.xyz/v1' },
     // K3 usa chave própria (KIMI_NEW) — crédito limitado, ver custo antes de
     // disparar passada cheia: $3/$15 por milhão, ~3x o k2.7.
-    'kimi-k3': { provider: 'openai_compatible', keyEnvs: ['KIMI_NEW', 'BYOK_MOONSHOT_API_KEY'], baseURL: 'https://api.moonshot.ai/v1' },
+    'kimi-k3': { provider: 'openai_compatible', keyEnvs: ['KIMI_NEW', 'BYOK_MOONSHOT_API_KEY', 'API_MOONSHOT_API_KEY'], baseURL: 'https://api.moonshot.ai/v1' },
     // Kimi k2.7-code served via NOVITA (openai_compatible transport) — the host
     // an org may pick instead of Moonshot-native. Different wrapping than the
     // Anthropic-protocol Moonshot endpoint, useful for the return-shape corpus.
@@ -87,6 +101,8 @@ const TIER0 = {
     // Standard tier: $1,25 in / $4,25 out. O tier `-contributor` (12x mais
     // barato) nao esta provisionado nesta conta.
     'muse-spark-1.2': { provider: 'openai_compatible', keyEnvs: ['META_MUSE_API_KEY'], baseURL: 'https://api.meta.ai/v1' },
+    // A versao que a producao roda (#1821).
+    'muse-spark-1.3': { provider: 'openai_compatible', keyEnvs: ['META_MUSE_API_KEY'], baseURL: 'https://api.meta.ai/v1' },
 
     // xAI — OpenAI-compatible. ATENCAO no custo: o preco DOBRA acima de 200k
     // tokens de prompt, e os casos do light 30 passam disso com folga (media
@@ -101,6 +117,21 @@ const TIER0 = {
     // nao de env. Cobra na cota semanal do plano ChatGPT, nao por token — sai
     // no leaderboard com accessPath=subscription e SEM coluna de custo.
     'gpt-5.6-sol@sub': { provider: 'codex_subscription', codexModel: 'gpt-5.6-sol', keyEnvs: [] },
+    'gpt-6-sol@sub': { provider: 'codex_subscription', codexModel: 'gpt-6-sol', keyEnvs: [] },
+    'gpt-6.1-sol@sub': { provider: 'codex_subscription', codexModel: 'gpt-6.1-sol', keyEnvs: [] },
+    'gpt-6-astra@sub': { provider: 'codex_subscription', codexModel: 'gpt-6-astra', keyEnvs: [] },
+    // Claude pela ASSINATURA via Claude Agent SDK (#1821): o loop roda no Claude
+    // Code, com as tools do bench por MCP. Credencial em ~/.claude-oauth
+    // (`claude setup-token`), nao em env.
+    'claude-sonnet-5.5@sdk': { provider: 'claude_agent_sdk', sdkModel: 'claude-sonnet-5-5', keyEnvs: [] },
+    'claude-opus-5.5@sdk': { provider: 'claude_agent_sdk', sdkModel: 'claude-opus-5-5', keyEnvs: [] },
+    // O Agent SDK (preset do Claude Code, loop do SDK) autenticado pela chave de API, nao pela assinatura.
+    'claude-opus-5.5@sdk-api': { provider: 'claude_agent_sdk', sdkModel: 'claude-opus-5-5', sdkAuth: 'api', keyEnvs: ['API_ANTHROPIC_API_KEY'] },
+    // Mesmo gpt-6-sol pela API da OpenAI (#1821: separar o modelo da rota da assinatura).
+    'gpt-6-sol@api': { provider: 'openai', byokNative: true, doModel: 'gpt-6-sol', keyEnvs: ['MATRIX_OPENAI_API_KEY', 'API_OPEN_AI_API_KEY', 'BYOK_OPENAI_API_KEY'] },
+    'gpt-6.1-sol@api': { provider: 'openai', byokNative: true, doModel: 'gpt-6.1-sol', keyEnvs: ['MATRIX_OPENAI_API_KEY', 'API_OPEN_AI_API_KEY', 'BYOK_OPENAI_API_KEY'] },
+    'gpt-6-luna@api': { provider: 'openai', byokNative: true, doModel: 'gpt-6-luna', keyEnvs: ['MATRIX_OPENAI_API_KEY'] },
+    'claude-sonnet-5.5@api': { provider: 'anthropic', byokNative: true, doModel: 'claude-sonnet-5-5', keyEnvs: ['API_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY'] },
     'gpt-5.6-luna@sub': { provider: 'codex_subscription', codexModel: 'gpt-5.6-luna', keyEnvs: [] },
     'gpt-5.6-terra@sub': { provider: 'codex_subscription', codexModel: 'gpt-5.6-terra', keyEnvs: [] },
     // GPT-6 and Sonnet 5.5 through the same OpenRouter account as the tier-0
@@ -138,7 +169,12 @@ const TIER0 = {
 
 // Models the benchmark excludes from the default full run (cost). Opt in with
 // --model to force one.
-const EXCLUDED_BY_DEFAULT = new Set(['claude-opus-4-7']);
+// Subscription and Agent SDK ids are research routes: production has no such
+// route (evals/README.md rule 5), so they stay out of the default matrices.
+const EXCLUDED_BY_DEFAULT = new Set([
+    'claude-opus-4-7',
+    ...Object.keys(TIER0).filter((id) => ['codex_subscription', 'claude_agent_sdk'].includes(TIER0[id].provider)),
+]);
 
 // Routes that only answer inside the wiring smoke (its local server is up only
 // while it runs): never offered as a runnable model.
@@ -170,6 +206,7 @@ function applyModelEnv(modelId, env = process.env) {
     // A subscription takes no env var: its credential is ~/.codex/auth.json
     // (libs/llm/codex-subscription-model.ts).
     if (spec.provider === 'codex_subscription') return spec;
+    if (spec.provider === 'claude_agent_sdk') return spec;
     const key = spec.keyEnvs.map((e) => env[e]).find(Boolean);
     if (!key) throw new Error(`no API key for ${modelId} — set one of ${spec.keyEnvs.join('/')}`);
 

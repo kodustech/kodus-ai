@@ -87,6 +87,8 @@ function watchEfforts() {
     const original = globalThis.fetch;
     globalThis.fetch = function watchedFetch(input, init) {
         const task = taskScope.getStore();
+        const c = global.__EVAL_CASE_ALS?.getStore();
+        if (c && init && typeof init.body === 'string' && init.body.includes('Re-think the review based on the context above.')) c.rescueRequests += 1;
         if (task && init && typeof init.body === 'string') {
             try {
                 const body = JSON.parse(init.body);
@@ -117,6 +119,13 @@ function tokensUsed() {
 
 // One answered call: its usage (libs/llm/ai-sdk-usage.ts AiSdkUsage) and time.
 function addCall(usage, ms) {
+    // LOCAL BASELINE ONLY (#1821): per-PR totals for the baseline comparison.
+    const c = global.__EVAL_CASE_ALS?.getStore();
+    if (c) {
+        c.in += usage?.inputTokens ?? 0; c.out += usage?.outputTokens ?? 0;
+        c.cacheRead += usage?.cacheReadTokens ?? 0; c.cacheWrite += usage?.cacheWriteTokens ?? 0;
+        c.calls += 1; const t = taskScope.getStore() || 'unnamed'; c.byTask[t] = (c.byTask[t] || 0) + 1;
+    }
     const tok = tokensUsed();
     tok.in += usage?.inputTokens ?? 0;
     tok.out += usage?.outputTokens ?? 0;
