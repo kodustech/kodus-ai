@@ -16,18 +16,6 @@ type WrappedModel = ReturnType<typeof wrapLanguageModel>;
 type ByokGenerateResult = Awaited<ReturnType<WrappedModel['doGenerate']>>;
 
 import type { NormalizedModel } from '@libs/llm/byok-config';
-import {
-    runWithBYOKLimiter,
-    getLimiterForSlot,
-} from '@libs/llm/byok-to-vercel';
-import { estimateTextTokens } from '@libs/llm/token-estimate';
-import {
-    attachClassification,
-    classifyLLMError,
-    LlmErrorCategory,
-    type ClassifiedErrorInfo,
-} from '@libs/llm/error-classifier';
-import { extractProviderMessage } from '@libs/llm/review-error-diagnostics';
 import { createLogger } from '@libs/core/log/logger';
 import {
     MAX_REFUSAL_RETRIES,
@@ -37,29 +25,12 @@ import {
     withoutRefusedFields,
     withReasoningOff,
 } from '@libs/llm/rejected-reasoning-field';
+import {
+    runInByokEnvelope,
+    type ByokFailureReporter,
+} from '@libs/llm/byok-call-envelope';
 
 const logger = createLogger('ByokModelWrapper');
-
-/**
- * PRE-call token estimate for the tpm reservoir. Serializes the wire prompt the
- * same way the provider sees it, then counts with the SHARED tiktoken estimator
- * (`estimateTextTokens`) — NOT a char/4 heuristic (flat-4 under-counts dense
- * code ~1.6×). This is the ONE seam with `params.prompt`.
- */
-function estimatePromptTokens(prompt: unknown): number {
-    if (prompt == null) return 0;
-    const text =
-        typeof prompt === 'string' ? prompt : safeSerialize(prompt);
-    return estimateTextTokens(text);
-}
-
-function safeSerialize(value: unknown): string {
-    try {
-        return JSON.stringify(value) ?? '';
-    } catch {
-        return String(value);
-    }
-}
 
 /**
  * POST-call real token total for reconcile. Reads `doGenerate().usage` — the
@@ -90,15 +61,7 @@ export interface WrapByokModelOptions {
      *  in a later cleanup wave. */
     role?: 'main' | 'fallback' | 'internal';
     queueTimeoutMs?: number;
-    reporter?: (input: {
-        organizationId?: string;
-        provider: string;
-        /** The provider's own sentence when it gave one, else `err.message`. */
-        errorMessage: string;
-        category?: LlmErrorCategory;
-        httpStatus?: number;
-        routingRefusal?: boolean;
-    }) => void;
+    reporter?: ByokFailureReporter;
 }
 
 export function wrapByokModel(
@@ -165,97 +128,29 @@ export function wrapByokModel(
                         }
                     }
                 };
-                const run = async () => {
-                    try {
-                        return await generate();
-                    } catch (err) {
-                        // Classify (so downstream can read the canonical category)
-                        // and report — never let the reporter mask the LLM error.
-                        let classified: ClassifiedErrorInfo | undefined;
-                        if (err && typeof err === 'object') {
-                            classified = classifyLLMError(
-                                err,
-                                opts.provider,
-                            );
-                            attachClassification(err, classified);
-
-                            // Arm the slot's cooldown ONLY on a classified
-                            // RATE_LIMIT (429-rate) when the slot opted in via
-                            // cooldownMs. A QUOTA_EXCEEDED (429-billing) and a
-                            // TRANSIENT (5xx/network) NEVER arm. Arming is a
-                            // DELAY, not a retry: the limiter holds the next
-                            // admission; the reporter and rethrow below are
-                            // untouched. Reuses the classify already computed in
-                            // this catch — no re-classification.
-                            const cooldownSlot = opts.byokConfig;
-                            const cooldownMs = cooldownSlot?.cooldownMs;
-                            if (
-                                classified.category ===
-                                    LlmErrorCategory.RATE_LIMIT &&
-                                !!cooldownMs &&
-                                cooldownMs > 0
-                            ) {
-                                getLimiterForSlot({
-                                    slot: cooldownSlot,
-                                    organizationId: opts.organizationId,
-                                })?.armCooldown(cooldownMs);
-                            }
-                        }
-                        try {
-                            opts.reporter?.({
-                                organizationId: opts.organizationId,
-                                provider:
-                                    opts.provider ??
-                                    opts.byokConfig?.provider ??
-                                    'unknown',
-                                // For an AI SDK `APICallError` the message
-                                // only restates the status ("Provider returned
-                                // error"); the cause is in the body (#1871).
-                                errorMessage:
-                                    extractProviderMessage(err) ??
-                                    (err instanceof Error
-                                        ? err.message
-                                        : String(err ?? 'unknown')),
-                                category: classified?.category,
-                                httpStatus: classified?.httpStatus,
-                                routingRefusal: classified?.routingRefusal,
-                            });
-                        } catch {
-                            /* reporter failures must not surface */
-                        }
-                        throw err;
-                    }
-                };
-
                 // The limiter keys off the ONE resolved slot the org configured
-                // for this task (`slot`, above).
-
-                // tpm reservoir (hybrid): this wrapper is the ONE seam with BOTH
-                // the pre-call prompt AND the post-call usage. Estimate the
-                // prompt tokens to DEBIT the reservoir at admission, and hand the
-                // usage extractor so the limiter RECONCILES estimate vs actual
-                // after the call. Only when the slot carries tpm — otherwise zero
-                // estimation overhead and the exact 05-01 path (rpm/concurrency).
-                const hasTpm = !!slot?.tpm && slot.tpm > 0;
-                const estimatedTokens = hasTpm
-                    ? estimatePromptTokens(params?.prompt)
-                    : undefined;
-
+                // for this task (`slot`, above). The envelope owns admission,
+                // the tpm estimate/reconcile, and classify + cooldown + report
+                // on failure; the refusal retry above stays here because it
+                // edits AI SDK params.
+                //
                 // Pin T to the SDK's generate-result type so inference doesn't
                 // collapse to `unknown` (the middleware return type would then
-                // reject it). `run` yields exactly this, and `extractUsageTotal`
-                // takes `unknown`, so nothing else constrains T.
-                return runWithBYOKLimiter<ByokGenerateResult>(
+                // reject it).
+                return runInByokEnvelope<ByokGenerateResult>(
                     {
                         slot,
                         organizationId: opts.organizationId,
-                        abortSignal: params?.abortSignal,
+                        provider: opts.provider,
                         queueTimeoutMs: opts.queueTimeoutMs,
-                        estimatedTokens,
-                        getUsageTokens: hasTpm ? extractUsageTotal : undefined,
+                        reporter: opts.reporter,
                     },
-                    run,
-                    'llm-call',
+                    {
+                        abortSignal: params?.abortSignal,
+                        prompt: params?.prompt,
+                        usageTokens: extractUsageTotal,
+                    },
+                    generate,
                 );
             },
         },
