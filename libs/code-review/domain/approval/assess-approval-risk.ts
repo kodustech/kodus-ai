@@ -6,7 +6,7 @@ import type { NormalizedModel } from '@libs/llm/byok-config';
 import { LLM } from '@libs/llm/llm';
 import type { ApprovalRiskAssessment } from './approval-decision';
 
-const outputSchema = z.object({
+export const approvalRiskOutputSchema = z.object({
     level: z.enum(['low', 'medium', 'high']),
     reason: z.string().min(8).max(500),
 });
@@ -80,7 +80,7 @@ export async function assessApprovalRisk(input: {
 
     try {
         const result = await LLM.run({
-            schema: outputSchema,
+            schema: approvalRiskOutputSchema,
             runName: 'approval-risk',
             organizationId: input.organizationId,
             byokConfig: input.modelSlot,
