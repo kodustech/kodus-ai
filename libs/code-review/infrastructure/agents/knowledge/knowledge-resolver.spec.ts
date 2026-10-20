@@ -4,6 +4,7 @@ import {
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
 import { InMemoryBaseBranchReader, skillMarkdown } from './knowledge.fixtures';
+import { MAX_SKILL_FILES } from './knowledge-path';
 import {
     DOCS_TRUNCATED_MARKER,
     KnowledgeResolver,
@@ -89,7 +90,7 @@ describe('KnowledgeResolver', () => {
         expect(agent.warnings).toEqual([]);
     });
 
-    it('lists skill files only one level deep, as readSkillFile serves them', async () => {
+    it('lists skill files at any depth inside the folder, as readSkillFile serves them', async () => {
         const resolver = new KnowledgeResolver(
             new InMemoryBaseBranchReader({
                 ...baseFiles(),
@@ -103,8 +104,31 @@ describe('KnowledgeResolver', () => {
         expect(main.skills[0].files).toEqual([
             'NOTES.md',
             'references/codes.md',
+            'references/deep/nested.md',
             'scripts/check.sh',
         ]);
+    });
+
+    it('lists at most the cap of a large skill folder, shallow files first', async () => {
+        const many: Record<string, string> = {};
+        for (let i = 0; i < MAX_SKILL_FILES + 5; i++) {
+            many[
+                `${SKILL_DIR}/references/deep/r${String(i).padStart(3, '0')}.md`
+            ] = 'x';
+        }
+        const resolver = new KnowledgeResolver(
+            new InMemoryBaseBranchReader({
+                ...baseFiles(),
+                ...many,
+                [`${SKILL_DIR}/NOTES.md`]: 'top-level note',
+            }),
+        );
+
+        const main = await resolver.resolve({ items, target: 'main-review' });
+
+        expect(main.skills[0].files).toHaveLength(MAX_SKILL_FILES);
+        expect(main.skills[0].files).toContain('NOTES.md');
+        expect(main.skills[0].files).toContain('references/codes.md');
     });
 
     it('reads a skill linked to two targets once', async () => {

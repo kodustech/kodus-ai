@@ -273,7 +273,11 @@ export async function checkConventionQuotes(
             passed.push({
                 finding: {
                     ...finding,
-                    source: { file: 'TeamInstructions', section: '', quote: '' },
+                    source: {
+                        file: 'TeamInstructions',
+                        section: '',
+                        quote: '',
+                    },
                 },
                 sectionText: teamInstructions,
             });
@@ -420,9 +424,8 @@ async function findInSkillFiles(
         if (
             file === cited ||
             !file.startsWith(`${dir}/`) ||
-            // The same scope the knowledge resolver serves: references one
-            // level below the skill folder, never deeper.
-            file.slice(dir.length + 1).split('/').length > 2 ||
+            // The same scope the knowledge resolver serves: files inside the
+            // skill folder, at any depth (reads are capped below).
             !SKILL_TEXT_FILE.test(file)
         ) {
             continue;

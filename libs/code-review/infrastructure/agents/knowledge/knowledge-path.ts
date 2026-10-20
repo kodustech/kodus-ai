@@ -26,10 +26,15 @@ export function normalizeRepoPath(input: string): string | null {
     return segments.length ? segments.join('/') : null;
 }
 
+/** At most this many files of a skill folder are listed and served. */
+export const MAX_SKILL_FILES = 200;
+
 /**
- * Resolve a file the model asked for under a skill folder. References are one
- * level deep (`NOTES.md`, `references/codes.md`), as the skill format expects;
- * anything deeper or outside the folder is refused.
+ * Resolve a file the model asked for under a skill folder, at any depth
+ * (`NOTES.md`, `references/api/errors.md`). The path is plain and relative
+ * (no `..`, no absolute path), so it cannot leave the folder; the caller still
+ * serves it only when it is in the folder's listing, which leaves out
+ * symlinks, and each read is size-capped.
  */
 export function resolveInsideFolder(
     folder: string,
@@ -37,6 +42,5 @@ export function resolveInsideFolder(
 ): string | null {
     const normalized = normalizeRepoPath(relative);
     if (!normalized) return null;
-    if (normalized.split('/').length > 2) return null;
     return `${folder}/${normalized}`;
 }

@@ -232,6 +232,24 @@ describe('knowledge tools', () => {
         expect(result.output).toContain('loadSkill');
     });
 
+    it('readSkillFile reads a reference more than one level deep in the skill', async () => {
+        const deep = `${SKILL_DIR}/references/api/errors.md`;
+        files[deep] = 'LEDGER-404 account not found';
+        try {
+            const { tool } = await setup();
+
+            const result = await tool('readSkillFile').execute(
+                { skill: 'ledger-errors', path: 'references/api/errors.md' },
+                ctx,
+            );
+
+            expect(result.isError).toBeFalsy();
+            expect(result.output).toContain('LEDGER-404');
+        } finally {
+            delete files[deep];
+        }
+    });
+
     it('readSkillFile shows a script as text and never runs it', async () => {
         const { tool } = await setup();
 

@@ -17,7 +17,7 @@ import type {
     BaseBranchReader,
     BaseBranchReadResult,
 } from './base-branch-reader';
-import { normalizeRepoPath } from './knowledge-path';
+import { MAX_SKILL_FILES, normalizeRepoPath } from './knowledge-path';
 import { parseSkillMarkdown } from './skill-validator';
 
 /**
@@ -268,8 +268,14 @@ export class KnowledgeResolver {
                 ? (await this.list(location.folder))
                       .filter((f) => f !== location.skillFile)
                       .map((f) => f.slice(location.folder!.length + 1))
-                      // References are one level deep; deeper files are not served.
-                      .filter((f) => f.split('/').length <= 2)
+                      // Shallow files first, so a large folder keeps its top
+                      // references within the cap.
+                      .sort(
+                          (a, b) =>
+                              a.split('/').length - b.split('/').length ||
+                              a.localeCompare(b),
+                      )
+                      .slice(0, MAX_SKILL_FILES)
                       .sort()
                 : [];
 

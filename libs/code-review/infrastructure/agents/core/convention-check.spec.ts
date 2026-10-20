@@ -162,7 +162,7 @@ describe('checkConventionQuotes in a skill with rule files', () => {
         expect(r.rejected[0].reason).toBe(QUOTE_NOT_FOUND);
     });
 
-    it('does not look in files deeper than the references the skill serves', async () => {
+    it('finds a quote in a skill file more than one level deep, as the skill serves it', async () => {
         const DEEP = '.claude/skills/valve-rules/rules/archive/old.md';
         const deepFiles = {
             ...files,
@@ -183,8 +183,8 @@ describe('checkConventionQuotes in a skill with rule files', () => {
             [SKILL],
             jest.fn(async () => Object.keys(deepFiles)),
         );
-        expect(r.passed).toEqual([]);
-        expect(read).not.toHaveBeenCalledWith(DEEP);
+        expect(r.rejected).toEqual([]);
+        expect(r.passed[0].finding.source?.file).toBe(DEEP);
     });
 
     it('reads a bounded number of skill files when the quote is missing', async () => {
@@ -368,10 +368,30 @@ describe('checkConventionQuotes', () => {
         });
 
         it.each([
-            ['the reviewed file, no guides linked', 'src/valves/open.ts', [] as string[], { 'src/valves/open.ts': 'export const open = () => {};\n' }],
-            ['the reviewed file, outside the linked guides', 'src/valves/open.ts', [GUIDE], {}],
-            ['a guide that does not hold the quote', GUIDE, [GUIDE], { [GUIDE]: '# Guide\n\nUnrelated rule.\n' }],
-            ['a file missing on the target branch', 'src/valves/gone.ts', [] as string[], {}],
+            [
+                'the reviewed file, no guides linked',
+                'src/valves/open.ts',
+                [] as string[],
+                { 'src/valves/open.ts': 'export const open = () => {};\n' },
+            ],
+            [
+                'the reviewed file, outside the linked guides',
+                'src/valves/open.ts',
+                [GUIDE],
+                {},
+            ],
+            [
+                'a guide that does not hold the quote',
+                GUIDE,
+                [GUIDE],
+                { [GUIDE]: '# Guide\n\nUnrelated rule.\n' },
+            ],
+            [
+                'a file missing on the target branch',
+                'src/valves/gone.ts',
+                [] as string[],
+                {},
+            ],
         ])(
             're-points an instructions quote cited to %s at the instructions',
             async (_label, file, guides, files) => {
@@ -411,8 +431,18 @@ describe('checkConventionQuotes', () => {
         it('still drops a quote held by neither the cited file nor the instructions', async () => {
             const quote = 'Valves must emit a metric on each opening.';
             const r = await checkConventionQuotes(
-                [conv(quote, { source: { file: 'src/valves/open.ts', section: '', quote } })],
-                reader({ 'src/valves/open.ts': 'export const open = () => {};\n' }),
+                [
+                    conv(quote, {
+                        source: {
+                            file: 'src/valves/open.ts',
+                            section: '',
+                            quote,
+                        },
+                    }),
+                ],
+                reader({
+                    'src/valves/open.ts': 'export const open = () => {};\n',
+                }),
                 [],
                 undefined,
                 INSTRUCTIONS,
@@ -901,7 +931,10 @@ describe('makeTargetBranchGuideLister', () => {
             // A path missing on the branch is an empty skill...
             expect(await list('.claude/skills/none')).toEqual([]);
             // ...a failed listing is not.
-            const broken = makeTargetBranchGuideLister({ exec } as any, 'gone')!;
+            const broken = makeTargetBranchGuideLister(
+                { exec } as any,
+                'gone',
+            )!;
             await expect(broken('.claude/skills/valve-rules')).rejects.toThrow(
                 /git ls-tree exited/,
             );
