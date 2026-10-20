@@ -215,7 +215,9 @@ describe('EMAIL_TEMPLATE_REGISTRY', () => {
             const result = EMAIL_TEMPLATE_REGISTRY[
                 NotificationEvent.KODY_RULES_AUTO_PAUSE_DIGEST
             ]!(payload(), CTX);
-            expect(result.subject).toBe('2 Kody rules were paused this week');
+            expect(result.subject).toBe(
+                '2 Kody rules were paused since the last digest',
+            );
         });
 
         it('links each rule, explains it, and marks the ones already resumed', () => {

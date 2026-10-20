@@ -126,8 +126,15 @@ export class SendKodyRulesAutoPauseDigestUseCase {
             event: NotificationEvent.KODY_RULES_AUTO_PAUSE_DIGEST,
             organizationId,
             payload: {
+                // Pauses a failed send left behind stay listed, so the period
+                // reaches back to the oldest one.
                 periodStart: new Date(
-                    now.getTime() - DIGEST_PERIOD_DAYS * DAY_MS,
+                    Math.min(
+                        now.getTime() - DIGEST_PERIOD_DAYS * DAY_MS,
+                        ...pending.map(({ latest }) =>
+                            new Date(latest.pausedAt).getTime(),
+                        ),
+                    ),
                 ).toISOString(),
                 periodEnd: now.toISOString(),
                 rules,

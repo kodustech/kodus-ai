@@ -790,18 +790,25 @@ export class KodyRulesService implements IKodyRulesService {
             const activeRulesCount = (existing.rules ?? []).filter(
                 (r) => r.status === KodyRulesStatus.ACTIVE,
             ).length;
-            statusOverride = {
-                ...(await this.resolveStatusWithinPlanLimit(
-                    organizationAndTeamData,
-                    KodyRulesStatus.ACTIVE,
-                    activeRulesCount + 1,
-                )),
-                resumedAt: new Date(),
-                // `null`, not delete: updateRule only $sets defined fields.
-                autoPause: null,
-                lastAutoPause:
-                    existingRule.autoPause ?? existingRule.lastAutoPause,
-            };
+            const resolved = await this.resolveStatusWithinPlanLimit(
+                organizationAndTeamData,
+                KodyRulesStatus.ACTIVE,
+                activeRulesCount + 1,
+            );
+            // A resume the plan limit refused leaves the rule paused, so the
+            // auto-pause and its reason stay.
+            statusOverride =
+                resolved.status === KodyRulesStatus.ACTIVE
+                    ? {
+                          ...resolved,
+                          resumedAt: new Date(),
+                          // `null`, not delete: updateRule only $sets defined fields.
+                          autoPause: null,
+                          lastAutoPause:
+                              existingRule.autoPause ??
+                              existingRule.lastAutoPause,
+                      }
+                    : resolved;
         } else if (
             kodyRule.status !== undefined &&
             kodyRule.status !== KodyRulesStatus.ACTIVE

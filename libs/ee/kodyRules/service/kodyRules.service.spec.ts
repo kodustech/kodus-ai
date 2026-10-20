@@ -307,6 +307,28 @@ describe('KodyRulesService.createOrUpdate — auto-pause bookkeeping', () => {
         expect(patch.resumedAt).toBeInstanceOf(Date);
     });
 
+    it('a resume the plan limit refuses keeps the auto-pause and records no resume', async () => {
+        const stored = withRule({
+            status: KodyRulesStatus.PAUSED,
+            autoPause,
+        });
+        (svc as any).kodyRulesValidationService.validateRulesLimit = jest
+            .fn()
+            .mockResolvedValue(false);
+
+        await svc.createOrUpdate(
+            ORG,
+            { ...stored, status: KodyRulesStatus.ACTIVE } as any,
+            SYSTEM,
+        );
+
+        const patch = patchSent();
+        expect(patch.status).toBe(KodyRulesStatus.PAUSED);
+        expect(patch.lockedByPlan).toBe(true);
+        expect(patch.autoPause).toEqual(autoPause);
+        expect(patch.resumedAt).toBeUndefined();
+    });
+
     it('resuming a rule paused by hand stamps resumedAt and leaves lastAutoPause alone', async () => {
         const previous = { ...autoPause, digestedAt: new Date() };
         const stored = withRule({

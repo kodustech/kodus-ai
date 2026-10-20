@@ -117,6 +117,23 @@ describe('SendKodyRulesAutoPauseDigestUseCase', () => {
         );
     });
 
+    it('widens the period to the oldest pause it lists', async () => {
+        givenRules([
+            rule('late-1', {
+                autoPause: pause({
+                    pausedAt: new Date('2026-10-05T06:00:00Z'),
+                }),
+            }),
+            rule('new-1', { autoPause: pause() }),
+        ]);
+
+        await useCase.executeForOrganization(ORG, NOW);
+
+        expect(
+            notificationService.emit.mock.calls[0][0].payload.periodStart,
+        ).toBe('2026-10-05T06:00:00.000Z');
+    });
+
     it('sends no email when nothing new was paused', async () => {
         givenRules([
             rule('old-1', { autoPause: pause({ digestedAt: new Date() }) }),

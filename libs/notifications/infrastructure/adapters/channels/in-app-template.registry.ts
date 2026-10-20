@@ -245,7 +245,7 @@ export const IN_APP_TEMPLATE_REGISTRY: Partial<
         const count = normaliseAutoPauseEntries(m.rules).length;
         return {
             title: 'Weekly digest of paused Kody rules',
-            body: `${count} ${count === 1 ? 'rule was' : 'rules were'} paused automatically this week.`,
+            body: `${count} ${count === 1 ? 'rule was' : 'rules were'} paused automatically since the last digest.`,
             ctaUrl: rulesPageLink(),
         };
     },

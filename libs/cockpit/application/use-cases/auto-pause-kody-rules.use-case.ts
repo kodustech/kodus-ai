@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 
 import { createKodyRulesAutoPauseResolver } from '@libs/common/utils/kody-rules/kody-rules-auto-pause-settings';
 import { ParametersKey } from '@libs/core/domain/enums';
+import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 import { CodeReviewParameter } from '@libs/core/infrastructure/config/types/general/codeReviewConfig.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { createLogger } from '@libs/core/log/logger';
@@ -245,7 +246,9 @@ export class AutoPauseKodyRulesUseCase {
                             teams[0]?.teamId,
                     } as OrganizationAndTeamData,
                     {
-                        ...rule,
+                        // Only what the pause changes: the rest of the rule is the stored one,
+                        // not the snapshot read at the start of the run.
+                        uuid: rule.uuid,
                         status: KodyRulesStatus.PAUSED,
                         autoPause,
                     } as unknown as CreateKodyRuleDto,
@@ -322,9 +325,10 @@ export class AutoPauseKodyRulesUseCase {
             centralized: boolean;
         }>
     > {
-        const teams = await this.teamService.find({
-            organization: { uuid: organizationId },
-        });
+        const teams = await this.teamService.find(
+            { organization: { uuid: organizationId } },
+            [STATUS.ACTIVE],
+        );
 
         return Promise.all(
             (teams ?? []).map(async (team) => {

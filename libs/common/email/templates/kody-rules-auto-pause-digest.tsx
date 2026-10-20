@@ -22,7 +22,7 @@ export const kodyRulesAutoPauseDigestEmailMeta = (params: {
     from: EMAIL_FROM.NOTIFICATIONS,
     subject: `${params.count} Kody ${
         params.count === 1 ? 'rule was' : 'rules were'
-    } paused this week`,
+    } paused since the last digest`,
 });
 
 const ruleTitle: React.CSSProperties = {
@@ -48,8 +48,8 @@ function KodyRulesAutoPauseDigestEmail({
         >
             <Heading style={baseHeading}>
                 {count === 1
-                    ? 'A Kody rule was paused this week'
-                    : `${count} Kody rules were paused this week`}
+                    ? 'A Kody rule was paused since the last digest'
+                    : `${count} Kody rules were paused since the last digest`}
             </Heading>
             <Text style={baseText}>
                 Kody paused {count === 1 ? 'this rule' : 'these rules'} because

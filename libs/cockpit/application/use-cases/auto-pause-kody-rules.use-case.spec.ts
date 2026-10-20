@@ -7,6 +7,7 @@ jest.mock('@libs/core/log/logger', () => ({
 }));
 
 import { ParametersKey } from '@libs/core/domain/enums';
+import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 import { KodyRulesStatus } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
 
@@ -184,6 +185,17 @@ describe('AutoPauseKodyRulesUseCase', () => {
     });
 
     describe('per organization', () => {
+        it('reads only the active teams of the organization', async () => {
+            givenRules([rule('r1')]);
+
+            await useCase.executeForOrganization(ORG, NOW);
+
+            expect(teamService.find).toHaveBeenCalledWith(
+                { organization: { uuid: ORG } },
+                [STATUS.ACTIVE],
+            );
+        });
+
         it('skips an organization outside the Cockpit tier', async () => {
             licenseService.validateOrganizationLicense.mockResolvedValue({
                 valid: true,
@@ -249,7 +261,7 @@ describe('AutoPauseKodyRulesUseCase', () => {
             expect(kodyRulesService.createOrUpdate).toHaveBeenCalledTimes(2);
             expect(kodyRulesService.createOrUpdate).toHaveBeenCalledWith(
                 { organizationId: ORG, teamId: 'team-1' },
-                expect.objectContaining({
+                {
                     uuid: 'ignored-1',
                     status: KodyRulesStatus.PAUSED,
                     autoPause: {
@@ -264,7 +276,7 @@ describe('AutoPauseKodyRulesUseCase', () => {
                         thumbsDown: 0,
                         digestedAt: null,
                     },
-                }),
+                },
                 { userId: 'kody-system', userEmail: 'kody@kodus.io' },
             );
             expect(kodyRulesService.createOrUpdate).toHaveBeenCalledWith(
