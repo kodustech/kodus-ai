@@ -1460,7 +1460,7 @@ describe('KodyRulesSyncService — bulk IDE rule transitions across repositories
         ]);
     });
 
-    it('re-enabling sync resumes paused rules but leaves the ones Kody paused', async () => {
+    it('a bulk resume of imported rules by an admin also resumes the ones Kody paused', async () => {
         const { service, kodyRulesService, createOrUpdateKodyRulesUseCase } =
             makeService();
         kodyRulesService.findByOrganizationId.mockResolvedValue({
@@ -1483,7 +1483,7 @@ describe('KodyRulesSyncService — bulk IDE rule transitions across repositories
         const resumed = createOrUpdateKodyRulesUseCase.execute.mock.calls.map(
             ([dto]: [any]) => dto.uuid,
         );
-        expect(resumed).toEqual(['by-hand']);
+        expect(resumed).toEqual(['by-hand', 'by-kody']);
     });
 
     it('does nothing for an empty list', async () => {

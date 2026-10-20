@@ -3148,10 +3148,6 @@ export class KodyRulesSyncService {
             if (onlyFromStatus && !onlyFromStatus.includes(r?.status)) {
                 return false;
             }
-            // Re-enabling sync is not an admin resuming a rule Kody paused.
-            if (targetStatus === KodyRulesStatus.ACTIVE && r?.autoPause) {
-                return false;
-            }
             return true;
         });
 
