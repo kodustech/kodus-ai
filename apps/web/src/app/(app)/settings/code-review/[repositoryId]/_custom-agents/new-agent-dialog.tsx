@@ -13,6 +13,7 @@ import {
 import { toast } from "@components/ui/toaster/use-toast";
 import {
     agentFromSkill,
+    agentsUsingSkill,
     createAgentFromTemplate,
     CUSTOM_AGENT_TEMPLATES,
     setKnowledgeLink,
@@ -225,40 +226,56 @@ export const NewAgentDialog = ({
                                     .claude/skills/&lt;name&gt;/SKILL.md.
                                 </p>
                             )}
-                        {candidates.map((candidate) => (
-                            <button
-                                key={candidate.path}
-                                type="button"
-                                disabled={
-                                    saving ||
-                                    otherFieldsDirty ||
-                                    !!candidate.errors
-                                }
-                                onClick={() => fromSkill(candidate)}
-                                className="border-card-lv3/60 bg-card-lv1 hover:bg-card-lv2 flex items-start gap-3 rounded-xl border px-4 py-3 text-left disabled:opacity-60">
-                                <FolderGit2Icon className="text-text-secondary mt-0.5 size-4 shrink-0" />
-                                <span className="flex min-w-0 flex-col gap-0.5">
-                                    <span className="text-text-primary text-sm font-medium">
-                                        {candidate.name ?? candidate.path}
-                                    </span>
-                                    <span className="text-text-tertiary truncate text-xs">
-                                        {candidate.path}
-                                    </span>
-                                    {candidate.description && (
-                                        <span className="text-text-secondary text-xs">
-                                            {candidate.description}
+                        {candidates.map((candidate) => {
+                            const importedAs = agentsUsingSkill(
+                                candidate,
+                                knowledge,
+                                linkableAgents,
+                            );
+                            return (
+                                <button
+                                    key={candidate.path}
+                                    type="button"
+                                    disabled={
+                                        saving ||
+                                        otherFieldsDirty ||
+                                        !!candidate.errors ||
+                                        importedAs.length > 0
+                                    }
+                                    onClick={() => fromSkill(candidate)}
+                                    className="border-card-lv3/60 bg-card-lv1 hover:bg-card-lv2 flex items-start gap-3 rounded-xl border px-4 py-3 text-left disabled:opacity-60">
+                                    <FolderGit2Icon className="text-text-secondary mt-0.5 size-4 shrink-0" />
+                                    <span className="flex min-w-0 flex-col gap-0.5">
+                                        <span className="text-text-primary text-sm font-medium">
+                                            {candidate.name ?? candidate.path}
                                         </span>
-                                    )}
-                                    {candidate.errors && (
-                                        <span className="text-warning text-xs">
-                                            Not a valid skill:{" "}
-                                            {candidate.errors.join("; ") ||
-                                                "it could not be read"}
+                                        <span className="text-text-tertiary truncate text-xs">
+                                            {candidate.path}
                                         </span>
-                                    )}
-                                </span>
-                            </button>
-                        ))}
+                                        {candidate.description && (
+                                            <span className="text-text-secondary text-xs">
+                                                {candidate.description}
+                                            </span>
+                                        )}
+                                        {candidate.errors && (
+                                            <span className="text-warning text-xs">
+                                                Not a valid skill:{" "}
+                                                {candidate.errors.join("; ") ||
+                                                    "it could not be read"}
+                                            </span>
+                                        )}
+                                        {importedAs.length > 0 && (
+                                            <span className="text-text-tertiary text-xs">
+                                                Already imported as{" "}
+                                                {importedAs
+                                                    .map((agent) => agent.name)
+                                                    .join(", ")}
+                                            </span>
+                                        )}
+                                    </span>
+                                </button>
+                            );
+                        })}
                     </div>
                 )}
             </DialogContent>
