@@ -5,6 +5,7 @@ import argparse
 import csv
 import gzip
 import json
+import random
 from pathlib import Path
 
 ROOT = Path(__file__).parent
@@ -27,6 +28,7 @@ def main():
     parser.add_argument('--full', type=Path, required=True)
     parser.add_argument('--retry', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--blind-output', type=Path)
     args = parser.parse_args()
 
     candidate_plan = json.loads((ROOT / 'adjudication-plan.json').read_text())['ids']
@@ -89,6 +91,27 @@ def main():
         writer = csv.DictWriter(file, fieldnames=list(rows[0]))
         writer.writeheader()
         writer.writerows({key: safe_cell(value) for key, value in row.items()} for row in rows)
+    if args.blind_output:
+        blind_ids = plan.copy()
+        random.Random(1765).shuffle(blind_ids)
+        args.blind_output.parent.mkdir(parents=True, exist_ok=True)
+        with args.blind_output.open('w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow((
+                'caseId', 'snapshotAt', 'compareUrl', 'fileCount',
+                'filesComplete', 'humanLabel', 'humanRationale',
+            ))
+            for ident in blind_ids:
+                snapshot = snapshots[ident]
+                writer.writerow((
+                    safe_cell(ident),
+                    snapshot['snapshotAt'],
+                    snapshot['compareUrl'],
+                    len(snapshot['files']),
+                    snapshot['filesComplete'],
+                    '',
+                    '',
+                ))
     print(f'{len(rows)} cases exported; {sum(row["priority"] == "wrong_approval" for row in rows)} wrong approvals')
 
 
