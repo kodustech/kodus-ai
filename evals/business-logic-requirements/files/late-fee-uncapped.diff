@@ -1,0 +1,22 @@
+diff --git a/src/loans/lateFee.ts b/src/loans/lateFee.ts
+new file mode 100644
+--- /dev/null
++++ b/src/loans/lateFee.ts
+@@ -0,0 +1,5 @@
++export const FEE_PER_DAY = 0.5;
++export function lateFee(dueDate: Date, returnedAt: Date): number {
+  const days = Math.ceil((returnedAt.getTime() - dueDate.getTime()) / 86_400_000);
+  return days > 0 ? days * FEE_PER_DAY : 0;
++}
+diff --git a/src/loans/returnLoan.ts b/src/loans/returnLoan.ts
+--- a/src/loans/returnLoan.ts
++++ b/src/loans/returnLoan.ts
+@@ -1,8 +1,8 @@
+ import { db } from '../db';
++import { lateFee } from './lateFee';
+ export async function returnLoan(loanId: string, returnedAt = new Date()) {
+   const loan = await db.loans.get(loanId);
++  const fee = lateFee(loan.dueDate, returnedAt);
+-  await db.loans.update(loanId, { returnedAt });
++  await db.loans.update(loanId, { returnedAt, fee });
+ }

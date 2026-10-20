@@ -74,7 +74,12 @@ const STAGES = [
                 name: 'Which task a PR names, read through each tracker, scripted MCP servers',
                 specs: ['test/evals/business-rules-validation/task-resolution/task-resolution.eval.spec.ts'],
             },
-            { kind: 'contract', name: 'The stage, its MCP adapter and the Jira MCP, end to end', wiring: ['business-logic'] },
+            { kind: 'contract', name: 'The stage, its MCP adapter and the Jira MCP, end to end', wiring: ['business-logic', 'business-logic-requirements'] },
+            {
+                kind: 'contract',
+                name: 'Per requirement: done work not called a gap, and gaps caught (evals/business-logic-requirements)',
+                weekly: ['evals/business-logic-requirements/run.js', '--gate'],
+            },
         ],
         eval: {
             path: 'evals/business-logic',

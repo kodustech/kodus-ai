@@ -1,0 +1,9 @@
+diff --git a/src/invoices/total.ts b/src/invoices/total.ts
+--- a/src/invoices/total.ts
++++ b/src/invoices/total.ts
+@@ -1,5 +1,5 @@
+ export function invoiceTotal(lines: Line[]) {
+   const raw = lines.reduce((s, l) => s + l.qty * l.price, 0);
+-  return raw;
++  return Math.round((raw + Number.EPSILON) * 100) / 100;
+ }

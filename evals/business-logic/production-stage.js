@@ -66,10 +66,22 @@ function pullRequestRecord(pr) {
 }
 
 // The ticket as Atlassian's getJiraIssue returns it, from a `# Task: <title>`
-// markdown file.
-function jiraIssue(key, markdown) {
+// markdown file, with its parent and sub-tasks when it has them.
+function jiraIssue(key, markdown, { parent, subtasks } = {}) {
     const [first, ...rest] = String(markdown).split('\n');
-    return { key, fields: { summary: first.replace(/^#\s*(Task:\s*)?/, '').trim(), description: rest.join('\n').trim(), status: { name: 'In Progress' }, issuetype: { name: 'Story' } } };
+    return {
+        key,
+        fields: {
+            summary: first.replace(/^#\s*(Task:\s*)?/, '').trim(),
+            description: rest.join('\n').trim(),
+            status: { name: 'In Progress' },
+            issuetype: { name: parent ? 'Sub-task' : 'Story' },
+            ...(parent ? { parent: { key: parent } } : {}),
+            ...(subtasks?.length
+                ? { subtasks: subtasks.map((t) => ({ key: t.key, fields: { summary: t.title, status: { name: t.status || 'To Do' } } })) }
+                : {}),
+        },
+    };
 }
 
 // One local HTTP server: production's Kodus MCP at /mcp, and the eval's
@@ -156,9 +168,9 @@ async function startServices(world) {
                 inputSchema: { cloudId: z.string().describe('Atlassian site id (UUID) or site URL'), issueIdOrKey: z.string().describe('Issue id or key, e.g. PROJ-123') },
             },
             async ({ cloudId, issueIdOrKey }) => {
-                const ticket = world.current?.ticket;
-                const known = ticket && ticket.task && String(issueIdOrKey).toUpperCase() === ticket.key && [ATLASSIAN_SITE.id, ATLASSIAN_SITE.url].includes(String(cloudId).replace(/\/+$/, ''));
-                return known ? text(jiraIssue(ticket.key, ticket.task)) : text('Issue does not exist or you do not have permission to see it.', true);
+                const ticket = (world.current?.tickets || []).find((t) => t.key === String(issueIdOrKey).toUpperCase());
+                const known = ticket && ticket.task && [ATLASSIAN_SITE.id, ATLASSIAN_SITE.url].includes(String(cloudId).replace(/\/+$/, ''));
+                return known ? text(jiraIssue(ticket.key, ticket.task, ticket)) : text('Issue does not exist or you do not have permission to see it.', true);
             },
         );
         server.registerTool(
@@ -198,7 +210,7 @@ function observability() {
 // The stage with its production collaborators. `codeHost` keeps the comments
 // the publisher writes. `verifyAnalyzerResult` is the one skill-policy setting
 // a deployment can change (SKILL.md, off by default).
-function buildStage({ verifyAnalyzerResult = false, storedConfig = null, codeHost, judgeFailures = [] }) {
+function buildStage({ verifyAnalyzerResult = false, storedConfig = null, codeHost, judgeFailures = [], outcomes = [] }) {
     const { JwtService } = require('@nestjs/jwt');
     const { BusinessLogicValidationStage } = lib('code-review/pipeline/stages/business-logic-validation.stage.ts');
     const { BusinessValidationService } = lib('agents/business-validation/business-validation.service.ts');
@@ -239,6 +251,12 @@ function buildStage({ verifyAnalyzerResult = false, storedConfig = null, codeHos
         clearPendingRecheck: async () => undefined,
     };
     const publisher = new BusinessLogicPublisher(service, codeHost, runs);
+    // What the service decided, as the publisher receives it.
+    const publish = publisher.publish.bind(publisher);
+    publisher.publish = (input) => {
+        outcomes.push(input.result.outcome);
+        return publish(input);
+    };
     return new BusinessLogicValidationStage(service, publisher);
 }
 
@@ -255,23 +273,37 @@ function caseCodeHost(world, comments) {
         updateIssueComment: async ({ body, commentId }) => {
             comments[Number(commentId) - 1] = body;
         },
-        getRepositoryAllFiles: async () => filesOfDiff(world.current.diff).map((f) => ({ path: f.filename })),
-        getRepositoryContentFile: async () => null,
+        // The repository at the PR's head: the files the diff touches and the
+        // ones the case says were already there.
+        getRepositoryAllFiles: async () => [
+            ...new Set([...filesOfDiff(world.current.diff).map((f) => f.filename), ...Object.keys(world.current.repoFiles)]),
+        ].map((p) => ({ path: p })),
+        getRepositoryContentFile: async ({ file }) =>
+            file?.filename in world.current.repoFiles ? { data: { content: world.current.repoFiles[file.filename] } } : null,
     };
 }
 
 // One case through the stage: the comments it publishes and the outcome it
 // records.
 async function reviewCase(world, c, opts = {}) {
-    const dir = path.join(__dirname, 'files');
+    const dir = opts.filesDir || path.join(__dirname, 'files');
     world.current = {
         pr: c.pr,
         diff: fs.readFileSync(path.join(dir, c.diff), 'utf8'),
-        ticket: { key: c.ticket.key, task: c.ticket.task ? fs.readFileSync(path.join(dir, c.ticket.task), 'utf8') : null },
+
+        // The ticket the PR closes, and the ones it links to (parent, sub-tasks).
+        tickets: [c.ticket, ...(c.related || [])].map((t) => ({
+            ...t,
+            task: t.task ? fs.readFileSync(path.join(dir, t.task), 'utf8') : null,
+        })),
+        repoFiles: Object.fromEntries(
+            Object.entries(c.repoFiles || {}).map(([p, f]) => [p, fs.readFileSync(path.join(dir, f), 'utf8')]),
+        ),
     };
     const comments = [];
     const judgeFailures = [];
-    const stage = buildStage({ ...opts, codeHost: caseCodeHost(world, comments), judgeFailures });
+    const outcomes = [];
+    const stage = buildStage({ ...opts, codeHost: caseCodeHost(world, comments), judgeFailures, outcomes });
     const context = {
         organizationAndTeamData: ORG,
         platformType: 'GITHUB',
@@ -292,7 +324,7 @@ async function reviewCase(world, c, opts = {}) {
     };
     try {
         const out = await stage.execute(context);
-        return { outcome: out.businessLogicOutcome || null, comments, judgeFailures, errors: out.errors || [] };
+        return { outcome: out.businessLogicOutcome || null, decided: outcomes[0] || null, comments, judgeFailures, errors: out.errors || [] };
     } finally {
         world.current = null;
     }

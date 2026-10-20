@@ -1,0 +1,1044 @@
+[
+  {
+    "id": "late-fee",
+    "checks": "Calls three fee rules met where the diff codes them, and the receipt line missing",
+    "pr": {
+      "number": 300,
+      "title": "Charge a late fee on overdue loans",
+      "body": "Closes PROJ-201.",
+      "headRef": "feat/PROJ-201-late-fee"
+    },
+    "ticket": {
+      "key": "PROJ-201",
+      "task": "late-fee.task.md"
+    },
+    "diff": "late-fee.diff",
+    "gold": [
+      {
+        "match": "per day|0[.,]50",
+        "accept": [
+          "met"
+        ]
+      },
+      {
+        "match": "cap|10[.,]00|maximum",
+        "accept": [
+          "met"
+        ]
+      },
+      {
+        "match": "on time",
+        "accept": [
+          "met"
+        ]
+      },
+      {
+        "match": "receipt",
+        "accept": [
+          "missing",
+          "partial"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "late-fee-uncapped",
+    "checks": "Calls the cap missing when the fee grows without a limit (control for late-fee)",
+    "pr": {
+      "number": 301,
+      "title": "Charge a late fee on overdue loans",
+      "body": "Closes PROJ-201.",
+      "headRef": "feat/PROJ-201-late-fee"
+    },
+    "ticket": {
+      "key": "PROJ-201",
+      "task": "late-fee-uncapped.task.md"
+    },
+    "diff": "late-fee-uncapped.diff",
+    "gold": [
+      {
+        "match": "per day|0[.,]50",
+        "accept": [
+          "met"
+        ]
+      },
+      {
+        "match": "cap|10[.,]00|maximum",
+        "accept": [
+          "missing",
+          "partial"
+        ]
+      },
+      {
+        "match": "on time",
+        "accept": [
+          "met"
+        ]
+      },
+      {
+        "match": "receipt",
+        "accept": [
+          "missing",
+          "partial"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "loan-limit",
+    "checks": "Calls the limit and its message met though the code names neither \"five\" nor the task",
+    "pr": {
+      "number": 302,
+      "title": "Cap active loans per member",
+      "body": "Closes PROJ-202.",
+      "headRef": "feat/PROJ-202-loan-limit"
+    },
+    "ticket": {
+      "key": "PROJ-202",
+      "task": "loan-limit.task.md"
+    },
+    "diff": "loan-limit.diff",
+    "gold": [
+      {
+        "match": "five|5|limit|more than",
+        "accept": [
+          "met"
+        ]
+      },
+      {
+        "match": "loan limit reached|error|message",
+        "accept": [
+          "met"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "loan-limit-off-by-one",
+    "checks": "Calls the limit not met when a sixth loan still goes through (control for loan-limit)",
+    "pr": {
+      "number": 303,
+      "title": "Cap active loans per member",
+      "body": "Closes PROJ-202.",
+      "headRef": "feat/PROJ-202-loan-limit"
+    },
+    "ticket": {
+      "key": "PROJ-202",
+      "task": "loan-limit-off-by-one.task.md"
+    },
+    "diff": "loan-limit-off-by-one.diff",
+    "gold": [
+      {
+        "match": "five|5|limit|more than",
+        "accept": [
+          "missing",
+          "partial"
+        ]
+      },
+      {
+        "match": "loan limit reached|error|message",
+        "accept": [
+          "met",
+          "partial"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "renew-rules-outside-diff",
+    "checks": "Calls the reservation and overdue rules met: they are in loanRules.ts, which the PR calls but does not change",
+    "pr": {
+      "number": 304,
+      "title": "Let members renew a loan",
+      "body": "Closes PROJ-203.",
+      "headRef": "feat/PROJ-203-renew"
+    },
+    "ticket": {
+      "key": "PROJ-203",
+      "task": "renew-rules-outside-diff.task.md"
+    },
+    "diff": "renew-rules-outside-diff.diff",
+    "gold": [
+      {
+        "match": "once|14",
+        "accept": [
+          "met"
+        ]
+      },
+      {
+        "match": "reserv",
+        "accept": [
+          "met"
+        ]
+      },
+      {
+        "match": "overdue",
+        "accept": [
+          "met"
+        ]
+      }
+    ],
+    "repoFiles": {
+      "src/loans/loanRules.ts": "renew-rules-outside-diff.repo0.txt"
+    }
+  },
+  {
+    "id": "renew-rules-outside-diff-no-reservation",
+    "checks": "Calls the reservation rule missing when loanRules.ts checks only overdue (control for renew-rules-outside-diff)",
+    "pr": {
+      "number": 305,
+      "title": "Let members renew a loan",
+      "body": "Closes PROJ-203.",
+      "headRef": "feat/PROJ-203-renew"
+    },
+    "ticket": {
+      "key": "PROJ-203",
+      "task": "renew-rules-outside-diff-no-reservation.task.md"
+    },
+    "diff": "renew-rules-outside-diff-no-reservation.diff",
+    "gold": [
+      {
+        "match": "once|14",
+        "accept": [
+          "met"
+        ]
+      },
+      {
+        "match": "reserv",
+        "accept": [
+          "missing",
+          "partial"
+        ]
+      },
+      {
+        "match": "overdue",
+        "accept": [
+          "met"
+        ]
+      }
+    ],
+    "repoFiles": {
+      "src/loans/loanRules.ts": "renew-rules-outside-diff-no-reservation.repo0.txt"
+    }
+  },
+  {
+    "id": "reader-email-pt",
+    "checks": "Calls the three e-mail rules met in a Portuguese ticket, one of them in a helper outside the diff",
+    "pr": {
+      "number": 306,
+      "title": "Validar e-mail no cadastro de leitor",
+      "body": "Closes PROJ-204.",
+      "headRef": "feat/PROJ-204-email"
+    },
+    "ticket": {
+      "key": "PROJ-204",
+      "task": "reader-email-pt.task.md"
+    },
+    "diff": "reader-email-pt.diff",
+    "gold": [
+      {
+        "match": "@|inv[aá]lid",
+        "accept": [
+          "met"
+        ]
+      },
+      {
+        "match": "min[uú]scul|lower",
+        "accept": [
+          "met"
+        ]
+      },
+      {
+        "match": "j[aá] cadastrad|duplicad|already|repetid",
+        "accept": [
+          "met"
+        ]
+      }
+    ],
+    "repoFiles": {
+      "src/readers/validateEmail.ts": "reader-email-pt.repo0.txt"
+    }
+  },
+  {
+    "id": "reader-email-pt-case-kept",
+    "checks": "Calls the lowercase rule missing when the e-mail is saved as typed (control for reader-email-pt)",
+    "pr": {
+      "number": 307,
+      "title": "Validar e-mail no cadastro de leitor",
+      "body": "Closes PROJ-204.",
+      "headRef": "feat/PROJ-204-email"
+    },
+    "ticket": {
+      "key": "PROJ-204",
+      "task": "reader-email-pt-case-kept.task.md"
+    },
+    "diff": "reader-email-pt-case-kept.diff",
+    "gold": [
+      {
+        "match": "@|inv[aá]lid",
+        "accept": [
+          "met"
+        ]
+      },
+      {
+        "match": "min[uú]scul|lower",
+        "accept": [
+          "missing",
+          "partial"
+        ]
+      },
+      {
+        "match": "j[aá] cadastrad|duplicad|already|repetid",
+        "accept": [
+          "met"
+        ]
+      }
+    ],
+    "repoFiles": {
+      "src/readers/validateEmail.ts": "reader-email-pt-case-kept.repo0.txt"
+    }
+  },
+  {
+    "id": "archive-confirm-look-alike",
+    "checks": "Calls the archive confirmation missing when the PR confirms deleting instead",
+    "pr": {
+      "number": 308,
+      "title": "Confirm before archiving an invoice",
+      "body": "Closes PROJ-205.",
+      "headRef": "feat/PROJ-205-archive"
+    },
+    "ticket": {
+      "key": "PROJ-205",
+      "task": "archive-confirm-look-alike.task.md"
+    },
+    "diff": "archive-confirm-look-alike.diff",
+    "gold": [
+      {
+        "match": "archiv.*(ask|confirm)|confirm.*archiv|before",
+        "accept": [
+          "missing",
+          "partial"
+        ]
+      },
+      {
+        "match": "open invoices|list|no longer",
+        "accept": [
+          "met"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "discount-code-half",
+    "checks": "Calls expiry met, the minimum-order message partial and once-per-customer missing",
+    "pr": {
+      "number": 309,
+      "title": "Validate discount codes at checkout",
+      "body": "Closes PROJ-206.",
+      "headRef": "feat/PROJ-206-discount"
+    },
+    "ticket": {
+      "key": "PROJ-206",
+      "task": "discount-code-half.task.md"
+    },
+    "diff": "discount-code-half.diff",
+    "gold": [
+      {
+        "match": "expired",
+        "accept": [
+          "met"
+        ]
+      },
+      {
+        "match": "once",
+        "accept": [
+          "missing",
+          "partial"
+        ]
+      },
+      {
+        "match": "minimum|below",
+        "accept": [
+          "missing",
+          "partial"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "reminder-subtask-skips-cancelled",
+    "checks": "Judges a sub-task by its parent: the 24h SMS met, the cancelled check missing, the profile switch not this PR's work",
+    "pr": {
+      "number": 310,
+      "title": "Send the 24h reminder SMS",
+      "body": "Closes PROJ-207.",
+      "headRef": "feat/PROJ-207-reminder"
+    },
+    "ticket": {
+      "key": "PROJ-207",
+      "task": "reminder-subtask-skips-cancelled.task.md",
+      "parent": "PROJ-200"
+    },
+    "diff": "reminder-subtask-skips-cancelled.diff",
+    "gold": [
+      {
+        "match": "24",
+        "accept": [
+          "met"
+        ]
+      },
+      {
+        "match": "cancel",
+        "accept": [
+          "missing",
+          "partial"
+        ]
+      },
+      {
+        "match": "profile|turn.*off|opt",
+        "accept": [
+          "check_manually"
+        ],
+        "absentOk": true
+      }
+    ],
+    "related": [
+      {
+        "key": "PROJ-200",
+        "task": "reminder-subtask-skips-cancelled.PROJ-200.task.md"
+      }
+    ]
+  },
+  {
+    "id": "due-date-api-list-missing",
+    "checks": "Calls the single-loan field met, and the list endpoint and the OpenAPI entry missing",
+    "pr": {
+      "number": 311,
+      "title": "Expose the loan due date in the API",
+      "body": "Closes PROJ-208.",
+      "headRef": "feat/PROJ-208-due-date"
+    },
+    "ticket": {
+      "key": "PROJ-208",
+      "task": "due-date-api-list-missing.task.md"
+    },
+    "diff": "due-date-api-list-missing.diff",
+    "gold": [
+      {
+        "match": ":id|single|detail",
+        "accept": [
+          "met"
+        ]
+      },
+      {
+        "match": "get /loans returns|every item|each item|list",
+        "accept": [
+          "missing",
+          "partial"
+        ]
+      },
+      {
+        "match": "openapi|spec|document",
+        "accept": [
+          "missing",
+          "partial"
+        ]
+      }
+    ],
+    "repoFiles": {
+      "src/api/loans/loanList.serializer.ts": "due-date-api-list-missing.repo0.txt",
+      "docs/openapi.yaml": "due-date-api-list-missing.repo1.txt"
+    }
+  },
+  {
+    "id": "patient-cpf-pt",
+    "checks": "Calls the three CPF criteria met in a Portuguese ticket",
+    "pr": {
+      "number": 312,
+      "title": "Adicionar CPF opcional ao paciente",
+      "body": "Closes PROJ-209.",
+      "headRef": "feat/PROJ-209-cpf"
+    },
+    "ticket": {
+      "key": "PROJ-209",
+      "task": "patient-cpf-pt.task.md"
+    },
+    "diff": "patient-cpf-pt.diff",
+    "gold": [
+      {
+        "match": "opcional|optional|campo",
+        "accept": [
+          "met"
+        ]
+      },
+      {
+        "match": "d[ií]gitos|digits|pontos",
+        "accept": [
+          "met"
+        ]
+      },
+      {
+        "match": "get|devolve|returns",
+        "accept": [
+          "met"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "patient-cpf-pt-masked",
+    "checks": "Calls the digits-only rule missing when the CPF is saved as typed (control for patient-cpf-pt)",
+    "pr": {
+      "number": 313,
+      "title": "Adicionar CPF opcional ao paciente",
+      "body": "Closes PROJ-209.",
+      "headRef": "feat/PROJ-209-cpf"
+    },
+    "ticket": {
+      "key": "PROJ-209",
+      "task": "patient-cpf-pt-masked.task.md"
+    },
+    "diff": "patient-cpf-pt-masked.diff",
+    "gold": [
+      {
+        "match": "opcional|optional|campo",
+        "accept": [
+          "met"
+        ]
+      },
+      {
+        "match": "d[ií]gitos|digits|pontos",
+        "accept": [
+          "missing",
+          "partial"
+        ]
+      },
+      {
+        "match": "get|devolve|returns",
+        "accept": [
+          "met"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "branch-preference",
+    "checks": "Calls both halves met: the choice is stored as a preference and read back when the session starts",
+    "pr": {
+      "number": 314,
+      "title": "Remember the picked branch",
+      "body": "Closes PROJ-210.",
+      "headRef": "feat/PROJ-210-branch"
+    },
+    "ticket": {
+      "key": "PROJ-210",
+      "task": "branch-preference.task.md"
+    },
+    "diff": "branch-preference.diff",
+    "gold": [
+      {
+        "match": "remember|store|save|persist",
+        "accept": [
+          "met"
+        ]
+      },
+      {
+        "match": "log in|login|next time|selected",
+        "accept": [
+          "met"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "branch-preference-never-read",
+    "checks": "Calls the next-login half missing when the preference is saved but never read (control for branch-preference)",
+    "pr": {
+      "number": 315,
+      "title": "Remember the picked branch",
+      "body": "Closes PROJ-210.",
+      "headRef": "feat/PROJ-210-branch"
+    },
+    "ticket": {
+      "key": "PROJ-210",
+      "task": "branch-preference-never-read.task.md"
+    },
+    "diff": "branch-preference-never-read.diff",
+    "gold": [
+      {
+        "match": "remember|store|save|persist",
+        "accept": [
+          "met",
+          "partial"
+        ]
+      },
+      {
+        "match": "log in|login|next time|selected",
+        "accept": [
+          "missing",
+          "partial"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "invoice-currency-no-backfill",
+    "checks": "Calls the field met, the backfill of existing invoices missing and the PDF line missing",
+    "pr": {
+      "number": 316,
+      "title": "Store the invoice currency",
+      "body": "Closes PROJ-211.",
+      "headRef": "feat/PROJ-211-currency"
+    },
+    "ticket": {
+      "key": "PROJ-211",
+      "task": "invoice-currency-no-backfill.task.md"
+    },
+    "diff": "invoice-currency-no-backfill.diff",
+    "gold": [
+      {
+        "match": "iso|4217|stores",
+        "accept": [
+          "met"
+        ]
+      },
+      {
+        "match": "existing|usd",
+        "accept": [
+          "missing",
+          "partial"
+        ]
+      },
+      {
+        "match": "pdf",
+        "accept": [
+          "missing",
+          "partial"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "reservations-empty-state",
+    "checks": "Calls the copy and the link met from the code, and leaves the illustration to check by hand",
+    "pr": {
+      "number": 317,
+      "title": "Empty state for the reservations page",
+      "body": "Closes PROJ-212.",
+      "headRef": "feat/PROJ-212-empty-state"
+    },
+    "ticket": {
+      "key": "PROJ-212",
+      "task": "reservations-empty-state.task.md"
+    },
+    "diff": "reservations-empty-state.diff",
+    "gold": [
+      {
+        "match": "no reservations",
+        "accept": [
+          "met",
+          "check_manually"
+        ]
+      },
+      {
+        "match": "browse catalog|/catalog",
+        "accept": [
+          "met",
+          "check_manually"
+        ]
+      },
+      {
+        "match": "illustration|figma",
+        "accept": [
+          "check_manually"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "rounding-no-tests",
+    "checks": "Calls the rounding met and the unit tests the ticket asks for missing",
+    "pr": {
+      "number": 318,
+      "title": "Round invoice totals to cents",
+      "body": "Closes PROJ-213.",
+      "headRef": "feat/PROJ-213-rounding"
+    },
+    "ticket": {
+      "key": "PROJ-213",
+      "task": "rounding-no-tests.task.md"
+    },
+    "diff": "rounding-no-tests.diff",
+    "gold": [
+      {
+        "match": "half|round|decimal",
+        "accept": [
+          "met"
+        ]
+      },
+      {
+        "match": "test",
+        "accept": [
+          "missing",
+          "partial"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "cancel-log-pt",
+    "checks": "Calls the log and its test met in a Portuguese ticket",
+    "pr": {
+      "number": 319,
+      "title": "Registrar log ao cancelar consulta",
+      "body": "Closes PROJ-214.",
+      "headRef": "feat/PROJ-214-cancel-log"
+    },
+    "ticket": {
+      "key": "PROJ-214",
+      "task": "cancel-log-pt.task.md"
+    },
+    "diff": "cancel-log-pt.diff",
+    "gold": [
+      {
+        "match": "log",
+        "accept": [
+          "met"
+        ]
+      },
+      {
+        "match": "teste|test",
+        "accept": [
+          "met"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "cancel-log-pt-no-reason",
+    "checks": "Calls the log partial and the test missing when the log drops the reason (control for cancel-log-pt)",
+    "pr": {
+      "number": 320,
+      "title": "Registrar log ao cancelar consulta",
+      "body": "Closes PROJ-214.",
+      "headRef": "feat/PROJ-214-cancel-log"
+    },
+    "ticket": {
+      "key": "PROJ-214",
+      "task": "cancel-log-pt-no-reason.task.md"
+    },
+    "diff": "cancel-log-pt-no-reason.diff",
+    "gold": [
+      {
+        "match": "log",
+        "accept": [
+          "missing",
+          "partial"
+        ]
+      },
+      {
+        "match": "teste|test",
+        "accept": [
+          "missing",
+          "partial"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "invoice-reminders-parent",
+    "checks": "Calls the scheduling met and the e-mail template, a sub-task not in this PR, not a gap",
+    "pr": {
+      "number": 321,
+      "title": "Schedule invoice reminders",
+      "body": "Closes PROJ-215.",
+      "headRef": "feat/PROJ-215-reminders"
+    },
+    "ticket": {
+      "key": "PROJ-215",
+      "task": "invoice-reminders-parent.task.md",
+      "subtasks": [
+        {
+          "key": "PROJ-217",
+          "title": "Reminder e-mail template",
+          "status": "To Do"
+        },
+        {
+          "key": "PROJ-218",
+          "title": "Schedule the reminders",
+          "status": "In Progress"
+        }
+      ]
+    },
+    "diff": "invoice-reminders-parent.diff",
+    "gold": [
+      {
+        "match": "7|seven|unpaid",
+        "accept": [
+          "met"
+        ]
+      },
+      {
+        "match": "template",
+        "accept": [
+          "check_manually",
+          "met"
+        ],
+        "absentOk": true
+      }
+    ]
+  },
+  {
+    "id": "thin-trim-names",
+    "checks": "Calls the one thing the ticket asks met and invents no other requirement (#1725)",
+    "pr": {
+      "number": 322,
+      "title": "Trim member names",
+      "body": "Closes PROJ-219.",
+      "headRef": "feat/PROJ-219-trim"
+    },
+    "ticket": {
+      "key": "PROJ-219",
+      "task": "thin-trim-names.task.md"
+    },
+    "diff": "thin-trim-names.diff",
+    "gold": [
+      {
+        "match": "trim|whitespace|spaces",
+        "accept": [
+          "met"
+        ]
+      }
+    ],
+    "onlyGold": true
+  },
+  {
+    "id": "holiday-look-alike-pt",
+    "checks": "Calls the holiday rule missing when the PR blocks weekends instead",
+    "pr": {
+      "number": 323,
+      "title": "Bloquear agendamento em feriado",
+      "body": "Closes PROJ-220.",
+      "headRef": "feat/PROJ-220-holiday"
+    },
+    "ticket": {
+      "key": "PROJ-220",
+      "task": "holiday-look-alike-pt.task.md"
+    },
+    "diff": "holiday-look-alike-pt.diff",
+    "gold": [
+      {
+        "match": "feriado nacional|holiday|agendar",
+        "accept": [
+          "missing",
+          "partial"
+        ]
+      },
+      {
+        "match": "mensagem|message|n[aã]o atendemos",
+        "accept": [
+          "met",
+          "partial"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "card-validation-subtask",
+    "checks": "Calls the Luhn check met though the code never says \"Luhn\", and the retry, another sub-task, not a gap",
+    "pr": {
+      "number": 324,
+      "title": "Client-side card validation",
+      "body": "Closes PROJ-221.",
+      "headRef": "feat/PROJ-221-card"
+    },
+    "ticket": {
+      "key": "PROJ-221",
+      "task": "card-validation-subtask.task.md",
+      "parent": "PROJ-222"
+    },
+    "diff": "card-validation-subtask.diff",
+    "gold": [
+      {
+        "match": "luhn|card number",
+        "accept": [
+          "met"
+        ]
+      },
+      {
+        "match": "expir|past",
+        "accept": [
+          "met"
+        ]
+      },
+      {
+        "match": "retr|time",
+        "accept": [
+          "check_manually"
+        ],
+        "absentOk": true
+      }
+    ],
+    "related": [
+      {
+        "key": "PROJ-222",
+        "task": "card-validation-subtask.PROJ-222.task.md"
+      }
+    ]
+  },
+  {
+    "id": "card-validation-subtask-length-only",
+    "checks": "Calls the Luhn check missing when only the length is checked, and the expiry message partial (control for card-validation-subtask)",
+    "pr": {
+      "number": 325,
+      "title": "Client-side card validation",
+      "body": "Closes PROJ-221.",
+      "headRef": "feat/PROJ-221-card"
+    },
+    "ticket": {
+      "key": "PROJ-221",
+      "task": "card-validation-subtask-length-only.task.md",
+      "parent": "PROJ-222"
+    },
+    "diff": "card-validation-subtask-length-only.diff",
+    "gold": [
+      {
+        "match": "luhn|card number",
+        "accept": [
+          "missing",
+          "partial"
+        ]
+      },
+      {
+        "match": "expir|past",
+        "accept": [
+          "missing",
+          "partial"
+        ]
+      },
+      {
+        "match": "retr|time",
+        "accept": [
+          "check_manually"
+        ],
+        "absentOk": true
+      }
+    ],
+    "related": [
+      {
+        "key": "PROJ-222",
+        "task": "card-validation-subtask-length-only.PROJ-222.task.md"
+      }
+    ]
+  },
+  {
+    "id": "negative-quantity-ui-only",
+    "checks": "Calls the server-side rule and its message missing when the PR only adds min=\"1\" to the input",
+    "pr": {
+      "number": 326,
+      "title": "Reject negative quantities",
+      "body": "Closes PROJ-223.",
+      "headRef": "feat/PROJ-223-quantity"
+    },
+    "ticket": {
+      "key": "PROJ-223",
+      "task": "negative-quantity-ui-only.task.md"
+    },
+    "diff": "negative-quantity-ui-only.diff",
+    "gold": [
+      {
+        "match": "rejected|below 1|at least 1|quantity",
+        "accept": [
+          "missing",
+          "partial"
+        ]
+      },
+      {
+        "match": "never be negative|total",
+        "accept": [
+          "missing",
+          "partial"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "appointment-dto-outside-diff",
+    "checks": "Calls both fields met: the DTO the new route returns already has them",
+    "pr": {
+      "number": 327,
+      "title": "Appointment details endpoint",
+      "body": "Closes PROJ-224.",
+      "headRef": "feat/PROJ-224-appointment-detail"
+    },
+    "ticket": {
+      "key": "PROJ-224",
+      "task": "appointment-dto-outside-diff.task.md",
+      "parent": "PROJ-225"
+    },
+    "diff": "appointment-dto-outside-diff.diff",
+    "gold": [
+      {
+        "match": "doctor",
+        "accept": [
+          "met"
+        ]
+      },
+      {
+        "match": "address",
+        "accept": [
+          "met"
+        ]
+      }
+    ],
+    "related": [
+      {
+        "key": "PROJ-225",
+        "task": "appointment-dto-outside-diff.PROJ-225.task.md"
+      }
+    ],
+    "repoFiles": {
+      "src/api/appointments/appointment.dto.ts": "appointment-dto-outside-diff.repo0.txt"
+    }
+  },
+  {
+    "id": "appointment-dto-outside-diff-no-address",
+    "checks": "Calls the address missing when the DTO has only the doctor (control for appointment-dto-outside-diff)",
+    "pr": {
+      "number": 328,
+      "title": "Appointment details endpoint",
+      "body": "Closes PROJ-224.",
+      "headRef": "feat/PROJ-224-appointment-detail"
+    },
+    "ticket": {
+      "key": "PROJ-224",
+      "task": "appointment-dto-outside-diff-no-address.task.md",
+      "parent": "PROJ-225"
+    },
+    "diff": "appointment-dto-outside-diff-no-address.diff",
+    "gold": [
+      {
+        "match": "doctor",
+        "accept": [
+          "met"
+        ]
+      },
+      {
+        "match": "address",
+        "accept": [
+          "missing",
+          "partial"
+        ]
+      }
+    ],
+    "related": [
+      {
+        "key": "PROJ-225",
+        "task": "appointment-dto-outside-diff-no-address.PROJ-225.task.md"
+      }
+    ],
+    "repoFiles": {
+      "src/api/appointments/appointment.dto.ts": "appointment-dto-outside-diff-no-address.repo0.txt"
+    }
+  }
+]

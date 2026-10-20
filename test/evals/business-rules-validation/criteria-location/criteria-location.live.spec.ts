@@ -11,7 +11,7 @@
  *   RUN_BR_EVAL=1 API_NODE_ENV=test npx jest --no-coverage \
  *     test/evals/business-rules-validation/criteria-location
  *
- * Writes the per-variant report to BR_EVAL_REPORT (default: the system temp dir).
+ * Writes the per-variant report into BR_EVAL_REPORT_DIR (default: the system temp dir).
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -377,8 +377,10 @@ describe('every variant hands the judge its criteria', () => {
             }
 
             const out =
-                process.env.BR_EVAL_REPORT ??
-                path.join(os.tmpdir(), 'business-rules-criteria-location.json');
+                path.join(
+                    process.env.BR_EVAL_REPORT_DIR ?? os.tmpdir(),
+                    'business-rules-criteria-location.json',
+                );
             fs.writeFileSync(out, JSON.stringify(report, null, 2));
             for (const r of report) {
                 console.log(

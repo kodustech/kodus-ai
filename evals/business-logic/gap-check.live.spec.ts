@@ -195,8 +195,10 @@ function readerOf(files: Record<string, string>): RepositoryReader {
                 report.push({ case: c.name, state, result, ok });
             }
             const out =
-                process.env.BR_EVAL_REPORT ??
-                path.join(os.tmpdir(), 'business-rules-gap-check.json');
+                path.join(
+                    process.env.BR_EVAL_REPORT_DIR ?? os.tmpdir(),
+                    'business-rules-gap-check.json',
+                );
             fs.writeFileSync(
                 out,
                 JSON.stringify({ right, total: CASES.length, report }, null, 2),

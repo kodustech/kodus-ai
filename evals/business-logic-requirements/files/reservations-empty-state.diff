@@ -1,0 +1,15 @@
+diff --git a/src/reservations/ReservationsPage.tsx b/src/reservations/ReservationsPage.tsx
+--- a/src/reservations/ReservationsPage.tsx
++++ b/src/reservations/ReservationsPage.tsx
+@@ -1,11 +1,11 @@
+ export function ReservationsPage({ reservations }: Props) {
++  if (reservations.length === 0) {
++    return (
++      <EmptyState illustration="shelf">
++        <p>You have no reservations yet</p>
++        <Link to="/catalog"><Button>Browse catalog</Button></Link>
++      </EmptyState>
++    );
++  }
+   return <ReservationList items={reservations} />;
+ }

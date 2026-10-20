@@ -24,7 +24,7 @@ import { SkillLoaderService } from '@libs/agents/skills/skill-loader.service';
  *   RUN_BR_EVAL=1 API_NODE_ENV=test npx jest --no-coverage \
  *     evals/business-logic/requirement-accuracy.live.spec.ts
  *
- * Writes the per-case report to BR_EVAL_REPORT (default: the system temp dir).
+ * Writes the per-case report into BR_EVAL_REPORT_DIR (default: the system temp dir).
  */
 const RUN = process.env.RUN_BR_EVAL === '1';
 /** The share of requirements the judge must get right across all cases. */
@@ -386,9 +386,8 @@ function score(c: Case, result: ValidationResult) {
 
             const accuracy = right / total;
             const out =
-                process.env.BR_EVAL_REPORT ??
                 path.join(
-                    os.tmpdir(),
+                    process.env.BR_EVAL_REPORT_DIR ?? os.tmpdir(),
                     'business-rules-requirement-accuracy.json',
                 );
             fs.writeFileSync(

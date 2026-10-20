@@ -1,0 +1,10 @@
+diff --git a/src/header/BranchPicker.tsx b/src/header/BranchPicker.tsx
+--- a/src/header/BranchPicker.tsx
++++ b/src/header/BranchPicker.tsx
+@@ -1,6 +1,6 @@
+ export function BranchPicker({ branches, api }: Props) {
+   const onPick = async (branchId: string) => {
+     setBranch(branchId);
++    await api.patch('/me/preferences', { defaultBranchId: branchId });
+   };
+ }

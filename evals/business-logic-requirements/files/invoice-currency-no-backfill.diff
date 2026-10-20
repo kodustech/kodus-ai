@@ -1,0 +1,18 @@
+diff --git a/migrations/1730000000000-invoice-currency.ts b/migrations/1730000000000-invoice-currency.ts
+new file mode 100644
+--- /dev/null
++++ b/migrations/1730000000000-invoice-currency.ts
+@@ -0,0 +1,5 @@
++export class InvoiceCurrency1730000000000 {
+  async up(q: QueryRunner) {
+    await q.query('ALTER TABLE invoices ADD COLUMN currency char(3)');
+  }
++}
+diff --git a/src/invoices/invoice.entity.ts b/src/invoices/invoice.entity.ts
+--- a/src/invoices/invoice.entity.ts
++++ b/src/invoices/invoice.entity.ts
+@@ -1,4 +1,4 @@
+ export class Invoice {
+   total: number;
++  currency: string; // ISO 4217
+ }

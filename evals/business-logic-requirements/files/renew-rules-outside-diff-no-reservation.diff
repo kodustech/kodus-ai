@@ -1,0 +1,14 @@
+diff --git a/src/loans/renew.ts b/src/loans/renew.ts
+new file mode 100644
+--- /dev/null
++++ b/src/loans/renew.ts
+@@ -0,0 +1,9 @@
++import { db } from '../db';
++import { assertRenewable } from './loanRules';
++export async function renewLoan(loanId: string) {
+  const loan = await db.loans.get(loanId);
+  if (loan.renewals >= 1) throw new Error('This loan was already renewed');
+  await assertRenewable(loan);
+  const dueDate = new Date(loan.dueDate.getTime() + 14 * 86_400_000);
+  return db.loans.update(loanId, { dueDate, renewals: loan.renewals + 1 });
++}
