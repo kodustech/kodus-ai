@@ -745,9 +745,18 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
      * Rule metadata (title, status, zero-trigger rules) lives in Mongo;
      * `GetKodyRulesHealthUseCase` does the merge.
      */
-    async getKodyRulesUsage(q: CockpitRangeQuery): Promise<KodyRuleUsageRow[]> {
+    async getKodyRulesUsage(
+        q: CockpitRangeQuery,
+        opts: { suggestionsCreatedSince?: string } = {},
+    ): Promise<KodyRuleUsageRow[]> {
         const params: unknown[] = [];
         const scope = this.closedPrScope(q, params);
+        // The auto-pause cron judges a resumed rule only on what it flagged
+        // after the resume, not on older suggestions of PRs closed since.
+        const createdSince = opts.suggestionsCreatedSince
+            ? (params.push(opts.suggestionsCreatedSince),
+              `AND s."suggestionCreatedAt" >= $${params.length}::timestamptz`)
+            : '';
 
         const rows = (await this.ds.query(
             `WITH scoped AS (
@@ -757,6 +766,7 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
                        s."brokenKodyRulesIds"
                 ${scope}
                     AND s."brokenKodyRulesIds" IS NOT NULL
+                    ${createdSince}
             )
             SELECT
                 rule_id,

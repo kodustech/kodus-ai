@@ -703,6 +703,8 @@ export type CodeReviewConfig = {
     kodusConfigFileOverridesWebPreferences: boolean;
     isRequestChangesActive?: boolean;
     kodyRulesGeneratorEnabled?: boolean;
+    // Pause rules Cockpit labels ignored or noisy (daily analytics cron).
+    kodyRulesAutoPauseEnabled?: boolean;
     // Provider-native user ids whose review comments are EXCLUDED when learning
     // Kody Rules from past reviews. Denylist: empty/absent = learn from everyone.
     kodyLearningExcludedReviewers?: string[];

@@ -759,7 +759,14 @@ export class KodyRulesService implements IKodyRulesService {
         // pausing and creating new rules — if the org is still over quota,
         // the rule stays PAUSED (lockedByPlan) instead of reactivating.
         let statusOverride: Partial<
-            Pick<IKodyRule, 'status' | 'lockedByPlan'>
+            Pick<
+                IKodyRule,
+                | 'status'
+                | 'lockedByPlan'
+                | 'autoPause'
+                | 'lastAutoPause'
+                | 'resumedAt'
+            >
         > = {};
 
         if (
@@ -769,11 +776,18 @@ export class KodyRulesService implements IKodyRulesService {
             const activeRulesCount = (existing.rules ?? []).filter(
                 (r) => r.status === KodyRulesStatus.ACTIVE,
             ).length;
-            statusOverride = await this.resolveStatusWithinPlanLimit(
-                organizationAndTeamData,
-                KodyRulesStatus.ACTIVE,
-                activeRulesCount + 1,
-            );
+            statusOverride = {
+                ...(await this.resolveStatusWithinPlanLimit(
+                    organizationAndTeamData,
+                    KodyRulesStatus.ACTIVE,
+                    activeRulesCount + 1,
+                )),
+                resumedAt: new Date(),
+                // `null`, not delete: updateRule only $sets defined fields.
+                autoPause: null,
+                lastAutoPause:
+                    existingRule.autoPause ?? existingRule.lastAutoPause,
+            };
         } else if (
             kodyRule.status !== undefined &&
             kodyRule.status !== KodyRulesStatus.ACTIVE

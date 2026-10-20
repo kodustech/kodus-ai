@@ -1,3 +1,5 @@
+import { renderToStaticMarkup } from 'react-dom/server';
+
 import { NotificationEvent } from '../../../domain/catalog/events';
 import {
     EMAIL_TEMPLATE_REGISTRY,
@@ -135,6 +137,41 @@ describe('EMAIL_TEMPLATE_REGISTRY', () => {
             organizationName: 'Acme',
             changedBy: 'jane@acme.com',
         },
+        [NotificationEvent.KODY_RULES_AUTO_PAUSE_DIGEST]: {
+            periodStart: '2026-10-13T09:00:00Z',
+            periodEnd: '2026-10-20T09:00:00Z',
+            rules: [
+                {
+                    ruleId: 'r-1',
+                    title: 'No console.log',
+                    repositoryId: 'repo-1',
+                    repositoryName: 'acme/api',
+                    state: 'ignored',
+                    triggers: 14,
+                    implemented: 2,
+                    rate: 0.14,
+                    thumbsUp: 0,
+                    thumbsDown: 0,
+                    windowDays: 30,
+                    pausedAt: '2026-10-15T06:00:00Z',
+                    resumed: false,
+                },
+                {
+                    ruleId: 'r-2',
+                    title: 'Use logger',
+                    repositoryId: null,
+                    state: 'noisy',
+                    triggers: 20,
+                    implemented: 10,
+                    rate: 0.5,
+                    thumbsUp: 1,
+                    thumbsDown: 5,
+                    windowDays: 30,
+                    pausedAt: '2026-10-16T06:00:00Z',
+                    resumed: true,
+                },
+            ],
+        },
     };
 
     it.each(Object.keys(EMAIL_PAYLOADS) as NotificationEvent[])(
@@ -168,6 +205,34 @@ describe('EMAIL_TEMPLATE_REGISTRY', () => {
                 NotificationEvent.ORG_MEMBER_REMOVED
             ]!(EMAIL_PAYLOADS[NotificationEvent.ORG_MEMBER_REMOVED]!, CTX);
             expect(result.subject).toContain('Acme');
+        });
+    });
+    describe('KODY_RULES_AUTO_PAUSE_DIGEST', () => {
+        const payload = () =>
+            EMAIL_PAYLOADS[NotificationEvent.KODY_RULES_AUTO_PAUSE_DIGEST]!;
+
+        it('counts the rules in the subject', () => {
+            const result = EMAIL_TEMPLATE_REGISTRY[
+                NotificationEvent.KODY_RULES_AUTO_PAUSE_DIGEST
+            ]!(payload(), CTX);
+            expect(result.subject).toBe('2 Kody rules were paused this week');
+        });
+
+        it('links each rule, explains it, and marks the ones already resumed', () => {
+            const result = EMAIL_TEMPLATE_REGISTRY[
+                NotificationEvent.KODY_RULES_AUTO_PAUSE_DIGEST
+            ]!(payload(), CTX);
+            const html = renderToStaticMarkup(result.react);
+
+            expect(html).toContain(
+                'https://app.example.com/settings/code-review/repo-1/kody-rules?rule=r-1',
+            );
+            expect(html).toContain(
+                'https://app.example.com/settings/code-review/global/kody-rules?rule=r-2',
+            );
+            expect(html).toContain('acme/api');
+            expect(html).toContain('2 of 14 suggestions implemented');
+            expect(html).toContain('Already resumed');
         });
     });
 });

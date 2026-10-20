@@ -207,6 +207,8 @@
 | `API_CRON_CHECK_IF_PR_SHOULD_BE_APPROVED` | – | cron | ⚙️ Both | Every 2 minutes. |
 | `API_CRON_ORG_REPORT` | – | cron | ⚙️ Both | 1st of each month at 09:00 UTC — org review report email. |
 | `API_CRON_REPO_REPORT` | – | cron | ⚙️ Both | 1st & 16th at 09:00 UTC — per-repo review digest email (biweekly). |
+| `API_CRON_KODY_RULES_AUTO_PAUSE` | – | cron | ⚙️ Both | Daily at 06:00 UTC — pauses ignored and noisy Kody Rules where the setting is on. |
+| `API_CRON_KODY_RULES_AUTO_PAUSE_DIGEST` | – | cron | ⚙️ Both | Mondays at 09:00 UTC — weekly email of auto-paused Kody Rules. |
 | `API_CRON_SPEND_LIMIT_ALERT` | – | cron | ⚙️ Both | Every hour |
 
 ## Email (Resend — https://resend.com / SMTP)

@@ -1,5 +1,10 @@
 import { APP_LINKS, rulesPageLink } from '../../../domain/catalog/app-links';
 import { NotificationEvent } from '../../../domain/catalog/events';
+import {
+    autoPausedRuleLink,
+    describeAutoPauseReason,
+    normaliseAutoPauseEntries,
+} from '../../../domain/catalog/kody-rule-auto-pause';
 
 /**
  * What the in-app channel needs at delivery time. Both fields are
@@ -211,6 +216,37 @@ export const IN_APP_TEMPLATE_REGISTRY: Partial<
                 repositoryId,
                 ruleId: issues.length === 1 ? issues[0]?.ruleId : undefined,
             }),
+        };
+    },
+
+    [NotificationEvent.KODY_RULES_AUTO_PAUSED]: (m) => {
+        const rules = normaliseAutoPauseEntries(m.rules);
+        if (rules.length === 1) {
+            const [rule] = rules;
+            return {
+                title: `Kody rule paused: ${rule.title}`,
+                body: `${describeAutoPauseReason(rule)} It is skipped on new reviews until you resume it.`,
+                ctaUrl: autoPausedRuleLink(rule),
+            };
+        }
+        return {
+            title: `${rules.length} Kody rules paused`,
+            body: `These rules were paused because they are ignored or downvoted: ${rules
+                .map((rule) => rule.title)
+                .join(
+                    ', ',
+                )}. They are skipped on new reviews until you resume them.`,
+            ctaUrl: rulesPageLink(),
+        };
+    },
+
+    // Email-only by default; the in-app copy exists for orgs that route it.
+    [NotificationEvent.KODY_RULES_AUTO_PAUSE_DIGEST]: (m) => {
+        const count = normaliseAutoPauseEntries(m.rules).length;
+        return {
+            title: 'Weekly digest of paused Kody rules',
+            body: `${count} ${count === 1 ? 'rule was' : 'rules were'} paused automatically this week.`,
+            ctaUrl: rulesPageLink(),
         };
     },
 };

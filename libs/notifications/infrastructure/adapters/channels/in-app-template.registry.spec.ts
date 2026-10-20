@@ -83,6 +83,28 @@ describe('IN_APP_TEMPLATE_REGISTRY', () => {
                 },
             ],
         },
+        [NotificationEvent.KODY_RULES_AUTO_PAUSED]: {
+            rules: [
+                {
+                    ruleId: 'r-1',
+                    title: 'No console.log',
+                    repositoryId: 'repo-1',
+                    state: 'ignored',
+                    triggers: 14,
+                    implemented: 2,
+                    rate: 0.14,
+                    thumbsUp: 0,
+                    thumbsDown: 0,
+                    windowDays: 30,
+                    pausedAt: '2026-10-20T06:00:00Z',
+                },
+            ],
+        },
+        [NotificationEvent.KODY_RULES_AUTO_PAUSE_DIGEST]: {
+            rules: [],
+            periodStart: '2026-10-13T09:00:00Z',
+            periodEnd: '2026-10-20T09:00:00Z',
+        },
     };
 
     // #1871: "Latest error: Provider returned error" told the owner nothing.
@@ -155,6 +177,58 @@ describe('IN_APP_TEMPLATE_REGISTRY', () => {
                 organizationName: 'Acme',
             });
             expect(result.body).toContain('x@y.com');
+        });
+    });
+    describe('kody_rules.auto_paused', () => {
+        const entry = (over: Record<string, unknown> = {}) => ({
+            ruleId: 'r-1',
+            title: 'No console.log',
+            repositoryId: 'repo-1',
+            directoryId: null,
+            state: 'ignored',
+            triggers: 14,
+            implemented: 2,
+            rate: 0.14,
+            thumbsUp: 0,
+            thumbsDown: 0,
+            windowDays: 30,
+            pausedAt: '2026-10-20T06:00:00Z',
+            ...over,
+        });
+        const build = (rules: unknown[]) =>
+            IN_APP_TEMPLATE_REGISTRY[NotificationEvent.KODY_RULES_AUTO_PAUSED]!({
+                rules,
+            });
+
+        it('one rule: names it, says why, and opens it', () => {
+            const result = build([entry()]);
+            expect(result.title).toBe('Kody rule paused: No console.log');
+            expect(result.body).toContain(
+                '2 of 14 suggestions implemented in the last 30 days',
+            );
+            expect(result.ctaUrl).toBe(
+                '/settings/code-review/repo-1/kody-rules?rule=r-1',
+            );
+        });
+
+        it('a noisy rule is explained by its downvotes', () => {
+            const result = build([
+                entry({ state: 'noisy', thumbsDown: 5, thumbsUp: 1, triggers: 20 }),
+            ]);
+            expect(result.body).toContain(
+                '5 👎 and 1 👍 on 20 suggestions in the last 30 days',
+            );
+        });
+
+        it('several rules: counts and lists them, and lands on the global rules page', () => {
+            const result = build([
+                entry(),
+                entry({ ruleId: 'r-2', title: 'Use logger', repositoryId: 'repo-2' }),
+            ]);
+            expect(result.title).toBe('2 Kody rules paused');
+            expect(result.body).toContain('No console.log');
+            expect(result.body).toContain('Use logger');
+            expect(result.ctaUrl).toBe('/settings/code-review/global/kody-rules');
         });
     });
 });

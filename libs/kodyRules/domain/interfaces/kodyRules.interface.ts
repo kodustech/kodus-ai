@@ -64,6 +64,24 @@ export interface IKodyRuleIndexEntry {
     status: KodyRulesStatus;
 }
 
+export type KodyRuleAutoPauseState = 'ignored' | 'noisy';
+
+export interface IKodyRuleAutoPause {
+    state: KodyRuleAutoPauseState;
+    pausedAt: Date;
+    /** Usage window the decision was taken on. */
+    windowStart: Date;
+    windowEnd: Date;
+    triggers: number;
+    implemented: number;
+    /** implemented / triggers, 0..1. */
+    rate: number;
+    thumbsUp: number;
+    thumbsDown: number;
+    /** When the weekly digest listed this pause; `null` until then. */
+    digestedAt: Date | null;
+}
+
 export interface IKodyRule {
     uuid?: string;
     title: string;
@@ -204,6 +222,20 @@ export interface IKodyRule {
      * is false (i.e., the org is on a paid plan). See #1626.
      */
     lockedByPlan?: boolean;
+    /**
+     * Set when the rule-health cron paused this rule because Cockpit labelled
+     * it ignored or noisy (`kodyRulesAutoPauseEnabled`). Carries the numbers
+     * shown to admins as the reason. Cleared (`null`) on resume, when it moves
+     * to `lastAutoPause` so the weekly digest can still list it.
+     */
+    autoPause?: IKodyRuleAutoPause | null;
+    lastAutoPause?: IKodyRuleAutoPause | null;
+    /**
+     * Last transition into ACTIVE from any other status. The auto-pause cron
+     * only judges usage after it, so a resumed rule isn't re-paused on the
+     * same history that paused it.
+     */
+    resumedAt?: Date | null;
 }
 
 export interface IKodyRuleCentralizedConfig {

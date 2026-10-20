@@ -1169,6 +1169,7 @@ summary:
 # kody rules
 ideRulesSyncEnabled: false
 kodyRulesGeneratorEnabled: true
+kodyRulesAutoPauseEnabled: false
 kodyLearningExcludedReviewers: []
 kodyKnowledgeApproval:
     enabled: false
