@@ -1,0 +1,304 @@
+{
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "V2",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: readInteger passes readLength -1 into read(), new byte[-1] throws NegativeArraySizeException on malformed DER."
+  },
+  {
+   "id": "V4",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-01",
+   "newGroup": null,
+   "reason": "Restates the readInteger indefinite-length -1 unchecked exception claim."
+  }
+ ],
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Ignored record.save result in BlockedEmail stat update; no rejected issue covers it."
+  }
+ ],
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": [
+  {
+   "id": "V1",
+   "match": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Same claim: RECREATE_UPGRADE_EXIT_CODE changed 4->3 and 4 reused for feature disabled, breaking consumers."
+  }
+ ],
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": [
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Working-hours check compares UTC slot against host-local working hours; the rejected issues concern date overrides/timezones, not this check."
+  }
+ ],
+ "advanced-query-processing-architecture-grafana-codex": [
+  {
+   "id": "V2",
+   "match": "advanced-query-processing-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Same claim: interpolating before the splitting guard substitutes $__range so range queries get wrongly split."
+  }
+ ],
+ "advanced-sql-analytics-framework-grafana-codex": [
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "magic-hello-world.ts test event lacks message so handler prints undefined; unrelated to SQL-expression issues."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Asks to validate the incoming event before reading event.message (input validation), a different concern from the missing test payload."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Regression test for the same undefined-message output as V2."
+  }
+ ],
+ "authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "authzservice-improve-authz-caching-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Same claim: List serves stale cached permissions on cache hit without refreshing."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Denial-cache key omits identity type so anonymous and render UserUID 0 collide; no rejected issue covers the key collision."
+  }
+ ],
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+  {
+   "id": "V3",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#12",
+   "newGroup": null,
+   "reason": "Same claim: immediateDelete branch cancels SendGrid but leaves the WorkflowReminder row orphaned."
+  }
+ ],
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": [
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Upsampling decision read from request.GET query instead of the derived executed query; not among rejected issues."
+  }
+ ],
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": [
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "NoMethodError when TopicUser notification_level is NULL in unsubscribe; not among rejected issues."
+  }
+ ],
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "V2",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#04",
+   "newGroup": null,
+   "reason": "Same claim: raw recovery codes serialized and persisted in plaintext in user storage."
+  }
+ ],
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "id": "V3",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#02",
+   "newGroup": null,
+   "reason": "Same defect and cause: unguarded self-ZUNIONSTORE when set_span_id equals span_id; only the stated consequence differs."
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "V1",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02",
+   "newGroup": null,
+   "reason": "Same claim: ClientRemovedEvent listener calls ClientPermissionsV2.setPermissionsEnabled which throws when V1 and V2 both enabled."
+  }
+ ],
+ "add-guest-management-functionality-to-existing-bookings-cal-com": [
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Per-attendee getTranslation without locale caching (performance); not among rejected issues."
+  }
+ ],
+ "anonymous-add-configurable-device-limit-grafana-codex": [
+  {
+   "id": "V4",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: ProvideAnonDBStore int64 param still registered in wire.go, breaking wire generation."
+  }
+ ],
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Same claim: spec expects TopicRetriever but controller only enqueues a job."
+  },
+  {
+   "id": "V2",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#23",
+   "newGroup": null,
+   "reason": "Same claim: `<%- end if %>` in best.html.erb is invalid / mis-binds the following expression."
+  },
+  {
+   "id": "V6",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#25",
+   "newGroup": null,
+   "reason": "Same claim: request.referer interpolated into an inline JS string can break out via a quote."
+  },
+  {
+   "id": "V7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Blocking ADD COLUMN with default on posts table; issue 28 is about the default value semantics, not table locking."
+  }
+ ],
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Missing ::int[] cast on = ANY(array) parameters; kimi-02 is about empty arrays, a different cause."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Refers to the same = ANY(array) interpolation finding as V1."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Test assertions depend on unordered DB results; no rejected issue covers ordering."
+  }
+ ],
+ "feature-automatically-downsize-large-images-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Asks for a regression test of a login brute-force bypass in password_concern; unrelated to the image issues."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Possible NoMethodError if find_user_by_password_algorithm is not mixed in."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Duplicated user-lookup hash refactor."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "find_by lookup precedence with both email and username."
+  },
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N5",
+   "reason": "find_user_by_password_algorithm raising on malformed stored algorithm yields 500; different cause from V2."
+  }
+ ],
+ "feature-localization-fallbacks-server-side-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Same claim: nil default_locale makes FallbackLocaleList#[] raise NoMethodError."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Override never raises InvalidLocale/Disabled for nil/false locale; not among rejected issues."
+  }
+ ],
+ "fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Same claim: routes supply :id while actions require :group_id, so ParameterMissing."
+  }
+ ],
+ "fixing-re-authentication-with-passkeys-keycloak": [
+  {
+   "id": "V1",
+   "match": "fixing-re-authentication-with-passkeys-keycloak#02",
+   "newGroup": null,
+   "reason": "Same claim: configuredFor now true for passkey-only users, changing behavior for normal logins."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Brute-force lockout challenge path now renders passkey UI allowing login bypass; no rejected issue covers it."
+  }
+ ],
+ "frontend-asset-optimization-grafana-codex": [
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Placeholder comment with no content; matches no rejected claim."
+  }
+ ],
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Same claim: box-ordinal-group off by one versus order."
+  }
+ ],
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Same claim: ContextualLoggerMiddleware panics on nil request without guard."
+  },
+  {
+   "id": "V2",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Same claim: metrics middleware factory mutates shared instance next field, data race."
+  }
+ ],
+ "replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "V2",
+   "match": "replays-self-serve-bulk-delete-system-sentry#15",
+   "newGroup": null,
+   "reason": "Same claim: consumers such as ExploreParams still read yAxes after Visualize switched to yAxis."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Serialized BaseVisualize keeps yAxes while isVisualize/readers expect yAxis on round-trip; different cause from issue 15/16."
+  }
+ ]
+}

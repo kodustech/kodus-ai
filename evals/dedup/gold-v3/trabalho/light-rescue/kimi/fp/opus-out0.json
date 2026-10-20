@@ -1,0 +1,406 @@
+{
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+    {
+      "id": "V1",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Length validated against total limit rather than remaining bytes; rejected issues only cover indefinite-length -1 handling."
+    }
+  ],
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+    {
+      "id": "V2",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Ignored save return value in should_block?; rejected #06 is about nil vs false return, a different problem."
+    }
+  ],
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": [
+    {
+      "id": "V2",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "canMapRoles dropping the user-level canManage short-circuit is not among the rejected claims."
+    },
+    {
+      "id": "V3",
+      "match": "new",
+      "newGroup": "N2",
+      "reason": "canManageGroupMembership dropping the user-level canManage short-circuit; different method than V2, not among rejected claims."
+    },
+    {
+      "id": "V4",
+      "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#05",
+      "newGroup": null,
+      "reason": "Same claim: searchForUser removed the usersEvaluator::canView filter, letting callers see unauthorized users."
+    },
+    {
+      "id": "V5",
+      "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#05",
+      "newGroup": null,
+      "reason": "Same claim (searchForUser no longer filters with canView) in the brute-force copy of searchForUser."
+    },
+    {
+      "id": "V7",
+      "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#08",
+      "newGroup": null,
+      "reason": "Same claim: getGroupIdsWithViewPermission evaluates permissions per group resource on every search."
+    }
+  ],
+  "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": [
+    {
+      "id": "V1",
+      "match": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#02",
+      "newGroup": null,
+      "reason": "Same claim: recreate exit code moved 4->3 and 4 reused for feature disabled, breaking contract."
+    }
+  ],
+  "advanced-sql-analytics-framework-grafana-codex": [
+    {
+      "id": "V2",
+      "match": "advanced-sql-analytics-framework-grafana-codex#prod-01",
+      "newGroup": null,
+      "reason": "Same claim: the SQL enablement gate is bypassed by the buildCMDNode/UnmarshalSQLCommand path in nodes.go."
+    }
+  ],
+  "authzservice-improve-authz-caching-grafana-codex": [
+    {
+      "id": "V1",
+      "match": "authzservice-improve-authz-caching-grafana-codex#kimi-01",
+      "newGroup": null,
+      "reason": "Same claim: permissionCacheUsage reports cache_hit=false for a cached-but-denied permission."
+    },
+    {
+      "id": "V2",
+      "match": "authzservice-improve-authz-caching-grafana-codex#oph-01",
+      "newGroup": null,
+      "reason": "Same claim: denial cache is checked first and never invalidated, so new grants are denied for the TTL."
+    },
+    {
+      "id": "V3",
+      "match": "authzservice-improve-authz-caching-grafana-codex#kimi-01",
+      "newGroup": null,
+      "reason": "Same claim: metric conflates a true cache miss with a cache hit that denies."
+    }
+  ],
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+    {
+      "id": "V2",
+      "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#sncc-01",
+      "newGroup": null,
+      "reason": "Same claim: immediateDelete=true cancels SendGrid but leaves the WorkflowReminder row orphaned."
+    },
+    {
+      "id": "V3",
+      "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#pf-ds-C2",
+      "newGroup": null,
+      "reason": "Same claim: cancelled-reminders query lacks referenceId/method filters, sending missing batch_id to SendGrid."
+    },
+    {
+      "id": "V4",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Unbounded concurrent fan-out of delete calls in workflows.tsx is not among rejected claims."
+    },
+    {
+      "id": "V11",
+      "match": "new",
+      "newGroup": "N2",
+      "reason": "Missing index on cancelled/scheduledDate for the cron query is a new claim."
+    }
+  ],
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": [
+    {
+      "id": "V3",
+      "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-03",
+      "newGroup": null,
+      "reason": "Same check: the prev-cursor trimming compares against the raw (negative) offset instead of the clamped start offset, mis-trimming results."
+    },
+    {
+      "id": "V4",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Expensive DB scan via large negative offsets (DoS) is a different problem from the rejected trimming/attribute claims."
+    }
+  ],
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+    {
+      "id": "V3",
+      "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#kimip-01",
+      "newGroup": null,
+      "reason": "Same claim: deleteCache restricts credential lookup to userId, rejecting team/delegated credentials."
+    }
+  ],
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+    {
+      "id": "V2",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Decoder failure with non-BrokerValue stalling partition commits is not among rejected claims."
+    },
+    {
+      "id": "V3",
+      "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#prod-01",
+      "newGroup": null,
+      "reason": "Same claim: committable-offset loop scans the whole range start..max_offset, costly on large gaps."
+    },
+    {
+      "id": "V4",
+      "match": "new",
+      "newGroup": "N2",
+      "reason": "Per-message metrics.gauge on the worker hot path is a new claim."
+    },
+    {
+      "id": "V7",
+      "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#prod-01",
+      "newGroup": null,
+      "reason": "Same claim: linear scan over the offset window per commit cycle."
+    },
+    {
+      "id": "V8",
+      "match": "new",
+      "newGroup": "N2",
+      "reason": "Same as V4: per-message metrics.gauge in OrderedQueueWorker.run."
+    }
+  ],
+  "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+    {
+      "id": "V1",
+      "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#07",
+      "newGroup": null,
+      "reason": "Same claim: Optional.get() on getCredential(user) without isPresent can throw NoSuchElementException."
+    },
+    {
+      "id": "V2",
+      "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#sncc-01",
+      "newGroup": null,
+      "reason": "Same claim: plaintext recovery codes passed to user storage providers instead of hashed."
+    }
+  ],
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+    {
+      "id": "V1",
+      "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02",
+      "newGroup": null,
+      "reason": "Same claim: ClientRemovedEvent listener calls ClientPermissionsV2.setPermissionsEnabled which throws, breaking client deletion."
+    }
+  ],
+  "add-guest-management-functionality-to-existing-bookings-cal-com": [
+    {
+      "id": "V4",
+      "match": "add-guest-management-functionality-to-existing-bookings-cal-com#kimip-01",
+      "newGroup": null,
+      "reason": "Same claim: email-sending errors are swallowed and success is returned."
+    },
+    {
+      "id": "V6",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "booking.userId || 0 lookup throwing P2025 for null organizer is not among rejected claims."
+    }
+  ],
+  "add-html-sanitizer-for-translated-message-resources-keycloak": [
+    {
+      "id": "V1",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "English-path regex missing digits in locale suffix (e.g. es_419) makes a file compare against itself; rejected #09 is about missing English counterpart aborting, musep-01 about English files."
+    },
+    {
+      "id": "V2",
+      "match": "new",
+      "newGroup": "N2",
+      "reason": "Anchor check does not require English anchors to be preserved (omitted links); rejected #03 is about extra target anchors."
+    },
+    {
+      "id": "V3",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Same as V1: locale regex lacks digits."
+    },
+    {
+      "id": "V4",
+      "match": "new",
+      "newGroup": "N2",
+      "reason": "Same as V2: missing English anchors in target are not detected."
+    }
+  ],
+  "anonymous-add-configurable-device-limit-grafana-codex": [
+    {
+      "id": "V1",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "int64 vs number|undefined frontend contract mismatch for AnonymousDeviceLimit is not among rejected claims."
+    }
+  ],
+  "dual-storage-architecture-grafana-codex": [
+    {
+      "id": "V7",
+      "match": "dual-storage-architecture-grafana-codex#kimi-01",
+      "newGroup": null,
+      "reason": "Same claim: every mode-3 write spawns an unbounded goroutine for the legacy store."
+    }
+  ],
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+    {
+      "id": "V2",
+      "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-01",
+      "newGroup": null,
+      "reason": "Same claim: embed_by_username.downcase without presence check raises NoMethodError."
+    },
+    {
+      "id": "V5",
+      "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-01",
+      "newGroup": null,
+      "reason": "Same claim: <%- end if %> in best.html.erb is invalid and raises a syntax error."
+    },
+    {
+      "id": "V6",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Caching the loading page for a minute is different from opa-03 (staff view publicly cached)."
+    }
+  ],
+  "feat-2fa-backup-codes-cal-com": [
+    {
+      "id": "V5",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Used backup codes nulled rather than removed so MissingBackupCodes never fires; not among rejected claims."
+    }
+  ],
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+    {
+      "id": "V2",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Irreversible migration with raw execute in change is not among rejected claims."
+    },
+    {
+      "id": "V5",
+      "match": "new",
+      "newGroup": "N2",
+      "reason": "Unguarded params[:embeddable_host][:host] raising NoMethodError is a new claim (kimi-03 is about blank? vs nil?)."
+    },
+    {
+      "id": "V10",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Same as V2: irreversible migration."
+    },
+    {
+      "id": "V14",
+      "match": "new",
+      "newGroup": "N2",
+      "reason": "Same as V5: missing nested embeddable_host param raises NoMethodError."
+    }
+  ],
+  "feature-localization-fallbacks-server-side-discourse-cursor": [
+    {
+      "id": "V1",
+      "match": "feature-localization-fallbacks-server-side-discourse-cursor#04",
+      "newGroup": null,
+      "reason": "Same claim: nil default_locale makes FallbackLocaleList#[] raise NoMethodError."
+    },
+    {
+      "id": "V2",
+      "match": "feature-localization-fallbacks-server-side-discourse-cursor#05",
+      "newGroup": null,
+      "reason": "Same claim: every fallback lookup recomputes the chain and reads SiteSetting.default_locale on the hot path."
+    },
+    {
+      "id": "V3",
+      "match": "feature-localization-fallbacks-server-side-discourse-cursor#03",
+      "newGroup": null,
+      "reason": "Same claim: String locale mixed with Symbol entries defeats uniq, causing double lookups/loading."
+    }
+  ],
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+    {
+      "id": "V4",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Raw Prisma credential passed to getCalendar without appName is not among rejected claims."
+    }
+  ],
+  "fix-proper-handling-of-group-memberships-discourse-cursor": [
+    {
+      "id": "V2",
+      "match": "fix-proper-handling-of-group-memberships-discourse-cursor#08",
+      "newGroup": null,
+      "reason": "Same claim: routes supply :id but add_members/remove_member require :group_id, raising ParameterMissing."
+    },
+    {
+      "id": "V5",
+      "match": "fix-proper-handling-of-group-memberships-discourse-cursor#08",
+      "newGroup": null,
+      "reason": "Same claim as V2: params.require(:group_id) vs route :id."
+    }
+  ],
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
+    {
+      "id": "V4",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Clearfix pseudo-elements becoming flex items in .contents is not among rejected claims."
+    }
+  ],
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+    {
+      "id": "V1",
+      "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#04",
+      "newGroup": null,
+      "reason": "Same claim: factory mutates a shared MetricsMiddleware instance next field."
+    },
+    {
+      "id": "V2",
+      "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#muse13-01",
+      "newGroup": null,
+      "reason": "Same claim: MetricsMiddleware dereferences req without nil guard, unlike LoggerMiddleware."
+    },
+    {
+      "id": "V3",
+      "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#kimi-01",
+      "newGroup": null,
+      "reason": "Same claim: plugin registry looked up twice per QueryData/CallResource request."
+    },
+    {
+      "id": "V4",
+      "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#08",
+      "newGroup": null,
+      "reason": "Same claim: checkHistogram carries foundLabels across metrics."
+    },
+    {
+      "id": "V5",
+      "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#04",
+      "newGroup": null,
+      "reason": "Same claim: closure reuses the same captured instance and overwrites next across chains."
+    },
+    {
+      "id": "V6",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Double lookup yielding inconsistent target labels between size and duration metrics is a different problem from kimi-01 (duplicate lookup cost)."
+    },
+    {
+      "id": "V7",
+      "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#08",
+      "newGroup": null,
+      "reason": "Same claim: foundLabels not reset between metric iterations."
+    }
+  ],
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
+    {
+      "id": "V2",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Killed process not joined, leaking zombies on restart, is not among rejected claims."
+    },
+    {
+      "id": "V3",
+      "match": "new",
+      "newGroup": "N2",
+      "reason": "Unhealthy thread in threading fallback is never stopped before replacement; distinct from V2 and rejected claims."
+    }
+  ]
+}

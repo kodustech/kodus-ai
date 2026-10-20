@@ -1,0 +1,806 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "id": "V1",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05",
+   "newGroup": null,
+   "reason": "Calendar interface requires createEvent(event, credentialId) but other implementations (Office365/Lark) keep the one-arg signature; same contract break as the golden text."
+  },
+  {
+   "id": "V2",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Google updateEvent fallback searches destinationCalendar for externalId equal to the absent externalCalendarId, so it never matches."
+  },
+  {
+   "id": "V3",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#06",
+   "newGroup": null,
+   "reason": "updateAllCalendarEvents passes an undefined credential to updateEvent when the credential lookup fails."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "handleCancelBooking passes a raw Prisma credential without appName to getCalendar; not a golden issue (pf-kimi-C2 is about per-reference query cost)."
+  },
+  {
+   "id": "V5",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Same never-matching externalId fallback in Google updateEvent."
+  },
+  {
+   "id": "V6",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#06",
+   "newGroup": null,
+   "reason": "Same undefined credential passed to updateEvent in updateAllCalendarEvents."
+  },
+  {
+   "id": "V7",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#12",
+   "newGroup": null,
+   "reason": "updateLocation stores externalId/credentialId from updateEvent results that never include them."
+  }
+ ],
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+  {
+   "id": "V1",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "Strategy close/join shuts down the factory-owned shared queue pool, breaking strategies created after rebalance."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims a decoder exception on a non-BrokerValue message leaves its offset uncompleted; no golden issue covers this."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Performance of the linear range scan in get_committable_offsets under the partition lock; #01 is about gaps blocking commits, not scan cost."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Per-message metrics.gauge overhead in the worker hot path; oph-01 is about the gauge's tagging, a different problem."
+  },
+  {
+   "id": "V5",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "newGroup": null,
+   "reason": "Same shared FixedQueuePool shut down by strategy lifecycle methods."
+  },
+  {
+   "id": "V6",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "newGroup": null,
+   "reason": "Unbounded queues and non-blocking submit give no backpressure."
+  },
+  {
+   "id": "V7",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Same linear-scan cost in get_committable_offsets while holding the lock."
+  },
+  {
+   "id": "V8",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Same per-message gauge overhead."
+  }
+ ],
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Migration interpolates legacy host values into the raw INSERT SQL."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Migration with raw execute in change is not reversible; not in golden set."
+  },
+  {
+   "id": "V3",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "update does not handle a missing record from where(id:).first."
+  },
+  {
+   "id": "V4",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "destroy does not handle a missing record from where(id:).first."
+  },
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "save_host reads params[:embeddable_host][:host] without checking the nested key; not in golden set."
+  },
+  {
+   "id": "V6",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "before_validation calls host.sub! on a nil host."
+  },
+  {
+   "id": "V7",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "record_for_host does not downcase the referer host before comparing to lower(host)."
+  },
+  {
+   "id": "V8",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#11",
+   "newGroup": null,
+   "reason": "After save the component sets the category from the local null categoryId instead of the saved uncategorized category."
+  },
+  {
+   "id": "V9",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Same SQL string interpolation in the migration INSERT."
+  },
+  {
+   "id": "V10",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Same irreversible migration claim."
+  },
+  {
+   "id": "V11",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Migration indexes execute(...)[0] without checking for empty results."
+  },
+  {
+   "id": "V12",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "update does not handle a missing record."
+  },
+  {
+   "id": "V13",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "destroy does not handle a missing record."
+  },
+  {
+   "id": "V14",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Same unguarded nested params access in save_host."
+  },
+  {
+   "id": "V15",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Same nil host sub! in before_validation."
+  },
+  {
+   "id": "V16",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Same case-sensitive referer host lookup."
+  },
+  {
+   "id": "V17",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#11",
+   "newGroup": null,
+   "reason": "Same stale categoryId overwriting the persisted category after save."
+  }
+ ],
+ "notification-rule-processing-engine-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "notification-rule-processing-engine-grafana-codex#07",
+   "newGroup": null,
+   "reason": "GrafanaRuleListItem rendered in map without a key prop."
+  },
+  {
+   "id": "V2",
+   "match": "notification-rule-processing-engine-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Pause menu item still gated on a ruler rule, so it disappears in the list view that passes only promRule."
+  },
+  {
+   "id": "V3",
+   "match": "notification-rule-processing-engine-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Delete menu item still requires rulerRule, so list-view rules lose Delete."
+  },
+  {
+   "id": "V4",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "Silence drawer gated on a ruler alerting rule never renders for list-view rules passed only promRule."
+  },
+  {
+   "id": "V5",
+   "match": "notification-rule-processing-engine-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Same missing key on GrafanaRuleListItem."
+  },
+  {
+   "id": "V6",
+   "match": "notification-rule-processing-engine-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Same Pause item gated on rulerRule in the list view."
+  },
+  {
+   "id": "V7",
+   "match": "notification-rule-processing-engine-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Same Delete item gated on rulerRule."
+  },
+  {
+   "id": "V8",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "Same Silence drawer never rendering without a ruler rule."
+  }
+ ],
+ "feat-2fa-backup-codes-cal-com": [
+  {
+   "id": "V1",
+   "match": "feat-2fa-backup-codes-cal-com#01",
+   "newGroup": null,
+   "reason": "Password check skipped when any totpCode is present, so backup code plus dummy totpCode bypasses the password."
+  },
+  {
+   "id": "V2",
+   "match": "feat-2fa-backup-codes-cal-com#07",
+   "newGroup": null,
+   "reason": "Non-atomic read-modify-write of backup codes allows reuse under concurrency."
+  },
+  {
+   "id": "V3",
+   "match": "feat-2fa-backup-codes-cal-com#17",
+   "newGroup": null,
+   "reason": "Backup codes compared case-sensitively against lowercase hex."
+  },
+  {
+   "id": "V4",
+   "match": "feat-2fa-backup-codes-cal-com#15",
+   "newGroup": null,
+   "reason": "Backup-codes object URL is not revoked on close/cancel, leaking a blob URL."
+  },
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Consumed codes are nulled instead of removed so MissingBackupCodes never fires; not in golden set."
+  }
+ ],
+ "replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "V1",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "fetch_error_details zips error_ids with get_multi values positionally, so missing/reordered nodes misattribute errors."
+  },
+  {
+   "id": "V2",
+   "match": "replays-self-serve-bulk-delete-system-sentry#01",
+   "newGroup": null,
+   "reason": "Truthy .get() checks in age/timestamp mutual-exclusion validators treat 0 as absent; comment also covers requiring one of them but includes the issue's fix."
+  },
+  {
+   "id": "V3",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "Same positional zip of error_ids with nodestore results."
+  },
+  {
+   "id": "V4",
+   "match": "replays-self-serve-bulk-delete-system-sentry#12",
+   "newGroup": null,
+   "reason": "Feature-flagged TableWidgetVisualization receives hardcoded empty columns and data."
+  }
+ ],
+ "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": ".topic-meta-data h5 a light-theme lightness changed from 30% to 70%."
+  },
+  {
+   "id": "V2",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Mobile .topic-map/a.star h3 light-theme lightness changed from 20% to 50%."
+  },
+  {
+   "id": "V3",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Mobile .custom-message-length light-theme lightness changed from 70% to 30%."
+  },
+  {
+   "id": "V4",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Same 30%->70% change for .topic-meta-data h5 a."
+  },
+  {
+   "id": "V5",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Same 20%->50% change for the mobile topic-map heading."
+  },
+  {
+   "id": "V6",
+   "match": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Same inverted pair for .custom-message-length."
+  }
+ ],
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": [
+  {
+   "id": "V1",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03",
+   "newGroup": null,
+   "reason": "Date-override early return true skips the busy-times check."
+  },
+  {
+   "id": "V2",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "Working-hours end computed from slotStartTime instead of slotEndTime."
+  },
+  {
+   "id": "V3",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#04",
+   "newGroup": null,
+   "reason": "Working-hours check rejects a slot outside any single range, breaking split schedules."
+  },
+  {
+   "id": "V4",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "newGroup": null,
+   "reason": "Zero-length override check compares dayjs objects with ===."
+  },
+  {
+   "id": "V5",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03",
+   "newGroup": null,
+   "reason": "Same early return before the busy check on override days."
+  },
+  {
+   "id": "V6",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "newGroup": null,
+   "reason": "Same end computed from slotStartTime."
+  },
+  {
+   "id": "V7",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#04",
+   "newGroup": null,
+   "reason": "Same rejection of slots outside any one working-hours range."
+  },
+  {
+   "id": "V8",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "newGroup": null,
+   "reason": "Same === comparison of dayjs objects."
+  }
+ ],
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+  {
+   "id": "V1",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+   "newGroup": null,
+   "reason": "Async reminder cancel helpers called without await inside forEach in handleCancelBooking."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "On reschedule, deleteScheduledEmailReminder(...,true) leaves the reminder row neither deleted nor marked; #11 is only about naming."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Cron cancel query lacks method/referenceId filters; not in golden set."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Unbounded concurrent fan-out of reminder cancellations to SendGrid/Twilio; not the missing-await issue."
+  },
+  {
+   "id": "V5",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+   "newGroup": null,
+   "reason": "Same un-awaited reminder cancellation in forEach."
+  },
+  {
+   "id": "V6",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+   "newGroup": null,
+   "reason": "Reschedule path: leftover reminder row plus un-awaited async calls inside forEach/try; includes the missing-await problem of #01."
+  },
+  {
+   "id": "V7",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+   "newGroup": null,
+   "reason": "Un-awaited reminder cancellation in bookings.tsx forEach."
+  },
+  {
+   "id": "V8",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+   "newGroup": null,
+   "reason": "Un-awaited reminder cancellations before deleting the workflow."
+  },
+  {
+   "id": "V9",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+   "newGroup": null,
+   "reason": "Un-awaited forEach(async) reminder cancellation in the workflow edit path."
+  },
+  {
+   "id": "V10",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+   "newGroup": null,
+   "reason": "Single try around the cron cancel loop: one SendGrid failure aborts remaining cancellations."
+  },
+  {
+   "id": "V11",
+   "match": "new",
+   "newGroup": "N4",
+   "reason": "Missing index for the cancelled/scheduledDate cron query; not in golden set."
+  }
+ ],
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": [
+  {
+   "id": "V1",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#06",
+   "newGroup": null,
+   "reason": "get_item_key calls math.floor/ceil on the datetime sort key used by the audit log endpoint."
+  },
+  {
+   "id": "V2",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "BasePaginator passes negative prev-cursor offsets unchanged into queryset slicing."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims the extra-row trimming comparison against a negative offset yields wrong pages; a different claim from #01's slicing error."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Claims negative slicing causes an unbounded expensive scan (DoS); the golden issues are the slicing error and the user-controlled flag, not query cost."
+  },
+  {
+   "id": "V5",
+   "match": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#oph-01",
+   "newGroup": null,
+   "reason": "value_from_cursor returns the raw integer compared against the datetime column."
+  }
+ ],
+ "add-html-sanitizer-for-translated-message-resources-keycloak": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "English-source filename regex lacks digits for locales like es_419; not in golden set."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Anchor check does not require every English anchor to be present in the translation; not in golden set."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Same locale regex missing digits."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Same missing check that all English anchors appear in the target."
+  }
+ ],
+ "anonymous-add-configurable-device-limit-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims AnonymousDeviceLimit int64 vs frontend number|undefined type mismatch; not in golden set."
+  },
+  {
+   "id": "V2",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Non-atomic count-then-insert lets concurrent requests exceed the device limit."
+  },
+  {
+   "id": "V3",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#09",
+   "newGroup": null,
+   "reason": "Device tagging now synchronous in Authenticate, adding DB latency to the auth path."
+  },
+  {
+   "id": "V4",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Same non-atomic count/insert race on the device limit."
+  },
+  {
+   "id": "V5",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#07",
+   "newGroup": null,
+   "reason": "tagDeviceUI caches the device before CreateOrUpdateDevice, so a limit-rejected device passes on the next request."
+  },
+  {
+   "id": "V6",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#09",
+   "newGroup": null,
+   "reason": "Same synchronous device tagging on the auth request path."
+  }
+ ],
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+  {
+   "id": "V1",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+   "newGroup": null,
+   "reason": "updateManyByCredentialId with empty data does not refresh @updatedAt."
+  },
+  {
+   "id": "V2",
+   "match": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+   "newGroup": null,
+   "reason": "Same empty-data update that never refreshes updatedAt."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "deleteCache authorization ignores team-owned credentials; #08 is about the error type, not this."
+  }
+ ],
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "TopicUser.find_by may return nil and is dereferenced without a guard."
+  },
+  {
+   "id": "V2",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Unsubscribe mutates notification level on a GET with no CSRF protection."
+  },
+  {
+   "id": "V3",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Same nil TopicUser dereference in unsubscribe."
+  },
+  {
+   "id": "V4",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Same state-mutating GET unsubscribe without CSRF."
+  }
+ ],
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Optional.get() without isPresent in RecoveryAuthnCodeInputLoginBean; not in golden set."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Raw unhashed recovery codes passed to external user storage; not in golden set."
+  },
+  {
+   "id": "V3",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#01",
+   "newGroup": null,
+   "reason": "Test user storage validates recovery codes without consuming the used code, allowing replay."
+  }
+ ],
+ "database-performance-optimizations-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Leftover cleanup debug logs at Error level on every batch."
+  },
+  {
+   "id": "V2",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Same leftover Error-level debug logging in the cleanup loop."
+  },
+  {
+   "id": "V3",
+   "match": "database-performance-optimizations-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Same leftover Error-level debug logging in the cleanup loop."
+  },
+  {
+   "id": "V4",
+   "match": "database-performance-optimizations-grafana-codex#08",
+   "newGroup": null,
+   "reason": "Cleanup ticker changed from 10 minutes to 1 minute."
+  },
+  {
+   "id": "V5",
+   "match": "database-performance-optimizations-grafana-codex#07",
+   "newGroup": null,
+   "reason": "SQLite inline ID list built with quadratic fmt.Sprintf concatenation."
+  },
+  {
+   "id": "V6",
+   "match": "database-performance-optimizations-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Non-SQLite deleteByIDs binds unbounded placeholders, failing above the DB limit."
+  }
+ ],
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Read-modify-write of match_count/last_match_at in should_block? loses increments under concurrency."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Ignored record.save return value in should_block?; not in golden set."
+  },
+  {
+   "id": "V3",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "BlockedEmail stores and matches emails case-sensitively, allowing bypass by changing case."
+  }
+ ],
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "V1",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Cleanup registered for literal \"alias\" instead of the created IDP aliases."
+  },
+  {
+   "id": "V2",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "newGroup": null,
+   "reason": "Same wrong cleanup alias leaving created IDPs behind."
+  }
+ ],
+ "authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "permissionCacheUsage cache_hit=false also counted for cached-but-denied checks; #05 is about the DB reload, not the metric."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Denial cache is never invalidated on permission change, so stale denials persist up to TTL; not in golden set."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Same misleading cache_hit=false metric for cached denials."
+  }
+ ],
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "align-items mixin emits the nonexistent -ms-align-items property."
+  },
+  {
+   "id": "V2",
+   "match": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#pf-gpt-C1",
+   "newGroup": null,
+   "reason": ".small-action-desc becomes content-sized in the new flex container without flex:1."
+  },
+  {
+   "id": "V3",
+   "match": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Same invalid -ms-align-items property."
+  },
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Clearfix pseudo-elements become flex items in the flex .contents container; not in golden set."
+  }
+ ],
+ "feature-localization-fallbacks-server-side-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims SiteSetting.default_locale can be nil so .to_sym raises in FallbackLocaleList; not in golden set."
+  },
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "FallbackLocaleList#[] recomputes the chain on every lookup (hot-path overhead); #06 is about stale cache keys, a different problem."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "String locale not normalized to symbol, so uniq keeps duplicate locale entries; not in golden set."
+  }
+ ],
+ "advanced-query-processing-architecture-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "advanced-query-processing-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "runSplitQuery re-interpolates targets already interpolated by runShardSplitQuery, duplicating ad hoc filters."
+  },
+  {
+   "id": "V2",
+   "match": "advanced-query-processing-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Same double interpolation of Loki shard/split queries."
+  }
+ ],
+ "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": [
+  {
+   "id": "V1",
+   "match": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02",
+   "newGroup": null,
+   "reason": "get_monitor_environment_context returns the original config instead of the converted copy."
+  },
+  {
+   "id": "V2",
+   "match": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02",
+   "newGroup": null,
+   "reason": "Same discarded schedule_type conversion."
+  }
+ ],
+ "frontend-asset-optimization-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "frontend-asset-optimization-grafana-codex#01",
+   "newGroup": null,
+   "reason": "No re-check of the cache after acquiring the write lock, so concurrent callers reload the manifest."
+  },
+  {
+   "id": "V2",
+   "match": "frontend-asset-optimization-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Same missing second nil check under the write lock."
+  }
+ ]
+}

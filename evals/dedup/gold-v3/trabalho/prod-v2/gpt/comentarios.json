@@ -1,0 +1,1262 @@
+{
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+   "lines": [
+    58,
+    60
+   ],
+   "texto": "The loop accepts an INTEGER that extends past the declared SEQUENCE boundary, so `asn1derToConcatenatedRS` accepts malformed DER such as `30 05 02 01 01 02 01 01` as a valid two-integer signature. Reject a child whose encoded length exceeds the sequence's remaining length before adding it to the result."
+  }
+ ],
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+   "lines": [
+    405,
+    406
+   ],
+   "texto": "When an organization is disabled, `original.isEnabled()` returns false through the organization-aware wrapper, so setting `hideOnLogin` or `linkOnly` makes both predicates false and skips invalidation of a previously populated login list; enabling the organization afterward exposes the hidden or link-only provider because the login bean only rechecks `isEnabled()`. Compare persisted IDP eligibility independently of organization enablement when deciding whether to invalidate the login lists."
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+   "lines": [
+    77,
+    82
+   ],
+   "texto": "A global `VIEW` grant makes `canView(client)` return before evaluating a client-specific deny, and `ClientsResource.getClients` also uses `canView()` to return full representations without individual checks. Separate coarse admin-role visibility from resource-type permission evaluation so client-specific policies still apply to direct reads and listings."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+   "lines": [
+    87,
+    87
+   ],
+   "texto": "An administrator granted only all-clients `MANAGE` fails `canView()`, so inherited `canList()` rejects client listing unless the administrator also has a query role, despite allowing client creation. Include the global manage permission in the visibility/list eligibility calculation while preserving client-specific policy evaluation."
+  }
+ ],
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/models/blocked_email.rb",
+   "lines": [
+    12,
+    12
+   ],
+   "texto": "The exact-match lookup allows a signup using `block@SPAMFROMHOME.ORG` to bypass a block for `block@spamfromhome.org`, because `User.new_from_params` preserves the submitted case even though DNS domain names are case-insensitive. Normalize email domains consistently when storing blocked addresses and when looking them up."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/models/blocked_email.rb",
+   "lines": [
+    14,
+    16
+   ],
+   "texto": "Persisting match statistics during validation counts a single rejected signup twice: `UsersController.create` calls `user.valid?` and then `user.save`, both of which run `EmailValidator`. Record the blocking attempt once at the signup boundary rather than as a side effect of every validation."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/models/blocked_email.rb",
+   "lines": [
+    14,
+    16
+   ],
+   "texto": "Concurrent signup attempts can read the same `match_count` and both save the same incremented value, losing blocked-attempt statistics. Update the counter with an atomic SQL increment and update `last_match_at` in the same statement, or lock and reload the row before modifying it."
+  }
+ ],
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+   "lines": [
+    70,
+    70
+   ],
+   "texto": "An administrator granted only all-groups `view` passes the inherited `requireManage()` check, allowing `GroupsResource.addTopLevelGroup()` to create groups or move existing subgroups to the root. Require only `MANAGE` in the parameterless `canManage()` policy evaluation."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+   "lines": [
+    122,
+    123
+   ],
+   "texto": "`groupResource.getId()` is an authorization-resource ID, whereas `hasPermission()` looks up resources by group ID/name and user search/count consumers require actual group IDs, so this collector evaluates the wrong resource and returns unusable membership filters. Use `groupResource.getName()` for both the permission check and the collected group ID."
+  }
+ ],
+ "add-guest-management-functionality-to-existing-bookings-cal-com": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+   "lines": [
+    46,
+    48
+   ],
+   "texto": "A team administrator who is neither the booking organizer nor an attendee receives `FORBIDDEN` because `isTeamOwner` rejects the ADMIN role even though `isTeamAdmin` accepts it. Use `isTeamAdmin` alone, which already accepts both ADMIN and OWNER memberships."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+   "lines": [
+    74,
+    78
+   ],
+   "texto": "Submitting the same new email twice directly to the mutation creates duplicate attendees because the filter only compares against previously saved attendees and the server schema does not enforce uniqueness. Deduplicate the submitted emails before filtering and inserting them; the dialog's uniqueness validation does not protect API requests."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+   "lines": [
+    77,
+    77
+   ],
+   "texto": "An authorized attendee can bypass `BLACKLISTED_GUEST_EMAILS` by submitting a mixed-case version of a blocked address because only the blacklist entries are lowercased. Normalize the guest email before checking the blacklist."
+  }
+ ],
+ "add-html-sanitizer-for-translated-message-resources-keycloak": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+   "lines": [
+    107,
+    111
+   ],
+   "texto": "The independent suffix scan can overlap the prefix scan: for `abc<script>abc`, sanitization leaves `abc`, so both `start` and `end` become 3 and the diagnostic calls `substring(3, 0)`. Bound the suffix scan by each string's remaining length after `start` so invalid translations return validation messages instead of aborting verification with `StringIndexOutOfBoundsException`."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+   "lines": [
+    71,
+    71
+   ],
+   "texto": "Lithuanian users configuring OTP now receive Italian instructions because `login-config-totp.ftl` directly renders this message. Replace this value and the matching `totpStep1` value in the Lithuanian account bundle with Lithuanian text rather than the copied Italian translation."
+  }
+ ],
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": [],
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/trpc/server/routers/viewer/slots.ts",
+   "lines": [
+    133,
+    135
+   ],
+   "texto": "A slot on an override date returns `true` before `busy.every` runs, so fixed and rotating hosts appear available even when an existing booking or calendar event overlaps that slot. Continue to the busy-time checks after validating the override rather than returning success immediately."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/trpc/server/routers/viewer/slots.ts",
+   "lines": [
+    139,
+    144
+   ],
+   "texto": "With working windows 09:00\u201312:00 and 13:00\u201317:00, a 10:00 slot fails against the afternoon window and a 14:00 slot fails against the morning window, removing valid availability for both fixed and rotating hosts. Require containment in at least one applicable window instead of rejecting when any window excludes the slot."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/trpc/server/routers/viewer/slots.ts",
+   "lines": [
+    117,
+    125
+   ],
+   "texto": "The override check accepts partial overlap, such as a 09:30\u201310:30 slot for a 10:00\u201311:00 override, and rejects a valid slot in one override window when another window on the same date excludes it. Match any override on that date that fully contains the slot, and reject only when none contains it."
+  },
+  {
+   "id": "V4",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/trpc/server/routers/viewer/slots.ts",
+   "lines": [
+    142,
+    142
+   ],
+   "texto": "A 60-minute slot starting at 16:30 passes a fixed host's 17:00 closing boundary because `end` is calculated from the slot start, allowing round-robin slots generated by another host to extend beyond that fixed host's hours. Calculate and compare the actual slot end, accounting for slots crossing midnight."
+  },
+  {
+   "id": "V5",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/lib/slots.ts",
+   "lines": [
+    218,
+    223
+   ],
+   "texto": "Converting an override such as 22:00\u201323:00 UTC for an attendee at UTC+3 produces 01:00\u201302:00 but retains the original invitee day, moving availability a day earlier; intervals crossing midnight can also become reversed minute ranges and disappear. Convert complete override datetimes into the attendee timezone and clip or split them against each invitee day's boundaries before extracting minutes."
+  }
+ ],
+ "advanced-query-processing-architecture-grafana-codex": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "public/app/plugins/datasource/loki/querySplitting.ts",
+   "lines": [
+    299,
+    299
+   ],
+   "texto": "The new interpolation pass expands variable values again when `runQuery` delegates to `DataSourceWithBackend.query`, which still calls `applyTemplateVariables` on every target. A variable whose literal value contains another variable reference (for example, a search value of `$level`) now changes meaning on the second pass; ensure already-interpolated targets bypass downstream template expansion while preserving backend macro handling."
+  }
+ ],
+ "advanced-sql-analytics-framework-grafana-codex": [],
+ "anonymous-add-configurable-device-limit-grafana-codex": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/services/anonymous/anonimpl/client.go",
+   "lines": [
+    44,
+    46
+   ],
+   "texto": "A device rejected at capacity authenticates successfully on its next request because `tagDeviceUI` caches its ID before `CreateOrUpdateDevice` returns `ErrDeviceLimitReached`. Cache only successfully admitted devices, and ensure concurrent requests cannot treat an in-progress admission as a successful one."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/services/anonymous/anonimpl/client.go",
+   "lines": [
+    44,
+    46
+   ],
+   "texto": "Requests without `X-Grafana-Device-Id` bypass the configured limit because `TagDevice` returns nil for an empty header and authentication proceeds to return an anonymous identity. When a limit is enabled, require an enforceable device identity rather than interpreting an unidentified request as an admitted device."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+   "lines": [
+    109,
+    117
+   ],
+   "texto": "Concurrent admissions can both observe `count < deviceLimit` and insert different IDs because the count and upsert execute in separate sessions without serialization. Make slot admission atomic across server instances so requests cannot exceed the configured device limit."
+  }
+ ],
+ "async-import-of-the-appstore-packages-cal-com": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/app-store/vital/lib/reschedule.ts",
+   "lines": [
+    125,
+    128
+   ],
+   "texto": "Calendar construction failures now reject the async `forEach` callback instead of reaching the surrounding `try/catch`, producing an unhandled rejection while rescheduling continues; an invalid encrypted Exchange credential triggers this through its constructor's decrypt/JSON parse. Await `Promise.all(bookingRefsFiltered.map(async ...))` inside the existing `try` block, and apply the same change to `wipemycalother/lib/reschedule.ts`."
+  }
+ ],
+ "authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/services/authz/rbac/cache.go",
+   "lines": [
+    31,
+    31
+   ],
+   "texto": "Different resource/folder pairs such as `name=a_b, parent=c` and `name=a, parent=b_c` produce the same denial key, so denying the first request makes the second return false without checking its permissions. Encode the key components unambiguously, for example as a JSON array."
+  }
+ ],
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+   "lines": [
+    57,
+    59
+   ],
+   "texto": "The cron initializes only `sgMail`, but the new cancellation requests use the separately imported `client` without configuring its API key, causing cancellation requests to fail authentication in an isolated cron process. Initialize `client` with `sendgridAPIKey`, as `emailReminderManager.ts` does."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+   "lines": [
+    222,
+    225
+   ],
+   "texto": "The `immediateDelete` branch returns without marking the reminder cancelled, so reminders cancelled during rescheduling never enter the cron's `cancelled: true` retry path. Persist the cancellation flag as well so cancellations performed well before delivery are reapplied within the final hour rather than expiring before the scheduled send."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+   "lines": [
+    53,
+    57
+   ],
+   "texto": "One rejected cancellation exits the entire loop before any queued database deletions execute, leaving successfully processed rows pending and skipping every subsequent reminder. Catch failures per reminder and delete each successfully cancelled row independently so an invalid or expired batch cannot block unrelated cancellations."
+  }
+ ],
+ "database-performance-optimizations-grafana-codex": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+   "lines": [
+    609,
+    612
+   ],
+   "texto": "Each iteration copies the entire accumulated ID list, producing quadratic allocation and copying for large SQLite cleanup batches, including the tens of thousands of orphaned tags created by the new integration test. Build the list with a `strings.Builder` and `strconv.FormatInt` so construction scales linearly with the number of IDs."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/services/cleanup/cleanup.go",
+   "lines": [
+    77,
+    77
+   ],
+   "texto": "The one-minute ticker runs all eight cleanup jobs ten times as often, including `cleanUpTmpFolder`, which enumerates entire directories and reads metadata for every file even when none are expired. Preserve the ten-minute shared cadence, or schedule annotation cleanup separately if it requires a shorter interval."
+  }
+ ],
+ "dual-storage-architecture-grafana-codex": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+   "lines": [
+    50,
+    55
+   ],
+   "texto": "All four asynchronous legacy writes inherit request cancellation, so completing the HTTP request can cancel the backup operation before it finishes despite the ten-second timeout. Derive each background timeout from `context.WithoutCancel(ctx)` to preserve request values without inheriting its cancellation."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+   "lines": [
+    139,
+    139
+   ],
+   "texto": "Passing the original `objInfo` makes `legacyStorage.Update` recompute `UpdatedObject` against the legacy record, so a patch can preserve stale fields or fail rather than mirror the successful unified update. Pass an `updateWrapper` containing `res` as before."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+   "lines": [
+    106,
+    106
+   ],
+   "texto": "Every successfully deleted resource name becomes a distinct `kind` label in the global storage HistogramVec, retaining per-object histograms and growing scrape cardinality throughout the process lifetime. Pass `options.Kind` instead of `name`, matching the error path and other operations."
+  },
+  {
+   "id": "V4",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+   "lines": [
+    166,
+    166
+   ],
+   "texto": "The legacy DeleteCollection observation is recorded in the unified-storage histogram, while Create and Update record unified failures in the legacy histogram, misattributing errors and latency to operations that did not run. Use `recordLegacyDuration` here and `recordStorageDuration` on the Create and Update storage-error paths."
+  }
+ ],
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/views/embed/best.html.erb",
+   "lines": [
+    6,
+    6
+   ],
+   "texto": "The trailing `if` has no condition, so rendering an existing embedded topic fails while compiling the ERB template. Close the conditional with `<%- end %>` instead."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/jobs/scheduled/poll_feed.rb",
+   "lines": [
+    35,
+    35
+   ],
+   "texto": "Description-only RSS items have no `content`, so `i.content.scrub` raises and aborts the feed import before subsequent articles are processed. Fall back to the item's description and handle absent bodies before calling `scrub`."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/models/topic_embed.rb",
+   "lines": [
+    22,
+    22
+   ],
+   "texto": "Feed HTML passes through `absolutize_urls` without sanitization and becomes `post.cooked` verbatim through `raw_html`, allowing embedded scripts or event handlers from feed content to execute on the forum origin. Sanitize imported HTML with an explicit safe tag, attribute, and URL-scheme policy before storing it."
+  },
+  {
+   "id": "V4",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "lib/topic_retriever.rb",
+   "lines": [
+    41,
+    41
+   ],
+   "texto": "Each previously unseen article URL downloads and processes the entire configured feed, and the throttle is per article URL rather than per feed. Coalesce or cache feed polling by feed URL so simultaneous embeds for different articles do not repeat all feed imports."
+  },
+  {
+   "id": "V5",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/models/topic_embed.rb",
+   "lines": [
+    64,
+    71
+   ],
+   "texto": "Protocol-relative resources such as `//cdn.example.com/image.jpg` become `http://article-host/cdn.example.com/image.jpg`, while path-relative resources remain relative to the forum instead of the source article. Resolve links and image sources against the full article URL with URI joining."
+  }
+ ],
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+   "lines": [
+    71,
+    71
+   ],
+   "texto": "Authorized requests without organization membership dereference `None` at `organization_context.member`, causing a server error even when `optimized_pagination` is absent. Guard the optional member and evaluate eligibility only when optimization is requested."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/api/paginator.py",
+   "lines": [
+    838,
+    843
+   ],
+   "texto": "The audit endpoint orders by a datetime field, but `get_item_key` applies numerical rounding to datetime objects, so any nonempty optimized first page raises `TypeError`; subsequent cursors also lose the datetime conversion required by the query. Inherit from `DateTimePaginator` and reuse its key and cursor conversions."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/api/paginator.py",
+   "lines": [
+    877,
+    882
+   ],
+   "texto": "The advanced negative-offset branch passes a negative slice directly to a Django queryset, which rejects negative indexing instead of implementing reverse pagination. Reject negative offsets with `BadPaginationError` before slicing or implement reverse navigation using nonnegative slices."
+  }
+ ],
+ "feat-2fa-backup-codes-cal-com": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/features/auth/lib/next-auth-options.ts",
+   "lines": [
+    131,
+    131
+   ],
+   "texto": "Supplying a valid `backupCode` together with any nonempty `totpCode` skips password verification at line 121 and enters this branch without validating the TOTP, allowing authentication with a backup code alone. Reject mixed-factor submissions or ensure the backup-code path verifies the password regardless of `totpCode`."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/features/auth/lib/next-auth-options.ts",
+   "lines": [
+    149,
+    155
+   ],
+   "texto": "Concurrent logins can read the same encrypted code list and both authenticate with one backup code; requests consuming different codes can also overwrite each other's removals and restore a consumed code. Consume codes atomically with a conditional update against the previously read ciphertext and reject or retry when the update affects no rows."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+   "lines": [
+    134,
+    136
+   ],
+   "texto": "After enabling 2FA, dismissing the backup-code dialog with Escape or an outside click never invokes `onEnable`, so the parent retains its cached disabled state and the switch opens the enable flow again. Invalidate the parent's user state when enable succeeds, independently of how the backup-code screen closes."
+  }
+ ],
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/features/apps/components/CredentialActionsDropdown.tsx",
+   "lines": [
+    43,
+    46
+   ],
+   "texto": "After cache deletion, `connectedCalendars` retains the old `cacheUpdatedAt`, so the dropdown continues showing a cache that no longer exists; the event-type settings caller supplies no `onSuccess` callback and disables refetch on window focus. Invalidate `utils.viewer.calendars.connectedCalendars` on successful deletion instead of relying on the optional parent callback."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "scripts/test-gcal-webhooks.sh",
+   "lines": [
+    68,
+    68
+   ],
+   "texto": "On Linux with GNU sed, `sed -i '' -E` treats the empty argument as the script and fails instead of replacing an existing `GOOGLE_WEBHOOK_URL`, while the script still prints success. Use a portable backup-suffix invocation and only report success after the replacement succeeds."
+  }
+ ],
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": [],
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/integrations/services/assignment_source.py",
+   "lines": [
+    18,
+    18
+   ],
+   "texto": "`timezone.now()` runs when the class is defined, so every assignment created without an explicit `queued` value carries the worker's module-import timestamp rather than its own creation time. Use a dataclass default factory to generate the timestamp for each instance."
+  }
+ ],
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/api/helpers/error_upsampling.py",
+   "lines": [
+    100,
+    103
+   ],
+   "texto": "A Discover query such as `event.type:error OR event.type:transaction` passes this check even though it includes transactions, causing its count to use error sample weights despite the errors-only contract. Determine whether the parsed query restricts all matching events to errors rather than searching the raw text for a substring."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/api/endpoints/organization_events_stats.py",
+   "lines": [
+    243,
+    248
+   ],
+   "texto": "Only `timeseries_columns` receives the weighted aggregate, while `discover.top_events_timeseries` selects the top groups using the unchanged `selected_columns` and `orderby`, so a group with 100 stored events of weight 1 outranks a group with 20 stored events of weight 10 despite the latter having the larger displayed count. Apply the weighted count consistently to the top-group selection and ordering as well as the resulting time series."
+  }
+ ],
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/remote_subscriptions/consumers/result_consumer.py",
+   "lines": [
+    254,
+    255
+   ],
+   "texto": "Every strategy reuses the factory's pool, but `SimpleQueueProcessingStrategy.close()` shuts that pool down; recreating the strategy after a partition reassignment therefore submits to shut-down queues with stopped workers, and `submit()` catches the failure and marks those unprocessed offsets complete. Create a fresh pool for each strategy lifecycle rather than reusing the pool stopped by the previous strategy."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+   "lines": [
+    233,
+    234
+   ],
+   "texto": "Setting `worker.shutdown` before draining causes each worker to exit after its current item, leaving queued results unprocessed during graceful close, while `close()` also stops offset commits before remaining processing finishes. Drain queued and in-flight work before stopping workers, then commit completed offsets before stopping the commit loop."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+   "lines": [
+    185,
+    185
+   ],
+   "texto": "Unbounded queues let `submit()` consume Kafka messages faster than the fixed workers can process them, retaining both decoded results and original messages until memory exhaustion during sustained backlog or a slow group. Bound pending work and propagate backpressure through the processing strategy instead of always accepting submissions."
+  }
+ ],
+ "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/incidents/grouptype.py",
+   "lines": [
+    11,
+    12
+   ],
+   "texto": "Resolving a detector with type `metric_alert_fire` now raises `TypeError` in `Detector.detector_handler`, because this class leaves `counter_names`, `get_dedupe_value`, `get_group_key_values`, and `build_occurrence_and_event_data` abstract. Keep the concrete no-op `DetectorHandler` implementation returning an empty dictionary until the stateful methods are implemented."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "tests/sentry/workflow_engine/processors/test_detector.py",
+   "lines": [
+    536,
+    538
+   ],
+   "texto": "The expected occurrence uses fingerprint `<detector_id>:val1`, but `evaluate_group_key_value` invokes the hook with `group_key`, producing fingerprint `<detector_id>:group_key` and failing the result equality assertion. Build the expected occurrence with `\"group_key\"` to match the evaluated key."
+  }
+ ],
+ "feature-automatically-downsize-large-images-discourse-cursor": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/models/optimized_image.rb",
+   "lines": [
+    149,
+    150
+   ],
+   "texto": "The second `downsize` definition replaces the existing method rather than overloading it, so `Jobs::ResizeEmoji.execute` now raises `ArgumentError` when it passes `(path, path, 100, 100, opts)`. Keep one compatible method that accepts both dimension forms, or migrate the emoji caller to the geometry-string signature."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/assets/javascripts/discourse/lib/utilities.js",
+   "lines": [
+    182,
+    182
+   ],
+   "texto": "The fixed 10 MB limit also applies to attachments, although the server still enforces `max_attachment_size_kb` and never downsizes non-images. Retain the configured attachment limit so oversized attachments fail before transfer and attachments configured above 10 MB remain uploadable."
+  }
+ ],
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+   "lines": [
+    9,
+    15
+   ],
+   "texto": "When `embed_category` is unset or no longer matches a category name, the query returns no rows and `[0]['id']` raises before the fallback executes, aborting the migration even on sites that never enabled embedding. Read the first row defensively and resolve the uncategorized fallback without indexing an empty result."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+   "lines": [
+    24,
+    25
+   ],
+   "texto": "Legacy entries such as `https://example.com` are inserted unchanged, but `record_for_host` compares the stored value to the bare `URI.host`, so previously working embeds become unauthorized after upgrading. Normalize migrated entries using the same scheme/path stripping as the new model and quote the inserted values."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/assets/javascripts/admin/components/embeddable-host.js.es6",
+   "lines": [
+    38,
+    38
+   ],
+   "texto": "Saving a new host without selecting a category makes the server assign the uncategorized category, but this callback replaces the client relationship with the lookup for the still-null `categoryId`, leaving the category badge blank until reload. Resolve the relationship from the returned `host.category_id` instead of the local selection."
+  },
+  {
+   "id": "V4",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/models/embeddable_host.rb",
+   "lines": [
+    2,
+    2
+   ],
+   "texto": "The five-letter TLD limit rejects valid embedding domains such as `example.technology`, which the previous host setting allowed. Accept longer valid DNS top-level domains instead of restricting them to two through five letters."
+  }
+ ],
+ "feature-localization-fallbacks-server-side-discourse-cursor": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "config/initializers/i18n.rb",
+   "lines": [
+    17,
+    17
+   ],
+   "texto": "The accelerator caches translations using only the key, active locale, and backend identity, but this fallback list now also depends on `SiteSetting.default_locale`. On multisite installations, two sites using the same active locale but different default locales can receive each other's cached fallback translations; include the fallback context in the accelerator cache key."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "config/initializers/i18n.rb",
+   "lines": [
+    20,
+    21
+   ],
+   "texto": "Fallback translations remain unloaded on non-controller paths such as `Jobs::Base` and `PostAlerter`, because the accelerator loads only the active locale and disables implicit backend loading. Move fallback loading into the translation entry point so jobs and `I18n.with_locale` calls can resolve the configured site and English fallbacks without relying on a prior HTTP request."
+  }
+ ],
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/controllers/topics_controller.rb",
+   "lines": [
+    105,
+    107
+   ],
+   "texto": "`TopicUser.find_by` returns `nil` when a logged-in user has no topic-user row, so opening the unsubscribe URL for an unvisited public topic raises at `tu.notification_level`. Handle the absent row and create the explicit preference through `TopicUser.change`."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/controllers/topics_controller.rb",
+   "lines": [
+    113,
+    113
+   ],
+   "texto": "Saving only `notification_level` leaves `notifications_reason_id` unset for automatically tracked users, so `TopicUser.update_last_read` can promote the topic back to tracking once its reading threshold is exceeded. Persist the level through `TopicUser.change`, which records the explicit user-change reason and timestamp."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "config/routes.rb",
+   "lines": [
+    440,
+    441
+   ],
+   "texto": "These GET endpoints change the logged-in user's notification preferences, allowing an external site to trigger an unsubscribe through a cross-site navigation without a CSRF token. Keep GET as a confirmation page and perform the preference update through a CSRF-protected POST or PUT."
+  }
+ ],
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+   "lines": [
+    152,
+    157
+   ],
+   "texto": "The assertion can pass before an in-flight reader request records its exception, and any exception during deletion skips `deletedAll.set(true)`, leaving the reader issuing requests indefinitely. Retain the reader thread, set the stop flag in a `finally` block, and join the thread before inspecting `caughtExceptions`."
+  }
+ ],
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/core/EventManager.ts",
+   "lines": [
+    119,
+    119
+   ],
+   "texto": "Selecting Google Meet with no destination calendar now throws when `mainHostDestinationCalendar` is undefined, instead of falling back to Cal Video. Restore optional chaining on `mainHostDestinationCalendar?.integration` so null and empty destination arrays retain the previous behavior."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/core/EventManager.ts",
+   "lines": [
+    170,
+    170
+   ],
+   "texto": "Video references now lose the credential ID returned by `videoClient`, so `handleCancelBooking` skips `deleteMeeting` and leaves the external meeting active after cancellation. Preserve `result.credentialId` for video results as well as calendar results."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/core/EventManager.ts",
+   "lines": [
+    370,
+    370
+   ],
+   "texto": "Each host's credential receives the full destination array, but Office365, Lark, and BaseCalendarService always read its first element, causing secondary hosts to write to the organizer's calendar ID or fail when that ID is inaccessible. Pass a per-destination event with `destinationCalendar: [destination]` to each creation call."
+  },
+  {
+   "id": "V4",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+   "lines": [
+    254,
+    256
+   ],
+   "texto": "When a stored reference has no external calendar ID, the fallback searches for that same null or undefined ID and cannot select a real destination, so updates fail with a missing calendar ID and deletions target `primary` instead of the configured calendar. Restore the first destination's external ID as the fallback in both `updateEvent` and `deleteEvent`."
+  },
+  {
+   "id": "V5",
+   "origem": "synthesis-rescue",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/trpc/server/routers/viewer/organizations/create.handler.ts",
+   "lines": [
+    151,
+    151
+   ],
+   "texto": "When team billing is disabled, organization creation now saves neither `slug` nor `metadata.requestedSlug`, causing `createTeamsHandler` to throw `NoOrganizationSlugError` for the newly created organization. Restore the disabled-billing condition for persisting `slug` while retaining the enabled-billing condition for `requestedSlug`."
+  }
+ ],
+ "fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+   "lines": [
+    13,
+    13
+   ],
+   "texto": "When `user_count` is an exact multiple of `limit`, `totalPages` includes an extra page, so `showingLast` permits navigation to an empty member list (for example, offset 50 for 50 members). Use `Math.ceil(user_count / limit)` while retaining the zero-member handling."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/controllers/groups_controller.rb",
+   "lines": [
+    22,
+    26
+   ],
+   "texto": "The public group-members route calls `findMembers()` once and its template has no pagination controls, so the new 50-member default hides all remaining members, including members of custom groups that previously loaded in full. Add pagination to the public members view or preserve complete loading for that consumer."
+  },
+  {
+   "id": "V3",
+   "origem": "synthesis-rescue",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/controllers/admin/groups_controller.rb",
+   "lines": [
+    90,
+    90
+   ],
+   "texto": "Removing a user from their primary group now leaves `primary_group_id` unchanged, so serializers can continue displaying the removed group as their primary group. Clear the matching user's `primary_group_id` when deleting the membership, preserving the cleanup previously performed by `Group#destroy_deletions`."
+  }
+ ],
+ "fixing-re-authentication-with-passkeys-keycloak": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/PasswordForm.java",
+   "lines": [
+    63,
+    63
+   ],
+   "texto": "Passkey-only users now pass `configuredFor`, but realms using the legacy `keycloak` login theme render the inherited base `login-password.ftl`, which contains only a password form and no passkey controls, leaving those users unable to complete this step. Add the passkeys import and `conditionalUIData` invocation to the base password template as well as the v2 template."
+  }
+ ],
+ "frontend-asset-optimization-grafana-codex": [],
+ "github-oauth-security-enhancement-sentry": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/integrations/github/integration.py",
+   "lines": [
+    401,
+    408
+   ],
+   "texto": "`pipeline.signature` is an MD5 of the pipeline view class names, not a session-specific nonce, so an attacker can supply the known state with an OAuth code from another authorization flow and pass this CSRF check. Generate an unpredictable nonce per pipeline session, store it in pipeline state, and validate that nonce on callback."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/integrations/github/integration.py",
+   "lines": [
+    481,
+    482
+   ],
+   "texto": "The missing-integration branch advances directly to `finish_pipeline`, which fetches the installation using app credentials and creates the integration without checking its installer against the OAuth user. This permits attachment without the new ownership verification when the webhook has not arrived or the local integration record was deleted; require verified installer information before advancing."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/integrations/github/integration.py",
+   "lines": [
+    501,
+    504
+   ],
+   "texto": "`build_integration` omits `sender` for installations created through the browser pipeline, so an existing unlinked integration from that path raises `KeyError` here instead of returning an installation response. Guard missing sender metadata and return the invalid-installation error rather than indexing it unconditionally."
+  }
+ ],
+ "implement-access-token-context-encoding-framework-keycloak": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+   "lines": [
+    483,
+    483
+   ],
+   "texto": "The matcher reads characters 3\u20134 instead of 4\u20135 and rejects equality, so the code, refresh, device, and CIBA event assertions accept token IDs with the wrong grant shortcut. Check that the prefix has six characters and reject when `substring(4, 6)` does not equal `expectedGrantShortcut`."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java",
+   "lines": [
+    74,
+    76
+   ],
+   "texto": "`OAuth2GrantTypeFactory.getShortcut()` documents approximately three-character shortcuts, but the factory accepts these even though `getTokenContextFromTokenId()` requires a six-character prefix with exactly two grant characters, making issued IDs impossible to decode for such extensions. Require exactly two characters in the SPI contract and validate shortcut lengths before registering them, including dynamically loaded factories."
+  }
+ ],
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+   "lines": [
+    125,
+    127
+   ],
+   "texto": "When a user already has locally stored recovery codes and regeneration succeeds in user storage, this branch leaves the previous local credential active; `UserCredentialManager.isValid` falls back to the local recovery provider when external validation rejects an old code. Remove existing locally stored recovery credentials after successfully replacing them in user storage so regeneration invalidates the previous set."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+   "lines": [
+    340,
+    340
+   ],
+   "texto": "A successful recovery-code check never removes the matching code, and `getCredentials` reconstructs the complete original set on every lookup, so the same code authenticates indefinitely and the UI always requests code 1. Persist consumption on successful validation and return the remaining-code state rather than rebuilding an unused set."
+  }
+ ],
+ "notification-rule-processing-engine-grafana-codex": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx",
+   "lines": [
+    47,
+    47
+   ],
+   "texto": "Passing only `promRule` removes Pause and Delete from every Grafana rule's list menu because `AlertRuleMenu` still requires `rulerRule` to render both actions, even when the new abilities allow them. Adapt those menu actions and their handlers to work from the Grafana identifier before removing the ruler input."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx",
+   "lines": [
+    47,
+    47
+   ],
+   "texto": "Clicking Silence notifications now only sets `showSilenceDrawer`: `RuleActionsButtons.V2` still mounts `SilenceGrafanaRuleDrawer` only when `rulerRuleType.grafana.alertingRule(rule)` succeeds, but this call no longer supplies `rule`. Load the required rule on demand or adapt the drawer to the Prometheus rule so the exposed action actually opens it."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+   "lines": [
+    243,
+    245
+   ],
+   "texto": "Delegating `useAllAlertRuleAbilities` to this implementation discards the combined group's `source_tenants`, so federated Mimir rules now receive supported Update and Delete abilities instead of remaining immutable. Preserve the federation check from `rule.group` in the combined-rule hook or pass that state into the shared ability calculation."
+  }
+ ],
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+   "lines": [
+    15,
+    15
+   ],
+   "texto": "The sync branch returns a raw Fetch Response, but Google and Zoho consumers read `.data`, and HubSpot reads token fields directly, so enabled syncing fails instead of refreshing credentials. Decode the response and adapt it to each caller's expected token shape, or standardize all callers on one decoded contract."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+   "lines": [
+    5,
+    11
+   ],
+   "texto": "Computed schema keys stringify Zod objects rather than matching arbitrary response properties, so normal expiry and refresh-token fields are stripped from synchronized responses. Define explicit supported fields or use a validated passthrough schema so Zoom retains `expires_in` and Office retains its expiry information."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+   "lines": [
+    97,
+    100
+   ],
+   "texto": "The helper returns a safeParse result envelope, so persisting it as `key` replaces Google's credentials with `{ success, data }` after any successful refresh, including when sharing is disabled. Persist the parsed `.data` instead so the next service construction can validate the credential."
+  },
+  {
+   "id": "V4",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+   "lines": [
+    93,
+    93
+   ],
+   "texto": "Passing `credentialId` sends the credential's primary key as `calcomUserId`, so the sync endpoint looks up the wrong user and team credentials incorrectly enter the user-sync branch. Thread `credential.userId` from `biginAuth` into this refresh call."
+  },
+  {
+   "id": "V5",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+   "lines": [
+    96,
+    96
+   ],
+   "texto": "The new database update references `prisma` without importing or defining it; searching this file found only this usage. This breaks compilation or raises a ReferenceError on Salesforce initialization; import the Prisma client from `@calcom/prisma`."
+  },
+  {
+   "id": "V6",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+   "lines": [
+    25,
+    27
+   ],
+   "texto": "Replacing an omitted refresh token with the literal `refresh_token` overwrites Office365's existing valid refresh token when Microsoft returns only a new access token. Preserve the previous refresh token when the response omits it rather than manufacturing a placeholder."
+  }
+ ],
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/assets/stylesheets/common/base/header.scss",
+   "lines": [
+    17,
+    18
+   ],
+   "texto": "With a long topic title, the default Ember wrapper emitted by `header-extra-info` becomes a flex item with an automatic content-based minimum width, pushing the navigation beyond the header instead of truncating the title. Apply `min-width: 0` to that direct flex item (or make `.extra-info-wrapper` the component root), so its existing overflow and ellipsis rules can constrain the title."
+  }
+ ],
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/spans/buffer.py",
+   "lines": [
+    197,
+    199
+   ],
+   "texto": "Existing buffers use Redis SETs under the same `span-buf:s:` keys, so deploying this code against buffered data makes `zadd` and `zscan` fail with WRONGTYPE rather than ingesting or flushing those segments. Migrate the existing values or use a versioned key namespace with a compatible drain path before switching their Redis type."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/scripts/spans/add-buffer.lua",
+   "lines": [
+    47,
+    47
+   ],
+   "texto": "Replaying a span whose original parent redirects to another buffer can put the same payload in both sets, and `ZUNIONSTORE` defaults to SUM, replacing its end timestamp with twice that timestamp. Specify `AGGREGATE MAX` in both unions so duplicate delivery cannot promote old spans above newer spans during eviction."
+  }
+ ],
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [],
+ "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": [],
+ "replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent batch 1/2",
+   "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+   "lines": [
+    165,
+    173
+   ],
+   "texto": "Organizations with `use-table-widget-visualization` enabled see empty tables even when `result` contains query results because this branch discards both the rows and column metadata. Pass the actual result data and metadata into `TableWidgetVisualization`, deriving columns from the selected fields instead of supplying empty arrays."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent batch 1/2",
+   "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+   "lines": [
+    39,
+    42
+   ],
+   "texto": "Switching organizations with identical project and date filters reuses the previous organization's attribute cache because `queryKey` omits the organization, although the fetcher uses an organization-specific URL. Include `organization.slug` in the query key so each organization receives its own cached attributes."
+  },
+  {
+   "id": "V3",
+   "origem": "synthesis-rescue",
+   "agente": "kodus-generalist-review-agent batch 1/2",
+   "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+   "lines": [
+    153,
+    155
+   ],
+   "texto": "The merge compares error timestamps in seconds with recording timestamps in milliseconds, so errors occurring later in the replay are emitted before the initial user actions and give the summarizer an incorrect event sequence. Convert the error timestamp to milliseconds for this comparison while preserving its original value for display."
+  }
+ ],
+ "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/assets/stylesheets/desktop/topic-post.scss",
+   "lines": [
+    291,
+    291
+   ],
+   "texto": "The light-theme branch now scales embedded-post author links by 70% instead of the previous 30%, making the small author text substantially fainter even though this change targets dark themes. Preserve the original 30% adjustment in the first argument and use the complementary 70% secondary adjustment in the dark-theme branch."
+  }
+ ],
+ "sms-workflow-reminder-retry-count-tracking-cal-com": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+   "lines": [
+    190,
+    197
+   ],
+   "texto": "If a booking cancellation deletes a reminder while this handler awaits Twilio, the scheduling update fails and the new catch attempts another update of the deleted row, throwing again and aborting all remaining reminders in the batch. Use an atomic `updateMany` increment in the catch so a concurrently deleted reminder is a harmless zero-row update."
+  }
+ ],
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/spans/consumers/process/flusher.py",
+   "lines": [
+    254,
+    255
+   ],
+   "texto": "Workers created by `multiprocessing.get_context(\"spawn\").Process` are `SpawnProcess` instances, not instances of the separate `multiprocessing.Process` class, so the new guard skips killing hung workers before starting replacements. Test against `multiprocessing.context.BaseProcess` so replacement does not leave the original worker flushing the same shards concurrently."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/spans/consumers/process/flusher.py",
+   "lines": [
+    338,
+    341
+   ],
+   "texto": "When `next_step.join(timeout)` or an earlier worker consumes the deadline, `break` skips every remaining worker, leaving them running after strategy shutdown and potentially overlapping replacement consumers after rebalancing. Apply the deadline only to waiting, and perform termination cleanup for every spawned worker regardless of the remaining time."
+  },
+  {
+   "id": "V3",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "src/sentry/spans/consumers/process/flusher.py",
+   "lines": [
+    300,
+    301
+   ],
+   "texto": "Each `buffer.get_memory_info()` calls `iter_cluster_memory_usage`, which issues Redis INFO requests for the entire cluster without filtering by assigned shards, so P flusher processes now cause P identical cluster-wide memory probes per submission. Query memory once through a single buffer because all buffers use the same Redis cluster."
+  }
+ ],
+ "unified-storage-performance-optimizations-grafana-codex": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/storage/unified/resource/search.go",
+   "lines": [
+    216,
+    216
+   ],
+   "texto": "The event consumer starts before this call, and `TotalDocs` iterates `bleveBackend.cache` without locking while an event for a new resource can insert an index, causing a concurrent map iteration/write race and potentially terminating the process. Protect cache iteration in `TotalDocs` with `cacheMu.RLock` (including its metrics-collection callers)."
+  },
+  {
+   "id": "V2",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "pkg/storage/unified/search/bleve.go",
+   "lines": [
+    137,
+    139
+   ],
+   "texto": "Locking only cache publication lets `GetIndex` return nil while the same key is being built, so a concurrent search or write event builds a second index; a later publication can replace the index that received the event and lose that update. Serialize builds per key and recheck the cache after acquiring that key's lock, while retaining parallel builds for different keys."
+  }
+ ],
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": [
+  {
+   "id": "V1",
+   "origem": "generalist",
+   "agente": "kodus-generalist-review-agent",
+   "file": "app/serializers/user_serializer.rb",
+   "lines": [
+    43,
+    43
+   ],
+   "texto": "Anonymous requests for TL0 profiles now receive `website_name` even though `restrict_user_fields?` suppresses `website`, exposing the restricted website hostname and, for matching domains, its path through the public user endpoint. Add `website_name` to `untrusted_attributes` so it uses the same visibility predicate as `website`."
+  }
+ ]
+}

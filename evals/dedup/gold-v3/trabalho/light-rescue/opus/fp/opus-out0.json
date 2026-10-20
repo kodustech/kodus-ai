@@ -1,0 +1,138 @@
+{
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "V2",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: readLength -1 passed to read() allocates new byte[-1], NegativeArraySizeException instead of IOException."
+  }
+ ],
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "V3",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#09",
+   "newGroup": null,
+   "reason": "Same claim: group removal listener calls GroupPermissionsV2.setPermissionsEnabled which throws UnsupportedOperationException."
+  }
+ ],
+ "advanced-sql-analytics-framework-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "advanced-sql-analytics-framework-grafana-codex#oph-03",
+   "newGroup": null,
+   "reason": "Same claim: stubbed DB makes TablesList/NewSQLCommand fail so existing parser tests break."
+  }
+ ],
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+  {
+   "id": "V3",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#oph-01",
+   "newGroup": null,
+   "reason": "Same claim: reschedule path cancels SendGrid reminders immediately instead of flagging cancelled, accumulating cancelled batches."
+  }
+ ],
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "V2",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: plaintext recovery codes sent to user storage via updateCredential while local path stores hashed codes."
+  }
+ ],
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "id": "V4",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-02",
+   "newGroup": null,
+   "reason": "Same claim: direct end_timestamp_precise lookup raises KeyError and fails the whole batch."
+  }
+ ],
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": [
+  {
+   "id": "V2",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#muse13-01",
+   "newGroup": null,
+   "reason": "Same claim: scheme-less website gives nil host, website_name nil, website disappears from profile."
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "V1",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02",
+   "newGroup": null,
+   "reason": "Same claim: ClientRemovedEvent listener calls ClientPermissionsV2.setPermissionsEnabled which throws when V1 and V2 are both enabled."
+  },
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Multiple hasPermission evaluations in canView(ClientModel) per client; issues 14/sncc-01 concern getClientsWithPermission iterating all resources, a different place and cause."
+  }
+ ],
+ "anonymous-add-configurable-device-limit-grafana-codex": [
+  {
+   "id": "V2",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#opa-03",
+   "newGroup": null,
+   "reason": "Same claim: RowsAffected()==0 on MySQL counts changed rows, wrongly denying known devices."
+  },
+  {
+   "id": "V4",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: ProvideAnonDBStore int64 param still registered in wire.go, wire cannot provide int64."
+  }
+ ],
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "V7",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-02",
+   "newGroup": null,
+   "reason": "Same claim: `end if` leaves a dangling if modifier so the next output append becomes the condition."
+  }
+ ],
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "id": "V9",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Organizer email taken from main host calendar instead of credential-matched calendar; issue 01 is about undefined dereference, a different defect."
+  },
+  {
+   "id": "V10",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-02",
+   "newGroup": null,
+   "reason": "Same claim: dynamic-user query dropped organization slug select, so user.organization is undefined."
+  }
+ ],
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": [
+  {
+   "id": "V13",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#opa-02",
+   "newGroup": null,
+   "reason": "Same claim: team branch only checks membership, not admin, so any member can install OAuth credentials for the team."
+  }
+ ],
+ "replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Full error_events list attached to every paginated page; no rejected issue covers this (kimi-01 is about in-place sort)."
+  },
+  {
+   "id": "V5",
+   "match": "replays-self-serve-bulk-delete-system-sentry#21",
+   "newGroup": null,
+   "reason": "Same claim: get_environment_info fetches recommended event per issue, N+1 on the PR comment path."
+  }
+ ],
+ "unified-storage-performance-optimizations-grafana-codex": [
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Data race on shared err in parallel errgroup workers after removing cacheMu; no rejected issue covers it."
+  }
+ ]
+}

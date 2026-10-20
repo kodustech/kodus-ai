@@ -56,7 +56,7 @@ def placar(k, D):
         uso[d['caseId']] = u
     return {'comentarios': tot, 'tp': n['TP'], 'fpNit': n['FP nit'], 'fpAlucinacao': n['FP hallucination'], 'totalTp': TOTAL, 'semCasamento': novos,
             **metr(n['TP'], tot),
-            'porOrigem': {x: {'comentarios': o[x]['comentarios'], 'tp': len(o[x]['tps']), 'fpNit': o[x]['FP nit'], 'fpAlucinacao': o[x]['FP hallucination'], **metr(len(o[x]['tps']), o[x]['comentarios'])} for x in ORIG},
+            'porOrigem': {x: {'comentarios': o[x]['comentarios'], 'tp': len(o[x]['tps']), 'tpIds': sorted(o[x]['tps']), 'fpNit': o[x]['FP nit'], 'fpAlucinacao': o[x]['FP hallucination'], **metr(len(o[x]['tps']), o[x]['comentarios'])} for x in ORIG},
             'porPr': por_pr, 'uso': uso}
 P = f'{AQUI}/placar.json'; out = json.load(open(P)) if os.path.exists(P) else {}
 for k, D in zip(sys.argv[1::2], sys.argv[2::2]):

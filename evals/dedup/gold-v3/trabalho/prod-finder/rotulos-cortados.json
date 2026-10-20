@@ -1,0 +1,956 @@
+{
+ "kimi|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|C1": {
+  "issue": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+  "via": "juiz-tp"
+ },
+ "kimi|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|C2": {
+  "issue": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+  "via": "juiz-tp"
+ },
+ "kimi|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|C3": {
+  "issue": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+  "via": "juiz-tp"
+ },
+ "kimi|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|C4": {
+  "issue": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+  "via": "juiz-tp"
+ },
+ "kimi|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|C5": {
+  "issue": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+  "via": "juiz-tp"
+ },
+ "kimi|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|C6": {
+  "issue": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+  "via": "juiz-tp"
+ },
+ "kimi|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|C7": {
+  "issue": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+  "via": "juiz-tp"
+ },
+ "kimi|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|C8": {
+  "issue": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+  "via": "juiz-tp"
+ },
+ "kimi|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|C9": {
+  "issue": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+  "via": "juiz-tp"
+ },
+ "kimi|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|C10": {
+  "issue": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+  "via": "juiz-tp"
+ },
+ "opus|dual-storage-architecture-grafana-codex|C1": {
+  "issue": "dual-storage-architecture-grafana-codex#04",
+  "via": "juiz-tp"
+ },
+ "opus|dual-storage-architecture-grafana-codex|C2": {
+  "issue": "dual-storage-architecture-grafana-codex#04",
+  "via": "juiz-tp"
+ },
+ "opus|dual-storage-architecture-grafana-codex|C3": {
+  "issue": "dual-storage-architecture-grafana-codex#02",
+  "via": "juiz-tp"
+ },
+ "opus|dual-storage-architecture-grafana-codex|C4": {
+  "issue": "dual-storage-architecture-grafana-codex#01",
+  "via": "juiz-tp"
+ },
+ "opus|add-html-sanitizer-for-translated-message-resources-keycloak|C1": {
+  "issue": "add-html-sanitizer-for-translated-message-resources-keycloak#10",
+  "via": "juiz-tp"
+ },
+ "opus|add-html-sanitizer-for-translated-message-resources-keycloak|C2": {
+  "issue": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+  "via": "juiz-tp"
+ },
+ "opus|add-html-sanitizer-for-translated-message-resources-keycloak|C3": {
+  "issue": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+  "via": "juiz-tp"
+ },
+ "muse|optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor|C1": {
+  "issue": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#04",
+  "via": "juiz-fp"
+ },
+ "muse|optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor|C2": {
+  "issue": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#02",
+  "via": "juiz-tp"
+ },
+ "muse|optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor|C3": {
+  "issue": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#pf-muse-C3",
+  "via": "classificacao",
+  "class": "FP",
+  "subclass": "none",
+  "upstream": null
+ },
+ "kimi|async-import-of-the-appstore-packages-cal-com|C1": {
+  "issue": "async-import-of-the-appstore-packages-cal-com#02",
+  "via": "juiz-tp"
+ },
+ "kimi|async-import-of-the-appstore-packages-cal-com|C2": {
+  "issue": "async-import-of-the-appstore-packages-cal-com#02",
+  "via": "juiz-tp"
+ },
+ "kimi|async-import-of-the-appstore-packages-cal-com|C3": {
+  "issue": "async-import-of-the-appstore-packages-cal-com#02",
+  "via": "juiz-tp"
+ },
+ "ds|add-html-sanitizer-for-translated-message-resources-keycloak|C1": {
+  "issue": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+  "via": "juiz-tp"
+ },
+ "ds|add-html-sanitizer-for-translated-message-resources-keycloak|C2": {
+  "issue": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+  "via": "juiz-tp"
+ },
+ "ds|database-performance-optimizations-grafana-codex|C1": {
+  "issue": "database-performance-optimizations-grafana-codex#07",
+  "via": "juiz-tp"
+ },
+ "ds|database-performance-optimizations-grafana-codex|C2": {
+  "issue": "database-performance-optimizations-grafana-codex#04",
+  "via": "juiz-tp"
+ },
+ "sonnet|implement-access-token-context-encoding-framework-keycloak|C1": {
+  "issue": "implement-access-token-context-encoding-framework-keycloak#02",
+  "via": "juiz-tp"
+ },
+ "sonnet|implement-access-token-context-encoding-framework-keycloak|C2": {
+  "issue": "implement-access-token-context-encoding-framework-keycloak#01",
+  "via": "juiz-tp"
+ },
+ "muse|enhance-embed-url-handling-and-validation-system-discourse-cursor|C1": {
+  "issue": "enhance-embed-url-handling-and-validation-system-discourse-cursor#01",
+  "via": "juiz-tp"
+ },
+ "muse|enhance-embed-url-handling-and-validation-system-discourse-cursor|C2": {
+  "issue": "enhance-embed-url-handling-and-validation-system-discourse-cursor#02",
+  "via": "juiz-fp"
+ },
+ "muse|implement-access-token-context-encoding-framework-keycloak|C1": {
+  "issue": "implement-access-token-context-encoding-framework-keycloak#01",
+  "via": "juiz-tp"
+ },
+ "muse|implement-access-token-context-encoding-framework-keycloak|C2": {
+  "issue": "implement-access-token-context-encoding-framework-keycloak#02",
+  "via": "juiz-tp"
+ },
+ "kimi|feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry|C1": {
+  "issue": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#03",
+  "via": "juiz-tp"
+ },
+ "kimi|feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry|C2": {
+  "issue": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#kimip-01",
+  "via": "juiz-tp"
+ },
+ "kimi|ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor|C1": {
+  "issue": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#pf-kimi-C1",
+  "via": "classificacao",
+  "class": "TP",
+  "subclass": "nit",
+  "upstream": null
+ },
+ "kimi|ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor|C2": {
+  "issue": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+  "via": "juiz-tp"
+ },
+ "ds|anonymous-add-configurable-device-limit-grafana-codex|C1": {
+  "issue": "anonymous-add-configurable-device-limit-grafana-codex#07",
+  "via": "juiz-tp"
+ },
+ "ds|feature-per-topic-unsubscribe-option-in-emails-discourse-cursor|C1": {
+  "issue": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
+  "via": "juiz-tp"
+ },
+ "ds|replays-self-serve-bulk-delete-system-sentry|C1": {
+  "issue": "replays-self-serve-bulk-delete-system-sentry#12",
+  "via": "juiz-tp"
+ },
+ "gpt|dual-storage-architecture-grafana-codex|C1": {
+  "issue": "dual-storage-architecture-grafana-codex#02",
+  "via": "juiz-tp"
+ },
+ "gpt|fix-proper-handling-of-group-memberships-discourse-cursor|C1": {
+  "issue": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+  "via": "juiz-tp"
+ },
+ "opus|add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak|C1": {
+  "issue": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#02",
+  "via": "juiz-tp"
+ },
+ "opus|authzservice-improve-authz-caching-grafana-codex|C1": {
+  "issue": "authzservice-improve-authz-caching-grafana-codex#04",
+  "via": "juiz-tp"
+ },
+ "opus|oauth-credential-sync-and-app-integration-enhancements-cal-com|C1": {
+  "issue": "oauth-credential-sync-and-app-integration-enhancements-cal-com#02",
+  "via": "juiz-tp"
+ },
+ "sonnet|add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak|C1": {
+  "issue": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#02",
+  "via": "juiz-tp"
+ },
+ "sonnet|database-performance-optimizations-grafana-codex|C1": {
+  "issue": "database-performance-optimizations-grafana-codex#04",
+  "via": "juiz-tp"
+ },
+ "sonnet|feature-can-edit-category-host-relationships-for-embedding-discourse-cursor|C1": {
+  "issue": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+  "via": "juiz-tp"
+ },
+ "sonnet|optimize-spans-buffer-insertion-with-eviction-during-insert-sentry|C1": {
+  "issue": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01",
+  "via": "juiz-tp"
+ },
+ "muse|add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak|C1": {
+  "issue": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#05",
+  "via": "juiz-tp"
+ },
+ "muse|enhanced-pagination-performance-for-high-volume-audit-logs-sentry|C1": {
+  "issue": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+  "via": "juiz-tp"
+ },
+ "muse|fix-proper-handling-of-group-memberships-discourse-cursor|C1": {
+  "issue": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+  "via": "juiz-tp"
+ },
+ "muse|ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor|C1": {
+  "issue": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#01",
+  "via": "juiz-tp"
+ },
+ "kimi|add-html-sanitizer-for-translated-message-resources-keycloak|C1": {
+  "issue": "add-html-sanitizer-for-translated-message-resources-keycloak#pf-kimi-C1",
+  "via": "classificacao",
+  "class": "TP",
+  "subclass": "none",
+  "upstream": "pendente"
+ },
+ "kimi|feat-2fa-backup-codes-cal-com|C1": {
+  "issue": "feat-2fa-backup-codes-cal-com#01",
+  "via": "juiz-tp"
+ },
+ "kimi|frontend-asset-optimization-grafana-codex|C1": {
+  "issue": "frontend-asset-optimization-grafana-codex#01",
+  "via": "juiz-tp"
+ },
+ "kimi|optimize-spans-buffer-insertion-with-eviction-during-insert-sentry|C1": {
+  "issue": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#03",
+  "via": "juiz-tp"
+ },
+ "ds|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|C1": {
+  "issue": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+  "via": "juiz-tp"
+ },
+ "ds|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|C2": {
+  "issue": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+  "via": "juiz-tp"
+ },
+ "ds|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|C3": {
+  "issue": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+  "via": "juiz-tp"
+ },
+ "ds|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|C4": {
+  "issue": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+  "via": "juiz-tp"
+ },
+ "ds|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|C5": {
+  "issue": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+  "via": "juiz-tp"
+ },
+ "ds|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|C6": {
+  "issue": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+  "via": "juiz-tp"
+ },
+ "ds|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|C7": {
+  "issue": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+  "via": "juiz-tp"
+ },
+ "ds|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|C8": {
+  "issue": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+  "via": "juiz-tp"
+ },
+ "ds|dual-storage-architecture-grafana-codex|C1": {
+  "issue": "dual-storage-architecture-grafana-codex#04",
+  "via": "juiz-tp"
+ },
+ "ds|dual-storage-architecture-grafana-codex|C2": {
+  "issue": "dual-storage-architecture-grafana-codex#04",
+  "via": "juiz-tp"
+ },
+ "ds|dual-storage-architecture-grafana-codex|C3": {
+  "issue": "dual-storage-architecture-grafana-codex#02",
+  "via": "juiz-tp"
+ },
+ "ds|dual-storage-architecture-grafana-codex|C4": {
+  "issue": "dual-storage-architecture-grafana-codex#01",
+  "via": "juiz-tp"
+ },
+ "kimi|github-oauth-security-enhancement-sentry|C1": {
+  "issue": "github-oauth-security-enhancement-sentry#10",
+  "via": "juiz-tp"
+ },
+ "kimi|github-oauth-security-enhancement-sentry|C2": {
+  "issue": "github-oauth-security-enhancement-sentry#09",
+  "via": "juiz-tp"
+ },
+ "kimi|github-oauth-security-enhancement-sentry|C3": {
+  "issue": "github-oauth-security-enhancement-sentry#05",
+  "via": "juiz-tp"
+ },
+ "kimi|github-oauth-security-enhancement-sentry|C4": {
+  "issue": "github-oauth-security-enhancement-sentry#10",
+  "via": "juiz-tp"
+ },
+ "muse|async-import-of-the-appstore-packages-cal-com|C1": {
+  "issue": "async-import-of-the-appstore-packages-cal-com#02",
+  "via": "juiz-tp"
+ },
+ "muse|async-import-of-the-appstore-packages-cal-com|C2": {
+  "issue": "async-import-of-the-appstore-packages-cal-com#02",
+  "via": "juiz-tp"
+ },
+ "muse|async-import-of-the-appstore-packages-cal-com|C3": {
+  "issue": "async-import-of-the-appstore-packages-cal-com#06",
+  "via": "juiz-fp"
+ },
+ "kimi|advanced-query-processing-architecture-grafana-codex|C1": {
+  "issue": "advanced-query-processing-architecture-grafana-codex#01",
+  "via": "juiz-tp"
+ },
+ "kimi|advanced-query-processing-architecture-grafana-codex|C2": {
+  "issue": "advanced-query-processing-architecture-grafana-codex#01",
+  "via": "juiz-tp"
+ },
+ "kimi|advanced-query-processing-architecture-grafana-codex|C3": {
+  "issue": "advanced-query-processing-architecture-grafana-codex#01",
+  "via": "juiz-tp"
+ },
+ "ds|add-comprehensive-email-validation-for-blocked-users-discourse-cursor|C1": {
+  "issue": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+  "via": "juiz-tp"
+ },
+ "ds|add-comprehensive-email-validation-for-blocked-users-discourse-cursor|C2": {
+  "issue": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+  "via": "juiz-tp"
+ },
+ "ds|async-import-of-the-appstore-packages-cal-com|C1": {
+  "issue": "async-import-of-the-appstore-packages-cal-com#02",
+  "via": "juiz-tp"
+ },
+ "ds|async-import-of-the-appstore-packages-cal-com|C2": {
+  "issue": "async-import-of-the-appstore-packages-cal-com#02",
+  "via": "juiz-tp"
+ },
+ "opus|feat-add-calendar-cache-status-and-actions-22532-cal-com|C1": {
+  "issue": "feat-add-calendar-cache-status-and-actions-22532-cal-com#07",
+  "via": "juiz-tp"
+ },
+ "opus|feat-add-calendar-cache-status-and-actions-22532-cal-com|C2": {
+  "issue": "feat-add-calendar-cache-status-and-actions-22532-cal-com#pf-opus-C2",
+  "via": "classificacao",
+  "class": "TP",
+  "subclass": "none",
+  "upstream": "pendente"
+ },
+ "muse|add-comprehensive-email-validation-for-blocked-users-discourse-cursor|C1": {
+  "issue": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+  "via": "juiz-tp"
+ },
+ "muse|add-comprehensive-email-validation-for-blocked-users-discourse-cursor|C2": {
+  "issue": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#03",
+  "via": "juiz-fp"
+ },
+ "muse|feat-add-calendar-cache-status-and-actions-22532-cal-com|C1": {
+  "issue": "feat-add-calendar-cache-status-and-actions-22532-cal-com#pf-muse-C1",
+  "via": "classificacao",
+  "class": "FP",
+  "subclass": "none",
+  "upstream": null
+ },
+ "muse|feat-add-calendar-cache-status-and-actions-22532-cal-com|C2": {
+  "issue": "feat-add-calendar-cache-status-and-actions-22532-cal-com#muse13-01",
+  "via": "juiz-tp"
+ },
+ "muse|plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex|C1": {
+  "issue": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#03",
+  "via": "juiz-tp"
+ },
+ "muse|plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex|C2": {
+  "issue": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#13",
+  "via": "juiz-fp"
+ },
+ "kimi|implement-access-token-context-encoding-framework-keycloak|C1": {
+  "issue": "implement-access-token-context-encoding-framework-keycloak#01",
+  "via": "juiz-tp"
+ },
+ "kimi|implement-access-token-context-encoding-framework-keycloak|C2": {
+  "issue": "implement-access-token-context-encoding-framework-keycloak#02",
+  "via": "juiz-tp"
+ },
+ "ds|add-guest-management-functionality-to-existing-bookings-cal-com|C1": {
+  "issue": "add-guest-management-functionality-to-existing-bookings-cal-com#prod-01",
+  "via": "juiz-fp"
+ },
+ "ds|feat-add-calendar-cache-status-and-actions-22532-cal-com|C1": {
+  "issue": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+  "via": "juiz-tp"
+ },
+ "ds|implement-recovery-key-support-for-user-storage-providers-keycloak|C1": {
+  "issue": "implement-recovery-key-support-for-user-storage-providers-keycloak#pf-ds-C1",
+  "via": "classificacao",
+  "class": "TP",
+  "subclass": "nit",
+  "upstream": null
+ },
+ "ds|span-buffer-multiprocess-enhancement-with-health-monitoring-sentry|C1": {
+  "issue": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#10",
+  "via": "juiz-tp"
+ },
+ "gpt|enhanced-pagination-performance-for-high-volume-audit-logs-sentry|C1": {
+  "issue": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+  "via": "juiz-tp"
+ },
+ "gpt|implement-recovery-key-support-for-user-storage-providers-keycloak|C1": {
+  "issue": "implement-recovery-key-support-for-user-storage-providers-keycloak#01",
+  "via": "juiz-tp"
+ },
+ "opus|add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak|C1": {
+  "issue": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+  "via": "juiz-tp"
+ },
+ "opus|enhance-embed-url-handling-and-validation-system-discourse-cursor|C1": {
+  "issue": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-02",
+  "via": "juiz-fp"
+ },
+ "opus|optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor|C1": {
+  "issue": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#musep-01",
+  "via": "juiz-fp"
+ },
+ "sonnet|add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak|C1": {
+  "issue": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#snapi-01",
+  "via": "juiz-tp"
+ },
+ "sonnet|dual-storage-architecture-grafana-codex|C1": {
+  "issue": "dual-storage-architecture-grafana-codex#01",
+  "via": "juiz-tp"
+ },
+ "sonnet|fix-handle-collective-multiple-host-on-destinationcalendar-cal-com|C1": {
+  "issue": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+  "via": "juiz-tp"
+ },
+ "sonnet|replays-self-serve-bulk-delete-system-sentry|C1": {
+  "issue": "replays-self-serve-bulk-delete-system-sentry#21",
+  "via": "juiz-fp"
+ },
+ "muse|add-guest-management-functionality-to-existing-bookings-cal-com|C1": {
+  "issue": "add-guest-management-functionality-to-existing-bookings-cal-com#pf-muse-C1",
+  "via": "classificacao",
+  "class": "FP",
+  "subclass": "none",
+  "upstream": null
+ },
+ "muse|feature-can-edit-category-host-relationships-for-embedding-discourse-cursor|C1": {
+  "issue": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+  "via": "juiz-tp"
+ },
+ "muse|replays-self-serve-bulk-delete-system-sentry|C1": {
+  "issue": "replays-self-serve-bulk-delete-system-sentry#01",
+  "via": "juiz-tp"
+ },
+ "kimi|add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak|C1": {
+  "issue": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+  "via": "juiz-tp"
+ },
+ "kimi|authzservice-improve-authz-caching-grafana-codex|C1": {
+  "issue": "authzservice-improve-authz-caching-grafana-codex#02",
+  "via": "juiz-fp"
+ },
+ "kimi|feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com|C1": {
+  "issue": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#kimi-03",
+  "via": "juiz-tp"
+ },
+ "kimi|implement-recovery-key-support-for-user-storage-providers-keycloak|C1": {
+  "issue": "implement-recovery-key-support-for-user-storage-providers-keycloak#01",
+  "via": "juiz-tp"
+ },
+ "kimi|plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex|C1": {
+  "issue": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#pf-kimi-C1",
+  "via": "classificacao",
+  "class": "FP",
+  "subclass": "hallucination",
+  "upstream": null
+ },
+ "opus|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|C1": {
+  "issue": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+  "via": "juiz-tp"
+ },
+ "opus|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|C2": {
+  "issue": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+  "via": "juiz-tp"
+ },
+ "opus|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|C3": {
+  "issue": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+  "via": "juiz-tp"
+ },
+ "opus|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|C4": {
+  "issue": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+  "via": "juiz-tp"
+ },
+ "opus|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|C5": {
+  "issue": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+  "via": "juiz-tp"
+ },
+ "opus|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|C6": {
+  "issue": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+  "via": "juiz-tp"
+ },
+ "opus|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|C7": {
+  "issue": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+  "via": "juiz-tp"
+ },
+ "kimi|dual-storage-architecture-grafana-codex|C1": {
+  "issue": "dual-storage-architecture-grafana-codex#04",
+  "via": "juiz-tp"
+ },
+ "kimi|dual-storage-architecture-grafana-codex|C2": {
+  "issue": "dual-storage-architecture-grafana-codex#01",
+  "via": "juiz-tp"
+ },
+ "kimi|dual-storage-architecture-grafana-codex|C3": {
+  "issue": "dual-storage-architecture-grafana-codex#03",
+  "via": "juiz-tp"
+ },
+ "kimi|dual-storage-architecture-grafana-codex|C4": {
+  "issue": "dual-storage-architecture-grafana-codex#04",
+  "via": "juiz-tp"
+ },
+ "kimi|dual-storage-architecture-grafana-codex|C5": {
+  "issue": "dual-storage-architecture-grafana-codex#02",
+  "via": "juiz-tp"
+ },
+ "ds|implement-access-token-context-encoding-framework-keycloak|C1": {
+  "issue": "implement-access-token-context-encoding-framework-keycloak#02",
+  "via": "juiz-tp"
+ },
+ "ds|implement-access-token-context-encoding-framework-keycloak|C2": {
+  "issue": "implement-access-token-context-encoding-framework-keycloak#01",
+  "via": "juiz-tp"
+ },
+ "ds|implement-access-token-context-encoding-framework-keycloak|C3": {
+  "issue": "implement-access-token-context-encoding-framework-keycloak#02",
+  "via": "juiz-tp"
+ },
+ "sonnet|add-html-sanitizer-for-translated-message-resources-keycloak|C1": {
+  "issue": "add-html-sanitizer-for-translated-message-resources-keycloak#10",
+  "via": "juiz-tp"
+ },
+ "sonnet|add-html-sanitizer-for-translated-message-resources-keycloak|C2": {
+  "issue": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+  "via": "juiz-tp"
+ },
+ "sonnet|add-html-sanitizer-for-translated-message-resources-keycloak|C3": {
+  "issue": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+  "via": "juiz-tp"
+ },
+ "kimi|advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com|C1": {
+  "issue": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+  "via": "juiz-tp"
+ },
+ "kimi|advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com|C2": {
+  "issue": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+  "via": "juiz-tp"
+ },
+ "kimi|advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com|C3": {
+  "issue": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03",
+  "via": "juiz-tp"
+ },
+ "kimi|sms-workflow-reminder-retry-count-tracking-cal-com|C1": {
+  "issue": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
+  "via": "juiz-tp"
+ },
+ "kimi|sms-workflow-reminder-retry-count-tracking-cal-com|C2": {
+  "issue": "sms-workflow-reminder-retry-count-tracking-cal-com#07",
+  "via": "juiz-tp"
+ },
+ "kimi|sms-workflow-reminder-retry-count-tracking-cal-com|C3": {
+  "issue": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+  "via": "juiz-tp"
+ },
+ "ds|comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com|C1": {
+  "issue": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#12",
+  "via": "juiz-fp"
+ },
+ "ds|comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com|C2": {
+  "issue": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#pf-ds-C2",
+  "via": "classificacao",
+  "class": "FP",
+  "subclass": "none",
+  "upstream": null
+ },
+ "sonnet|async-import-of-the-appstore-packages-cal-com|C1": {
+  "issue": "async-import-of-the-appstore-packages-cal-com#02",
+  "via": "juiz-tp"
+ },
+ "sonnet|async-import-of-the-appstore-packages-cal-com|C2": {
+  "issue": "async-import-of-the-appstore-packages-cal-com#02",
+  "via": "juiz-tp"
+ },
+ "muse|add-html-sanitizer-for-translated-message-resources-keycloak|C1": {
+  "issue": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+  "via": "juiz-tp"
+ },
+ "muse|add-html-sanitizer-for-translated-message-resources-keycloak|C2": {
+  "issue": "add-html-sanitizer-for-translated-message-resources-keycloak#pf-muse-C2",
+  "via": "classificacao",
+  "class": "TP",
+  "subclass": "nit",
+  "upstream": null
+ },
+ "muse|fix-handle-collective-multiple-host-on-destinationcalendar-cal-com|C1": {
+  "issue": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+  "via": "juiz-tp"
+ },
+ "muse|fix-handle-collective-multiple-host-on-destinationcalendar-cal-com|C2": {
+  "issue": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#prod-01",
+  "via": "juiz-tp"
+ },
+ "kimi|add-rolling-updates-feature-flag-and-compatibility-framework-keycloak|C1": {
+  "issue": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#01",
+  "via": "juiz-fp"
+ },
+ "kimi|add-rolling-updates-feature-flag-and-compatibility-framework-keycloak|C2": {
+  "issue": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#01",
+  "via": "juiz-fp"
+ },
+ "kimi|span-buffer-multiprocess-enhancement-with-health-monitoring-sentry|C1": {
+  "issue": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#10",
+  "via": "juiz-tp"
+ },
+ "kimi|span-buffer-multiprocess-enhancement-with-health-monitoring-sentry|C2": {
+  "issue": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#01",
+  "via": "juiz-tp"
+ },
+ "ds|advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com|C1": {
+  "issue": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#04",
+  "via": "juiz-tp"
+ },
+ "ds|feat-ecosystem-implement-cross-system-issue-synchronization-sentry|C1": {
+  "issue": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+  "via": "juiz-tp"
+ },
+ "ds|notification-rule-processing-engine-grafana-codex|C1": {
+  "issue": "notification-rule-processing-engine-grafana-codex#02",
+  "via": "juiz-tp"
+ },
+ "ds|unified-storage-performance-optimizations-grafana-codex|C1": {
+  "issue": "unified-storage-performance-optimizations-grafana-codex#01",
+  "via": "juiz-tp"
+ },
+ "gpt|feat-ecosystem-implement-cross-system-issue-synchronization-sentry|C1": {
+  "issue": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+  "via": "juiz-tp"
+ },
+ "gpt|optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor|C1": {
+  "issue": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#pf-gpt-C1",
+  "via": "classificacao",
+  "class": "TP",
+  "subclass": "none",
+  "upstream": "confirmado"
+ },
+ "opus|add-comprehensive-email-validation-for-blocked-users-discourse-cursor|C1": {
+  "issue": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+  "via": "juiz-tp"
+ },
+ "opus|fix-proper-handling-of-group-memberships-discourse-cursor|C1": {
+  "issue": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+  "via": "juiz-tp"
+ },
+ "opus|optimize-spans-buffer-insertion-with-eviction-during-insert-sentry|C1": {
+  "issue": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01",
+  "via": "juiz-tp"
+ },
+ "sonnet|add-comprehensive-email-validation-for-blocked-users-discourse-cursor|C1": {
+  "issue": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+  "via": "juiz-tp"
+ },
+ "sonnet|feat-add-calendar-cache-status-and-actions-22532-cal-com|C1": {
+  "issue": "feat-add-calendar-cache-status-and-actions-22532-cal-com#07",
+  "via": "juiz-tp"
+ },
+ "sonnet|fix-proper-handling-of-group-memberships-discourse-cursor|C1": {
+  "issue": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+  "via": "juiz-tp"
+ },
+ "sonnet|sms-workflow-reminder-retry-count-tracking-cal-com|C1": {
+  "issue": "sms-workflow-reminder-retry-count-tracking-cal-com#sncc-01",
+  "via": "juiz-tp"
+ },
+ "muse|add-rolling-updates-feature-flag-and-compatibility-framework-keycloak|C1": {
+  "issue": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#01",
+  "via": "juiz-fp"
+ },
+ "muse|feature-localization-fallbacks-server-side-discourse-cursor|C1": {
+  "issue": "feature-localization-fallbacks-server-side-discourse-cursor#05",
+  "via": "juiz-fp"
+ },
+ "muse|sms-workflow-reminder-retry-count-tracking-cal-com|C1": {
+  "issue": "sms-workflow-reminder-retry-count-tracking-cal-com#sncc-01",
+  "via": "juiz-tp"
+ },
+ "kimi|add-comprehensive-email-validation-for-blocked-users-discourse-cursor|C1": {
+  "issue": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+  "via": "juiz-tp"
+ },
+ "kimi|database-performance-optimizations-grafana-codex|C1": {
+  "issue": "database-performance-optimizations-grafana-codex#04",
+  "via": "juiz-tp"
+ },
+ "kimi|feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry|C1": {
+  "issue": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+  "via": "juiz-tp"
+ },
+ "kimi|notification-rule-processing-engine-grafana-codex|C1": {
+  "issue": "notification-rule-processing-engine-grafana-codex#11",
+  "via": "juiz-tp"
+ },
+ "kimi|ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry|C1": {
+  "issue": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02",
+  "via": "juiz-tp"
+ },
+ "sonnet|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|C1": {
+  "issue": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+  "via": "juiz-tp"
+ },
+ "sonnet|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|C2": {
+  "issue": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+  "via": "juiz-tp"
+ },
+ "sonnet|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|C3": {
+  "issue": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+  "via": "juiz-tp"
+ },
+ "sonnet|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|C4": {
+  "issue": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+  "via": "juiz-tp"
+ },
+ "sonnet|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|C5": {
+  "issue": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+  "via": "juiz-tp"
+ },
+ "muse|dual-storage-architecture-grafana-codex|C1": {
+  "issue": "dual-storage-architecture-grafana-codex#04",
+  "via": "juiz-tp"
+ },
+ "muse|dual-storage-architecture-grafana-codex|C2": {
+  "issue": "dual-storage-architecture-grafana-codex#04",
+  "via": "juiz-tp"
+ },
+ "muse|dual-storage-architecture-grafana-codex|C3": {
+  "issue": "dual-storage-architecture-grafana-codex#03",
+  "via": "juiz-tp"
+ },
+ "muse|dual-storage-architecture-grafana-codex|C4": {
+  "issue": "dual-storage-architecture-grafana-codex#02",
+  "via": "juiz-tp"
+ },
+ "muse|dual-storage-architecture-grafana-codex|C5": {
+  "issue": "dual-storage-architecture-grafana-codex#snapi-01",
+  "via": "juiz-tp"
+ },
+ "kimi|add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak|C1": {
+  "issue": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#02",
+  "via": "juiz-tp"
+ },
+ "kimi|add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak|C2": {
+  "issue": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#02",
+  "via": "juiz-tp"
+ },
+ "kimi|add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak|C3": {
+  "issue": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#03",
+  "via": "juiz-fp"
+ },
+ "kimi|add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak|C4": {
+  "issue": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#06",
+  "via": "juiz-fp"
+ },
+ "opus|feature-can-edit-category-host-relationships-for-embedding-discourse-cursor|C1": {
+  "issue": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+  "via": "juiz-tp"
+ },
+ "opus|feature-can-edit-category-host-relationships-for-embedding-discourse-cursor|C2": {
+  "issue": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+  "via": "juiz-tp"
+ },
+ "opus|feature-can-edit-category-host-relationships-for-embedding-discourse-cursor|C3": {
+  "issue": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#11",
+  "via": "juiz-tp"
+ },
+ "kimi|add-client-resource-type-and-scopes-to-authorization-schema-keycloak|C1": {
+  "issue": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+  "via": "juiz-tp"
+ },
+ "kimi|add-client-resource-type-and-scopes-to-authorization-schema-keycloak|C2": {
+  "issue": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+  "via": "juiz-fp"
+ },
+ "kimi|add-client-resource-type-and-scopes-to-authorization-schema-keycloak|C3": {
+  "issue": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-02",
+  "via": "juiz-tp"
+ },
+ "kimi|comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com|C1": {
+  "issue": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+  "via": "juiz-tp"
+ },
+ "kimi|comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com|C2": {
+  "issue": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+  "via": "juiz-tp"
+ },
+ "kimi|comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com|C3": {
+  "issue": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+  "via": "juiz-tp"
+ },
+ "ds|advanced-sql-analytics-framework-grafana-codex|C1": {
+  "issue": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+  "via": "juiz-tp"
+ },
+ "ds|advanced-sql-analytics-framework-grafana-codex|C2": {
+  "issue": "advanced-sql-analytics-framework-grafana-codex#prod-01",
+  "via": "juiz-fp"
+ },
+ "gpt|add-comprehensive-email-validation-for-blocked-users-discourse-cursor|C1": {
+  "issue": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+  "via": "juiz-tp"
+ },
+ "gpt|add-comprehensive-email-validation-for-blocked-users-discourse-cursor|C2": {
+  "issue": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#05",
+  "via": "juiz-tp"
+ },
+ "sonnet|notification-rule-processing-engine-grafana-codex|C1": {
+  "issue": "notification-rule-processing-engine-grafana-codex#07",
+  "via": "juiz-tp"
+ },
+ "sonnet|notification-rule-processing-engine-grafana-codex|C2": {
+  "issue": "notification-rule-processing-engine-grafana-codex#11",
+  "via": "juiz-tp"
+ },
+ "muse|feat-2fa-backup-codes-cal-com|C1": {
+  "issue": "feat-2fa-backup-codes-cal-com#15",
+  "via": "juiz-tp"
+ },
+ "muse|feat-2fa-backup-codes-cal-com|C2": {
+  "issue": "feat-2fa-backup-codes-cal-com#pf-muse-C2",
+  "via": "classificacao",
+  "class": "FP",
+  "subclass": "none",
+  "upstream": null
+ },
+ "muse|implement-recovery-key-support-for-user-storage-providers-keycloak|C1": {
+  "issue": "implement-recovery-key-support-for-user-storage-providers-keycloak#02",
+  "via": "juiz-tp"
+ },
+ "muse|implement-recovery-key-support-for-user-storage-providers-keycloak|C2": {
+  "issue": "implement-recovery-key-support-for-user-storage-providers-keycloak#prod-01",
+  "via": "juiz-fp"
+ },
+ "kimi|fix-handle-collective-multiple-host-on-destinationcalendar-cal-com|C1": {
+  "issue": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+  "via": "juiz-tp"
+ },
+ "kimi|fix-handle-collective-multiple-host-on-destinationcalendar-cal-com|C2": {
+  "issue": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#pf-kimi-C2",
+  "via": "classificacao",
+  "class": "TP",
+  "subclass": "nit",
+  "upstream": null
+ },
+ "ds|add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak|C1": {
+  "issue": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#02",
+  "via": "juiz-tp"
+ },
+ "ds|advanced-query-processing-architecture-grafana-codex|C1": {
+  "issue": "advanced-query-processing-architecture-grafana-codex#01",
+  "via": "juiz-tp"
+ },
+ "ds|feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry|C1": {
+  "issue": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+  "via": "juiz-tp"
+ },
+ "ds|optimize-spans-buffer-insertion-with-eviction-during-insert-sentry|C1": {
+  "issue": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#06",
+  "via": "juiz-tp"
+ },
+ "gpt|add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak|C1": {
+  "issue": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+  "via": "juiz-tp"
+ },
+ "gpt|feature-can-edit-category-host-relationships-for-embedding-discourse-cursor|C1": {
+  "issue": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#11",
+  "via": "juiz-tp"
+ },
+ "gpt|replays-self-serve-bulk-delete-system-sentry|C1": {
+  "issue": "replays-self-serve-bulk-delete-system-sentry#opa-02",
+  "via": "juiz-tp"
+ },
+ "opus|async-import-of-the-appstore-packages-cal-com|C1": {
+  "issue": "async-import-of-the-appstore-packages-cal-com#02",
+  "via": "juiz-tp"
+ },
+ "opus|github-oauth-security-enhancement-sentry|C1": {
+  "issue": "github-oauth-security-enhancement-sentry#10",
+  "via": "juiz-tp"
+ },
+ "opus|replays-self-serve-bulk-delete-system-sentry|C1": {
+  "issue": "replays-self-serve-bulk-delete-system-sentry#opa-02",
+  "via": "juiz-tp"
+ },
+ "sonnet|advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com|C1": {
+  "issue": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#04",
+  "via": "juiz-tp"
+ },
+ "sonnet|feature-automatically-downsize-large-images-discourse-cursor|C1": {
+  "issue": "feature-automatically-downsize-large-images-discourse-cursor#02",
+  "via": "juiz-tp"
+ },
+ "sonnet|optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor|C1": {
+  "issue": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#pf-sonnet-C1",
+  "via": "classificacao",
+  "class": "TP",
+  "subclass": "none",
+  "upstream": "confirmado"
+ },
+ "sonnet|span-buffer-multiprocess-enhancement-with-health-monitoring-sentry|C1": {
+  "issue": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#02",
+  "via": "juiz-tp"
+ },
+ "muse|comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com|C1": {
+  "issue": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#12",
+  "via": "juiz-fp"
+ },
+ "muse|fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak|C1": {
+  "issue": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+  "via": "juiz-tp"
+ },
+ "muse|span-buffer-multiprocess-enhancement-with-health-monitoring-sentry|C1": {
+  "issue": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08",
+  "via": "juiz-tp"
+ },
+ "kimi|add-groups-resource-type-and-scopes-to-authorization-schema-keycloak|C1": {
+  "issue": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+  "via": "juiz-tp"
+ },
+ "kimi|enhanced-pagination-performance-for-high-volume-audit-logs-sentry|C1": {
+  "issue": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#01",
+  "via": "juiz-tp"
+ },
+ "kimi|feature-automatically-downsize-large-images-discourse-cursor|C1": {
+  "issue": "feature-automatically-downsize-large-images-discourse-cursor#sncc-01",
+  "via": "juiz-tp"
+ },
+ "kimi|optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor|C1": {
+  "issue": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#03",
+  "via": "juiz-tp"
+ },
+ "kimi|unified-storage-performance-optimizations-grafana-codex|C1": {
+  "issue": "unified-storage-performance-optimizations-grafana-codex#01",
+  "via": "juiz-tp"
+ }
+}

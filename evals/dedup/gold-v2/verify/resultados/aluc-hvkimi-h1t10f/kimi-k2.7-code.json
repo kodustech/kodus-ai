@@ -1,0 +1,2972 @@
+{
+ "model": "kimi-k2.7-code",
+ "verificador": "kimi-k2.7-code@openrouter",
+ "versao": "hvkimi-h1t10f",
+ "versaoDedup": "hvkimi-dedup",
+ "prs": {
+  "add-guest-management-functionality-to-existing-bookings-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11",
+      "S2",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S3",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9",
+      "S1",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-2fa-backup-codes-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "sms-workflow-reminder-retry-count-tracking-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7",
+      "S2",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:3: `import { describe, expect, it } from \"vitest\";` — the tests use Vitest, not Jest, contradicting the comment's repeated claim that \"Jest toEqual\" is the comparison mechanism. packages/lib/server/service/insightsBooking.ts:119-122, 171-174, 204-207 show `Prisma.sql\\`(${acc}) AND (${condition})\\`` / `OR` composition; Prisma's `sql` tag is designed to flatten interpolated Sql fragments into a single Sql object with a flat `values` array, so the actual result is not nested and compares equal to the flat expected literal.",
+       "reason": "The comment is factually wrong about both the test runner and Prisma.sql's behavior: the test uses Vitest, not Jest, and Prisma.sql flattens nested Sql interpolations, so the returned Sql object has a flat values array comparable with the flat expected literal."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence quotes the test file's actual import (`import { describe, expect, it } from \"vitest\"`), which directly contradicts the comment's repeated claim that the tests use Jest. It also quotes the service's `Prisma.sql` composition code and shows that Prisma flattens interpolated Sql fragments, so the assertion that the resulting `values` array is nested and unequal is false."
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "packages/lib/server/service/insightsBooking.ts:154\n`const teamIds = [options.orgId, ...teamsFromOrg.map((t) => t.id)];`\n\nThe array always includes `options.orgId`, so it is never empty even when `teamsFromOrg` is empty. The org scope schema also requires `orgId: z.number()` (lines 17-19), guaranteeing a typed non-empty array is passed to `ANY`.",
+       "reason": "The reported runtime error depends on `teamIds` being empty, but the code seeds the array with `options.orgId`, so the array is never empty and the type-inference failure cannot occur."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence quotes the actual code that constructs `teamIds` at line 154, showing it always includes `options.orgId`, so the comment's factual claim that `teamIds` is empty when there are no child teams is false."
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 1494,
+    "cacheRead": 0,
+    "output": 1548,
+    "reasoning": 1390,
+    "ms": 23038
+   }
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S18",
+      "S20"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16",
+      "S2",
+      "S14"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:5-11\n```ts\nconst minimumTokenResponseSchema = z.object({\n  access_token: z.string(),\n  //   Assume that any property with a number is the expiry\n  [z.string().toString()]: z.number(),\n  //   Allow other properties in the token response\n  [z.string().optional().toString()]: z.unknown().optional(),\n});\n```\nThe schema is a plain `z.object(...)` with no `.strict()` or catchall, so Zod’s default behavior is to strip unknown keys rather than reject them.",
+       "reason": "Zod object schemas strip unknown keys by default, so the schema accepts responses with arbitrary extra keys as long as `access_token` is present and does not reject otherwise-valid provider responses."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "The evidence relies on Zod's default behavior for plain object schemas (strip unknown keys rather than reject), which is a claim about how the Zod library behaves, not a repository-code fact that contradicts what the comment states the code contains or does."
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S17",
+      "S21"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S19",
+     "membros": [
+      "S19",
+      "S4",
+      "S22"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 723,
+    "cacheRead": 0,
+    "output": 580,
+    "reasoning": 518,
+    "ms": 14776
+   }
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "db/migrate/20150818190757_create_embeddable_hosts.rb:5: `t.integer :category_id, null: false` shows `category_id` is an integer column. app/controllers/admin/embeddable_hosts_controller.rb:24-25 assigns `params[:embeddable_host][:category_id]` to `host.category_id` and then checks `.blank?` on that integer attribute. In Rails ActiveSupport, integer `0.blank?` returns `false`, so `0` is not treated the same as `nil` or an empty string.",
+       "reason": "The comment assumes `0` is falsy/blank, but `category_id` is an integer column and `0.blank?` is `false` in Rails, so the code does not silently replace a category id of `0`."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "The evidence relies on Rails ActiveSupport behavior (0.blank? returns false for integers) to refute the comment; the quoted migration and controller files only illustrate the column type and assignment, so the rebuttal is grounded in framework semantics rather than a direct factual contradiction within the repository code."
+     }
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S17"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S10",
+      "S16"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S18"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13",
+      "S14"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 703,
+    "cacheRead": 0,
+    "output": 1076,
+    "reasoning": 1007,
+    "ms": 24816
+   }
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S5",
+      "S6",
+      "S7",
+      "S8",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "app/controllers/admin/groups_controller.rb:37: `group.alias_level = params[:alias_level].to_i if params[:alias_level].present?`; in Rails/ActiveSupport, Numeric#blank? is false (so 0.present? is true) and the string \"0\" is also present?, so a selected alias_level of 0 is not skipped.",
+       "reason": "The comment's premise that `present?` treats 0 as absent is false for both the Integer 0 and the string \"0\", so the bug it describes does not exist."
+      }
+     ],
+     "nit": false,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "argues",
+      "reason": "The evidence quotes the relevant line but relies on Rails/ActiveSupport framework behavior (Numeric#blank? being false, so 0.present? is true) to dispute the comment's claim, rather than repository-specific code that contradicts it."
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S1",
+      "S5",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 629,
+    "cacheRead": 0,
+    "output": 573,
+    "reasoning": 514,
+    "ms": 14298
+   }
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "lib/topic_retriever.rb:9:    perform_retrieve unless (invalid_host? || retrieved_recently?)\nlib/topic_retriever.rb:14-19:    def invalid_host? ... SiteSetting.embeddable_host != URI(@embed_url).host ... rescue URI::InvalidURIError ... true\nspec/components/topic_retriever_spec.rb:11,17,23:    topic_retriever.expects(:perform_retrieve).never (in the first three tests, which do not stub retrieved_recently?)",
+       "reason": "The retrieve method evaluates invalid_host? before deciding whether to call perform_retrieve, and the first three tests assert perform_retrieve is never called without stubbing retrieved_recently?, so a bug making invalid_host? return false would normally invoke perform_retrieve and fail those tests, meaning they do exercise the real host-matching logic."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence quotes the repository's actual retrieve method and the first three spec tests to show that invalid_host? is evaluated before perform_retrieve and that retrieved_recently? is not stubbed in those tests. That directly refutes the comment's factual claim that a bug in invalid_host? would not cause these tests to fail and that they exercise the mock rather than the real host-matching logic."
+     }
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S17",
+     "membros": [
+      "S17"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S18",
+     "membros": [
+      "S18"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S14"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13",
+      "S15",
+      "S16"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "lib/enum.rb:14: `start = options.fetch(:start) { 1 }` – Enum defaults to starting at 1, not 0.\napp/models/post.rb:64: `@cook_methods ||= Enum.new(:regular, :raw_html)` – no `:start` option is passed, so `:regular => 1` and `:raw_html => 2`.\ndb/migrate/20131219203905_add_cook_method_to_posts.rb:3: `add_column :posts, :cook_method, :integer, default: 1, null: false` – the default value 1 therefore maps to `:regular`, not `:raw_html`.\napp/models/post.rb:133: `return raw if cook_method == Post.cook_methods[:raw_html]` – only value 2 would skip cooking, so default posts are cooked normally.",
+       "reason": "The comment's central claim that the enum maps `:regular` to 0 and `:raw_html` to 1 is false; the project's `Enum` class starts at 1 by default, so the migration's default of 1 corresponds to `:regular` and posts are cooked normally."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence quotes the repository's own Enum implementation (lib/enum.rb default start of 1), the actual Post.cook_methods definition (without :start), the migration default value, and the cooking guard condition to show that the comment's claimed enum mapping (regular => 0, raw_html => 1) is factually false in this repository."
+     }
+    }
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 1622,
+    "cacheRead": 0,
+    "output": 6260,
+    "reasoning": 6080,
+    "ms": 110553
+   }
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "frontend-asset-optimization-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "pkg/services/anonymous/anonimpl/client.go:44-46 returns anonstore.ErrDeviceLimitReached directly from Authenticate; no backend translation wrapper exists. Repository search shows no backend i18n.Translate or equivalent package (only frontend files: packages/grafana-ui/src/utils/i18n.tsx, public/locales). The Go sentinel at pkg/services/anonymous/anonimpl/anonstore/database.go:18 is fmt.Errorf(\"device limit reached\"); Grafana's backend has no i18n/translation system for Go error literals to bypass.",
+       "reason": "The backend has no project-wide translation mechanism for Go error strings, so the claim that the literal bypasses one is false."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence cites repository searches and specific source locations showing Grafana's backend has no i18n/translation mechanism for Go error strings, directly refuting the comment's factual claim that the literal bypasses such a system."
+     }
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 677,
+    "cacheRead": 0,
+    "output": 281,
+    "reasoning": 223,
+    "ms": 6054
+   }
+  },
+  "unified-storage-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "pkg/storage/unified/resource/server.go:293-318: func (s *server) Init(ctx context.Context) error { s.once.Do(func() { ... }) return s.initErr }",
+       "reason": "The Init method is guarded by sync.Once (s.once.Do), so calling it again after construction is a no-op and does not affect or break consumers."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence quotes the Init implementation in pkg/storage/unified/resource/server.go:293-318, which uses sync.Once (s.once.Do), proving that calling Init again after construction is a no-op. This directly contradicts the comment's factual claim that consumers calling Init after construction would be affected or broken."
+     }
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 596,
+    "cacheRead": 0,
+    "output": 358,
+    "reasoning": 281,
+    "ms": 8284
+   }
+  },
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "dual-storage-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S16",
+     "membros": [
+      "S16"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S10",
+      "S17"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S11",
+      "S18"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S19"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S13",
+     "membros": [
+      "S13",
+      "S14",
+      "S15",
+      "S20"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "notification-rule-processing-engine-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "implement-access-token-context-encoding-framework-keycloak": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S1",
+      "S3",
+      "S4",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "services/src/main/java/org/keycloak/utils/GroupUtils.java:90: representation.setSubGroupCount(group.getSubGroupsCount()); and core/src/main/java/org/keycloak/representations/idm/GroupRepresentation.java:94: public void setSubGroupCount(Long subGroupCount) {",
+       "reason": "The only production caller passes the result to a method that accepts java.lang.Long, so no unboxing or dereference occurs and no NullPointerException is introduced."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence quotes the actual production caller and the target setter signature, showing the result is passed into a java.lang.Long parameter with no unboxing or dereference, which contradicts the comment's claim that existing callers will unbox or dereference it and throw NullPointerException."
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S2",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 645,
+    "cacheRead": 0,
+    "output": 403,
+    "reasoning": 336,
+    "ms": 9080
+   }
+  },
+  "fixing-re-authentication-with-passkeys-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "services/src/main/java/org/keycloak/authentication/authenticators/browser/AbstractUsernameFormAuthenticator.java:129: boolean shouldClearUserFromCtxAfterBadPassword = !isUserAlreadySetBeforeUsernamePasswordAuth(context);\nservices/src/main/java/org/keycloak/authentication/authenticators/browser/AbstractUsernameFormAuthenticator.java:130: return user != null && validatePassword(context, user, inputData, shouldClearUserFromCtxAfterBadPassword) && validateUser(context, user, inputData);\nservices/src/main/java/org/keycloak/authentication/authenticators/browser/AbstractUsernameFormAuthenticator.java:138-143: if (isUserAlreadySetBeforeUsernamePasswordAuth(context)) { UserModel user = context.getUser(); testInvalidUser(context, user); return user; } else { context.clearUser(); ... }\nservices/src/main/java/org/keycloak/authentication/authenticators/browser/AbstractUsernameFormAuthenticator.java:257-259: protected boolean isUserAlreadySetBeforeUsernamePasswordAuth(AuthenticationFlowContext context) { String userSet = context.getAuthenticationSession().getAuthNote(USER_SET_BEFORE_USERNAME_PASSWORD_AUTH); return Boolean.parseBoolean(userSet); }",
+       "reason": "The flag is also consumed by AbstractUsernameFormAuthenticator itself to decide whether to clear the user on bad password, whether to retrieve the user from context, and which error message to show, so the claim that it is consumed only by AuthenticatorUtils.setupReauthenticationInUsernamePasswordFormError is false."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence quotes code in the same repository that reads and acts on USER_SET_BEFORE_USERNAME_PASSWORD_AUTH inside AbstractUsernameFormAuthenticator itself (to decide whether to clear the user on a bad password, whether to fetch the user from the context, etc.), which directly falsifies the comment's factual claim that the flag is consumed only by AuthenticatorUtils.setupReauthenticationInUsernamePasswordFormError."
+     }
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 859,
+    "cacheRead": 0,
+    "output": 216,
+    "reasoning": 127,
+    "ms": 5454
+   }
+  },
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:77-83\n```\n    public boolean canView(ClientModel client) {\n        if (canView() || canConfigure(client)) {\n            return true;\n        }\n\n        return hasPermission(client, AdminPermissionsSchema.VIEW);\n    }\n```\nservices/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissionManagement.java:29\n```\n    public static final String VIEW_SCOPE = \"view\";\n```\nserver-spi-private/src/main/java/org/keycloak/authorization/AdminPermissionsSchema.java:59\n```\n    public static final String VIEW = \"view\";\n```",
+       "reason": "ClientPermissionsV2.canView(ClientModel) does perform a per-client view check via hasPermission(client, AdminPermissionsSchema.VIEW), and AdminPermissionsSchema.VIEW equals AdminPermissionManagement.VIEW_SCOPE (both \"view\"), so the V1 per-client VIEW_SCOPE check is not absent; the comment’s claim that it is absent is false."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence quotes ClientPermissionsV2.canView(ClientModel) calling hasPermission(client, AdminPermissionsSchema.VIEW), and shows AdminPermissionsSchema.VIEW and AdminPermissionManagement.VIEW_SCOPE are both the literal string \"view\". This factually contradicts the comment's claim that V2 never evaluates the per-client VIEW_SCOPE permission."
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7",
+      "S9",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 786,
+    "cacheRead": 0,
+    "output": 249,
+    "reasoning": 171,
+    "ms": 6060
+   }
+  },
+  "add-html-sanitizer-for-translated-message-resources-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "replays-self-serve-bulk-delete-system-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "src/sentry/issues/endpoints/browser_reporting_collector.py:50-60\n```python\n    def validate_timestamp(self, value: int) -> int:\n        \"\"\"Validate that age is absent, but timestamp is present.\"\"\"\n        if self.initial_data.get(\"age\"):\n            raise serializers.ValidationError(\"If timestamp is present, age must be absent\")\n        return value\n\n    def validate_age(self, value: int) -> int:\n        \"\"\"Validate that age is present, but not timestamp.\"\"\"\n        if self.initial_data.get(\"timestamp\"):\n            raise serializers.ValidationError(\"If age is present, timestamp must be absent\")\n        return value\n```\ntests/sentry/api/endpoints/test_browser_reporting_collector.py:164-175 also expects exactly these messages under their respective fields, confirming they are not swapped.",
+       "reason": "The timestamp validator already produces an error about age, and the age validator already produces an error about timestamp, which matches the existing test expectations, so the claim that the messages are swapped is false."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The quoted validators already show validate_timestamp raising an error about age and validate_age raising an error about timestamp, with tests expecting exactly those messages, so the claim that the messages are swapped is factually false about the code."
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 764,
+    "cacheRead": 0,
+    "output": 249,
+    "reasoning": 193,
+    "ms": 6087
+   }
+  },
+  "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7",
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "src/sentry/conf/server.py:739-741 sets CELERY_TASK_SERIALIZER = \"pickle\" and CELERY_ACCEPT_CONTENT = {\"pickle\"}, so Celery serializes task kwargs with pickle, not JSON. Pickle can encode datetime objects, so the task will not fail at the serialization boundary with a TypeError due to JSON encoding.",
+       "reason": "The reported bug depends on Celery using JSON serialization, but the repository configures Celery to use pickle as the task serializer, and pickle handles datetime objects."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The repository's Celery configuration (src/sentry/conf/server.py:739-741) sets CELERY_TASK_SERIALIZER = \"pickle\" and CELERY_ACCEPT_CONTENT = {\"pickle\"}, so Celery does not serialize task kwargs with JSON. This directly falsifies the comment's claim that the dict is 'serialized by Celery using JSON' and therefore disproves the predicted JSON datetime serialization failure."
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "src/sentry/integrations/mixins/issues.py:397-403 defines `sync_assignee_outbound(..., **kwargs: Any)`. Concrete overrides also accept `**kwargs: Any`: src/sentry/integrations/jira_server/integration.py:1038-1044, src/sentry/integrations/jira/integration.py:936-942, src/sentry/integrations/vsts/issues.py:217-223, src/sentry/integrations/example/integration.py:152-158. The caller at src/sentry/integrations/tasks/sync_assignee_outbound.py:59-61 passes `assignment_source=parsed_assignment_source`, which is consumed by these `**kwargs` signatures, so no `TypeError` occurs.",
+       "reason": "Because the abstract method and every concrete override already accept arbitrary keyword arguments via `**kwargs: Any`, the new `assignment_source` keyword argument is already valid, so the reported runtime TypeError does not exist."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The cited code shows the abstract method and all concrete overrides already accept **kwargs: Any, so passing assignment_source does not cause a TypeError as the comment claims."
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 1416,
+    "cacheRead": 0,
+    "output": 472,
+    "reasoning": 327,
+    "ms": 6320
+   }
+  },
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "github-oauth-security-enhancement-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "async-import-of-the-appstore-packages-cal-com": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S1",
+      "S2",
+      "S5",
+      "S6",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "apps/web/test/lib/getSchedule.test.ts:123-124 defines the date override as startTime `1970-01-01T14:00:00.000Z` / endTime `1970-01-01T18:00:00.000Z`; lines 782-783 and 800-801 expect the converted UTC slots `08:30:00.000Z`, `09:30:00.000Z`, `10:30:00.000Z`, `11:30:00.000Z`; lines 53-58 show the matcher compares actual `slot.time` to `${dateString}T${expectedSlots[index]}`, so if the +5:30 conversion were removed the actual slots would be 14:00-17:00 UTC and the assertion would fail.",
+       "reason": "The expected UTC slot values are fixed and are the correctly converted times, so the test would fail if the date-override timezone conversion were removed or broken."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence quotes the relevant test file (apps/web/test/lib/getSchedule.test.ts) and shows the matcher compares actual slot.time values against fixed, converted UTC expected slots, not against themselves. If the +5:30 conversion were removed, the actual UTC slots would differ from the expected values and the assertion would fail, which directly contradicts the comment's claim."
+     }
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7",
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 776,
+    "cacheRead": 0,
+    "output": 467,
+    "reasoning": 382,
+    "ms": 9279
+   }
+  },
+  "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S1",
+      "S9",
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "app/controllers/topics_controller.rb:99 `@topic_view = TopicView.new(params[:topic_id], current_user)` is followed by TopicUser update/save at lines 105-113, and only then `perform_show_response` at line 115. lib/topic_view.rb:238-242 memoizes `@topic_user` only when `topic_user` is first called, and `TopicView#initialize` (lines 31-71) does not call `topic_user`; `find_topic` only `includes(:category)` (line 358). Therefore the memoized `@topic_user` is not populated before the TopicUser update, and the serializer in `perform_show_response` will fetch the updated record, not the old notification level.",
+       "reason": "The bug claim depends on TopicView.topic_user being cached before TopicUser is updated, but the code does not memoize topic_user until it is first called, which happens after the update."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence directly quotes repository code showing that TopicView#initialize does not call topic_user, the memoized @topic_user is only set when topic_user is first called, and that call happens after the TopicUser update/save; this refutes the comment's factual claim that the old notification_level is cached before the update."
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "app/controllers/topics_controller.rb:8-28 – `before_filter :ensure_logged_in` applies to `:unsubscribe`; app/controllers/application_controller.rb:408-410 – `ensure_logged_in` raises `Discourse::NotLoggedIn` unless `current_user.present?`; app/controllers/topics_controller.rb:98-115 – the `unsubscribe` action looks up/changes the `TopicUser` row for `current_user.id`, so a user must be logged in for the notification level to change.",
+       "reason": "The topic unsubscribe endpoint is protected by `ensure_logged_in`, so merely possessing or visiting the public `#{url}/unsubscribe` link cannot change a notification level without an authenticated session; the reported unauthenticated capability-bearing-link issue therefore does not exist."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence quotes repository code showing the unsubscribe endpoint is guarded by `ensure_logged_in` and only modifies `current_user`'s `TopicUser` record, so visiting the bare URL cannot automatically change a recipient's notification level without an authenticated session."
+     }
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "app/models/topic.rb:263-274: `def fancy_title\\n  sanitized_title = ERB::Util.html_escape(title)\\n  ...\\n  Redcarpet::Render::SmartyPants.render(sanitized_title)\\nend`; spec/models/topic_spec.rb:167-177: tests that `<script>`, `<b>` and `<img>` in titles are escaped in `fancy_title`.",
+       "reason": "The topic title is HTML-escaped server-side before it becomes `fancy_title` (which the client’s `model.fancyTitle` uses), so arbitrary HTML/JS is not present in the interpolated value and the triple-brace rendering does not create an XSS vulnerability."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence quotes topic.rb and its specs, which show that fancy_title HTML-escapes the title server-side and that script/img/b tags are escaped, directly refuting the comment's premise that model.fancyTitle might contain unescaped HTML/JS."
+     }
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "app/models/topic.rb:719-720 `def unsubscribe_url; \"#{url}/unsubscribe\"; end` and app/models/topic.rb:703-711 `def self.url(id, slug, post_number=nil); url = \"#{Discourse.base_url}/t/#{slug}/#{id}\"; ...; end` / `def url(post_number = nil); self.class.url id, slug, post_number; end` show `post.topic.unsubscribe_url` is built from `Topic#url`, which already prepends `Discourse.base_url` and is therefore absolute, not relative.",
+       "reason": "The reported bug depends on `post.topic.unsubscribe_url` being a relative path that needs `Discourse.base_url` prepended, but the code shows it is already absolute because `Topic#url` uses `Discourse.base_url`."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence quotes app/models/topic.rb showing that unsubscribe_url is built from Topic#url, which already prepends Discourse.base_url, so post.topic.unsubscribe_url is absolute, directly contradicting the comment's claim that it is a relative path."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S3",
+      "S4",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 4,
+    "input": 2918,
+    "cacheRead": 0,
+    "output": 1358,
+    "reasoning": 1094,
+    "ms": 14517
+   }
+  },
+  "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "lib/validators/email_validator.rb:21 `value =~ regexp` — Ruby’s Object#=~ returns nil for a nil receiver, so no NoMethodError is raised.",
+       "reason": "The `=~` call on a nil value invokes Object#=~ and returns nil rather than raising NoMethodError, so the reported crash does not occur."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence quotes the exact line `value =~ regexp` and shows that, because Ruby's Object#=~ returns nil for a nil receiver, the code does not raise a NoMethodError as the comment claims. This directly refutes a factual statement about what the code does."
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S1",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 630,
+    "cacheRead": 0,
+    "output": 2878,
+    "reasoning": 2810,
+    "ms": 53059
+   }
+  },
+  "advanced-sql-analytics-framework-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S2",
+      "S4",
+      "S6",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "advanced-query-processing-architecture-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "authzservice-improve-authz-caching-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4",
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "database-performance-optimizations-grafana-codex": {
+   "grupos": [
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S3",
+      "S4",
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
+   "grupos": []
+  },
+  "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2",
+      "S3",
+      "S4"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "GroupPermissionEvaluator.java:72-77 documents canManage() as: \"Returns {@code true} if the caller has {@link AdminRoles#MANAGE_USERS} role.\\n<p/>\\nFor V2 only: Also if it has permission to {@link AdminPermissionsSchema#VIEW} or\\n{@link AdminPermissionsSchema#MANAGE} groups.\"",
+       "reason": "The GroupPermissionEvaluator contract explicitly states that for V2, canManage() returns true when the caller has either VIEW or MANAGE permission on groups, so checking both scopes does not violate the contract."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence quotes the GroupPermissionEvaluator contract in this repository, which explicitly states that for V2, canManage() returns true when the caller has either VIEW or MANAGE permission on groups. This directly contradicts the comment's claim that requiring only MANAGE is the correct contract."
+     }
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 674,
+    "cacheRead": 0,
+    "output": 227,
+    "reasoning": 159,
+    "ms": 4733
+   }
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "model/storage/src/main/java/org/keycloak/credential/UserCredentialManager.java:114-117 and :298-305: removeStoredCredentialById calls getStoreForUser(user).removeStoredCredential(...), and getStoreForUser returns p.userFederatedStorage() when StorageId.isLocalStorage(user.getId()) is false; model/jpa/src/main/java/org/keycloak/storage/jpa/JpaUserFederatedStorageProvider.java:601 implements removeStoredCredential for federated storage.",
+       "reason": "The comment's reported problem depends on the false claim that removeStoredCredentialById only removes locally stored credentials; the implementation routes removal through either local or federated storage depending on where the user is stored, and a federated-storage implementation exists."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence quotes the repository's UserCredentialManager showing that removeStoredCredentialById delegates to getStoreForUser, which returns federated storage when the user is not in local storage, and cites a JpaUserFederatedStorageProvider implementation of removeStoredCredential. This directly disproves the comment's factual claim that removeStoredCredentialById only removes locally stored credentials."
+     }
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 756,
+    "cacheRead": 0,
+    "output": 399,
+    "reasoning": 312,
+    "ms": 7578
+   }
+  },
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S9",
+     "membros": [
+      "S9"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3",
+      "S6"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7",
+      "S8"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ]
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "src/sentry/search/events/builder/discover.py:65-71 maps `Dataset.Events` (the errors dataset) to `DiscoverDatasetConfig`:\n        if self.dataset in [\n            Dataset.Discover,\n            Dataset.Transactions,\n            Dataset.Events,\n            Dataset.IssuePlatform,\n        ]:\n            return DiscoverDatasetConfig(self)\n\nsrc/sentry/search/events/datasets/discover.py:1042 registers `upsampled_count` in that same config:\n                    \"upsampled_count\",",
+       "reason": "The errors dataset uses `DiscoverDatasetConfig`, which already defines `upsampled_count`, so the errors-dataset `count()` rewrite will not hit an unknown function error."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence shows that Dataset.Events (the errors dataset) is mapped to DiscoverDatasetConfig, and that upsampled_count is registered in DiscoverDatasetConfig, so the comment's claim that the errors dataset config might not inherit upsampled_count is factually false."
+     }
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 710,
+    "cacheRead": 0,
+    "output": 377,
+    "reasoning": 314,
+    "ms": 6906
+   }
+  },
+  "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+   "grupos": [
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "src/sentry/api/paginator.py:838-843 — OptimizedCursorPaginator.get_item_key does `int(math.floor(value))` on `getattr(item, self.key)`, operating on and returning a numeric value, so value_from_cursor correctly returns the same numeric cursor.value rather than a datetime; converting it to a datetime would be inconsistent with this paginator's key type.",
+       "reason": "The comment assumes OptimizedCursorPaginator should mirror DateTimePaginator by converting the cursor value back to a datetime, but its own get_item_key treats the item key as a numeric value (math.floor/math.ceil) and returns an int, so value_from_cursor returning the numeric cursor.value is internally consistent and not the described bug."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence quotes OptimizedCursorPaginator.get_item_key in src/sentry/api/paginator.py:838-843, showing it applies math.floor and returns an int, so this paginator uses a numeric key. Therefore value_from_cursor returning the numeric cursor.value is consistent with the actual key type, contradicting the comment's claim that it must be converted back to a datetime to avoid a datetime-column mismatch."
+     }
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S10",
+     "membros": [
+      "S10"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "src/sentry/api/paginator.py:133-134\n    def value_from_cursor(self, cursor):\n        raise NotImplementedError\n\nsrc/sentry/api/paginator.py:226-227\n    def value_from_cursor(self, cursor):\n        return cursor.value\n\nA search for cursor.value + 1 / value_from_cursor with + returned no matches in the file.",
+       "reason": "The comment relies on BasePaginator incrementing cursor.value for previous cursors, but BasePaginator.value_from_cursor is an abstract NotImplementedError stub and the concrete Paginator subclass also returns cursor.value unchanged; there is no +1 behavior to restore, so the claimed boundary mismatch is grounded in a false fact."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment claims BasePaginator.value_from_cursor returns cursor.value + 1 for previous cursors, but the repository shows BasePaginator.value_from_cursor raises NotImplementedError and the concrete Paginator subclass also returns cursor.value unchanged, with no +1 behavior anywhere in the file."
+     }
+    },
+    {
+     "rep": "S11",
+     "membros": [
+      "S11"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "src/sentry/api/paginator.py:130-131:     def get_item_key(self, item, for_prev):\\n        raise NotImplementedError\\n(No isinstance(self.key, Callable) branch exists in BasePaginator or anywhere in the file.)",
+       "reason": "BasePaginator.get_item_key is abstract and raises NotImplementedError, so it provides no callable-key branch for OptimizedCursorPaginator to omit, and no existing paginator in the file supports callable keys."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The comment claims BasePaginator.get_item_key provides a callable-key branch, but the quoted code at src/sentry/api/paginator.py:130-131 shows it is abstract and only raises NotImplementedError, and no callable-key branch exists anywhere in the file."
+     }
+    },
+    {
+     "rep": "S14",
+     "membros": [
+      "S14"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S1",
+     "membros": [
+      "S1",
+      "S5",
+      "S6",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S12",
+     "membros": [
+      "S12",
+      "S3",
+      "S8",
+      "S9",
+      "S13"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S15",
+     "membros": [
+      "S15",
+      "S16"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 3,
+    "input": 1996,
+    "cacheRead": 0,
+    "output": 2295,
+    "reasoning": 2067,
+    "ms": 30608
+   }
+  },
+  "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S4",
+     "membros": [
+      "S4"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S5",
+     "membros": [
+      "S5"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:83-86: `min_offset = min(all_offsets)` and `start = max(last_committed + 1, min_offset)` — the loop starts at the smallest tracked offset, not at `last_committed + 1`, so gaps before the first tracked offset are skipped.\nsrc/sentry/remote_subscriptions/consumers/queue_consumer.py:89-93: `for offset in range(start, max_offset + 1): if offset in all_offsets and offset not in outstanding: highest_committable = offset else: break` — it stops at the first missing offset, so it never walks across large gaps between tracked offsets.",
+       "reason": "Because `start` is clamped to `min(all_offsets)` and the loop breaks on the first absent offset, the iteration count is bounded by the contiguous tracked prefix (backlog), not by sparse offset gaps, so the claimed O(offset-gap) stall does not exist."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence quotes the actual function in the repository and shows the loop starts at the smallest tracked offset and breaks on the first missing offset, so it does not iterate across large sparse gaps. This directly contradicts the comment's factual claim about O(offset-gap) behavior and stalling."
+     }
+    },
+    {
+     "rep": "S6",
+     "membros": [
+      "S6",
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    }
+   ],
+   "uso": {
+    "chamadas": 1,
+    "input": 776,
+    "cacheRead": 0,
+    "output": 420,
+    "reasoning": 352,
+    "ms": 7834
+   }
+  },
+  "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {
+   "grupos": [
+    {
+     "rep": "S1",
+     "membros": [
+      "S1"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S2",
+     "membros": [
+      "S2"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "src/sentry/scripts/spans/add-buffer.lua:66-70 tracks root-span status in a separate key regardless of sorted-set contents:\n\nlocal has_root_span_key = string.format(\"span-buf:hrs:%s\", set_key)\nlocal has_root_span = redis.call(\"get\", has_root_span_key) == \"1\" or is_root_span\nif has_root_span then\n    redis.call(\"setex\", has_root_span_key, set_timeout, \"1\")\nend\n\nsrc/sentry/spans/buffer.py:252-259 decides the queue timeout from that returned flag, before flush_segments runs:\n\nif has_root_span:\n    has_root_span_count += 1\n    offset = self.span_buffer_root_timeout_secs\nelse:\n    offset = self.span_buffer_timeout_secs\n\nzadd_items = queue_adds.setdefault(queue_key, {})\nzadd_items[add_item] = now + offset",
+       "reason": "Root timeout is chosen in process_spans based on the has_root_span flag returned by add-buffer.lua, not by flush_segments; add-buffer.lua preserves that flag in a separate has_root_span_key even if zpopmin evicts the root span payload, so root timeout is still applied."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence quotes src/sentry/scripts/spans/add-buffer.lua:66-70 showing root-span status is stored in a separate has_root_span_key independent of the sorted set, and src/sentry/spans/buffer.py:252-259 showing the queue timeout is chosen from that returned flag before flush_segments runs. This falsifies the comment's claim that zpopmin eviction breaks root-span detection in flush_segments so that root timeout is not applied."
+     }
+    },
+    {
+     "rep": "S3",
+     "membros": [
+      "S3"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S7",
+     "membros": [
+      "S7"
+     ],
+     "refs": [],
+     "nit": false,
+     "etapa1": false
+    },
+    {
+     "rep": "S8",
+     "membros": [
+      "S8",
+      "S9"
+     ],
+     "refs": [
+      {
+       "verdict": "refuted",
+       "evidence": "src/sentry/spans/buffer.py:434: `p.zscan(key, cursor=cursor, count=self.segment_page_size)` loads each segment's spans via ZSCAN, which Redis does not guarantee returns members sorted by score; flush_segments then yields output_spans in that arbitrary iteration order.",
+       "reason": "The comment's recommendation assumes flushed segment spans are ordered by end_timestamp_precise, but the buffer loads them with ZSCAN, whose iteration order is not score-ordered, so that assertion would test behavior the code does not implement."
+      }
+     ],
+     "nit": true,
+     "etapa1": true,
+     "etapa2": {
+      "kind": "contradicts",
+      "reason": "The evidence quotes src/sentry/spans/buffer.py showing flush_segments loads spans via ZSCAN and yields output_spans in that iteration order, which means the code does not order flushed spans by end_timestamp_precise. This directly contradicts the comment's recommendation to assert such ordering."
+     }
+    }
+   ],
+   "uso": {
+    "chamadas": 2,
+    "input": 1452,
+    "cacheRead": 0,
+    "output": 1713,
+    "reasoning": 1539,
+    "ms": 24406
+   }
+  }
+ },
+ "sobre": "hvkimi-h1t10",
+ "prompt": "c3"
+}

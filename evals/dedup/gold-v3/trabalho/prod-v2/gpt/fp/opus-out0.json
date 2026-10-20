@@ -1,0 +1,34 @@
+{
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+    {
+      "id": "V1",
+      "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#06",
+      "newGroup": null,
+      "reason": "Same claim: the lenient ASN1 sequence parser accepts malformed DER (child extending past the sequence boundary); #06 was rejected because the parser never sees external signatures."
+    }
+  ],
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+    {
+      "id": "V2",
+      "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#12",
+      "newGroup": null,
+      "reason": "Same defect: the immediateDelete branch of deleteScheduledEmailReminder returns without marking the WorkflowReminder row cancelled; only the stated consequence differs."
+    }
+  ],
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+    {
+      "id": "V1",
+      "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#23",
+      "newGroup": null,
+      "reason": "Same claim: `<%- end if %>` in embed/best.html.erb is a conditionless if that makes the template fail to compile/render."
+    }
+  ],
+  "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": [
+    {
+      "id": "V2",
+      "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#opa-01",
+      "newGroup": null,
+      "reason": "Same claim: test_dedupe expects fingerprint with 'val1' while evaluation uses 'group_key', so the equality assertion fails."
+    }
+  ]
+}

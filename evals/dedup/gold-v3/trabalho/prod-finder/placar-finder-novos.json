@@ -1,0 +1,74 @@
+{
+ "ds": {
+  "comentarios": 139,
+  "tp": 46,
+  "fp_nit": 73,
+  "fp_alucinacao": 20,
+  "fp_duplicata": 12,
+  "totalTp": 192,
+  "recall": 24.0,
+  "precisao": 33.1,
+  "f1": 27.8,
+  "f2": 25.4
+ },
+ "gpt": {
+  "comentarios": 107,
+  "tp": 71,
+  "fp_nit": 34,
+  "fp_alucinacao": 2,
+  "fp_duplicata": 0,
+  "totalTp": 192,
+  "recall": 37.0,
+  "precisao": 66.4,
+  "f1": 47.5,
+  "f2": 40.6
+ },
+ "opus": {
+  "comentarios": 156,
+  "tp": 78,
+  "fp_nit": 74,
+  "fp_alucinacao": 4,
+  "fp_duplicata": 6,
+  "totalTp": 192,
+  "recall": 40.6,
+  "precisao": 50.0,
+  "f1": 44.8,
+  "f2": 42.2
+ },
+ "sonnet": {
+  "comentarios": 123,
+  "tp": 69,
+  "fp_nit": 53,
+  "fp_alucinacao": 1,
+  "fp_duplicata": 5,
+  "totalTp": 192,
+  "recall": 35.9,
+  "precisao": 56.1,
+  "f1": 43.8,
+  "f2": 38.7
+ },
+ "muse": {
+  "comentarios": 196,
+  "tp": 83,
+  "fp_nit": 92,
+  "fp_alucinacao": 21,
+  "fp_duplicata": 6,
+  "totalTp": 192,
+  "recall": 43.2,
+  "precisao": 42.3,
+  "f1": 42.8,
+  "f2": 43.0
+ },
+ "kimi": {
+  "comentarios": 208,
+  "tp": 70,
+  "fp_nit": 123,
+  "fp_alucinacao": 15,
+  "fp_duplicata": 29,
+  "totalTp": 192,
+  "recall": 36.5,
+  "precisao": 33.7,
+  "f1": 35.0,
+  "f2": 35.9
+ }
+}

@@ -1,0 +1,74 @@
+{
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Zero-length INTEGER making BigInteger throw NumberFormatException; rejected issues cover indefinite-length -1 (NegativeArraySize) and truncation, a different cause."
+  }
+ ],
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": [
+  {
+   "id": "V1",
+   "match": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Same claim: null update strategy case returns before enabling the rolling-updates feature in UpgradeTest."
+  }
+ ],
+ "authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "authzservice-improve-authz-caching-grafana-codex#oph-01",
+   "newGroup": null,
+   "reason": "Same claim: denial cache checked first and never invalidated, so new grants/resources stay denied for the TTL."
+  }
+ ],
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+  {
+   "id": "V3",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#12",
+   "newGroup": null,
+   "reason": "Same claim: immediateDelete branch cancels SendGrid batch but neither deletes nor marks the WorkflowReminder row."
+  }
+ ],
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "V1",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#prod-01",
+   "newGroup": null,
+   "reason": "Same claim: getCredentials dereferences getMyUser without null check, NPE for missing user."
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "V1",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02",
+   "newGroup": null,
+   "reason": "Same claim: ClientRemovedEvent listener calls ClientPermissionsV2.setPermissionsEnabled which throws when V1 and V2 enabled, breaking client deletion."
+  }
+ ],
+ "anonymous-add-configurable-device-limit-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#opa-01",
+   "newGroup": null,
+   "reason": "Same claim: ProvideAnonDBStore's new int64 param still registered as wire provider with AnonStore bind, breaking wire/build."
+  }
+ ],
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "V4",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: `<%- end if %>` in embed/best.html.erb is invalid Ruby so the template fails to render."
+  }
+ ],
+ "fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Remove link shown because `automatic` resolves against the member context in group_member.hbs; no rejected issue covers this template condition."
+  }
+ ]
+}

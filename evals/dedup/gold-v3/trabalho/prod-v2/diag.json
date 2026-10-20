@@ -1,0 +1,74 @@
+{
+ "ds": {
+  "prodG": 45,
+  "light": 46,
+  "enxuta": 1,
+  "rescueX": 8,
+  "lentesX": 27,
+  "prod": 53,
+  "heavy": 73,
+  "prodForaHeavy": 20,
+  "heavyForaProd": 40,
+  "repete": 42
+ },
+ "gpt": {
+  "prodG": 65,
+  "light": 84,
+  "enxuta": 19,
+  "rescueX": 3,
+  "lentesX": 30,
+  "prod": 68,
+  "heavy": 114,
+  "prodForaHeavy": 4,
+  "heavyForaProd": 50,
+  "repete": 67
+ },
+ "sonnet": {
+  "prodG": 66,
+  "light": 66,
+  "enxuta": 0,
+  "rescueX": 7,
+  "lentesX": 32,
+  "prod": 73,
+  "heavy": 98,
+  "prodForaHeavy": 16,
+  "heavyForaProd": 41,
+  "repete": 59
+ },
+ "opus": {
+  "prodG": 76,
+  "light": 103,
+  "enxuta": 27,
+  "rescueX": 10,
+  "lentesX": 24,
+  "prod": 86,
+  "heavy": 127,
+  "prodForaHeavy": 8,
+  "heavyForaProd": 49,
+  "repete": 64
+ },
+ "muse": {
+  "prodG": 70,
+  "light": 63,
+  "enxuta": -7,
+  "rescueX": 8,
+  "lentesX": 16,
+  "prod": 78,
+  "heavy": 79,
+  "prodForaHeavy": 21,
+  "heavyForaProd": 22,
+  "repete": 62
+ },
+ "kimi": {
+  "prodG": 56,
+  "light": 54,
+  "enxuta": -2,
+  "rescueX": 14,
+  "lentesX": 15,
+  "prod": 70,
+  "heavy": 69,
+  "prodForaHeavy": 23,
+  "heavyForaProd": 22,
+  "repete": 45
+ }
+}

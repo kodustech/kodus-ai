@@ -48,6 +48,9 @@ def novo(m):
         out[modo] = {'uso': uso, 'porPr': pr}
     return out
 NOVO = {m[0]: novo(m[4]) for m in MODELOS}
+Q3 = json.load(open(f'{AQUI}/../light-rescue/placar.json')) if os.path.exists(f'{AQUI}/../light-rescue/placar.json') else {}
+Q4 = json.load(open(f'{AQUI}/../light-rescue/projecao-heavy.json')) if os.path.exists(f'{AQUI}/../light-rescue/projecao-heavy.json') else {}
+Q5 = json.load(open(f'{AQUI}/../light-rescue/x2.json')) if os.path.exists(f'{AQUI}/../light-rescue/x2.json') else {}
 def best(m1, m2):
     if not m2: return 'v1'
     return 'v2' if (m2['recall'], m2['f2']) > (m1['recall'], m1['f2']) else 'v1'
@@ -72,10 +75,13 @@ def uso_prod(k2):
 lin = []
 for m, k2, nome, via, _ in MODELOS:
     v1 = Q1[f'{m}|producao']; v2 = Q2.get(k2); b = best(v1, v2); base = v2 if b == 'v2' else v1
-    rows = [('Produção V1', v1, b == 'v1', False), ('Produção V2', v2, b == 'v2', False), ('Novo light', Q1[f'{m}|light'], False, True), ('Novo heavy', Q1[f'{m}|heavy'], False, True)]
+    rows = [('Produção V1', v1, b == 'v1', False), ('Produção V2', v2, b == 'v2', False), ('Novo light', Q1[f'{m}|light'], False, True)]
+    if m != 'sonnet-sdk': rows.append(('Novo light + rescue', Q3.get(k2), False, True))
+    rows.append(('Novo heavy', Q1[f'{m}|heavy'], False, True))
+    if m != 'sonnet-sdk': rows.append(('Novo heavy + rescue', Q4.get(k2), False, True))
     for j, (vn, q, destaque, cmp) in enumerate(rows):
         cls = ' '.join(x for x in ('gtop' if j == 0 else '', 'best' if destaque else '') if x)
-        head = f'<th rowspan="4" class="mod">{nome}<span class="via">{via}</span></th>' if j == 0 else ''
+        head = f'<th rowspan="{len(rows)}" class="mod">{nome}<span class="via">{via}</span></th>' if j == 0 else ''
         if not q:
             lin.append(f'<tr class="{cls}">{head}<td class="ver">{vn}</td><td colspan="7" class="pend">pendente</td></tr>'); continue
         cel = lambda k: f'<b>{q[k]:.1f}</b>' + (d(q[k], base[k]) if cmp else '')
@@ -89,7 +95,8 @@ def percs(uso):
     return {k: {p: pct([u[k] for u in uso.values()], q) for p, q in PS} for k, *_ in MET} if uso else None
 USO = {}
 for m, k2, *_ in MODELOS:
-    USO[m] = {'producao': percs(uso_prod(k2)), 'light': percs(NOVO[m]['light']['uso']), 'heavy': percs(NOVO[m]['heavy']['uso'])}
+    USO[m] = {'producao': percs(uso_prod(k2)), 'light': percs(NOVO[m]['light']['uso']), 'heavy': percs(NOVO[m]['heavy']['uso']),
+              'lr': percs({c: u['finder'] for c, u in Q3[k2]['uso'].items()}) if k2 in Q3 else None}
 cards = {}
 for p, _ in PS:
     blocos = []
@@ -105,8 +112,9 @@ for p, _ in PS:
     cards[p] = ''.join(blocos)
 tl = []
 for m, k2, nome, via, _ in MODELOS:
-    for j, (v, vn) in enumerate((('producao', 'Produção V2'), ('light', 'Novo light'), ('heavy', 'Novo heavy'))):
-        u = USO[m][v]; head = f'<th rowspan="3" class="mod">{nome}</th>' if j == 0 else ''
+    vs = (('producao', 'Produção V2'), ('light', 'Novo light')) + ((('lr', 'Novo light + rescue'),) if m != 'sonnet-sdk' else ()) + (('heavy', 'Novo heavy'),)
+    for j, (v, vn) in enumerate(vs):
+        u = USO[m][v]; head = f'<th rowspan="{len(vs)}" class="mod">{nome}</th>' if j == 0 else ''
         if not u: tl.append(f'<tr class="{"gtop" if j == 0 else ""}">{head}<td class="ver">{vn}</td><td colspan="12" class="pend">pendente</td></tr>'); continue
         cel = ''.join(f'<td class="{p} {"sep" if p == "p50" else ""}">{fmt(u[k][p])}</td>' for k, _, fmt in MET for p, _ in PS)
         tl.append(f'<tr class="{"gtop" if j == 0 else ""}">{head}<td class="ver">{vn}</td>{cel}</tr>')
@@ -132,6 +140,23 @@ for m, k2, nome, via, _ in MODELOS:
         pa.append(f'<tr class="{"gtop" if j == 0 else ""}{" tot" if o == "finder" else ""}">{head}<td class="ver">{on}</td><td>{r["comentarios"]}</td><td>{tps}</td><td><b>{pt}</b></td>'
                   f'<td>{r["recall"]:.1f}</td><td>{r["precisao"]:.1f}</td>{share}</tr>')
 tab_orig = ''.join(pa)
+ex = []
+for m, k2, nome, via, _ in MODELOS:
+    if m == 'sonnet-api': continue
+    q = Q2.get(k2); nm = 'Sonnet 5.5' if k2 == 'sonnet' else nome
+    if not q: ex.append(f'<tr class="gtop"><th class="mod">{nm}</th><td colspan="4" class="pend">pendente</td></tr>'); continue
+    ids = {o: set(q['porOrigem'][o]['tpIds']) for o, _ in ORIG}
+    for j, (o, on) in enumerate(ORIG):
+        outro = ids['synthesis-rescue' if o == 'generalist' else 'generalist']
+        so = ids[o] - outro; ach = len(ids[o])
+        head = f'<th rowspan="2" class="mod">{nm}</th>' if j == 0 else ''
+        ex.append(f'<tr class="{"gtop" if j == 0 else ""}">{head}<td class="ver">{on}</td><td>{ach}</td><td><b>{len(so)}</b></td><td>{round(100 * len(so) / ach) if ach else 0}%</td></tr>')
+tab_excl = ''.join(ex)
+DG = json.load(open(f'{AQUI}/diag.json')) if os.path.exists(f'{AQUI}/diag.json') else {}
+DGN = {'ds': 'DeepSeek v4.1 Flash', 'gpt': 'GPT 6.1 Sol', 'sonnet': 'Sonnet 5.5 via API', 'opus': 'Opus 5.5', 'muse': 'Muse Spark 1.3', 'kimi': 'Kimi K2.7 Code'}
+sg = lambda n: f'+{n}' if n > 0 else (f'−{-n}' if n < 0 else '0')
+tab_diag = ''.join(f'<tr class="{"foco" if k in ("muse", "kimi") else ""}"><th class="mod">{DGN[k]}</th><td>{d["prodG"]}</td><td>{d["light"]}</td><td><b>{sg(d["enxuta"])}</b></td><td>{d["rescueX"]}</td><td>{d["lentesX"]}</td><td>{d["prod"]}</td><td>{d["heavy"]}</td><td>{d["prodForaHeavy"]} / {d["heavyForaProd"]}</td><td>{d["repete"]}%</td></tr>' for k, d in DG.items())
+DIAG = open(f'{AQUI}/diagnostico.html').read() if os.path.exists(f'{AQUI}/diagnostico.html') else ''
 # por passada, por percentil
 def percs_o(q, o): return {k: {p: pct([u[o][k] for u in q['uso'].values()], qq) for p, qq in PS} for k, *_ in MET}
 porp = {}
@@ -178,7 +203,7 @@ html = f'''<title>Finder no gold v3</title>
 <div class="wrap">
 <h1>Finder no gold v3</h1>
 <p class="sub">Só a etapa do finder, antes do dedup e do verify · 50 PRs (light 30 + holdout 20) · gold v3 medido pelo <code>class_reviewed</code> · {TOTAL} TPs{(" · pendentes: " + ", ".join(pend)) if pend else ""}</p>
-<nav class="tabs" role="tablist"><button class="tab on" data-t="geral" role="tab">Geral</button><button class="tab" data-t="passadas" role="tab">Generalista × synthesis rescue</button></nav>
+<nav class="tabs" role="tablist"><button class="tab on" data-t="geral" role="tab">Geral</button><button class="tab" data-t="passadas" role="tab">Generalista × synthesis rescue</button><button class="tab" data-t="diag" role="tab">Diagnóstico Muse e Kimi</button></nav>
 <section data-t="geral">
 <div class="regra">
 <div><b>TP</b><p>Problema do gold que o repositório original corrigiu ou descontinuou. Cada TP conta uma vez.</p></div>
@@ -205,6 +230,11 @@ html = f'''<title>Finder no gold v3</title>
 <div class="scroll"><table class="t3"><thead><tr><th>Modelo</th><th>Passada</th><th>Comentários</th><th>TPs achados</th><th>% dos TPs do finder</th><th>Recall</th><th>Precisão</th><th>% do input</th><th>% do output</th><th>% do tempo</th></tr></thead><tbody>
 {tab_orig}
 </tbody></table></div>
+<h3>TPs exclusivos de cada passada</h3>
+<p class="nota">TPs achados: todos os que a passada achou. Exclusivos: os que só ela achou, sem a outra passada achar também.</p>
+<div class="scroll"><table class="t6"><thead><tr><th>Modelo</th><th>Passada</th><th>TPs achados</th><th>TPs exclusivos</th><th>% exclusivos</th></tr></thead><tbody>
+{tab_excl}
+</tbody></table></div>
 <h3>Por passada, por PR</h3>
 <p class="nota">Tokens e tempo de cada passada por PR, ao lado do finder inteiro e do novo light, que substitui o finder de produção na experiência do cliente.</p>
 {ptabs("porp", porp, lambda x: f'<div class="scroll"><table class="t4"><thead><tr><th>Modelo</th><th>Versão</th><th>Input</th><th>Cache read</th><th>Output</th><th>Tempo</th></tr></thead><tbody>{x}</tbody></table></div>')}
@@ -212,6 +242,14 @@ html = f'''<title>Finder no gold v3</title>
 <p class="nota">Hoje o cliente recebe o finder de produção (generalista + synthesis rescue); com a troca passa a receber o novo light. Por PR, no percentil escolhido: quantos TPs e quantos FPs o finder entrega, e que parte dos comentários é TP.</p>
 {ptabs("cli", cli, lambda x: f'<div class="scroll"><table class="t5"><thead><tr><th>Modelo</th><th>Versão</th><th>TPs por PR</th><th>FPs por PR</th><th>Comentários por PR</th><th>TP no que chega</th></tr></thead><tbody>{x}</tbody></table></div>')}
 {OBS}
+</section>
+<section data-t="diag" hidden>
+<h2>Por que o light e o heavy perdem da produção na Muse e no Kimi</h2>
+<p class="nota">TPs distintos em 50 PRs. Produção = V2 (generalista + rescue, sem verify). Light e heavy = rodadas do novo fluxo.</p>
+<div class="scroll"><table class="t7"><thead><tr><th>Modelo</th><th>Generalista de produção</th><th>Light</th><th>Efeito da saída enxuta</th><th>Exclusivos do rescue</th><th>Exclusivos das lentes</th><th>Produção V2</th><th>Heavy</th><th>Só na produção / só no heavy</th><th>TPs que se repetem entre rodadas</th></tr></thead><tbody>
+{tab_diag}
+</tbody></table></div>
+{DIAG}
 </section>
 </div>
 <script>
@@ -223,6 +261,8 @@ html = f'''<title>Finder no gold v3</title>
   document.querySelectorAll('.pt').forEach(function(b){{b.addEventListener('click',function(){{
     var g=b.dataset.g;document.querySelectorAll('.pt[data-g="'+g+'"]').forEach(function(x){{x.classList.toggle('on',x===b)}});
     document.querySelectorAll('.pp[data-g="'+g+'"]').forEach(function(x){{x.hidden=x.dataset.p!==b.dataset.p}})}})}});
+  function fit(){{document.querySelectorAll('.scroll').forEach(function(s){{s.classList.remove('fits');var t=s.querySelector('table');if(t&&t.offsetWidth&&t.offsetWidth<=s.clientWidth)s.classList.add('fits')}})}}
+  fit();window.addEventListener('resize',fit);document.addEventListener('click',function(e){{if(e.target.closest('.tab,.pt'))fit()}});
 }})();
 </script>
 '''

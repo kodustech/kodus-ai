@@ -1,8 +1,8 @@
 <h2>Observações</h2>
 <ul class="obs">
-<li><b>O rescue acha pouco TP só dele e custa caro.</b> TPs que só o rescue achou: Sonnet 7, Opus 10, DeepSeek 8, Muse 8, Kimi 14 (3,6 a 7,3 pp de recall). Para isso ele consome de 28% a 47% do input do finder e de 27% a 58% do tempo.</li>
+<li><b>O rescue acha pouco TP só dele e custa caro.</b> TPs que só o rescue achou: GPT 3, Sonnet 7, Opus 10, DeepSeek 8, Muse 8, Kimi 14 (1,6 a 7,3 pp de recall). Para isso ele consome de 28% a 47% do input do finder e de 27% a 58% do tempo. No GPT o rescue rodou em todos os PRs e voltou vazio em quase todos: 3 comentários em 50 PRs, por 29% do input e 27% do tempo.</li>
 <li><b>A precisão do rescue é mais baixa que a do generalista</b> em quase todos os modelos: DeepSeek 10 TPs em 33 comentários, Kimi 28 em 66 e Muse 10 em 25. Nos modelos Anthropic ela fica perto da do generalista: Sonnet 7 em 12 e Opus 10 em 15.</li>
-<li><b>O rescue roda depois do generalista, em série.</b> O tempo dele soma direto no tempo do finder: na Muse o finder de produção leva 360 s no P50, contra 129 s do novo light.</li>
-<li><b>Finder de produção × novo light no recall:</b> o novo light só ganha no Opus (53,6 contra 44,8). Perde no Sonnet via API (34,4 contra 38,0), no DeepSeek (24,0 contra 27,6), na Muse (32,8 contra 40,6) e no Kimi (28,1 contra 36,5). Em todos eles o novo light gasta bem menos input.</li>
-<li><b>Produção V2 × V1:</b> o recall subiu no Sonnet (+2,1), no Opus (+4,2) e no DeepSeek (+3,6), empatou no Kimi e caiu na Muse (−2,6). A V1 saiu depois do verify interno, que corta candidatos; a V2 é antes dele. Mesmo assim a Muse caiu, o que aponta variação entre rodadas.</li>
+<li><b>O rescue roda depois do generalista, em série.</b> O tempo dele soma direto no tempo do finder: no P50 o finder de produção leva 10,6 min no Kimi e 360 s na Muse, contra 162 s e 129 s do novo light.</li>
+<li><b>Finder de produção × novo light no recall:</b> o novo light ganha no Opus (53,6 contra 44,8) e no GPT (43,8 contra 35,4). Perde no Sonnet via API (34,4 contra 38,0), no DeepSeek (24,0 contra 27,6), na Muse (32,8 contra 40,6) e no Kimi (28,1 contra 36,5). Em todos eles o novo light gasta menos input.</li>
+<li><b>Produção V2 × V1:</b> o recall subiu no Sonnet (+2,1), no Opus (+4,2) e no DeepSeek (+3,6), empatou no Kimi e caiu na Muse (−2,6) e no GPT (−1,6). A V1 saiu depois do verify interno, que corta candidatos; a V2 é antes dele. Mesmo assim Muse e GPT caíram, o que aponta variação entre rodadas.</li>
 </ul>

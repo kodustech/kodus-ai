@@ -1,0 +1,496 @@
+{
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": [
+  {
+   "id": "V3",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#06",
+   "newGroup": null,
+   "reason": "Same claim: lenient readSequence accepts malformed/indefinite-length DER."
+  },
+  {
+   "id": "V4",
+   "match": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-03",
+   "newGroup": null,
+   "reason": "Same claim: integerToBytes truncates oversized r/s, causing malleability."
+  }
+ ],
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
+  {
+   "id": "V3",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Same claim: rejectedEmails.@each does not observe pushes of strings."
+  },
+  {
+   "id": "V4",
+   "match": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "Same claim: EmailValidator dropped the email format check."
+  }
+ ],
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "V3",
+   "match": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#muse13-01",
+   "newGroup": null,
+   "reason": "Same claim: UserPermissionsV2 dropped AdminRoles.ADMIN from canView/canManage."
+  }
+ ],
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": [
+  {
+   "id": "V4",
+   "match": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#snapi-01",
+   "newGroup": null,
+   "reason": "Same claim: optional override.timeZone passed unguarded to dayjs.tz in slots.ts."
+  },
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Performance of per-override dayjs parsing in the day loop; no rejected issue covers it."
+  },
+  {
+   "id": "V6",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Sign inversion (* -1) of the organizer offset in checkIfIsAvailable; #08 is about which timezone is used, a different cause."
+  }
+ ],
+ "async-import-of-the-appstore-packages-cal-com": [
+  {
+   "id": "V1",
+   "match": "async-import-of-the-appstore-packages-cal-com#03",
+   "newGroup": null,
+   "reason": "Same claim: getCalendarCredentials stores un-awaited Promise used by consumers."
+  },
+  {
+   "id": "V5",
+   "match": "async-import-of-the-appstore-packages-cal-com#06",
+   "newGroup": null,
+   "reason": "Same claim: getVideoAdapters awaits imports sequentially."
+  }
+ ],
+ "authzservice-improve-authz-caching-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "authzservice-improve-authz-caching-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Same claim: cached grants trusted without revalidation keep revoked access."
+  },
+  {
+   "id": "V2",
+   "match": "authzservice-improve-authz-caching-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Same claim: List serves stale cached permissions."
+  },
+  {
+   "id": "V3",
+   "match": "authzservice-improve-authz-caching-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Same claim: cached denial blocks newly granted access within TTL."
+  },
+  {
+   "id": "V4",
+   "match": "authzservice-improve-authz-caching-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Same claim: per-resource denial entries grow cache memory unboundedly."
+  }
+ ],
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": [
+  {
+   "id": "V1",
+   "match": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#12",
+   "newGroup": null,
+   "reason": "Same claim: immediateDelete cancels SendGrid but leaves WorkflowReminder row orphaned."
+  }
+ ],
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": [
+  {
+   "id": "V1",
+   "match": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#sncc-01",
+   "newGroup": null,
+   "reason": "Same claim: upsampled_count registered only on Discover config, errors dataset fails."
+  }
+ ],
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": [
+  {
+   "id": "V1",
+   "match": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#muse13-01",
+   "newGroup": null,
+   "reason": "Same claim: unsynchronized partition lock creation in _get_partition_lock."
+  }
+ ],
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": [
+  {
+   "id": "V3",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Same claim: per-topic unsubscribe URL in emails is relative."
+  },
+  {
+   "id": "V4",
+   "match": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Same claim: other mailers do not pass unsubscribe_url, missing interpolation."
+  },
+  {
+   "id": "V5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Route collision of topicUnsubscribe with topic nearPost route; not among rejected claims."
+  }
+ ],
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": [
+  {
+   "id": "V1",
+   "match": "implement-recovery-key-support-for-user-storage-providers-keycloak#prod-01",
+   "newGroup": null,
+   "reason": "Same claim: getCredentials dereferences getMyUser(user) without null check."
+  }
+ ],
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": [
+  {
+   "id": "V2",
+   "match": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#07",
+   "newGroup": null,
+   "reason": "Same claim: missing end_timestamp_precise raises KeyError and aborts the batch."
+  }
+ ],
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": [
+  {
+   "id": "V2",
+   "match": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#muse13-02",
+   "newGroup": null,
+   "reason": "Same claim: same-domain label drops query string and fragment."
+  }
+ ],
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "V1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Missing getForLogin invalidation on removeAll(); no rejected issue covers removeAll."
+  },
+  {
+   "id": "V2",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#10",
+   "newGroup": null,
+   "reason": "Same claim: getLoginPredicate NPE on null config."
+  },
+  {
+   "id": "V3",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#opa-02",
+   "newGroup": null,
+   "reason": "Same claim: each new organizationId invalidates/rebuilds the shared per-mode entry."
+  },
+  {
+   "id": "V4",
+   "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#04",
+   "newGroup": null,
+   "reason": "Same claim: linking/unlinking IDP to organization does not invalidate getForLogin caches."
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "V1",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "newGroup": null,
+   "reason": "Same claim: findByName uses server.getId() instead of getClientId() as owner."
+  },
+  {
+   "id": "V4",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+   "newGroup": null,
+   "reason": "Same claim: ClientRemovedEvent listener calls throwing setPermissionsEnabled, failing client deletion."
+  },
+  {
+   "id": "V5",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#13",
+   "newGroup": null,
+   "reason": "Same claim: hasPermission does not filter by resource id, allowing cross-client grants."
+  },
+  {
+   "id": "V6",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#14",
+   "newGroup": null,
+   "reason": "Same claim: per-client-resource policy evaluation in getClientsWithPermission."
+  }
+ ],
+ "add-guest-management-functionality-to-existing-bookings-cal-com": [
+  {
+   "id": "V7",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#15",
+   "newGroup": null,
+   "reason": "Same claim: the [\"\"] initial empty row causes email validation failures."
+  }
+ ],
+ "add-html-sanitizer-for-translated-message-resources-keycloak": [
+  {
+   "id": "V2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Translation missing English anchors (fewer tags) passes silently and stale matcher; #03 is about more tags than English, opposite direction."
+  }
+ ],
+ "anonymous-add-configurable-device-limit-grafana-codex": [
+  {
+   "id": "V3",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Same claim: zero-row update for stale existing device misreported as ErrDeviceLimitReached."
+  },
+  {
+   "id": "V6",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Same claim: ProvideAnonDBStore int64 param breaks wire DI."
+  },
+  {
+   "id": "V7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Frontend config anonymousDeviceLimit lacks number type annotation; not among rejected claims."
+  }
+ ],
+ "dual-storage-architecture-grafana-codex": [
+  {
+   "id": "V3",
+   "match": "dual-storage-architecture-grafana-codex#12",
+   "newGroup": null,
+   "reason": "Same claim: legacy-create goroutine shares mutable obj with caller (race)."
+  },
+  {
+   "id": "V7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Nil options/listOptions dereference panic; not among rejected claims."
+  }
+ ],
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#25",
+   "newGroup": null,
+   "reason": "Same claim: request.referer interpolated into inline JS string enabling XSS."
+  },
+  {
+   "id": "V2",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#26",
+   "newGroup": null,
+   "reason": "Same claim: postMessage targetOrigin is full referer URL, messages dropped."
+  },
+  {
+   "id": "V6",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Same claim: embed.js null #discourse-comments TypeError."
+  },
+  {
+   "id": "V8",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimi-02",
+   "newGroup": null,
+   "reason": "Same claim: poll_feed imports every item without a cap, worker blowup."
+  },
+  {
+   "id": "V10",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "Same claim: spec expects TopicRetriever while controller enqueues a job."
+  }
+ ],
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
+  {
+   "id": "V2",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#muse13-01",
+   "newGroup": null,
+   "reason": "Same claim: ExampleIntegration override lacks **kwargs for assignment_source, TypeError."
+  }
+ ],
+ "feature-automatically-downsize-large-images-discourse-cursor": [
+  {
+   "id": "V4",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Same claim: hardcoded 10MB download cap bypasses max_image_size_kb."
+  }
+ ],
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "V3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "save_host dereferences params[:embeddable_host] without presence check; not among rejected claims (kimi-03 is about blank? on category_id)."
+  },
+  {
+   "id": "V5",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Same claim: expandable_first_post? lost the embeddable-hosts guard."
+  },
+  {
+   "id": "V8",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-02",
+   "newGroup": null,
+   "reason": "Same claim: TopicEmbed.import passes nil category when no host matches."
+  },
+  {
+   "id": "V9",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#12",
+   "newGroup": null,
+   "reason": "Same claim: plural _ids hydration .map crashes on non-array values."
+  }
+ ],
+ "feature-localization-fallbacks-server-side-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Same claim: nil default_locale raises NoMethodError in FallbackLocaleList#[]."
+  },
+  {
+   "id": "V3",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Same claim: user locale with regex metacharacters reaches load_locale Regexp."
+  },
+  {
+   "id": "V4",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#05",
+   "newGroup": null,
+   "reason": "Same claim: SiteSetting.default_locale lookup on every fallback resolution."
+  }
+ ],
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": [
+  {
+   "id": "V3",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#muse13-01",
+   "newGroup": null,
+   "reason": "Same claim: reader thread busy-loops unbounded group listings."
+  }
+ ],
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "id": "V10",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Booking persists only destinationCalendar[0], orphaning co-host events on reschedule/cancel; not among rejected claims."
+  }
+ ],
+ "fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "V2",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#09",
+   "newGroup": null,
+   "reason": "Same claim: usernames not stripped after comma split."
+  },
+  {
+   "id": "V5",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "Same claim: actions read params[:group_id] while route supplies :id."
+  }
+ ],
+ "fixing-re-authentication-with-passkeys-keycloak": [
+  {
+   "id": "V1",
+   "match": "fixing-re-authentication-with-passkeys-keycloak#muse13-01",
+   "newGroup": null,
+   "reason": "Same claim: attributes set on a fresh discarded context.form() instance."
+  }
+ ],
+ "implement-access-token-context-encoding-framework-keycloak": [
+  {
+   "id": "V3",
+   "match": "implement-access-token-context-encoding-framework-keycloak#07",
+   "newGroup": null,
+   "reason": "Same claim: setFormParams does not refresh cached grantType."
+  },
+  {
+   "id": "V5",
+   "match": "implement-access-token-context-encoding-framework-keycloak#muse13-01",
+   "newGroup": null,
+   "reason": "Same claim: encodeTokenId throws for unmapped grant types, failing token issuance."
+  }
+ ],
+ "notification-rule-processing-engine-grafana-codex": [
+  {
+   "id": "V2",
+   "match": "notification-rule-processing-engine-grafana-codex#10",
+   "newGroup": null,
+   "reason": "Same claim: provisioned detection depends on optional promRule.provenance, making provisioned rules editable."
+  },
+  {
+   "id": "V3",
+   "match": "notification-rule-processing-engine-grafana-codex#muse13-01",
+   "newGroup": null,
+   "reason": "Same claim: loader renders only prom rules, dropping creating/deleting handling."
+  }
+ ],
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": [
+  {
+   "id": "V5",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#06",
+   "newGroup": null,
+   "reason": "Same claim: malformed state makes JSON.parse throw, 500."
+  },
+  {
+   "id": "V8",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#05",
+   "newGroup": null,
+   "reason": "Same claim: team credential path checks only membership, not admin."
+  },
+  {
+   "id": "V9",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#kimip-01",
+   "newGroup": null,
+   "reason": "Same claim: decrypted keys stored without schema validation."
+  },
+  {
+   "id": "V10",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#kimi-01",
+   "newGroup": null,
+   "reason": "Same claim: sync endpoint fetch has no timeout, blocking calendar/video calls."
+  }
+ ],
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
+  {
+   "id": "V1",
+   "match": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Same claim: order mixin box-ordinal-group off by one."
+  }
+ ],
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+  {
+   "id": "V1",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Same claim: factory mutates shared instance next field, data race."
+  },
+  {
+   "id": "V2",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#13",
+   "newGroup": null,
+   "reason": "Same claim: LoggerMiddleware depends on ContextualLoggerMiddleware for plugin identity."
+  }
+ ],
+ "replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "V4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Unsanitized environment/title markdown injection in PR comments; not among rejected claims."
+  },
+  {
+   "id": "V5",
+   "match": "replays-self-serve-bulk-delete-system-sentry#03",
+   "newGroup": null,
+   "reason": "Same claim: unauthenticated endpoint loops over unbounded reports array."
+  },
+  {
+   "id": "V6",
+   "match": "replays-self-serve-bulk-delete-system-sentry#14",
+   "newGroup": null,
+   "reason": "Same claim: column fallback Object.keys(tableData?.meta.fields) crashes when meta/fields missing."
+  }
+ ]
+}
