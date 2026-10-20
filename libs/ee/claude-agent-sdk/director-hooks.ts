@@ -1,6 +1,6 @@
 /**
  * The loop director (the harness policies) applied through the SDK's hooks
- * (A7), as the spike measured them (evals/results/claude-sdk-spike.md):
+ * (A7), as the spike measured them (evals/investigation/results/claude-sdk-spike.md):
  *
  *   UserPromptSubmit  beforeStep(0): note → additionalContext, tools → kept
  *   PostToolBatch     the step is handed to the runner, then shouldStop(n) →

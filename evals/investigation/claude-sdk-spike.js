@@ -10,7 +10,7 @@
  * The SDK is not a dependency yet (T30 pins it); CLAUDE_SDK_DIR points at a
  * folder with `@anthropic-ai/claude-agent-sdk` installed.
  *
- * Answers, written to evals/results/claude-sdk-spike-<date>.json:
+ * Answers, written to evals/investigation/results/claude-sdk-spike-<upstream>-<date>.json:
  *   - RSS and spawn latency of one subprocess (query() → system/init)
  *   - where PostToolBatch `additionalContext` lands in the next request
  *   - whether a Stop `block` counts toward maxTurns
@@ -31,7 +31,7 @@ const { startFakeLlmServer } = require('../shared/fake-llm-server');
 const args = Object.fromEntries(process.argv.slice(2).map((a) => a.replace(/^--/, '').split('=')));
 const UPSTREAM = args.upstream || 'fake';
 const MODEL = args.model || 'claude-sonnet-5-5';
-const RESULTS_DIR = path.join(__dirname, '..', 'results');
+const RESULTS_DIR = path.join(__dirname, 'results');
 
 async function loadSdk() {
     const dir = process.env.CLAUDE_SDK_DIR;

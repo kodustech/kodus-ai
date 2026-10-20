@@ -166,6 +166,39 @@ describe('SdkGateway', () => {
             expect(call.body.provider).toEqual({ order: ['anthropic'], allow_fallbacks: false });
         });
 
+        it('streams the upstream answer as it arrives, without buffering it', async () => {
+            let release!: () => void;
+            const gate = new Promise<void>((r) => (release = r));
+            const first = 'event: message_start\ndata: {"type":"message_start","message":{"usage":{"input_tokens":1,"output_tokens":1}}}\n\n';
+            const streaming = new SdkGateway({
+                fetch: (async () =>
+                    new Response(
+                        new ReadableStream({
+                            async start(c) {
+                                c.enqueue(new TextEncoder().encode(first));
+                                await gate;
+                                c.enqueue(new TextEncoder().encode('event: message_stop\ndata: {"type":"message_stop"}\n\n'));
+                                c.close();
+                            },
+                        }),
+                        { status: 200, headers: { 'content-type': 'text/event-stream' } },
+                    )) as typeof fetch,
+            });
+            try {
+                const s = await streaming.openSession({ route: anthropicRoute(), envelope: {} });
+                const r = await fetch(`${s.baseUrl}/v1/messages`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ model: 'm', messages: [] }) });
+                const reader = r.body!.getReader();
+                const chunk = await reader.read();
+                // The first event reached the client while the upstream is still open.
+                expect(new TextDecoder().decode(chunk.value)).toBe(first);
+                release();
+                while (!(await reader.read()).done);
+            } finally {
+                release();
+                await streaming.close();
+            }
+        });
+
         it('answers HEAD /api/hello itself and forwards count_tokens with the credential, outside the limiter', async () => {
             const s = await open();
             expect((await fetch(`${s.baseUrl}/api/hello`, { method: 'HEAD' })).status).toBe(200);

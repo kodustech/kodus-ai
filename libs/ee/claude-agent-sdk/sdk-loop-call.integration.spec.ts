@@ -8,6 +8,7 @@
 import { encrypt } from '@libs/common/utils/crypto';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { setClaudeSdkExecutors } from '@libs/llm/sdk-executor-registry';
+import { setLlmObservability } from '@libs/llm/llm-observability';
 import { __limiterCacheInternals } from '@libs/llm/byok-to-vercel';
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
@@ -188,6 +189,28 @@ describe('Claude loop on the Agent SDK (real binary)', () => {
         expect(Date.now() - t0).toBeLessThan(15_000);
         expect(gateway.liveSessions).toBe(0);
         expect(pool.inUse).toBe(0);
+    });
+
+    it('a GPT primary that fails before its first step fails over to a Claude fallback on the SDK, each attempt billed under its own slot', async () => {
+        const spans: any[] = [];
+        setLlmObservability({
+            runAiSdkLLMInSpan: async (p: any) => {
+                spans.push({ model: p.model, byokModelId: p.byokModelId });
+                return p.exec();
+            },
+        });
+        try {
+            // A closed port: the GPT attempt fails before any step.
+            const gpt = { provider: 'openai_compatible', model: 'gpt-primary', apiKey: encrypt('x'), baseURL: "http://127.0.0.1:9/v1", byokModelId: "byok-gpt" } as any;
+            gpt.fallback = { ...slot(), byokModelId: 'byok-claude' };
+            const state = await run(spec(), undefined, gpt);
+            expect(state.status).toBe('completed');
+            expect(modelCalls().every(viaCli)).toBe(true);
+            expect(modelCalls().length).toBeGreaterThan(0);
+            expect(spans.map((sp) => sp.byokModelId)).toEqual(['byok-gpt', 'byok-claude']);
+        } finally {
+            setLlmObservability(undefined);
+        }
     });
 
     it('a Claude 401 before the first step fails over to the slot’s non-Claude fallback on generateText', async () => {
