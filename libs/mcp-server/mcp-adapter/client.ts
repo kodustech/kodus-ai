@@ -472,9 +472,6 @@ export class SpecCompliantMCPClient extends EventEmitter<MCPClientEvents> {
         // Initialize consent manager (prevents confused deputy)
         this.consentManager = new ConsentManager();
 
-        // Initialize session manager (prevents session hijacking)
-        this.sessionManager = new SessionManager();
-
         // Create MCP Client with full capabilities
         this.client = new Client(config.clientInfo, {
             capabilities: {
@@ -654,6 +651,8 @@ export class SpecCompliantMCPClient extends EventEmitter<MCPClientEvents> {
             };
 
             this.connected = true;
+            // Created per connection: its cleanup interval is stopped in cleanup().
+            this.sessionManager = new SessionManager();
             this.metricsCollector.recordConnection(true);
 
             // Auto-load roots if server supports them
@@ -1012,10 +1011,11 @@ export class SpecCompliantMCPClient extends EventEmitter<MCPClientEvents> {
         let lastErrorMessage: string | undefined;
 
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            let timeoutId: ReturnType<typeof setTimeout> | undefined;
             try {
                 // Create timeout promise
                 const timeoutPromise = new Promise<never>((_, reject) => {
-                    setTimeout(() => {
+                    timeoutId = setTimeout(() => {
                         reject(
                             new Error(
                                 `MCP tool execution timeout after ${timeout}ms`,
@@ -1031,7 +1031,7 @@ export class SpecCompliantMCPClient extends EventEmitter<MCPClientEvents> {
                 const result = await Promise.race([
                     executionPromise,
                     timeoutPromise,
-                ]);
+                ]).finally(() => clearTimeout(timeoutId));
 
                 const duration = Date.now() - startTime;
                 this.metricsCollector.recordRequest(
@@ -1753,6 +1753,9 @@ export class SpecCompliantMCPClient extends EventEmitter<MCPClientEvents> {
             clearInterval(this.metricsIntervalId);
             this.metricsIntervalId = undefined;
         }
+
+        this.sessionManager?.destroy();
+        this.sessionManager = undefined;
 
         // Clear caches
         this.resourcesCache = null;
