@@ -114,7 +114,18 @@ function summaryMetrics(rows) {
     const groups = {
         hold: scored.filter((row) => row.metadata.expect === 'hold'),
         eligible: scored.filter((row) => row.metadata.expect === 'approve'),
-        sparse: scored.filter((row) => row.metadata.sparseHistory),
+        sparseHold: scored.filter(
+            (row) => row.metadata.sparseHistory && row.metadata.expect === 'hold',
+        ),
+        sparseEligible: scored.filter(
+            (row) => row.metadata.sparseHistory && row.metadata.expect === 'approve',
+        ),
+        linkedBugHold: scored.filter(
+            (row) => row.metadata.linkedBugHistory && row.metadata.expect === 'hold',
+        ),
+        linkedBugEligible: scored.filter(
+            (row) => row.metadata.linkedBugHistory && row.metadata.expect === 'approve',
+        ),
     };
     const arms = ['baseline', 'modelOnly', 'modelAndMap'];
     return Object.fromEntries(
@@ -125,9 +136,9 @@ function summaryMetrics(rows) {
             const coverage = groups.eligible.filter(
                 (row) => row.metadata.arms[arm] === 'approve',
             ).length;
-            const sparse = groups.sparse.filter(
-                (row) => row.metadata.arms[arm] === 'approve',
-            ).length;
+            const approvals = (group) =>
+                group.filter((row) => row.metadata.arms[arm] === 'approve')
+                    .length;
             return [
                 arm,
                 {
@@ -136,13 +147,40 @@ function summaryMetrics(rows) {
                         count: coverage,
                         of: groups.eligible.length,
                     },
-                    sparseApprovals: {
-                        count: sparse,
-                        of: groups.sparse.length,
+                    sparseWrongApprovals: {
+                        count: approvals(groups.sparseHold),
+                        of: groups.sparseHold.length,
+                    },
+                    sparseEligibleCoverage: {
+                        count: approvals(groups.sparseEligible),
+                        of: groups.sparseEligible.length,
+                    },
+                    linkedBugWrongApprovals: {
+                        count: approvals(groups.linkedBugHold),
+                        of: groups.linkedBugHold.length,
+                    },
+                    linkedBugEligibleCoverage: {
+                        count: approvals(groups.linkedBugEligible),
+                        of: groups.linkedBugEligible.length,
                     },
                 },
             ];
         }),
+    );
+}
+
+function touchesLinkedBugHistory(item) {
+    const directPaths = new Set(
+        item.files.map((file) => {
+            const slash = file.filename.lastIndexOf('/');
+            return slash < 0 ? '.' : file.filename.slice(0, slash);
+        }),
+    );
+    return Boolean(
+        item.areaMap?.directDirectories?.some(
+            (area) =>
+                directPaths.has(area.path) && area.linkedBugFixPrs > 0,
+        ),
     );
 }
 
@@ -200,6 +238,7 @@ async function main() {
                         sparseHistory:
                             !item.areaMap ||
                             item.areaMap.coverage?.scannedPrs < 10,
+                        linkedBugHistory: touchesLinkedBugHistory(item),
                     },
                 });
             } else {
