@@ -57,6 +57,11 @@ on:
                 default: auto
                 type: choice
                 options: [auto, cloud, self-hosted, both, none]
+            approval_smoke:
+                description: Run the approval and area-map smoke in Runo
+                required: false
+                default: false
+                type: boolean
     pull_request:
         # labeled/unlabeled: a preview:* label is a decision — act on it.
         # Labels applied by this workflow's own token never re-trigger it.
@@ -378,6 +383,22 @@ jobs:
                     echo "== $profile"
                     $RUNO exec --branch "$HEAD_REF" --profile "$profile" -- \
                       "docker compose -f docker-compose.dev.yml -f docker-compose.preview.yml -f $overlay --profile mcp ps" || true
+                  done
+
+            - name: Smoke approval and area map on Runo
+              if: steps.up.outcome == 'success' && steps.env.outputs.configured == 'true' && inputs.approval_smoke == true
+              env:
+                  RUNO_SERVER: ${{ vars.PREVIEW_RUNO_SERVER }}
+                  RUNO_TOKEN: ${{ secrets.PREVIEW_RUNO_TOKEN }}
+                  HEAD_REF: ${{ steps.target.outputs.branch }}
+                  PROFILES: ${{ steps.decide.outputs.profiles }}
+              run: |
+                  set -euo pipefail
+                  for profile in $PROFILES; do
+                    $RUNO exec --branch "$HEAD_REF" --profile "$profile" -- \
+                      "docker exec kodus_api pnpm run smoke:preview:approval-map"
+                    $RUNO exec --branch "$HEAD_REF" --profile "$profile" -- \
+                      "node evals/wiring-smoke.js --only=approval-risk"
                   done
 
             - name: Comment the preview link

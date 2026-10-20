@@ -21,7 +21,7 @@
 // loaded (<dir>/<step>.txt, for evals/nightly-evals.js): the nightly measures
 // each one only when one of its files changed.
 //
-//   node evals/wiring-smoke.js [--engine-files=<file>] [--kody-rules-files=<file>] [--eval-files-dir=<dir>] [--results=<file>]
+//   node evals/wiring-smoke.js [--only=<step>] [--engine-files=<file>] [--kody-rules-files=<file>] [--eval-files-dir=<dir>] [--results=<file>]
 //
 // --results writes one entry per step ({ step, ok, problem, ms, calls }), which
 // evals/stage-signals.js turns into one quality signal per review stage.
@@ -107,6 +107,9 @@ function resultProblem(step, file) {
 }
 
 async function main() {
+    const onlyStep = (
+        process.argv.find((a) => a.startsWith('--only=')) || ''
+    ).split('=')[1];
     const engineFilesOut = (
         process.argv.find((a) => a.startsWith('--engine-files=')) || ''
     ).split('=')[1];
@@ -400,7 +403,10 @@ async function main() {
                 `--output=${path.join(scratch, 'review-lifecycle.json')}`,
             ],
         },
-    ];
+    ].filter((step) => !onlyStep || step.name === onlyStep);
+    if (!steps.length) {
+        throw new Error(`Unknown wiring step: ${onlyStep}`);
+    }
 
     const results = [];
     for (const step of steps) {
