@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Approval decision stage on supplied PR snapshots. Controlled cases prove
-// wiring; full cases require independently adjudicated historical snapshots.
+// wiring; full cases require adjudicated historical snapshots.
 const fs = require('node:fs');
 const path = require('node:path');
 const zlib = require('node:zlib');
@@ -39,7 +39,7 @@ function loadCases() {
     );
     if (scored.length < 200)
         throw new Error(
-            'Full set needs at least 200 independently adjudicated PRs',
+            'Full set needs at least 200 adjudicated PRs',
         );
     const snapshots = path.join(__dirname, 'snapshots.json.gz');
     if (!fs.existsSync(snapshots))
@@ -185,7 +185,7 @@ async function main() {
                 const ok = arms.modelAndMap === item.expect;
                 rows.push({
                     id: item.id,
-                    checks: `At the pre-review snapshot, a human judged this PR ${item.expect === 'approve' ? 'eligible' : 'in need of human approval'}.`,
+                    checks: `At the pre-review snapshot, an adjudicator judged this PR ${item.expect === 'approve' ? 'eligible' : 'in need of human approval'}.`,
                     hits: Number(ok),
                     total: 1,
                     detail: [

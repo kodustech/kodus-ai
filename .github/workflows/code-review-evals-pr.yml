@@ -119,6 +119,49 @@ jobs:
                   gcp_sa_email: ${{ vars.GCP_SA_EMAIL }}
                   gcp_project: ${{ vars.GCP_PROJECT }}
 
+    approval-risk-full:
+        if: github.event_name == 'workflow_dispatch'
+        name: "approval risk · 200 snapshots"
+        runs-on: ubuntu-latest
+        timeout-minutes: 120
+        steps:
+            - uses: actions/checkout@v6.0.2
+            - uses: pnpm/action-setup@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+                  cache: "pnpm"
+            - name: Install deps
+              run: pnpm install --frozen-lockfile
+            - name: Create environment.ts (gitignored EE config)
+              run: |
+                  cat <<'EOF' > libs/ee/configs/environment/environment.ts
+                  import { environment as devEnvironment } from './environment.dev';
+
+                  export const environment = devEnvironment;
+                  EOF
+            - name: Validate frozen labels
+              run: node evals/approval-risk/validate-adjudications.js
+            - name: Compare approval decisions
+              env:
+                  BYOK_FIREWORKS_API_KEY: ${{ secrets.BYOK_FIREWORKS_API_KEY }}
+                  API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
+              run: |
+                  node evals/approval-risk/run.js \
+                    --set=full --model=deepseek-v4-flash@fireworks \
+                    --output=eval-results/approval-risk-full.json
+            - name: Report comparison
+              if: always() && hashFiles('eval-results/approval-risk-full.json') != ''
+              run: |
+                  node -e 'const r=require("./eval-results/approval-risk-full.json"); console.log(JSON.stringify({metric:r.metric,comparisons:r.comparisons,infra:r.infra,tokens:r.tokens},null,2))' >> "$GITHUB_STEP_SUMMARY"
+            - uses: actions/upload-artifact@v4
+              if: always()
+              with:
+                  name: approval-risk-full
+                  path: eval-results/approval-risk-full.json
+                  if-no-files-found: ignore
+                  retention-days: 30
+
     experiment:
         needs: wiring
         # The model keys are repository secrets: not on PRs from forks.

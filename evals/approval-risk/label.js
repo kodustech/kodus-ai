@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Blind human adjudication. Source finding flags and later outcomes are absent.
+// Blind adjudication. Source finding flags and later outcomes are absent.
 const fs = require('node:fs');
 const path = require('node:path');
 const readline = require('node:readline/promises');
