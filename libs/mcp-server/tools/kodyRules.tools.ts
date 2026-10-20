@@ -88,8 +88,30 @@ type KodyRuleMemoryInput = Required<
     >
 >;
 
+type SerializedKodyRule = Omit<
+    Partial<IKodyRule>,
+    'createdAt' | 'updatedAt'
+> & {
+    createdAt?: string;
+    updatedAt?: string;
+};
+
 interface KodyRulesResponse extends BaseResponse {
-    data: Partial<IKodyRule>[];
+    data: SerializedKodyRule[];
+}
+
+// Stored rules carry Date timestamps, but the output schema of the list tools
+// requires ISO strings, so the SDK rejected every response that had one.
+function serializeKodyRule(rule: Partial<IKodyRule>): SerializedKodyRule {
+    const { createdAt, updatedAt, ...rest } = rule;
+    const toIso = (value?: Date | string) =>
+        value instanceof Date ? value.toISOString() : value;
+
+    return {
+        ...rest,
+        ...(createdAt !== undefined && { createdAt: toIso(createdAt) }),
+        ...(updatedAt !== undefined && { updatedAt: toIso(updatedAt) }),
+    };
 }
 
 interface CreateKodyRuleResponse extends BaseResponse {
@@ -207,7 +229,7 @@ export class KodyRulesTools {
                     return {
                         success: true,
                         count: rules.length,
-                        data: rules,
+                        data: rules.map(serializeKodyRule),
                     };
                 },
             ),
@@ -296,7 +318,7 @@ export class KodyRulesTools {
                     return {
                         success: true,
                         count: repositoryRules?.length,
-                        data: repositoryRules,
+                        data: repositoryRules.map(serializeKodyRule),
                     };
                 },
             ),
