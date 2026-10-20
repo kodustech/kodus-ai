@@ -116,6 +116,15 @@ describe('createKodyRulesAutoPauseResolver', () => {
         expect(allOn({ repositoryId: 'unknown-repo' })).toBe(true);
     });
 
+    it('a team with no saved config counts as the default (off) for global rules', () => {
+        const resolve = createKodyRulesAutoPauseResolver([
+            buildConfig(ON),
+            undefined,
+        ]);
+
+        expect(resolve({ repositoryId: 'global' })).toBe(false);
+    });
+
     it('is off when no team has a code review config', () => {
         const resolve = createKodyRulesAutoPauseResolver([]);
 

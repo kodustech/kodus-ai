@@ -134,18 +134,24 @@ export class SendKodyRulesAutoPauseDigestUseCase {
             },
         });
 
-        for (const { rule, patch } of pending) {
+        for (const { rule, pausedAts } of pending) {
             try {
-                await this.kodyRulesService.updateRule(
-                    doc.uuid,
-                    rule.uuid!,
-                    Object.fromEntries(
-                        Object.entries(patch).map(([field, pause]) => [
-                            field,
-                            { ...pause, digestedAt: now },
-                        ]),
-                    ),
-                );
+                const marked =
+                    await this.kodyRulesService.markAutoPausesDigested(
+                        organizationId,
+                        rule.uuid!,
+                        pausedAts,
+                        now,
+                    );
+                if (!marked) {
+                    // Paused again or deleted since the read: nothing to mark.
+                    this.logger.warn({
+                        message:
+                            'Auto-paused Kody Rule changed before it was marked as digested',
+                        context: SendKodyRulesAutoPauseDigestUseCase.name,
+                        metadata: { organizationId, ruleId: rule.uuid },
+                    });
+                }
             } catch (error) {
                 this.logger.error({
                     message: 'Failed to mark auto-paused Kody Rule as digested',
@@ -171,15 +177,13 @@ export class SendKodyRulesAutoPauseDigestUseCase {
 
 /**
  * The undigested pauses of a rule: the one to list (the latest) and every
- * record to mark, so a rule paused twice in a week is listed once.
+ * pause to mark, so a rule paused twice in a week is listed once.
  */
 function pendingPauses(rule: Partial<IKodyRule>):
     | {
           latest: IKodyRuleAutoPause;
           resumed: boolean;
-          patch: Partial<
-              Record<'autoPause' | 'lastAutoPause', IKodyRuleAutoPause>
-          >;
+          pausedAts: Date[];
       }
     | undefined {
     if (!rule.uuid || rule.status === KodyRulesStatus.DELETED) return;
@@ -200,6 +204,8 @@ function pendingPauses(rule: Partial<IKodyRule>):
     return {
         latest,
         resumed: !rule.autoPause,
-        patch,
+        pausedAts: [patch.autoPause, patch.lastAutoPause]
+            .filter((pause): pause is IKodyRuleAutoPause => !!pause)
+            .map((pause) => pause.pausedAt),
     };
 }

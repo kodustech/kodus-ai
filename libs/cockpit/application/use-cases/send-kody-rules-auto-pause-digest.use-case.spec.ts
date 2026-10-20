@@ -40,7 +40,7 @@ describe('SendKodyRulesAutoPauseDigestUseCase', () => {
     let kodyRulesService: {
         findByOrganizationId: jest.Mock;
         findOrganizationIdsWithRules: jest.Mock;
-        updateRule: jest.Mock;
+        markAutoPausesDigested: jest.Mock;
     };
     let reviewAnalytics: { getRepositoryNames: jest.Mock };
     let notificationService: { emit: jest.Mock };
@@ -59,7 +59,7 @@ describe('SendKodyRulesAutoPauseDigestUseCase', () => {
         kodyRulesService = {
             findByOrganizationId: jest.fn(),
             findOrganizationIdsWithRules: jest.fn().mockResolvedValue([ORG]),
-            updateRule: jest.fn().mockResolvedValue({}),
+            markAutoPausesDigested: jest.fn().mockResolvedValue(true),
         };
         reviewAnalytics = {
             getRepositoryNames: jest
@@ -106,11 +106,14 @@ describe('SendKodyRulesAutoPauseDigestUseCase', () => {
                 ],
             },
         });
-        expect(kodyRulesService.updateRule).toHaveBeenCalledTimes(1);
-        expect(kodyRulesService.updateRule).toHaveBeenCalledWith(
-            'doc-1',
+        expect(kodyRulesService.markAutoPausesDigested).toHaveBeenCalledTimes(
+            1,
+        );
+        expect(kodyRulesService.markAutoPausesDigested).toHaveBeenCalledWith(
+            ORG,
             'new-1',
-            { autoPause: { ...autoPause, digestedAt: NOW } },
+            [autoPause.pausedAt],
+            NOW,
         );
     });
 
@@ -123,7 +126,7 @@ describe('SendKodyRulesAutoPauseDigestUseCase', () => {
 
         expect(result.sent).toBe(0);
         expect(notificationService.emit).not.toHaveBeenCalled();
-        expect(kodyRulesService.updateRule).not.toHaveBeenCalled();
+        expect(kodyRulesService.markAutoPausesDigested).not.toHaveBeenCalled();
     });
 
     it('still lists a rule resumed before the digest, marked as resumed', async () => {
@@ -141,10 +144,11 @@ describe('SendKodyRulesAutoPauseDigestUseCase', () => {
         expect(emittedRules()).toEqual([
             expect.objectContaining({ ruleId: 'resumed-1', resumed: true }),
         ]);
-        expect(kodyRulesService.updateRule).toHaveBeenCalledWith(
-            'doc-1',
+        expect(kodyRulesService.markAutoPausesDigested).toHaveBeenCalledWith(
+            ORG,
             'resumed-1',
-            { lastAutoPause: { ...lastAutoPause, digestedAt: NOW } },
+            [lastAutoPause.pausedAt],
+            NOW,
         );
     });
 
@@ -167,13 +171,11 @@ describe('SendKodyRulesAutoPauseDigestUseCase', () => {
                 resumed: false,
             }),
         ]);
-        expect(kodyRulesService.updateRule).toHaveBeenCalledWith(
-            'doc-1',
+        expect(kodyRulesService.markAutoPausesDigested).toHaveBeenCalledWith(
+            ORG,
             'again-1',
-            {
-                autoPause: { ...second, digestedAt: NOW },
-                lastAutoPause: { ...first, digestedAt: NOW },
-            },
+            [second.pausedAt, first.pausedAt],
+            NOW,
         );
     });
 
@@ -198,7 +200,7 @@ describe('SendKodyRulesAutoPauseDigestUseCase', () => {
         await expect(useCase.executeForOrganization(ORG, NOW)).rejects.toThrow(
             'outbox down',
         );
-        expect(kodyRulesService.updateRule).not.toHaveBeenCalled();
+        expect(kodyRulesService.markAutoPausesDigested).not.toHaveBeenCalled();
     });
 
     it('runs every organization and survives one failing', async () => {

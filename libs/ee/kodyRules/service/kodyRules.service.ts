@@ -529,6 +529,20 @@ export class KodyRulesService implements IKodyRulesService {
         return this.kodyRulesRepository.addRule(uuid, newRule);
     }
 
+    async markAutoPausesDigested(
+        organizationId: string,
+        ruleId: string,
+        pausedAts: Date[],
+        digestedAt: Date,
+    ): Promise<boolean> {
+        return this.kodyRulesRepository.markAutoPausesDigested(
+            organizationId,
+            ruleId,
+            pausedAts,
+            digestedAt,
+        );
+    }
+
     async updateRule(
         uuid: string,
         ruleId: string,

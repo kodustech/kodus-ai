@@ -23,37 +23,49 @@ export function createKodyRulesAutoPauseResolver(
     teamConfigs: CodeReviewConfigLike[],
 ): (rule: { repositoryId?: string; directoryId?: string }) => boolean {
     const defaults = getDefaultKodusConfigFile() as Level;
-    const configs = teamConfigs.filter(
-        (config): config is NonNullable<CodeReviewConfigLike> => !!config,
-    );
 
+    // A team without a saved config runs on the defaults, so it counts as off.
     const everyTeamGlobalOn =
-        configs.length > 0 &&
-        configs.every((config) =>
-            isOn(defaults, (config.configs ?? {}) as Level),
+        teamConfigs.length > 0 &&
+        teamConfigs.every((config) =>
+            isOn(defaults, (config?.configs ?? {}) as Level),
         );
 
-    return ({ repositoryId, directoryId }) => {
-        for (const config of configs) {
-            const repository = (config.repositories ?? []).find(
-                (repo) => String(repo.id) === String(repositoryId),
-            );
-            if (!repository) continue;
-
-            const directory = directoryId
-                ? (repository.directories ?? []).find(
-                      (dir) => dir.id === directoryId,
-                  )
-                : undefined;
-
-            return isOn(
-                defaults,
-                (config.configs ?? {}) as Level,
-                (repository.configs ?? {}) as Level,
-                (directory?.configs ?? {}) as Level,
-            );
+    // First team listing a repository owns it.
+    const byRepository = new Map<
+        string,
+        {
+            levels: Level[];
+            directories: Map<string, Level>;
         }
+    >();
+    for (const config of teamConfigs) {
+        for (const repository of config?.repositories ?? []) {
+            const key = String(repository.id);
+            if (byRepository.has(key)) continue;
+            byRepository.set(key, {
+                levels: [
+                    defaults,
+                    (config?.configs ?? {}) as Level,
+                    (repository.configs ?? {}) as Level,
+                ],
+                directories: new Map(
+                    (repository.directories ?? []).map((dir) => [
+                        dir.id,
+                        (dir.configs ?? {}) as Level,
+                    ]),
+                ),
+            });
+        }
+    }
 
-        return everyTeamGlobalOn;
+    return ({ repositoryId, directoryId }) => {
+        const repository = byRepository.get(String(repositoryId));
+        if (!repository) return everyTeamGlobalOn;
+
+        return isOn(
+            ...repository.levels,
+            (directoryId && repository.directories.get(directoryId)) || {},
+        );
     };
 }

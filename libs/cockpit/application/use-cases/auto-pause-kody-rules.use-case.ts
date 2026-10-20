@@ -205,6 +205,7 @@ export class AutoPauseKodyRulesUseCase {
             now,
         );
 
+        const repositoryOwners = this.teamsByRepository(teams);
         const paused: KodyRuleAutoPauseEntry[] = [];
         for (const rule of candidates) {
             result.evaluated++;
@@ -239,7 +240,9 @@ export class AutoPauseKodyRulesUseCase {
                 await this.kodyRulesService.createOrUpdate(
                     {
                         organizationId,
-                        teamId: this.teamFor(rule, teams),
+                        teamId:
+                            repositoryOwners.get(String(rule.repositoryId)) ??
+                            teams[0]?.teamId,
                     } as OrganizationAndTeamData,
                     {
                         ...rule,
@@ -351,20 +354,22 @@ export class AutoPauseKodyRulesUseCase {
         );
     }
 
-    /** The team whose config lists the rule's repository, else the first. */
-    private teamFor(
-        rule: ActiveRule,
+    /** Repository id → the first team whose config lists it. */
+    private teamsByRepository(
         teams: Array<{
             teamId: string;
             codeReviewConfig: CodeReviewParameter | undefined;
         }>,
-    ): string | undefined {
-        const owner = teams.find((team) =>
-            (team.codeReviewConfig?.repositories ?? []).some(
-                (repo) => String(repo.id) === String(rule.repositoryId),
-            ),
-        );
-        return (owner ?? teams[0])?.teamId;
+    ): Map<string, string> {
+        const owners = new Map<string, string>();
+        for (const team of teams) {
+            for (const repo of team.codeReviewConfig?.repositories ?? []) {
+                if (!owners.has(String(repo.id))) {
+                    owners.set(String(repo.id), team.teamId);
+                }
+            }
+        }
+        return owners;
     }
 
     /**
