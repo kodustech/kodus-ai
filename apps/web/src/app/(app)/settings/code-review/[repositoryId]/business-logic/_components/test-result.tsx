@@ -168,10 +168,9 @@ export const TestResult = ({
                     ))
                 ) : (
                     <Markdown className="[&_h2]:text-text-primary [&_h2]:text-sm [&_h2]:font-medium">
-                        {(verdict.message ?? "No task was read.")
-                            .replace(/<!--[\s\S]*?-->/g, "")
-                            // What a nested or unclosed marker leaves behind.
-                            .replace(/<!--|-->/g, "")}
+                        {withoutMarkerLines(
+                            verdict.message ?? "No task was read.",
+                        )}
                     </Markdown>
                 )}
             </Step>
@@ -252,3 +251,15 @@ export const TestResult = ({
         </Card>
     );
 };
+
+// The comment's marker (`<!-- kody-business-logic -->`) sits on a line of its
+// own; drop such lines rather than parse HTML out of the text.
+function withoutMarkerLines(text: string): string {
+    return text
+        .split("\n")
+        .filter((line) => {
+            const trimmed = line.trim();
+            return !(trimmed.startsWith("<!--") && trimmed.endsWith("-->"));
+        })
+        .join("\n");
+}

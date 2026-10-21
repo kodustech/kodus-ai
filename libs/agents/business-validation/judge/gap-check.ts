@@ -309,8 +309,9 @@ function prompt(input: GapCheckInput): string {
 
 /** A labeled data block whose text can't close it early. */
 function fence(label: string, text: string): string {
-    const safe = text.replace(new RegExp(`</?${label}>`, 'gi'), (tag) =>
-        tag.replace('<', '&lt;'),
+    const safe = text.replace(
+        new RegExp(`</?${label}>`, 'gi'),
+        (tag) => `&lt;${tag.slice(1)}`,
     );
     return `<${label}>\n${safe}\n</${label}>`;
 }
