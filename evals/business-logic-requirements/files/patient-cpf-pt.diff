@@ -21,8 +21,8 @@ new file mode 100644
 +++ b/src/patients/updatePatient.ts
 @@ -0,0 +1,6 @@
 +export function normalizeCpf(cpf?: string | null) {
-  return cpf ? cpf.replace(/\D/g, '') : null;
++  return cpf ? cpf.replace(/\D/g, '') : null;
 +}
 +export async function updatePatient(id: string, input: { name?: string; cpf?: string | null }) {
-  return db.patients.update(id, { ...input, cpf: normalizeCpf(input.cpf) });
++  return db.patients.update(id, { ...input, cpf: normalizeCpf(input.cpf) });
 +}

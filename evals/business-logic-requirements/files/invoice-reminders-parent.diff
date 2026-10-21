@@ -5,7 +5,7 @@ new file mode 100644
 @@ -0,0 +1,6 @@
 +import { queue } from '../queue';
 +export async function scheduleInvoiceReminder(invoice: { id: string; dueDate: Date; paidAt: Date | null }) {
-  if (invoice.paidAt) return;
-  const at = new Date(invoice.dueDate.getTime() + 7 * 86_400_000);
-  await queue.add('invoice-reminder', { invoiceId: invoice.id }, { at });
++  if (invoice.paidAt) return;
++  const at = new Date(invoice.dueDate.getTime() + 7 * 86_400_000);
++  await queue.add('invoice-reminder', { invoiceId: invoice.id }, { at });
 +}

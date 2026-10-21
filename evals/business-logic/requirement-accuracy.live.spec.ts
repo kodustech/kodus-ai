@@ -390,6 +390,7 @@ function score(c: Case, result: ValidationResult) {
                     process.env.BR_EVAL_REPORT_DIR ?? os.tmpdir(),
                     'business-rules-requirement-accuracy.json',
                 );
+            fs.mkdirSync(path.dirname(out), { recursive: true });
             fs.writeFileSync(
                 out,
                 JSON.stringify(

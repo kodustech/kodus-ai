@@ -4,7 +4,7 @@
 > - **Runs:** nightly on one real model when a file it loads changed (`evals/nightly-evals.js`), gated on it; weekly on every tier-0 model (`evals/weekly.js`); every engine PR against the scripted model (`evals/wiring-smoke.js`).
 > - **Run it:** `node evals/business-logic/run.js [--model=<tier-0 id>] [--gate] [--verify]`
 > - **Gate:** `--gate` uses the per-model floor in `evals/business-logic/targets.json`. A judge call that fails (a key, a quota, a timeout) is not measured (exit 2), never a miss.
-> - **Cost:** per case, the judge call, its second look at a MISSING requirement, and the verify call with `--verify`; three cases.
+> - **Cost:** per case, the judge call, its second look at each MISSING, PARTIAL or CHECK MANUALLY requirement, and the verify call with `--verify`; three cases.
 
 It runs production's `BusinessLogicValidationStage` (`production-stage.js`):
 `BusinessValidationService` finds the task the PR names, reads it through the
@@ -44,4 +44,4 @@ Beside it, with no model: `test/evals/business-rules-validation/task-resolution`
 reads which task a PR names through each tracker's scripted MCP server. With a
 real model, gated on `RUN_BR_EVAL=1`: `requirement-accuracy.live.spec.ts` (the
 judge's answer per requirement against a gold), `gap-check.live.spec.ts` (the
-second look at a MISSING one) and `analyzer-verdict.live.spec.ts`.
+second look at a requirement the diff left open) and `analyzer-verdict.live.spec.ts`.

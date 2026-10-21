@@ -5,8 +5,8 @@ new file mode 100644
 @@ -0,0 +1,5 @@
 +export const FEE_PER_DAY = 0.5;
 +export function lateFee(dueDate: Date, returnedAt: Date): number {
-  const days = Math.ceil((returnedAt.getTime() - dueDate.getTime()) / 86_400_000);
-  return days > 0 ? days * FEE_PER_DAY : 0;
++  const days = Math.ceil((returnedAt.getTime() - dueDate.getTime()) / 86_400_000);
++  return days > 0 ? days * FEE_PER_DAY : 0;
 +}
 diff --git a/src/loans/returnLoan.ts b/src/loans/returnLoan.ts
 --- a/src/loans/returnLoan.ts

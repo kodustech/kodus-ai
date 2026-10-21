@@ -13,6 +13,6 @@ new file mode 100644
 @@ -0,0 +1,5 @@
 +import { cancelAppointment } from './cancel';
 +it('logs the appointment and the reason', async () => {
-  await cancelAppointment('a1', 'patient asked');
-  expect(logger.info).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 'a1', reason: 'patient asked' }));
++  await cancelAppointment('a1', 'patient asked');
++  expect(logger.info).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 'a1', reason: 'patient asked' }));
 +});

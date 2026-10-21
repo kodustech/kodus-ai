@@ -5,8 +5,8 @@ new file mode 100644
 @@ -0,0 +1,7 @@
 +import { db } from '../db';
 +export async function applyCode(code: string, order: { total: number; customerId: string }) {
-  const discount = await db.codes.get(code);
-  if (discount.expiresAt < new Date()) throw new Error('This code has expired');
-  if (order.total < discount.minOrder) throw new Error('Invalid code');
-  return { ...order, total: order.total - discount.amount };
++  const discount = await db.codes.get(code);
++  if (discount.expiresAt < new Date()) throw new Error('This code has expired');
++  if (order.total < discount.minOrder) throw new Error('Invalid code');
++  return { ...order, total: order.total - discount.amount };
 +}

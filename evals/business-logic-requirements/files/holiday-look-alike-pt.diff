@@ -5,6 +5,6 @@ new file mode 100644
 @@ -0,0 +1,5 @@
 +import { isWeekend } from '../dates';
 +export async function book(input: { startsAt: Date; patientId: string }) {
-  if (isWeekend(input.startsAt)) throw new Error('Não atendemos em feriados');
-  return db.appointments.create(input);
++  if (isWeekend(input.startsAt)) throw new Error('Não atendemos em feriados');
++  return db.appointments.create(input);
 +}

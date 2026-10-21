@@ -6,7 +6,7 @@ new file mode 100644
 +import { db } from '../db';
 +import { validateEmail } from './validateEmail';
 +export async function createReader(input: { name: string; email: string }) {
-  validateEmail(input.email);
-  if (await db.readers.findFirst({ email: input.email })) throw new Error('E-mail já cadastrado');
-  return db.readers.create(input);
++  validateEmail(input.email);
++  if (await db.readers.findFirst({ email: input.email })) throw new Error('E-mail já cadastrado');
++  return db.readers.create(input);
 +}

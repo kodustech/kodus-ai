@@ -4,9 +4,9 @@ new file mode 100644
 +++ b/migrations/1730000000000-invoice-currency.ts
 @@ -0,0 +1,5 @@
 +export class InvoiceCurrency1730000000000 {
-  async up(q: QueryRunner) {
-    await q.query('ALTER TABLE invoices ADD COLUMN currency char(3)');
-  }
++  async up(q: QueryRunner) {
++    await q.query('ALTER TABLE invoices ADD COLUMN currency char(3)');
++  }
 +}
 diff --git a/src/invoices/invoice.entity.ts b/src/invoices/invoice.entity.ts
 --- a/src/invoices/invoice.entity.ts

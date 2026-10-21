@@ -4,6 +4,6 @@ new file mode 100644
 +++ b/src/checkout/card.ts
 @@ -0,0 +1,4 @@
 +export function validateCard(card: { number: string; expiry: Date }) {
-  if (card.number.replace(/\s/g, '').length < 12) throw new Error('Invalid card number');
-  if (card.expiry < new Date()) throw new Error('Invalid card');
++  if (card.number.replace(/\s/g, '').length < 12) throw new Error('Invalid card number');
++  if (card.expiry < new Date()) throw new Error('Invalid card');
 +}

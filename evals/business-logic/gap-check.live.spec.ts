@@ -9,11 +9,13 @@ import {
 import { aiSdkAgentRun } from '@libs/agents/business-validation/trackers/task-finder';
 
 /**
- * Does the second look at a MISSING requirement overturn only real false
- * gaps? Each case is a requirement the judge called MISSING from the diff,
- * and a small repository at the PR head. Some already do it outside the diff
- * (it must become MET or PARTIAL, citing the line); some don't, or only look
- * like they do (it must stay MISSING). The domain is invented.
+ * Does the second look settle only what the repository settles? Each case is
+ * a requirement the judge left open from the diff (MISSING, PARTIAL or CHECK
+ * MANUALLY) and a small repository at the PR head. Some are done outside the
+ * diff (they must become MET, citing the line); some are not, or only look
+ * like they are (a MISSING stays MISSING, a PARTIAL stays PARTIAL, a CHECK
+ * MANUALLY whose helper lacks the rule becomes MISSING, citing the helper).
+ * The domain is invented.
  *
  * Stack-gated: hits a real model, skipped by default.
  *
@@ -22,16 +24,78 @@ import { aiSdkAgentRun } from '@libs/agents/business-validation/trackers/task-fi
  */
 const RUN = process.env.RUN_BR_EVAL === '1';
 
+type State = 'met' | 'partial' | 'missing' | 'check_manually';
+
 type Case = {
     name: string;
     requirement: string;
+    /** What the judge said from the diff; MISSING when unset. */
+    from?: Exclude<State, 'met'>;
+    /** Why the judge said it. */
+    note?: string;
     diff: string;
     files: Record<string, string>;
     /** What a right answer is. */
-    expect: Array<'met' | 'partial' | 'missing'>;
-    /** For a refutation: the file it must cite. */
+    expect: State[];
+    /** For a changed state: the file it must cite. */
     cites?: string;
 };
+
+const RENEW_DIFF = [
+    '=== FILE: src/loans/renew.ts ===',
+    '@@ -0,0 +1,9 @@',
+    "+import { assertRenewable } from './rules';",
+    "+import { loans } from './store';",
+    '+',
+    '+export async function renewLoan(loanId: string, memberId: string) {',
+    '+  const loan = await loans.get(loanId);',
+    '+  assertRenewable(loan, memberId);',
+    '+  loan.dueDate = new Date(loan.dueDate.getTime() + 14 * 86_400_000);',
+    '+  await loans.save(loan);',
+    '+}',
+].join('\n');
+
+const RENEW_FILE =
+    "import { assertRenewable } from './rules';\nimport { loans } from './store';\n\nexport async function renewLoan(loanId: string, memberId: string) {\n  const loan = await loans.get(loanId);\n  assertRenewable(loan, memberId);\n  loan.dueDate = new Date(loan.dueDate.getTime() + 14 * 86_400_000);\n  await loans.save(loan);\n}\n";
+
+// The helper the renewal calls, untouched by the PR: it refuses overdue
+// loans and says nothing about reservations.
+const RULES_FILE = [
+    "import { LoanError } from './errors';",
+    '',
+    'export function assertRenewable(loan: { dueDate: Date }, memberId: string) {',
+    '  if (loan.dueDate.getTime() < Date.now()) {',
+    "    throw new LoanError('This loan is overdue and cannot be renewed.');",
+    '  }',
+    '}',
+].join('\n');
+
+const DETAIL_DIFF = [
+    '=== FILE: src/api/appointments/detail.route.ts ===',
+    '@@ -0,0 +1,7 @@',
+    "+import { appointments } from '../../appointments/store';",
+    "+import { toAppointmentDto } from './appointment.dto';",
+    '+',
+    '+export async function getAppointment(req: { params: { id: string } }) {',
+    "+  const appointment = await appointments.find(req.params.id, { with: ['doctor', 'clinic'] });",
+    '+  return toAppointmentDto(appointment);',
+    '+}',
+].join('\n');
+
+const DETAIL_FILE =
+    "import { appointments } from '../../appointments/store';\nimport { toAppointmentDto } from './appointment.dto';\n\nexport async function getAppointment(req: { params: { id: string } }) {\n  const appointment = await appointments.find(req.params.id, { with: ['doctor', 'clinic'] });\n  return toAppointmentDto(appointment);\n}\n";
+
+const dto = (withAddress: boolean) =>
+    [
+        'export function toAppointmentDto(a: any) {',
+        '  return {',
+        '    id: a.id,',
+        '    startsAt: a.startsAt.toISOString(),',
+        '    doctorName: a.doctor.name,',
+        ...(withAddress ? ['    clinicAddress: a.clinic.address,'] : []),
+        '  };',
+        '}',
+    ].join('\n');
 
 const TOOLBAR_DIFF = [
     '=== FILE: src/tickets/Toolbar.tsx ===',
@@ -151,6 +215,77 @@ const CASES: Case[] = [
         },
         expect: ['partial', 'missing'],
     },
+    {
+        name: 'check manually: the helper the PR calls already refuses it',
+        requirement: 'Renewing a loan that is already overdue is refused.',
+        from: 'check_manually',
+        note: 'The renewal calls assertRenewable, whose code is not in this diff.',
+        diff: RENEW_DIFF,
+        files: {
+            'src/loans/renew.ts': RENEW_FILE,
+            'src/loans/rules.ts': RULES_FILE,
+        },
+        expect: ['met'],
+        cites: 'src/loans/rules.ts',
+    },
+    {
+        name: 'check manually: the helper the PR calls lacks the rule',
+        requirement: 'A loan another member has reserved cannot be renewed.',
+        from: 'check_manually',
+        note: 'The renewal calls assertRenewable, whose code is not in this diff.',
+        diff: RENEW_DIFF,
+        files: {
+            'src/loans/renew.ts': RENEW_FILE,
+            'src/loans/rules.ts': RULES_FILE,
+        },
+        expect: ['missing'],
+        cites: 'src/loans/rules.ts',
+    },
+    {
+        name: 'check manually: nothing in the repository could do it, never MET',
+        requirement:
+            'The invoice PDF shows the currency code next to the total.',
+        from: 'check_manually',
+        note: 'No PDF code is in this diff.',
+        diff: [
+            '=== FILE: migrations/1730000000000-invoice-currency.ts ===',
+            '@@ -0,0 +1,3 @@',
+            '+export const up = (db: any) =>',
+            "+  db.query('ALTER TABLE invoices ADD COLUMN currency char(3)');",
+        ].join('\n'),
+        files: {
+            'migrations/1730000000000-invoice-currency.ts':
+                "export const up = (db: any) =>\n  db.query('ALTER TABLE invoices ADD COLUMN currency char(3)');\n",
+            'src/invoices/invoice.entity.ts':
+                'export class Invoice {\n  id!: string;\n  total!: number;\n  currency?: string;\n}\n',
+        },
+        expect: ['check_manually', 'missing'],
+    },
+    {
+        name: 'partial: the mapper the route uses already returns the address',
+        requirement: 'GET /appointments/:id returns the clinic address.',
+        from: 'partial',
+        note: 'The route loads the clinic, but the diff does not show whether toAppointmentDto returns its address.',
+        diff: DETAIL_DIFF,
+        files: {
+            'src/api/appointments/detail.route.ts': DETAIL_FILE,
+            'src/api/appointments/appointment.dto.ts': dto(true),
+        },
+        expect: ['met'],
+        cites: 'src/api/appointments/appointment.dto.ts',
+    },
+    {
+        name: 'partial: the mapper the route uses drops the address',
+        requirement: 'GET /appointments/:id returns the clinic address.',
+        from: 'partial',
+        note: 'The route loads the clinic, but the diff does not show whether toAppointmentDto returns its address.',
+        diff: DETAIL_DIFF,
+        files: {
+            'src/api/appointments/detail.route.ts': DETAIL_FILE,
+            'src/api/appointments/appointment.dto.ts': dto(false),
+        },
+        expect: ['partial'],
+    },
 ];
 
 function readerOf(files: Record<string, string>): RepositoryReader {
@@ -164,9 +299,9 @@ function readerOf(files: Record<string, string>): RepositoryReader {
 }
 
 (RUN ? describe : describe.skip)(
-    'business-rules gap check: refutes only false gaps (live)',
+    'business-rules gap check: settles only what the repository settles (live)',
     () => {
-        it('overturns a MISSING only where the code already does it', async () => {
+        it('changes a state only where the repository settles it', async () => {
             const check = createGapCheck(
                 aiSdkAgentRun(undefined, { organizationId: 'eval-org' }),
             );
@@ -176,16 +311,16 @@ function readerOf(files: Record<string, string>): RepositoryReader {
                 const result = await check({
                     requirement: {
                         requirement: c.requirement,
-                        state: 'missing',
+                        state: c.from ?? 'missing',
                         evidence: [],
                         confidence: 'high',
-                        note: 'No evidence in this PR diff.',
+                        note: c.note ?? 'No evidence in this PR diff.',
                     },
                     taskText: c.requirement,
                     diff: c.diff,
                     reader: readerOf(c.files),
                 });
-                const state = result?.state ?? 'missing';
+                const state: State = result?.state ?? c.from ?? 'missing';
                 const ok =
                     c.expect.includes(state) &&
                     (!result ||
@@ -194,11 +329,11 @@ function readerOf(files: Record<string, string>): RepositoryReader {
                 right += ok ? 1 : 0;
                 report.push({ case: c.name, state, result, ok });
             }
-            const out =
-                path.join(
-                    process.env.BR_EVAL_REPORT_DIR ?? os.tmpdir(),
-                    'business-rules-gap-check.json',
-                );
+            const out = path.join(
+                process.env.BR_EVAL_REPORT_DIR ?? os.tmpdir(),
+                'business-rules-gap-check.json',
+            );
+            fs.mkdirSync(path.dirname(out), { recursive: true });
             fs.writeFileSync(
                 out,
                 JSON.stringify({ right, total: CASES.length, report }, null, 2),

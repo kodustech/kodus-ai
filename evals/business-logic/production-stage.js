@@ -51,6 +51,16 @@ function filesOfDiff(diff) {
     return files;
 }
 
+// A changed file at the PR head, as far as its patch shows it: the added and
+// context lines, in order. A case's diff covers each file whole.
+function headOf(patch) {
+    return patch
+        .split('\n')
+        .filter((l) => l.startsWith('+') || l.startsWith(' '))
+        .map((l) => l.slice(1))
+        .join('\n');
+}
+
 // The PR as GitHub's adapter returns it (getPullRequest).
 function pullRequestRecord(pr) {
     const repo = { id: REPOSITORY.id, name: REPOSITORY.name, defaultBranch: 'main', fullName: REPOSITORY.fullName };
@@ -278,8 +288,11 @@ function caseCodeHost(world, comments) {
         getRepositoryAllFiles: async () => [
             ...new Set([...filesOfDiff(world.current.diff).map((f) => f.filename), ...Object.keys(world.current.repoFiles)]),
         ].map((p) => ({ path: p })),
-        getRepositoryContentFile: async ({ file }) =>
-            file?.filename in world.current.repoFiles ? { data: { content: world.current.repoFiles[file.filename] } } : null,
+        getRepositoryContentFile: async ({ file }) => {
+            if (file?.filename in world.current.repoFiles) return { data: { content: world.current.repoFiles[file.filename] } };
+            const changed = filesOfDiff(world.current.diff).find((f) => f.filename === file?.filename);
+            return changed ? { data: { content: headOf(changed.patch) } } : null;
+        },
     };
 }
 

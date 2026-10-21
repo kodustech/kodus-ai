@@ -18,7 +18,9 @@ def diff(path, lines, new=True):
     head = [f'diff --git a/{path} b/{path}']
     head += ['new file mode 100644', '--- /dev/null'] if new else [f'--- a/{path}']
     head += [f'+++ b/{path}', f'@@ -0,0 +1,{len(lines)} @@' if new else f'@@ -1,{len(lines)} +1,{len(lines)} @@']
-    body = [l if l[:1] in ('+', '-', ' ') else '+' + l for l in lines] if new else lines
+    # Every line of a new file is added, indented ones too: a leading space is
+    # code, not a context marker.
+    body = [l if l.startswith('+') else '+' + l for l in lines] if new else lines
     return '\n'.join(head + body)
 
 

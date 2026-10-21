@@ -5,6 +5,6 @@ new file mode 100644
 @@ -0,0 +1,5 @@
 +import { toAppointmentDto } from './appointment.dto';
 +router.get('/appointments/:id', async (req, res) => {
-  const appointment = await db.appointments.get(req.params.id);
-  res.json(toAppointmentDto(appointment));
++  const appointment = await db.appointments.get(req.params.id);
++  res.json(toAppointmentDto(appointment));
 +});

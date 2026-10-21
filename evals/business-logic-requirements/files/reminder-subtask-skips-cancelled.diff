@@ -5,6 +5,6 @@ new file mode 100644
 @@ -0,0 +1,5 @@
 +import { queue } from '../queue';
 +export async function scheduleReminder(appointment: { id: string; startsAt: Date; phone: string }) {
-  const at = new Date(appointment.startsAt.getTime() - 24 * 3_600_000);
-  await queue.add('sms', { to: appointment.phone, appointmentId: appointment.id }, { at });
++  const at = new Date(appointment.startsAt.getTime() - 24 * 3_600_000);
++  await queue.add('sms', { to: appointment.phone, appointmentId: appointment.id }, { at });
 +}

@@ -381,6 +381,7 @@ describe('every variant hands the judge its criteria', () => {
                     process.env.BR_EVAL_REPORT_DIR ?? os.tmpdir(),
                     'business-rules-criteria-location.json',
                 );
+            fs.mkdirSync(path.dirname(out), { recursive: true });
             fs.writeFileSync(out, JSON.stringify(report, null, 2));
             for (const r of report) {
                 console.log(
