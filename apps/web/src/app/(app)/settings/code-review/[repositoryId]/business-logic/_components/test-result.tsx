@@ -168,10 +168,10 @@ export const TestResult = ({
                     ))
                 ) : (
                     <Markdown className="[&_h2]:text-text-primary [&_h2]:text-sm [&_h2]:font-medium">
-                        {(verdict.message ?? "No task was read.").replace(
-                            /<!--[\s\S]*?-->/g,
-                            "",
-                        )}
+                        {(verdict.message ?? "No task was read.")
+                            .replace(/<!--[\s\S]*?-->/g, "")
+                            // What a nested or unclosed marker leaves behind.
+                            .replace(/<!--|-->/g, "")}
                     </Markdown>
                 )}
             </Step>

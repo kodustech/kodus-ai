@@ -1,13 +1,14 @@
 "use client";
 
-import { useParams } from "next/navigation";
 import { Heading } from "@components/ui/heading";
 import { Label } from "@components/ui/label";
 import { Link } from "@components/ui/link";
 import { RadioGroup } from "@components/ui/radio-group";
 import { Switch } from "@components/ui/switch";
 import { Controller, useFormContext } from "react-hook-form";
+import { addSearchParamsToUrl } from "src/core/utils/url";
 
+import { useCodeReviewRouteParams } from "../../../../_hooks";
 import { OverrideIndicatorForm } from "../../../_components/override";
 import type { CodeReviewFormType } from "../../../_types";
 
@@ -44,7 +45,7 @@ const RECHECK = [
 
 /** What Kody does on the pull request (UC-26, UC-35). */
 export const PrOptions = ({ canEdit }: { canEdit: boolean }) => {
-    const { repositoryId } = useParams<{ repositoryId: string }>();
+    const { repositoryId, directoryId } = useCodeReviewRouteParams();
     const form = useFormContext<CodeReviewFormType>();
     return (
         <section className="flex flex-col gap-3">
@@ -57,7 +58,10 @@ export const PrOptions = ({ canEdit }: { canEdit: boolean }) => {
                     an ignored keyword (like WIP) and, when reviews don&apos;t
                     run on drafts, drafts. Set them in{" "}
                     <Link
-                        href={`/settings/code-review/${repositoryId}/general`}>
+                        href={addSearchParamsToUrl(
+                            `/settings/code-review/${repositoryId}/general`,
+                            { directoryId },
+                        )}>
                         General
                     </Link>
                     . A comment with <code>@kody -v business-logic</code> always

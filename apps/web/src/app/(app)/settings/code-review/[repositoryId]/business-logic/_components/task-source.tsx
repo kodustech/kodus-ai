@@ -262,9 +262,13 @@ export const TaskSource = ({
                 <CollapsibleContent>
                     <div className="border-card-lv3/60 flex flex-col gap-2 border-t px-5 py-4">
                         <p className="text-text-secondary text-xs">
-                            Kody already finds keys like SAA-96 or sc-123, AB#8,
-                            #12, CU-86a1b2c3d and tracker links. For another
-                            shape, write a regular expression; its first group,
+                            Kody already finds keys like SAA-96, AB#8, #12,
+                            CU-86a1b2c3d and tracker links, and a lower-case key
+                            like sc-123 in a branch name. In a title or
+                            description a lower-case key counts only when Linear
+                            or Jira has that team or project; for another
+                            tracker, or another shape, write a regular
+                            expression; its first group,
                             when it has one, is the id Kody looks up. For
                             example <code>{"T(\\d{4})"}</code> reads 1234 from
                             the branch <code>nina/T1234-gift-cards</code>.
