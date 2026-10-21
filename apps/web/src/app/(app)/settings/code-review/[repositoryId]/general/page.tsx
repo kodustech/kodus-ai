@@ -201,12 +201,12 @@ export default function General() {
     }
 
     return (
-        <Page.Root>
+        <Page.Root className="min-w-0">
             {/* Sticky: this is a long column of toggles and the only way to
                 keep a change lives up here. Scrolled away, flipping something
                 near the bottom left the reader with no save in reach and
                 nothing on screen saying anything was pending. */}
-            <Page.Header sticky>
+            <Page.Header sticky className="min-w-0 gap-y-2 px-4 sm:px-8">
                 <Page.TitleContainer>
                     <Page.Title>General settings</Page.Title>
                     <Page.Description>
@@ -234,11 +234,16 @@ export default function General() {
                 </Page.SaveActions>
             </Page.Header>
 
-            <Page.Content>
+            <Page.Content className="min-w-0 gap-5 px-4 sm:px-8">
                 <CentralizedConfigReadOnlyAlert />
 
-                <div data-field-name="automatedReviewActive">
-                    <AutomatedReviewActive />
+                <div className="border-card-lv3/60 bg-card-lv1 divide-card-lv3/60 min-w-0 divide-y overflow-hidden rounded-xl border">
+                    <div data-field-name="automatedReviewActive">
+                        <AutomatedReviewActive />
+                    </div>
+                    <div data-field-name="runOnDraft">
+                        <RunOnDraft />
+                    </div>
                 </div>
 
                 {repositoryId !== "global" && (
@@ -247,42 +252,73 @@ export default function General() {
                     </div>
                 )}
 
-                <div data-field-name="kodusConfigFileOverridesWebPreferences">
-                    <KodusConfigFileOverridesWebPreferences />
-                </div>
+                {currentLevel !== FormattedConfigLevel.GLOBAL && (
+                    <div
+                        data-field-name="kodusConfigFileOverridesWebPreferences"
+                        className="border-card-lv3/60 bg-card-lv1 min-w-0 rounded-xl border">
+                        <KodusConfigFileOverridesWebPreferences />
+                    </div>
+                )}
                 <div
                     data-field-name="pullRequestApprovalActive"
                     className="border-card-lv3/60 bg-card-lv1 overflow-hidden rounded-xl border">
                     <PullRequestApprovalActive />
                     <ApprovalPolicySettings />
                 </div>
-                <AsyncBoundary errorVariant="minimal">
-                    <div data-field-name="isRequestChangesActive">
-                        <IsRequestChangesActive />
+                <div className="border-card-lv3/60 bg-card-lv1 divide-card-lv3/60 min-w-0 divide-y overflow-hidden rounded-xl border">
+                    <div className="px-5 py-4 sm:px-6">
+                        <h2 className="text-text-primary text-base font-semibold">
+                            Review feedback
+                        </h2>
+                        <p className="text-text-secondary mt-1 text-xs leading-5">
+                            Choose how Kody responds on a pull request.
+                        </p>
                     </div>
-                </AsyncBoundary>
-                <div data-field-name="runOnDraft">
-                    <RunOnDraft />
-                </div>
-                <div data-field-name="showStatusFeedback">
-                    <ShowStatusFeedback />
-                </div>
-                <AsyncBoundary errorVariant="minimal">
-                    <div data-field-name="enableCommittableSuggestions">
-                        <EnableCommittableSuggestions />
+                    <AsyncBoundary errorVariant="minimal">
+                        <div data-field-name="isRequestChangesActive">
+                            <IsRequestChangesActive />
+                        </div>
+                    </AsyncBoundary>
+                    <div data-field-name="showStatusFeedback">
+                        <ShowStatusFeedback />
                     </div>
-                </AsyncBoundary>
-                <div data-field-name="ignorePaths">
-                    <IgnorePaths />
+                    <AsyncBoundary errorVariant="minimal">
+                        <div data-field-name="enableCommittableSuggestions">
+                            <EnableCommittableSuggestions />
+                        </div>
+                    </AsyncBoundary>
                 </div>
-                <div data-field-name="ignoredTitleKeywords">
-                    <IgnoredTitleKeywords />
-                </div>
-                <div data-field-name="baseBranches">
-                    <BaseBranches />
+
+                <div className="border-card-lv3/60 bg-card-lv1 divide-card-lv3/60 min-w-0 divide-y overflow-hidden rounded-xl border">
+                    <div className="px-5 py-4 sm:px-6">
+                        <h2 className="text-text-primary text-base font-semibold">
+                            Review scope
+                        </h2>
+                        <p className="text-text-secondary mt-1 text-xs leading-5">
+                            Skip files or pull requests that do not need a
+                            review.
+                        </p>
+                    </div>
+                    <div
+                        data-field-name="ignorePaths"
+                        className="min-w-0 px-5 py-4 sm:px-6">
+                        <IgnorePaths />
+                    </div>
+                    <div
+                        data-field-name="ignoredTitleKeywords"
+                        className="min-w-0 px-5 py-4 sm:px-6">
+                        <IgnoredTitleKeywords />
+                    </div>
+                    <div
+                        data-field-name="baseBranches"
+                        className="min-w-0 px-5 py-4 sm:px-6">
+                        <BaseBranches />
+                    </div>
                 </div>
                 {repositoryId === "global" && (
-                    <div data-field-name="language">
+                    <div
+                        data-field-name="language"
+                        className="border-card-lv3/60 bg-card-lv1 min-w-0 rounded-xl border px-5 py-4 sm:px-6">
                         <FormProvider {...form}>
                             <LanguageSelector />
                         </FormProvider>

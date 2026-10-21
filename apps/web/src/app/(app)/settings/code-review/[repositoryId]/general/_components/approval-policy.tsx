@@ -4,7 +4,7 @@ import { FormControl } from "@components/ui/form-control";
 import { Switch } from "@components/ui/switch";
 import TagInput from "@components/ui/tag-input";
 import { Textarea } from "@components/ui/textarea";
-import { Controller, useFormContext } from "react-hook-form";
+import { Controller, useFormContext, useWatch } from "react-hook-form";
 import { OverrideIndicatorForm } from "src/app/(app)/settings/code-review/_components/override";
 
 import type { CodeReviewFormType } from "../../../_types";
@@ -71,7 +71,10 @@ function EligibilityFields() {
 
 export function ApprovalPolicySettings() {
     const form = useFormContext<CodeReviewFormType>();
-    const riskAssessmentActive = form.watch("approvalRiskActive.value");
+    const riskAssessmentActive = useWatch({
+        control: form.control,
+        name: "approvalRiskActive.value",
+    });
 
     return (
         <div>
