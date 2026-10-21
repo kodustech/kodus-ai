@@ -1,0 +1,48 @@
+{
+ "caseId": "notification-rule-processing-engine-grafana-codex",
+ "items": [
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#03",
+   "defectStatement": "When the Grafana ability hook receives undefined, loading is false and Duplicate is reported as supported with Grafana create permission. AlertRuleMenu ORs this result with the ruler ability, exposing Duplicate on datasource rules even when their ruler ability denies it.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Make the Grafana Duplicate ability unsupported when rule is undefined.",
+    "Preserve the loading and plugin-provided rule restrictions on duplication.",
+    "Continue requiring Grafana create permission for duplication of eligible Grafana rules."
+   ],
+   "exampleFix": "    // GrafanaPromRuleDTO rules are supported when present and loading has completed.\n    const MaybeSupported = !rule || loading ? NotSupported : AlwaysSupported;\n    const MaybeSupportedUnlessImmutable = immutableRule ? NotSupported : MaybeSupported;\n\n    // Creating duplicates of plugin-provided rules does not seem to make a lot of sense\n    const duplicateSupported = isPluginProvided ? NotSupported : MaybeSupported;\n\n    const rulesPermissions = getRulesPermissions('grafana');\n\n    const abilities: Abilities<AlertRuleAction> = {\n      [AlertRuleAction.Duplicate]: toAbility(duplicateSupported, rulesPermissions.create),",
+   "notes": "Guarding duplicateSupported directly is also valid. The suggested MaybeSupported guard does not make every ability unsupported: View and Explore use AlwaysSupported independently."
+  },
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#01",
+   "defectStatement": "GrafanaRuleListItem supplies only promRule to RuleActionsButtons, but AlertRuleMenu requires a Grafana rulerRule to render Pause/Resume. Consequently, eligible list-view rules have no pause control even when the Prometheus pause ability allows it.",
+   "anchorCoversDefect": true,
+   "fixability": "needs-wider-change",
+   "contextSufficient": false,
+   "obligations": [
+    "Render Pause/Resume for eligible Grafana rules supplied only through promRule.",
+    "Use the correct rule UID, group, and current paused state when toggling evaluation.",
+    "Preserve permission and immutability restrictions and existing ruler-backed behavior."
+   ],
+   "exampleFix": null,
+   "notes": "The anchor shows the causal call site, but no ruler DTO is available there. The menu and pause component need adaptation, or real ruler data must be fetched. Their contracts are absent from the frozen input; casting a Prometheus DTO to a ruler DTO is invalid."
+  },
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#11",
+   "defectStatement": "For Grafana list-view rules supplied only through promRule, clicking Silence sets showSilenceDrawer, but the drawer's ruler-rule guard remains false. The menu action therefore opens no drawer.",
+   "anchorCoversDefect": true,
+   "fixability": "needs-wider-change",
+   "contextSufficient": false,
+   "obligations": [
+    "Open the silence drawer when Silence is selected for an eligible Grafana Prometheus alerting rule.",
+    "Target the selected rule's UID when creating the silence.",
+    "Preserve ruler-backed silencing and drawer close behavior.",
+    "Keep recording rules and datasource rules excluded from this Grafana alerting-rule drawer."
+   ],
+   "exampleFix": null,
+   "notes": "The drawer requires a RulerGrafanaRuleDTO and reads grafana_alert.uid, including in its memo comparator. Supporting a UID or Prometheus DTO requires changes outside the anchor; fetching a real ruler DTO also requires additional integration. The drawer contract is absent from the frozen input."
+  }
+ ]
+}

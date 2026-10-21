@@ -1,0 +1,63 @@
+{
+ "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+ "items": [
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "defectStatement": "The admin group's totalPages calculation adds an extra page when user_count is an exact multiple of limit. This leaves showingLast false on the actual final page and lets Next load an empty page.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Return the ceiling of user_count divided by limit for positive counts.",
+    "Preserve zero pages for an empty group.",
+    "Keep the computed property dependent on limit and user_count."
+   ],
+   "exampleFix": "  totalPages: function() {\n    if (this.get(\"user_count\") == 0) { return 0; }\n    return Math.ceil(this.get(\"user_count\") / this.get(\"limit\"));\n  }.property(\"limit\", \"user_count\"),",
+   "notes": "Correcting totalPages activates the existing showingLast guard in next. The additional next guard suggested by the finding is unnecessary for this defect."
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-01",
+   "defectStatement": "Admin add_members inserts memberships without checking existing members or repeated users in the request, causing unique-index failures. Because additions are not enclosed in one transaction, a later failure can leave earlier additions committed.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Skip existing memberships and repeated references to the same user within a request.",
+    "Roll back the batch if an addition raises or the final group save fails.",
+    "Continue rejecting automatic-group changes and ignoring unknown usernames.",
+    "Preserve the success response and group validation-error response."
+   ],
+   "exampleFix": "  def add_members\n    group = Group.find(params.require(:group_id).to_i)\n    usernames = params.require(:usernames)\n\n    return can_not_modify_automatic if group.automatic\n\n    saved = false\n    Group.transaction do\n      member_ids = group.user_ids\n      usernames.split(\",\").each do |username|\n        if user = User.find_by_username(username)\n          next if member_ids.include?(user.id)\n          group.add(user)\n          member_ids << user.id\n        end\n      end\n\n      saved = group.save\n      raise ActiveRecord::Rollback unless saved\n    end\n\n    if saved\n      render json: success_json\n    else\n      render_json_error(group)\n    end\n  end",
+   "notes": "Deduplicating username strings alone does not cover existing members or different casing resolving to the same user. A transaction must explicitly roll back when save returns false."
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#10",
+   "defectStatement": "remove_member deletes the membership without clearing the removed user's primary_group_id when it points to this group. The user can therefore retain primary-group presentation after losing membership.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Delete the requested group membership.",
+    "Clear the target user's primary_group_id only when it equals the removed group's ID.",
+    "Leave other users and primary-group assignments to other groups unchanged."
+   ],
+   "exampleFix": "    group.users.delete(user_id)\n    User.where(id: user_id, primary_group_id: group.id).update_all(primary_group_id: nil)",
+   "notes": "Replacing delete with Group#remove alone is insufficient: that method also lacks primary-group cleanup."
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#06",
+   "defectStatement": "The public members route calls findMembers once, loading only the default first 50 members, while the template provides no pagination. Members beyond that first page are inaccessible through the public members view.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": false,
+   "obligations": [
+    "Make members beyond the first 50 available in the public members view.",
+    "Start loading at offset zero so a retained offset cannot omit earlier members.",
+    "Preserve the group controller's showing state and the members controller's group model.",
+    "Use the actual findMembers contract and populate the model's members collection."
+   ],
+   "exampleFix": "  setupController: function(controller, model) {\n    this.controllerFor('group').set('showing', 'members');\n    controller.set(\"model\", model);\n    model.setProperties({ offset: 0, limit: 50 });\n    return model.findMembers().then(function() {\n      if (model.get(\"user_count\") > model.get(\"members\").length) {\n        model.set(\"limit\", model.get(\"user_count\"));\n        return model.findMembers();\n      }\n    });\n  }",
+   "notes": "Repository inspection confirms that 50 is a default, not a server-enforced maximum; findMembers reads limit/offset from the model and updates user_count and members before resolving. Those contracts are absent from the frozen input. Loading all members is locally possible; adding pagination controls would require wider changes."
+  }
+ ]
+}

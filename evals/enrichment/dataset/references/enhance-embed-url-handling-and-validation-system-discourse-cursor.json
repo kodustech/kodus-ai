@@ -1,0 +1,94 @@
+{
+ "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+ "items": [
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#30",
+   "defectStatement": "Each retrieval of an unknown embed URL synchronously downloads and processes the entire configured feed. Because retrieval throttling is per article URL, requests for different articles repeatedly trigger this work.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Bound request-triggered full-feed polling across different embed URLs.",
+    "Retain the existing-embed check after polling.",
+    "Preserve HTTP retrieval when the requested embed remains missing.",
+    "Preserve independently scheduled feed imports."
+   ],
+   "exampleFix": "      if SiteSetting.feed_polling_enabled?\n        feed_poll_key = \"embed:feed-poll:#{Time.now.to_i / 60}\"\n        if $redis.setnx(feed_poll_key, \"1\")\n          $redis.expire(feed_poll_key, 120)\n          Jobs::PollFeed.new.execute({})\n        end\n        return if TopicEmbed.where(embed_url: @embed_url).exists?",
+   "notes": "This bounds request-triggered polling to once per fixed minute; an admitted poll still processes the full feed. Targeted importing is another solution but requires changes to PollFeed, which currently ignores execute arguments."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-01",
+   "defectStatement": "The public endpoint enqueues retrieval for every unknown embed URL without a client-wide limit. Varying paths or query strings bypasses the downstream exact-URL throttle, allowing excessive jobs, network requests, and potentially duplicate article topics.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": false,
+   "obligations": [
+    "Limit retrieval enqueueing using an identity independent of the supplied embed URL.",
+    "Enforce the limit across concurrent requests and application workers.",
+    "Continue permitting anonymous retrieval within the limit.",
+    "Preserve rendering of already-existing topics."
+   ],
+   "exampleFix": "    else\n      retrieve_key = \"embed:retrieve:#{request.remote_ip}:#{Time.now.to_i / 60}\"\n      if $redis.setnx(retrieve_key, \"1\")\n        $redis.expire(retrieve_key, 120)\n        Jobs.enqueue(:retrieve_topic, user_id: current_user.try(:id), embed_url: embed_url)\n      end\n      render 'loading'",
+   "notes": "The repository provides a shared, site-namespaced $redis client, but that dependency is absent from this item's frozen input. The example permits one retrieval per IP per fixed minute; other reasonable limits are valid. Feed-specific throttling is addressed separately by #30."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+   "defectStatement": "absolutize_urls treats protocol-relative href and src values as paths on the article host, breaking external links and images. It also leaves path-relative values unresolved instead of resolving them against the article URL.",
+   "anchorCoversDefect": true,
+   "fixability": "needs-wider-change",
+   "contextSufficient": true,
+   "obligations": [
+    "Preserve the destination host of protocol-relative links and images.",
+    "Resolve path-relative references against the article URL.",
+    "Preserve correct root-relative and already-absolute references.",
+    "Handle both anchor href and image src attributes, including documents without anchors."
+   ],
+   "exampleFix": null,
+   "notes": "The cited range covers only the anchor branch. The independent image branch at lines 70–72 also needs correction; changing only href handling is incomplete."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimip-01",
+   "defectStatement": "import_remote uses open-uri, which follows redirects without repeating the initial embeddable-host validation. An allowed-host URL can therefore redirect the server to an internal service; the initial validation also permits unexpected schemes and ports.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Prevent redirects from causing requests to unvalidated destinations.",
+    "Restrict the initial request to the configured host over permitted HTTP(S) schemes and ports.",
+    "Continue passing successful response bodies to Readability with the existing options.",
+    "Do not import redirect or unsuccessful response bodies as articles."
+   ],
+   "exampleFix": "    require 'net/http'\n    require 'openssl'\n\n    uri = URI.parse(url)\n    return unless %w[http https].include?(uri.scheme) && uri.host == SiteSetting.embeddable_host\n    return unless uri.port == (uri.scheme == 'https' ? 443 : 80)\n\n    http = Net::HTTP.new(uri.host, uri.port, nil)\n    http.use_ssl = uri.scheme == 'https'\n    http.verify_mode = OpenSSL::SSL::VERIFY_PEER if http.use_ssl?\n    http.open_timeout = 10\n    http.read_timeout = 10\n    response = http.start { |connection| connection.get(uri.request_uri) }\n    return unless response.is_a?(Net::HTTPSuccess)\n\n    doc = Readability::Document.new(response.body,",
+   "notes": "Rejecting all redirects fixes the confirmed redirect bypass without needing a new application helper. This example does not claim protection against the configured hostname itself resolving to private addresses or DNS rebinding. A timeout alone does not fix the bypass."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "defectStatement": "PollFeed calls scrub on i.content even when a feed item supplies only description. The resulting NoMethodError aborts processing of that item and all remaining feed items.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Use description when content is absent.",
+    "Skip items with no usable body without aborting subsequent items.",
+    "Preserve scrubbing and HTML entity decoding for imported bodies."
+   ],
+   "exampleFix": "        body = i.content.presence || i.description\n        next if body.blank?\n        content = CGI.unescapeHTML(body.scrub)",
+   "notes": "Falling back for blank content as well as nil is valid. Converting nil directly to an empty string avoids the exception but loses description-only articles."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
+   "defectStatement": "TopicEmbed.import interpolates the source URL unescaped into both an HTML attribute and link text in a raw-HTML post, allowing markup injection. Appending the footer with << also raises when contents is nil.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Escape the URL for both the quoted href attribute and visible link text.",
+    "Handle nil contents without raising.",
+    "Preserve the article body and translated attribution footer.",
+    "Keep the original URL unchanged for embed lookup and storage."
+   ],
+   "exampleFix": "    escaped_url = ERB::Util.html_escape(url)\n    contents = \"#{contents}\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \"<a href='#{escaped_url}'>#{escaped_url}</a>\")}</small>\\n\"",
+   "notes": "Constructing the link with Nokogiri is also valid. Escaping must include apostrophes because href uses single quotes. All supplied local replacements passed Ruby syntax compilation in their surrounding files; runtime tests were not run."
+  }
+ ]
+}

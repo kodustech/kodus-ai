@@ -1,0 +1,47 @@
+{
+ "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+ "items": [
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#02",
+   "defectStatement": "validateUploadedFile uses a fixed 10 MB limit instead of the configured limit for the upload type. This rejects uploads allowed by higher site settings and lets uploads exceeding lower settings pass client validation.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Select max_image_size_kb or max_attachment_size_kb according to type.",
+    "Reject files strictly exceeding the configured limit, comparing sizes in KB.",
+    "Display the applicable configured limit in the existing error message."
+   ],
+   "exampleFix": "    // check file size\n    var fileSizeKB = file.size / 1024;\n    var maxSizeKB = Discourse.SiteSettings['max_' + type + '_size_kb'];\n    if (fileSizeKB > maxSizeKB) {\n      bootbox.alert(I18n.t('post.errors.file_too_large', { max_size_kb: maxSizeKB }));\n      return false;\n    }",
+   "notes": "The separate hardcoded limit in the HTTP 413 handler is outside this finding."
+  },
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "defectStatement": "In app/models/optimized_image.rb, the second self.downsize definition replaces the width/height version. ResizeEmoji still calls downsize(path, path, 100, 100, opts), so its five-argument invocation raises ArgumentError.",
+   "anchorCoversDefect": false,
+   "fixability": "local",
+   "contextSufficient": false,
+   "obligations": [
+    "Make ResizeEmoji's downsizing invocation compatible with the effective method signature.",
+    "Preserve the controller's percentage-based downsizing invocation.",
+    "Preserve animation and aspect-ratio options for emoji resizing."
+   ],
+   "exampleFix": null,
+   "notes": "No usable anchor. Local classification reflects that consolidating the model's method can restore compatibility without caller edits. The verified failing caller passes five arguments; four arguments instead bind the numeric height as opts."
+  },
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#09",
+   "defectStatement": "The downsizing loop keeps using an open Tempfile after processing its pathname. If processing replaces the file's inode, subsequent size checks and the Tempfile passed to Upload.create_for can still reference the original oversized content.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Refresh the Tempfile's underlying file handle after each downsizing attempt so subsequent checks observe the current file.",
+    "Pass the current content, positioned at its beginning, and its current size to Upload.create_for.",
+    "Preserve the five-attempt bound, image eligibility checks, percentage reduction, animation option, and Tempfile cleanup."
+   ],
+   "exampleFix": "      # allow users to upload large images that will be automatically reduced to allowed size\n      if tempfile && tempfile.size > 0 && SiteSetting.max_image_size_kb > 0 && FileHelper.is_image?(filename)\n        attempt = 5\n        while attempt > 0 && tempfile.size > SiteSetting.max_image_size_kb.kilobytes\n          OptimizedImage.downsize(tempfile.path, tempfile.path, \"80%\", allow_animation: SiteSetting.allow_animated_thumbnails)\n          tempfile.open\n          attempt -= 1\n        end\n      end",
+   "notes": "The gold description's infinite-loop claim is incorrect: attempt bounds execution to five iterations. The issue is a stale file descriptor, not cached size. Tempfile#open reopens the pathname without truncation and resets position; rewind alone or changing only the loop's size check is insufficient."
+  }
+ ]
+}

@@ -1,0 +1,19 @@
+{
+ "caseId": "database-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "issueId": "database-performance-optimizations-grafana-codex#08",
+   "defectStatement": "CleanUpService.Run changes the shared cleanup ticker from ten minutes to one minute, increasing the scheduled frequency of every cleanup job rather than only annotation cleanup. This can run cleanup work ten times as often and increase database and I/O load.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Restore the shared cleanup ticker to a ten-minute interval.",
+    "Preserve immediate startup temporary-file cleanup.",
+    "Preserve periodic cleanup execution and context-cancellation handling."
+   ],
+   "exampleFix": "func (srv *CleanUpService) Run(ctx context.Context) error {\n\tsrv.cleanUpTmpFiles(ctx)\n\n\tticker := time.NewTicker(time.Minute * 10)\n\tfor {",
+   "notes": "The tenfold increase concerns ticker frequency; actual execution frequency depends on job duration. Separately scheduling annotation cleanup is unnecessary for the minimal fix."
+  }
+ ]
+}

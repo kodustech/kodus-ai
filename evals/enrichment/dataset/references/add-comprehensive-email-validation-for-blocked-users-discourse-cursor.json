@@ -1,0 +1,19 @@
+{
+ "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
+ "items": [
+  {
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "defectStatement": "BlockedEmail.should_block? uses a case-sensitive email lookup, allowing a submitted address with different capitalization from the stored blocked address to bypass the block list.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Match email addresses case-insensitively, including existing mixed-case stored addresses.",
+    "Preserve exact address matching apart from case; do not introduce wildcard matching.",
+    "Preserve match statistics updates and the distinction between block and do_nothing actions."
+   ],
+   "exampleFix": "    record = BlockedEmail.where('lower(email) = ?', email.to_s.downcase).first",
+   "notes": "Lowercasing only the input is insufficient because stored addresses are not normalized. Normalizing stored values is optional for this defect when the lookup compares both sides case-insensitively."
+  }
+ ]
+}

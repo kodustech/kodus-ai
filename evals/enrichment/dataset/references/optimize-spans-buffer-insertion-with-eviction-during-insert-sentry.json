@@ -1,0 +1,46 @@
+{
+ "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+ "items": [
+  {
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#05",
+   "defectStatement": "The eviction in add-buffer.lua can remove the segment/root payload when its end timestamp ranks among the oldest members, while leaving the has-root flag set. flush_segments then returns a segment without its root payload; done_flush_segments performs cleanup afterward.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": false,
+   "obligations": [
+    "Retain a payload whose span_id equals set_span_id whenever one exists before eviction.",
+    "Reduce the sorted set to at most 1000 members, evicting the oldest eligible members.",
+    "Preserve retained payload bytes, scores, and the set's expiration."
+   ],
+   "exampleFix": "if span_count > 1000 then\n    local root_member = nil\n    local root_score = nil\n    local members = redis.call(\"zrange\", set_key, 0, -1, \"WITHSCORES\")\n    for i = 1, #members, 2 do\n        if cjson.decode(members[i]).span_id == set_span_id then\n            root_member = members[i]\n            root_score = members[i + 1]\n            break\n        end\n    end\n\n    if root_member then\n        redis.call(\"zrem\", set_key, root_member)\n    end\n    redis.call(\"zpopmin\", set_key, span_count - 1000)\n    if root_member then\n        redis.call(\"zadd\", set_key, root_score, root_member)\n    end\nend",
+   "notes": "The repository confirms that members are JSON payloads with a top-level span_id; the frozen input does not establish their encoding. The example protects one root representation, preserves its original score, and retains the cap. Merely clearing the has-root flag or deleting eviction does not satisfy these requirements."
+  },
+  {
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#03",
+   "defectStatement": "Both ZUNIONSTORE calls use the default SUM aggregation, adding timestamp scores when the same payload exists in both input sets. The inflated score causes older duplicated spans to survive eviction ahead of newer spans.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Use non-additive score aggregation in both merges so identical timestamp scores remain unchanged.",
+    "Preserve merged membership, span_count assignment, merge conditions, and source-key cleanup."
+   ],
+   "exampleFix": "if not is_root_span and redis.call(\"zcard\", span_key) > 0 then\n    span_count = redis.call(\"zunionstore\", set_key, 2, set_key, span_key, \"AGGREGATE\", \"MAX\")\n    redis.call(\"unlink\", span_key)\nend\n\nlocal parent_key = string.format(\"span-buf:s:{%s}:%s\", project_and_trace, parent_span_id)\nif set_span_id ~= parent_span_id and redis.call(\"zcard\", parent_key) > 0 then\n    span_count = redis.call(\"zunionstore\", set_key, 2, set_key, parent_key, \"AGGREGATE\", \"MAX\")\n    redis.call(\"unlink\", parent_key)",
+   "notes": "MIN is also valid for identical payload timestamp scores. The replacement deliberately omits the second block's closing end, which is outside the cited range."
+  },
+  {
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01",
+   "defectStatement": "Reducing the redirect loop's upper bound from 10000 to 1000 makes longer previously supported chains terminate at an intermediate ancestor. Subsequent redirects and merges can then place spans in the wrong buffer, splitting a segment.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Restore traversal capacity for redirect chains supported by the previous 10000 upper bound.",
+    "Preserve early termination on missing or self redirects and redirect_depth reporting.",
+    "Keep the traversal limit independent of the 1000-member eviction cap."
+   ],
+   "exampleFix": "local set_span_id = parent_span_id\nlocal redirect_depth = 0\n\nfor i = 0, 10000 do\n    local new_set_span = redis.call(\"hget\", main_redirect_key, set_span_id)\n    redirect_depth = i\n    if not new_set_span or new_set_span == set_span_id then",
+   "notes": "Lua numeric loop bounds are inclusive: the current loop permits 1001 iterations, versus 10001 previously. Restoring the previous bound fixes this regression without claiming support for arbitrarily deep chains."
+  }
+ ]
+}

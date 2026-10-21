@@ -1,0 +1,1077 @@
+{
+ "model": "gpt-6.1-sol@sub",
+ "items": [
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "defectStatement": "The totalPages computed property overcounts pages by one when a positive user_count is an exact multiple of limit. This leaves showingLast false on the actual last page and allows the existing next action to advance to an empty page.",
+   "obligations": [
+    "For positive user_count and positive limit, return the number of pages needed to hold all members, without an extra page for exact multiples (for example, 50 members with limit 50 yields 1).",
+    "Preserve a total of 0 pages for zero members and correctly count partial final pages (for example, 51 members with limit 50 yields 2).",
+    "Keep totalPages reactive to changes in both limit and user_count so the existing showingLast computation and next-action guard recognize the actual last page."
+   ],
+   "notes": "Only lines 11–14 are replaceable. Changing next is unnecessary for normal page-aligned navigation: its existing showingLast guard prevents advancing past the last page once totalPages is correct. Equivalent page-count calculations are valid; no additional behavior for invalid limits or already out-of-range offsets is required."
+  },
+  {
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "defectStatement": "The lookup in BlockedEmail.should_block? does not explicitly compare email addresses case-insensitively. On a case-sensitive database comparison, a differently cased submission will miss a blocked entry, bypassing blocking and its match tracking.",
+   "obligations": [
+    "Match stored email addresses regardless of case differences in either the stored value or the supplied address, including existing mixed-case records.",
+    "Preserve the matched-record behavior: increment match_count, update last_match_at, save the record, and block only when its action_type is actions[:block].",
+    "Preserve the no-match behavior without creating or updating unrelated records.",
+    "Keep supplied email values safely handled as query data rather than interpolating them into SQL."
+   ],
+   "notes": "Only the lookup line can be replaced; lowercasing stored values is not a required part of this fix. Lowercasing only the input is insufficient without a guarantee that existing stored values are normalized. Actual case sensitivity depends on database collation; the shown code does not establish User.new_from_params behavior."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#30",
+   "defectStatement": "When feed polling is enabled and the embed is missing, perform_retrieve synchronously invokes an untargeted PollFeed job before checking whether the requested embed now exists. If that job imports the whole feed as described, unrelated feed imports delay this single-URL retrieval, and the existence check runs too late to stop them.",
+   "obligations": [
+    "Avoid running an unrestricted synchronous whole-feed import for a single embed retrieval; unrelated feed imports must not continue after the requested embed has been obtained.",
+    "Preserve retrieval of the requested URL: if no TopicEmbed exists after any feed-specific attempt, execution must still reach fetch_http.",
+    "If a feed-specific attempt creates the requested TopicEmbed, avoid subsequently importing the same URL through fetch_http.",
+    "Preserve the existing early exit for an already-known embed and the direct HTTP retrieval path when feed polling is disabled."
+   ],
+   "notes": "Only lines 40–42 can be replaced. Bypassing synchronous feed polling in favor of the existing HTTP fallback is valid; passing a target or stop condition is valid only if the job actually supports it. PollFeed's implementation is not shown, so its loop behavior is an assumption from the finding, and O(N) new writes per request is overstated: imports may find existing records rather than create them. Host validation and throttling already limit which requests reach this code."
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#14",
+   "defectStatement": "In record_for_host, URI#host discards the URL's port before the database lookup, so entries such as example.com:8080, which the model permits storing, cannot be found by matching URLs. Consequently, host_allowed? returns false when only the corresponding port-qualified entry exists.",
+   "obligations": [
+    "Allow a URL with a non-default port to find the matching stored hostname:port entry.",
+    "Do not match a port-qualified entry for a URL using a different port.",
+    "Preserve hostname-only lookup behavior for ordinary URLs without a non-default port.",
+    "Preserve safe rejection of malformed input and input without a URI host, and continue returning a matching record or a falsey result compatible with host_allowed?."
+   ],
+   "notes": "Only lines 10–18 are replaceable; rejecting ports in the validation would require an out-of-scope change and would not address existing port-qualified records. URI#port can report an implicit scheme-default port, so blindly appending it would break ordinary hostname-only matches. The finding does not establish a required policy for explicitly written default ports or fallback to hostname-only entries for non-default-port URLs."
+  },
+  {
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "defectStatement": "The `.group-member-info .name` color declaration changes the light-theme primary lightness scaling from 30% to 50%, making names lighter than before and removing their color distinction from titles. The theme-aware declaration should retain the original light-theme shade and use the intended 70%-scaled secondary shade in dark themes.",
+   "obligations": [
+    "In light themes, resolve the name color to the equivalent of `scale-color($primary, $lightness: 30%)`.",
+    "In dark themes, resolve the name color to the equivalent of `scale-color($secondary, $lightness: 70%)`.",
+    "Preserve theme-dependent selection and limit the change to the cited name color declaration; leave title styling and layout unchanged."
+   ],
+   "notes": "Equivalent Sass expressions are acceptable. The diff directly establishes the light-theme regression; the 70% dark-theme value is the finding's requested target, not a value established by the previous declaration."
+  },
+  {
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#04",
+   "defectStatement": "In website_name, the equal-depth sibling-host check treats any shared suffix after the first label as a shared parent domain, even when that suffix is a public suffix. Consequently, a website such as evil.co.uk receives its path in the display name when the forum is forum.co.uk, despite belonging to a different registrable domain.",
+   "obligations": [
+    "Do not append the website path for distinct registrable domains that merely share a public suffix, including evil.co.uk versus forum.co.uk.",
+    "Continue appending the path for genuine sibling hosts such as www.example.com versus forum.example.com, including equivalent cases under multi-label public suffixes.",
+    "Preserve exact-host and existing parent-host handling, the host-only display for unrelated websites, and the nil result for websites without a parseable host.",
+    "Keep the display format as website host plus URI path when eligible, or website host alone otherwise; do not add the scheme, query, or fragment."
+   ],
+   "notes": "This is a display-name defect, not a change to the website URL itself. Public-suffix-aware comparison is valid but need not broaden matching beyond the existing sibling-host cases. The suggested minimum-label heuristic is not generally reliable: public suffixes have varying depths, and rejecting all two-label shared suffixes would also reject legitimate siblings under co.uk."
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#11",
+   "defectStatement": "The save-success callback unconditionally overwrites host.category using the component's submitted categoryId, which defaults to null. When the server assigns a default category to a host saved without a selection, this lookup can clear the client-side category instead of displaying the saved category.",
+   "obligations": [
+    "After a successful save without a category selection, retain or resolve the category actually assigned by the server rather than replacing it with the result of a null-ID lookup.",
+    "Continue to display the saved category correctly when an explicit category is selected, including when editing an existing host.",
+    "Preserve the save call, success-only exit from editing, and existing error handling."
+   ],
+   "notes": "Preserving a category populated by save or resolving the server-returned category ID are both valid, depending on the model's save contract. That contract and the server's default-category behavior are not shown here; simply deleting the assignment is sufficient only if save already populates the correct category."
+  },
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#02",
+   "defectStatement": "The size check in validateUploadedFile uses a fixed 10,240 KB limit instead of the configured limit for the supplied upload type. It therefore accepts files above a lower configured limit and rejects files permitted by a higher configured limit, for either images or attachments.",
+   "obligations": [
+    "Use max_image_size_kb for type 'image' and max_attachment_size_kb for type 'attachment' from Discourse.SiteSettings rather than a fixed limit.",
+    "Compare file.size in bytes against the configured KB limit with consistent units; reject only sizes strictly above the limit, allowing equality.",
+    "For an oversized file, show the existing localized post.errors.file_too_large alert with max_size_kb set to the applicable configured limit, and return false.",
+    "Preserve successful validation for files within the limit and the existing authorization and new-user checks; bypassNewUserRestriction must not bypass the size limit."
+   ],
+   "notes": "The finding concerns client-side validation, not proof that the server accepts oversized uploads. Both upload types can be affected in either direction depending on configuration. The separate HTTP 413 error-handler change is outside the cited lines and need not be fixed here."
+  },
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
+   "defectStatement": "The unsubscribe action changes and saves the current user's topic notification level without checking the request method or any request-authenticity token. If exposed via GET as described, visiting an attacker-supplied URL can therefore change notification preferences using the victim's logged-in session.",
+   "obligations": [
+    "Prevent an unauthenticated-to-the-request, session-bearing GET from changing notification preferences; require a CSRF-validated state-changing request or a verified signed authorization token bound to the affected user and topic.",
+    "Reject missing, invalid, or mismatched authorization tokens before any notification-level change is persisted; merely requiring POST or displaying a confirmation is insufficient without request-authenticity protection.",
+    "For an authorized unsubscribe, preserve the existing transition: levels above regular become regular, while regular or lower levels become muted, and persist the change only for the current user and requested topic.",
+    "Preserve topic access checks and successful topic rendering, and ensure slug canonicalization cannot bypass the mutation's authorization checks."
+   ],
+   "notes": "Routes and inherited CSRF filters are not shown, so GET reachability and exact browser exploitability are contextual rather than established by this method alone. Only the cited action can be replaced: a method-based fix must actually enforce the method and CSRF protection here or rely on demonstrably active framework protection, not assume an accompanying route change. A properly verified signed URL is an alternative valid fix."
+  },
+  {
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#05",
+   "defectStatement": "In website_name's fallback branch, the domain relationship is checked only for an instance host that is a subdomain of the website host. Consequently, a website on a subdomain of the instance (for example, forum.example.com/users/alice with instance example.com) is displayed as only its host, omitting the path.",
+   "obligations": [
+    "Include the website's URI path when the website host is a dot-delimited subdomain of the instance host.",
+    "Preserve inclusion of the path when the instance host is a dot-delimited subdomain of the website host.",
+    "Continue returning only the website host for unrelated hosts, including hosts that merely share a textual suffix without a dot boundary.",
+    "Preserve the surrounding behavior for equal hosts, same-depth sibling hosts, and websites without a parseable host; display only host plus path for qualifying websites, not the scheme, query, or fragment."
+   ],
+   "notes": "The finding concerns the fallback branch, not all domain comparisons: equal hosts and some same-depth sibling hosts already include paths in earlier branches. Either direction of a proper subdomain relationship must qualify; no broader registrable-domain matching is required."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-01",
+   "defectStatement": "In EmbedController#best, every request with no matching TopicEmbed unconditionally enqueues a retrieve_topic job, including anonymous requests that pass ensure_embeddable. Requests varying embed_url can therefore generate unbounded retrieval jobs; these lines provide no enqueue rate limit spanning different URLs.",
+   "obligations": [
+    "Bound retrieval-job enqueueing over a time interval using a scope shared across distinct embed URLs, such as requester IP or a global scope; URL-only deduplication is insufficient.",
+    "Enforce the bound for anonymous requests, including concurrent requests, and do not enqueue a job when the limit is exceeded.",
+    "For permitted missing-topic requests, preserve retrieval with the supplied embed_url and the current user's ID when present, or nil for anonymous users, and retain the loading response.",
+    "Preserve the existing-topic rendering path and the existing embeddability checks; rate-limited requests must receive a valid response without starting retrieval work."
+   ],
+   "notes": "Only lines 14–16 can be replaced. The shown code does not establish any downstream URL throttle, synchronous feed polling, or remote-fetch behavior, so those details should not be assumed proven. Independently scheduling or throttling PollFeed is outside this replacement's scope and is not required here. A suppressed enqueue may retain the loading response or return an appropriate rate-limit response."
+  },
+  {
+   "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#06",
+   "defectStatement": "Line 17 makes the translation fallback order depend on the mutable SiteSetting.default_locale. If the translation accelerator caches results using only the translation key, requested locale, and backend identity as reported, changing the site default can leave previously cached translations using the old fallback locale.",
+   "obligations": [
+    "After the site default locale changes, a repeated translation lookup must not reuse text cached solely under the previous site-default fallback configuration.",
+    "Preserve fallback precedence: requested locale, current site default locale, then English, with duplicates and nil entries removed.",
+    "Preserve the fallback-list interface used by translation lookup and ensure_loaded!."
+   ],
+   "notes": "The supplied code does not show the accelerator or its invalidation behavior, so the cache defect is conditional on the reported cache implementation. Only line 17 is editable: changing a cache key elsewhere or adding a setting-change hook elsewhere is outside this replacement scope. Invalidation performed only when this fallback list is evaluated is insufficient if an accelerator cache hit bypasses that evaluation."
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-01",
+   "defectStatement": "In add_members, every resolved username is passed to group.add without checking existing membership or earlier additions in the same request. If group.add inserts join rows as described, existing or repeated members can trigger a uniqueness violation, and a later failure can leave earlier additions persisted because the operation has no encompassing transaction.",
+   "obligations": [
+    "Treat existing members and repeated usernames resolving to the same user as no-ops, while adding each genuinely new member once.",
+    "Make the membership additions atomic: a failure during additions or the final save must not leave earlier additions from this request persisted.",
+    "Preserve required parameter handling, comma-separated username lookup, skipping unknown users, and rejection of membership changes to automatic groups.",
+    "Preserve the success JSON response for successful requests, including duplicate-only requests, and the JSON error response when group validation/save fails."
+   ],
+   "notes": "Group#add and the database index are not shown, so their asserted behavior cannot be independently verified from this excerpt. Membership checks must account for additions made earlier in the same request; deduplicating input alone does not handle existing members. A transaction that commits when group.save returns false does not ensure rollback on save failure. No particular membership-check or transaction implementation is required."
+  },
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#10",
+   "defectStatement": "The unsubscribe route's model hook only loads ordinary topic data through PostStream.loadTopicView; it does not perform an unsubscribe operation. A client-side transition can therefore render the unsubscribe confirmation without changing the user's topic notification preference.",
+   "obligations": [
+    "Ensure a client-side visit performs the actual unsubscribe operation for params.id before the route presents unsubscribe success, or delegates to a flow that requires a successful explicit submission.",
+    "Do not treat a failed unsubscribe request as successful completion.",
+    "Preserve a usable topic model for the existing page and afterModel hook, or delegate navigation to an unsubscribe flow that supplies the equivalent page behavior."
+   ],
+   "notes": "Changing only the local topic model or re-fetching ordinary topic JSON does not persist an unsubscribe. A server-navigation solution can also be valid if it actually invokes the unsubscribe flow rather than looping back into this client route. The shown code establishes the missing client-side operation; the claim that full server requests change preferences depends on server code not shown."
+  },
+  {
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "defectStatement": "The color declaration for `.custom-message-length` in the mobile modal stylesheet uses the lightness adjustments in reverse: 30% for the light-theme primary color and 70% for the dark-theme secondary color. This changes the previous light-theme color and gives the dark theme the wrong intended hint-text shade.",
+   "obligations": [
+    "In the light theme, render `.custom-message-length` with the equivalent of `scale-color($primary, $lightness: 70%)`, preserving its previous color.",
+    "In the dark theme, render it with the equivalent of `scale-color($secondary, $lightness: 30%)`.",
+    "Preserve theme-dependent color selection and leave the selector's margin and font size unchanged."
+   ],
+   "notes": "Equivalent Sass expressions are valid; hard-coded colors that only match the default palette are not. The provided excerpt confirms the light-theme regression but does not independently show the desktop rule referenced by the finding."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+   "defectStatement": "In TopicEmbed.absolutize_urls, the anchor href rewrite at lines 64–66 treats protocol-relative URLs such as //cdn.example.com/a.png as source-host-relative paths, changing their destination to the embed host. The image src block has the same defect, but is outside the cited replacement lines.",
+   "obligations": [
+    "Leave anchor href values beginning with // unchanged rather than prefixing them with the embed host.",
+    "Continue converting single-leading-slash anchor paths to absolute URLs using the existing prefix, including its scheme and non-default port.",
+    "Preserve existing behavior for absent or empty href attributes and for href values not beginning with /."
+   ],
+   "notes": "The replacement scope is only lines 64–66; do not require correction of the analogous img src block at lines 70–72. Preserving protocol-relative hrefs is sufficient; broader URL resolution or changes to prefix construction are not required."
+  },
+  {
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+   "defectStatement": "At line 497, the color for `.group-member-info .name` uses a 50% lightness adjustment to `$primary` in the light theme, replacing the previous 30% adjustment and unintentionally making names lighter. The theme-aware color should retain the original light-theme appearance and use the corresponding 70% adjustment to `$secondary` in the dark theme.",
+   "obligations": [
+    "In the light theme, resolve the name color to `scale-color($primary, $lightness: 30%)`.",
+    "In the dark theme, resolve the name color to `scale-color($secondary, $lightness: 70%)`.",
+    "Preserve theme-dependent selection and leave the surrounding name layout and other selectors unchanged."
+   ],
+   "notes": "The diff confirms the light-theme regression. The 70% dark-theme value is the finding's requested counterpart, not a previously existing value shown in the diff. Equivalent Sass expressions are valid if they produce the required theme-dependent colors."
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "defectStatement": "GroupPermissionsV2.canManage() accepts an all-groups VIEW grant as sufficient for management because hasPermission succeeds on any requested scope. This incorrectly authorizes VIEW-only subjects through callers relying on the no-argument management check.",
+   "obligations": [
+    "Without the MANAGE_USERS admin role, an all-groups VIEW grant alone must not make canManage() return true.",
+    "Continue to authorize subjects with an effective all-groups MANAGE grant, without requiring VIEW as well.",
+    "Preserve the unconditional authorization for subjects with the MANAGE_USERS admin role.",
+    "Preserve the existing all-groups permission evaluation and its denial behavior for missing grants, missing resource servers, and subjects outside the admin realm."
+   ],
+   "notes": "The permission fallback matches canView(), but the methods are not identical: canView() also allows the VIEW_USERS admin role. The shown code establishes the faulty no-argument authorization; claims about specific create/update/delete endpoints depend on callers not shown here. No change to canView() or the group-specific overload is needed."
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+   "defectStatement": "getClientsWithPermission enumerates resources by the \"Clients\" type, missing untyped V2 per-client resources, and returns authorization resource names rather than the clientId values expected by its caller. Consequently, granted clients are omitted and a granted aggregate resource can produce the spurious value \"Clients\".",
+   "obligations": [
+    "Discover existing V2 per-client resources even when they have no resource type.",
+    "Return the corresponding ClientModel.getClientId() values for clients granted the requested scope, not internal client IDs or authorization resource names.",
+    "Include only actual clients with a grant for the requested scope; do not return the aggregate resource name as a client identifier or include unrelated or stale resources.",
+    "Preserve the empty-set behavior for cross-realm administrators and missing resource servers, and preserve scope-specific permission evaluation."
+   ],
+   "notes": "Only lines 136–144 are replaceable; changing resource creation elsewhere is not an available fix. The shown per-client lookup uses client.getId() as the resource name, which is distinct from client.getClientId(); merely removing the type filter is insufficient. The creation code and caller cited in the finding are not included here, so the claim that the aggregate resource is the only possible type match should not be treated as independently demonstrated."
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#10",
+   "defectStatement": "In canView(ClientModel), the no-argument canView() can grant access based on the all-clients VIEW permission before the requested client's resource is evaluated, allowing access even when that client's VIEW evaluation denies it. The client-specific hasPermission helper already selects the concrete resource and falls back to all-clients only when that resource is absent.",
+   "obligations": [
+    "Do not let an all-clients VIEW grant alone authorize a client whose concrete resource denies VIEW when no other legitimate view-granting authority applies.",
+    "Preserve default administrative view authority and the existing rule that permission to configure or manage the requested client implies permission to view it.",
+    "Continue evaluating client-specific VIEW permission and preserve the existing all-clients fallback when the client has no concrete authorization resource.",
+    "Preserve denial when neither default authority, client configure/manage authority, nor the applicable VIEW evaluation grants access."
+   ],
+   "notes": "Simply reordering the OR operands or retrying global VIEW after a client-specific denial does not fix the bypass. The cited two lines can fix the client-specific method, but cannot independently change the no-argument canView() listing shortcut; that method and ClientsResource are outside the replacement span. Do not require a listing-wide fix for this localized replacement. A VIEW denial is not an unconditional veto over existing administrative or configure/manage authority."
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "defectStatement": "In getGroupIdsWithViewPermission(), the callback uses the authorization resource's internal ID both as the group identifier passed to hasPermission() and as the returned group ID, although the group ID is stored in the resource name. This makes the name-based permission lookup miss the specific group resource and fall back to all-groups permissions, and any returned resource UUIDs do not correctly identify groups for user filtering.",
+   "obligations": [
+    "Evaluate each enumerated group's member-view permission using its actual group identifier (the resource name), rather than its internal resource UUID.",
+    "Add the actual group identifier to the returned set only when that group's permission evaluation grants VIEW_MEMBERS or MANAGE_MEMBERS.",
+    "Preserve enumeration of GROUPS_RESOURCE_TYPE resources for the current resource server and existing early-return behavior."
+   ],
+   "notes": "Both identifier uses must be corrected; changing only the returned value or only the permission-check argument leaves a defect. Preserve the existing either-scope grant semantics and permission evaluation behavior. The claim that filtering matches no users assumes resource UUIDs differ from group IDs; the concrete defect is the identifier mismatch."
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#04",
+   "defectStatement": "The reported V2/JPA incompatibility is a downstream filtering-contract issue: if JPA requires a resource named group.resource.<groupId>, V2 grants backed only by resources named by group ID cannot expose members in search or count results. The cited `return granted;` does not impose that requirement, and changing that return alone cannot repair the downstream contract.",
+   "obligations": [
+    "Allow member search and count filtering for authorized V2 groups without requiring creation or existence of a legacy group.resource.<groupId> resource.",
+    "Preserve permission-based filtering: unauthorized groups must not expose their members, and search and count must apply consistent restrictions.",
+    "Preserve legacy V1 filtering behavior and the existing early-return behavior for unrestricted user viewing, cross-realm administration, and a missing resource server."
+   ],
+   "notes": "The JPA implementation and callers are not shown, so the claimed legacy-name check cannot be verified from this excerpt. A complete contract fix requires changes outside the cited return line; do not treat a return-only workaround as sufficient or require synthetic legacy resources. Separately, the loop uses authorization resource IDs where hasPermission expects group IDs/resource names; that is a distinct issue, not proof of the reported JPA defect."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "defectStatement": "In the collective-team branch, optional chaining skips appending teamDestinationCalendars when evt.destinationCalendar is null because neither the event type nor organizer has a destination calendar. Consequently, configured team-member destination calendars are omitted from the event passed to downstream calendar handling.",
+   "obligations": [
+    "For collective team events with a null or undefined destinationCalendar, include all collected teamDestinationCalendars in evt.destinationCalendar without throwing.",
+    "When destinationCalendar already contains an event-type or organizer calendar, preserve its entries and order and append the collected team calendars in their existing order.",
+    "Keep the change scoped to collective team events; do not add team destination calendars or alter destinationCalendar for other scheduling types.",
+    "Handle an empty teamDestinationCalendars collection without throwing or introducing invalid calendar entries."
+   ],
+   "notes": "Either initializing a missing array or assigning a combined array is valid. For a collective event with no calendars at all, retaining null or producing an empty array is acceptable. The shown code establishes omitted destination calendars, but does not by itself prove that hosts are absent from attendee invitations; attendees are populated separately."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "defectStatement": "In updateEvent, the fallback for a falsy externalCalendarId searches destination calendars for that same falsy ID instead of selecting the main host's destination calendar. This generally leaves selectedCalendar undefined despite a configured destination, passing an invalid or missing calendarId to both the update and any subsequent Meet-description patch.",
+   "obligations": [
+    "Preserve a truthy explicit externalCalendarId as the selected calendar, regardless of destination-calendar contents.",
+    "When externalCalendarId is falsy, select the first (main host) destination calendar's externalId rather than searching for the falsy input.",
+    "Handle absent or empty destinationCalendar without throwing, retaining an undefined selection when no main destination exists.",
+    "Keep the selected calendar shared by the event update and subsequent Meet-description patch."
+   ],
+   "notes": "The shown update path has no explicit \"primary\" fallback, so the finding's claim that it targets \"primary\" is unsupported. Using the already-extracted mainHostDestinationCalendar or an equivalent safe first-entry lookup is valid. Changes to deleteEvent or createEvent are outside the cited lines."
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03",
+   "defectStatement": "In checkIfIsAvailable, the return at lines 133–135 marks a slot available whenever a matching date override survives the preceding rejection checks, without checking busy intervals. Consequently, a slot overlapping an existing booking can be reported as available.",
+   "obligations": [
+    "For slots accepted by the date-override checks, reject busy-time overlaps using the existing overlap semantics, including rejecting a busy interval contained within the slot and allowing intervals that only touch slot boundaries.",
+    "Preserve date overrides taking precedence over normal working hours: an override-accepted slot with no busy conflict must not be rejected solely because it falls outside normal working hours.",
+    "Preserve the existing no-override path, earlier date-override rejections, and the currentSeats early-return behavior."
+   ],
+   "notes": "Only lines 133–135 are replaceable. Simply deleting the early return would expose override slots to the normal-working-hours rejection below and would not preserve override precedence. A localized busy-interval check in this branch is valid; it need not refactor the shared check. Other apparent defects in date-override or working-hours calculations are outside this finding."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "defectStatement": "In EventManager.create, destructuring a null, undefined, or empty destinationCalendar leaves mainHostDestinationCalendar undefined. When the location is Google Meet, reading its integration throws a TypeError and aborts creation instead of falling back to Cal Video.",
+   "obligations": [
+    "Handle null, undefined, and empty destinationCalendar without throwing at this check.",
+    "For a Google Meet location, select the existing integrations:daily fallback when the first destination calendar is absent or its integration is not google_calendar.",
+    "Preserve Google Meet when the first destination calendar uses google_calendar; continue checking only the first destination rather than searching later entries.",
+    "Leave non-Google-Meet locations unchanged by this fallback check."
+   ],
+   "notes": "The exception occurs only when the Google Meet condition is true, because && short-circuits for other locations. Optional chaining is a valid fix, but any equivalent null-safe check preserving the fallback semantics is acceptable."
+  },
+  {
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+   "defectStatement": "In lines 53–77, one rejected SendGrid cancellation request exits the entire loop, preventing cancellation attempts for subsequent reminders and skipping the await that executes the previously collected Prisma deletes. Consequently, successfully cancelled reminders can remain in the database, while later reminders may still be sent.",
+   "obligations": [
+    "Attempt cancellation for every reminder even if another reminder's cancellation fails, preserving the POST endpoint and each reminder's referenceId as batch_id with status \"cancel\".",
+    "Delete each successfully cancelled reminder by its own id, and ensure those deletes are executed and awaited even when another cancellation fails.",
+    "Do not unconditionally delete reminders whose SendGrid cancellation failed; preserve them for retry unless the failure is explicitly established to mean cancellation is unnecessary.",
+    "Handle and log cancellation or deletion failures without abandoning other reminders or preventing the handler from continuing to its subsequent scheduling logic."
+   ],
+   "notes": "Prisma delete clients are lazy, so collecting them without reaching an await can mean no deletion occurs at all. Sequential per-item awaits or independently settled concurrent operations are valid; retaining a collected-delete array is not required. A failed cancellation does not prove that an email will fire, and an already-sent email cannot be prevented by this fix."
+  },
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#e2b-01",
+   "defectStatement": "The falsy-result branch treats a skipped SMS scheduling attempt, including an undefined result caused by an SMS sending lock, as a failure and increments the reminder's retryCount. Repeated locked attempts can therefore push a valid reminder over the retry limit and cause deletion before scheduling can resume.",
+   "obligations": [
+    "A locked/skipped scheduling result must leave retryCount unchanged and must not throw an error merely because the result is falsy.",
+    "Keep a skipped reminder unscheduled and eligible for a later attempt under the existing scheduling and expiration rules.",
+    "Preserve successful scheduling behavior: mark the reminder scheduled and store the returned SMS sid as referenceId.",
+    "Preserve retryCount increments for actual exceptions handled by the existing catch block."
+   ],
+   "notes": "Removing the falsy-result branch's update is sufficient; no provider API change is required. The provider's lock behavior is supplied by the finding rather than shown here. With retryCount initially zero, two skipped attempts raise it to two, and deletion occurs on a subsequent cron run, not during the second attempt. Existing scheduled-date expiration still applies."
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#07",
+   "defectStatement": "Lines 25–27 insert the literal \"refresh_token\" for any falsy parsed refresh_token, including responses parsed with the caller's schema outside the credential-sharing/sync flow. When an ordinary provider response omits a refresh token, this fabricated value can overwrite a valid stored token when the parsed data is merged into credentials, breaking subsequent refreshes.",
+   "obligations": [
+    "Do not inject a placeholder in the caller-schema branch when the parsed response omits refresh_token; preserve the parsed data's refresh-token presence and value.",
+    "Retain the existing missing/falsy-token placeholder behavior for the sharing/sync branch, active only when both APP_CREDENTIAL_SHARING_ENABLED and CALCOM_CREDENTIAL_SYNC_ENDPOINT are truthy.",
+    "Preserve any existing truthy parsed refresh_token in either branch.",
+    "Preserve schema selection, validation failure behavior, and the returned successful parse-result structure."
+   ],
+   "notes": "Only lines 25–27 are replaceable, so a fix can gate the existing fallback using the same sharing/sync condition without changing callers. The helper has no stored token to restore; its responsibility here is to avoid fabricating a token in the ordinary branch. The current test covers all falsy values, not just absence."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#04",
+   "defectStatement": "The organization creation payload sets the top-level slug only when team billing is enabled, reversing the intended condition. This assigns the slug prematurely in the billing-enabled flow and omits it in the billing-disabled flow, where it should be assigned immediately.",
+   "obligations": [
+    "When IS_TEAM_BILLING_ENABLED is false, include the supplied slug in the organization creation payload.",
+    "When IS_TEAM_BILLING_ENABLED is true, omit the top-level slug from the organization creation payload.",
+    "Preserve metadata.requestedSlug as the supplied slug only when billing is enabled, and omit it when billing is disabled.",
+    "Preserve the metadata object structure and all unchanged organization metadata fields."
+   ],
+   "notes": "Only the top-level slug condition is inverted; the requestedSlug ternary preserves the original behavior and should not be inverted. Equivalent conditional constructions are valid. The payment flow itself is not shown, so the directly verifiable requirement is the creation payload's slug placement."
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "defectStatement": "In addGuestsHandler, the blacklist filter compares raw guest addresses against lowercased blacklist entries without normalizing guests to their base email. Case variations and plus-address aliases of a blocked base address can therefore pass the filter and be added as attendees.",
+   "obligations": [
+    "Compare each guest against the blacklist using a lowercased base-email representation, so case variations, plus-address aliases, and combinations of both cannot bypass a blocked base address.",
+    "Preserve case-insensitive handling of configured blacklist entries and treat an absent or empty BLACKLISTED_GUEST_EMAILS value as no blacklist.",
+    "Continue excluding guests whose original email exactly matches an existing attendee, and retain the original addresses of accepted guests for downstream attendee creation.",
+    "Continue filtering individual blocked guests rather than rejecting otherwise acceptable guests in the same request; preserve the existing BAD_REQUEST behavior when no guests remain."
+   ],
+   "notes": "An equivalent base-email normalization is valid; using extractBaseEmail is not mandatory. That helper is not imported in the shown file, so a replacement confined to the cited lines must not introduce an unresolved reference. The claimed consistency with handleNewBooking is not independently shown here. Notification delivery uses the original guests array outside the cited lines; correcting that separate issue is not required for this finding."
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "defectStatement": "The equality check at lines 114–116 compares two separately constructed Dayjs objects by reference rather than their time values, so it never detects equal override endpoints. This disables the explicit full-day-unavailable check, although the later boundary checks still reject many slots; slots spanning the equal endpoint can incorrectly remain available.",
+   "obligations": [
+    "Detect equal override start and end timestamps by value, including when they are distinct Date objects representing the same instant.",
+    "For an override matching the slot's date with equal endpoints, return a truthy match from the find callback so the enclosing availability check returns false.",
+    "Preserve the existing date-matching and UTC-offset semantics, and let unequal endpoints continue through the existing interval checks without treating them as full-day unavailability.",
+    "Preserve surrounding behavior, including the earlier currentSeats short-circuit and handling of slots with no matching override."
+   ],
+   "notes": "An instant-level comparison or equivalent timestamp comparison is valid; day-only equality would incorrectly reject ordinary same-day availability intervals. The finding overstates the consequence: full-day overrides are not necessarily ignored for every slot, because subsequent boundary checks can already reject them. Returning true here means unavailable through the enclosing find, not available."
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-03",
+   "defectStatement": "In checkIfIsAvailable, the dateOverrides.find callback rejects a slot when any same-day override excludes it, even if another same-day override allows it. Consequently, separate availability windows on the same day can incorrectly eliminate valid slots.",
+   "obligations": [
+    "Evaluate same-day overrides collectively: a slot allowed by one matching override must not be rejected merely because it lies outside another, regardless of override order.",
+    "Reject a slot when overrides exist for its day but none allows it; do not fall back to normal working hours in that case.",
+    "Preserve the organizer-time-zone adjustment and day matching, and leave dateOverrideExist false when no override matches so the existing working-hours and busy-time checks still run.",
+    "Keep the existing successful-override path compatible with the subsequent dateOverrideExist check, without changing unrelated seat, working-hours, or busy-time behavior."
+   ],
+   "notes": "The essential correction is existential acceptance across matching windows, not a particular use of find/filter/some. The current interval tests actually check overlap rather than full containment, and the zero-duration test compares distinct Dayjs objects with ===, so it does not compare timestamps. Those are separate issues; do not require preservation of that ineffective equality test or treat a broader interval-boundary cleanup as the core finding."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#09",
+   "defectStatement": "In the booking-reference mapping in EventManager.ts, non-calendar results always receive an undefined credentialId even when result.credentialId is present. This drops the video reference’s association with its creating credential, potentially preventing later update/delete operations from selecting the correct integration credential.",
+   "obligations": [
+    "Preserve a non-calendar result’s credentialId on its generated reference when provided.",
+    "Continue sourcing calendar references’ credentialId and externalCalendarId from their respective result, not from the event’s destination calendar.",
+    "Keep externalCalendarId undefined for non-calendar references, and handle results without a credentialId without inventing a credential or throwing."
+   ],
+   "notes": "Using result.credentialId for both calendar and non-calendar references is valid. The defect affects results that actually supply a credential ID; the shown code does not establish that every video provider requires one. No changes outside the cited lines are required."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#13",
+   "defectStatement": "In the all-remaining recurring cancellation branch, each outer calendar reference triggers another sweep of the organizer’s calendar credentials, deleting against only the first calendar reference of each occurrence rather than the reference matching the resolved credential. This can leave co-host events undeleted, attempt deletions through the wrong account, and repeat organizer deletion attempts.",
+   "obligations": [
+    "For each updated occurrence, select its calendar reference matching the current outer reference’s credentialId; skip occurrences with no matching reference rather than falling back to their first calendar reference.",
+    "Delete the matched occurrence event through the current resolved credential, including credentials fetched from the database that are absent from the organizer’s credentials, using that occurrence reference’s uid and externalCalendarId.",
+    "Avoid sweeping all organizer calendar credentials again for every outer reference.",
+    "Preserve deletion-result collection and compatibility with the surrounding asynchronous completion and error handling; leave single-occurrence and credential-less legacy cancellation behavior intact."
+   ],
+   "notes": "Only lines 449–457 are replaceable; the following lines still push deletedEvent, close the loop and async map, and await Promise.all(promises). A valid replacement must remain compatible with that unchanged structure. The finding’s claim that only organizer events are deleted is not guaranteed: the first reference may belong to any participant, but selecting it without credential matching is the defect."
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "defectStatement": "In addGuests.handler.ts, isTeamAdminOrOwner requires both role checks to succeed rather than either one. A user recognized only as a team admin or only as a team owner is therefore incorrectly forbidden from adding guests unless they are also the booking organizer or an attendee.",
+   "obligations": [
+    "Treat either successful team-role check as sufficient, including admin-only and owner-only users.",
+    "Evaluate role membership for the current user and the booking event type's team, preserving safe handling of a missing event type or team ID.",
+    "When neither role check succeeds, preserve the existing organizer and attendee authorization paths and reject users with none of these permissions.",
+    "Use resolved role-check results, not the truthiness of unresolved promises, to determine authorization."
+   ],
+   "notes": "The denial described in the finding is conditional: organizers and attendees already have independent authorization. Either short-circuit or eagerly evaluated role checks are valid; no particular evaluation strategy is required."
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "defectStatement": "The working-hours check uses the slot start for both bounds, so it can accept a slot that ends after working hours. It also rejects a slot whenever any same-day interval fails to contain it, rather than allowing a slot contained in another same-day interval.",
+   "obligations": [
+    "Check the actual slot end, derived from slotEndTime, against the working interval’s end; allow equality at both working-hour boundaries.",
+    "For a nonempty working-hours schedule, pass the working-hours check when at least one interval on the slot start’s weekday contains the whole slot, regardless of other entries; reject gaps, overruns, and days with no applicable interval.",
+    "Preserve the unrestricted working-hours behavior when workingHours is omitted or empty, since the parameter defaults to [] and shown callers can omit it.",
+    "A successful working-hours check must still proceed to the existing busy-time checks, not return availability immediately; preserve the preceding current-seat and date-override behavior."
+   ],
+   "notes": "The claim that multiple same-day entries reject every slot applies to disjoint intervals such as the example, not all possible overlapping entries. Any equivalent containment search is valid; using some is not required. An unconditional negated some would incorrectly reject callers that supply no working hours. Broader timezone, overnight-interval, and date-override defects are outside this finding."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05",
+   "defectStatement": "Office365CalendarService.createEvent selects the first destination calendar regardless of the credential used to authenticate the request. If that destination belongs to another host, the POST targets that host's calendar ID with the current host's token, which can fail or create the event in the wrong calendar.",
+   "obligations": [
+    "Select the destination calendar associated with the credential for this createEvent invocation, rather than relying on its position in destinationCalendar.",
+    "Use the matching destination's externalId for the calendar-specific events URL when it is present.",
+    "Preserve the default /me/calendar/events fallback when destinations are absent, no destination matches the active credential, or the matching destination has no usable externalId.",
+    "Preserve the existing POST payload, response conversion, and error handling."
+   ],
+   "notes": "The shown method accepts only event, and the constructor does not retain a credential ID in a visible field. Adding a named credentialId parameter would require changing line 72, outside the cited replacement range; grading must account for that scope limitation rather than assume the identifier is already in scope. Caller behavior is asserted by the finding but not shown. Failure is conditional on calendar ownership/access, not inevitable for every collective booking."
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#04",
+   "defectStatement": "The working-hours check in checkIfIsAvailable rejects a slot when any range on its weekday excludes it, rather than accepting coverage by any one applicable range; disjoint split-day ranges therefore reject otherwise valid slots. It also computes both start and end from slotStartTime, so it does not actually check whether the slot's duration fits within a range.",
+   "obligations": [
+    "For supplied, nonempty working hours, allow the working-hours check to pass when at least one range for the slot's weekday contains the whole slot, regardless of other ranges that do not contain it.",
+    "Reject slots outside all applicable ranges, including gaps between ranges and weekdays with no applicable range; use the actual slot end when checking full containment, allowing equality at range boundaries.",
+    "Preserve the unrestricted working-hours behavior when workingHours is omitted or empty, since existing callers omit it.",
+    "Continue to apply the existing busy-time checks after working-hours acceptance, and preserve the earlier currentSeats and date-override handling."
+   ],
+   "notes": "The finding's proposed unconditional negated some check would reject every slot for callers that omit workingHours (which defaults to []). Also, merely changing find to some without correcting the end calculation leaves duration containment unchecked. The claim that every slot is rejected applies to disjoint ranges, not all schedules with multiple ranges. No changes to unrelated date-override or timezone logic are required."
+  },
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#01",
+   "defectStatement": "The catch block writes retryCount using the previously fetched reminder.retryCount rather than the current stored count. Concurrent failures for the same reminder can overwrite each other's increments, undercounting failed attempts and delaying retry-limit cleanup.",
+   "obligations": [
+    "Increment the current persisted retryCount by exactly one for each catch-block update, without losing concurrent increments or relying on the fetched count.",
+    "Continue targeting the reminder identified by reminder.id, without changing other reminder fields.",
+    "Preserve the awaited update and the subsequent error logging and handler flow."
+   ],
+   "notes": "A database-side atomic increment is a valid fix. The similar stale-count write in the else branch is outside the cited replacement scope; fixing it is not required for this finding."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-01",
+   "defectStatement": "The recurring-series deletion branch runs again for every calendar reference with a resolved credential, but ignores that credential and instead sends each updated booking's first calendar reference to every organizer calendar credential. This repeats deletion attempts and can leave other hosts' events undeleted or attempt deletion using the wrong credentials.",
+   "obligations": [
+    "For recurring cancellation of all remaining bookings, avoid repeating the same event deletion merely because the original booking has multiple calendar references.",
+    "Delete the applicable calendar references of updatedBookings using their matching credentials, including resolved credentials belonging to other hosts; do not send an unrelated first reference to every organizer credential.",
+    "Preserve the recurring-series eligibility conditions and use each selected reference's own uid and externalCalendarId; skip bookings without an applicable reference.",
+    "Preserve non-bulk cancellation behavior, the existing legacy path for references without credentialId, and compatibility with the surrounding promise waiting and error handling."
+   ],
+   "notes": "The block runs only for references with a credentialId that resolves, not literally every reference. Duplicate attempts may fail, but failure is provider-dependent. A credential-scoped replacement can fit the cited lines and reuse the already resolved calendar; simply moving the existing bulk logic or suppressing repeat runs does not address its incorrect reference/credential pairing. The surrounding Promise.all(promises) remains outside the replacement."
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#06",
+   "defectStatement": "In the override-to-TimeFrame mapping, extracting only hour and minute discards the converted endpoints’ calendar dates. Overrides that cross midnight can consequently be placed on the wrong day or have an endTime smaller than startTime, causing incorrect or missing slots.",
+   "obligations": [
+    "Express override endpoints as minute positions relative to startOfInviteeDay, retaining their day displacement rather than wrapping them modulo 1440.",
+    "Preserve the chronological order and duration of valid override intervals across midnight, allowing negative or greater-than-1440 minute positions where appropriate.",
+    "Use a consistent timezone interpretation for both endpoints and the invitee-day origin so that the resulting slots represent the intended override times.",
+    "Preserve the existing userIds mapping and override precedence over the corresponding users’ regular working hours."
+   ],
+   "notes": "A direct difference between timezone-aware override endpoints and startOfInviteeDay is valid if the stored Dates represent the intended instants; do not require retaining the existing offset-difference arithmetic or applying an additional shift to already converted instants. The activeOverrides filter is outside the cited lines: this local fix need not make overrides starting on a different day discoverable."
+  },
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
+   "defectStatement": "The per-reminder catch block awaits a retry-count update without handling failures of that update. If the record has been deleted or the database update otherwise rejects, the new error escapes the catch, stops processing subsequent reminders, skips the original error log, and prevents the handler from reaching its normal response.",
+   "obligations": [
+    "Contain failures of the catch-block retry-count update so they do not abort the reminder loop or prevent the handler's normal completion.",
+    "Continue attempting to persist reminder.retryCount + 1 for reminder.id when handling a scheduling error.",
+    "Preserve logging of the original scheduling error even when retry-count persistence fails.",
+    "Preserve processing of subsequent reminders and leave the existing successful scheduling behavior unchanged."
+   ],
+   "notes": "Moving the log before the update alone is insufficient: it preserves logging but still allows the update rejection to abort the batch. A nested try/catch or another mechanism that handles both synchronous throws and asynchronous rejection is valid; logging the persistence failure separately is optional."
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#13",
+   "defectStatement": "In getClient, the new block unconditionally refreshes directly against Salesforce and writes credentials on every client creation, bypassing credential-sync routing, and incorrectly treats any statusText other than \"OK\" as failure. It also persists refreshed tokens without updating credentialKey, so the connection constructed immediately afterward still receives the old access token and instance URL.",
+   "obligations": [
+    "Honor credential-sync routing when enabled; retain the Salesforce refresh-token request as the non-sync fallback rather than always using the direct endpoint.",
+    "Determine HTTP success by the numeric success status (such as response.ok), accepting successful responses with empty or non-\"OK\" statusText and rejecting unsuccessful responses.",
+    "Avoid refreshing and writing credentials when the existing access token is known to be usable; refresh when it is missing or reliably determined to be expired or invalid.",
+    "Validate refreshed token data before persisting or using it, retain the existing refresh token when no replacement is returned, and ensure the subsequent connection receives the effective refreshed access token and instance URL."
+   ],
+   "notes": "Using refreshOAuthTokens is appropriate if available, but equivalent routing is valid. The shown Salesforce schema has issued_at but no expiration field; issued_at alone does not establish expiration, so do not require an invented fixed lifetime or assume every stored token has expiry metadata. The unchanged connection construction reads credentialKey, making a DB-only update insufficient. App-key checks outside the cited range remain outside this replacement's scope."
+  },
+  {
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#13",
+   "defectStatement": "In deleteScheduledSMSReminder, a rejection from twilio.cancelSMS skips prisma.workflowReminder.delete because both operations share the same try block. The error is logged and swallowed, leaving the reminder row present despite the cleanup request.",
+   "obligations": [
+    "Attempt deletion of the workflowReminder identified by reminderId even when Twilio cancellation throws or rejects.",
+    "Continue attempting Twilio cancellation when referenceId is truthy; skip it when referenceId is null or otherwise falsy.",
+    "Preserve database deletion when Twilio cancellation succeeds or no referenceId is supplied, and await the cleanup before the function completes.",
+    "Preserve non-propagating, logged error handling for cancellation and database cleanup failures."
+   ],
+   "notes": "Separate error handling or a suitably guarded finally block are valid. The shown code does not establish the historical caller behavior or any retry mechanism. Deleting the database row does not itself cancel an SMS already scheduled at Twilio, so the finding overstates that this change alone prevents delivery after a Twilio cancellation failure."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#prod-01",
+   "defectStatement": "In createEvent, the insert falls back to \"primary\" when the credential-matched destination has no usable externalId, but selectedCalendar remains undefined or empty for the subsequent patch. When the inserted event has an ID and hangoutLink, that patch lacks a valid calendarId and can fail to update the event description with the Meet link.",
+   "obligations": [
+    "Ensure the insert and its follow-up patch use the same valid calendar ID, including \"primary\" when destinationCalendar is absent, empty, has no matching credentialId, or the matched externalId is falsy.",
+    "Preserve selection of the destination matching credentialId and use its nonempty externalId rather than another destination or \"primary\".",
+    "Preserve the existing insert options and callback behavior, including the conditional description patch and returned event data."
+   ],
+   "notes": "Only lines 145–154 are replaceable, so the fix must make the existing downstream use of selectedCalendar safe within that scope. The patch updates the description using an already-created hangoutLink; it does not create conference data. Missing calendarId causes an invalid request, not necessarily a request to a different calendar."
+  },
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#03",
+   "defectStatement": "The deleteCache mutation handlers do not refresh the connectedCalendars query after successful cache deletion. Unless the optional parent onSuccess callback refreshes that data, cacheUpdatedAt can remain stale and the dropdown can continue showing the deleted cache's status and deletion action.",
+   "obligations": [
+    "After successful cache deletion, invalidate or refresh viewer.calendars.connectedCalendars independently of whether the parent onSuccess callback is provided.",
+    "Preserve the success toast and optional parent onSuccess callback on successful deletion.",
+    "Preserve the error toast on deletion failure, without invoking the parent success callback for that failure."
+   ],
+   "notes": "Invalidation in either onSuccess or onSettled is valid; refreshing on failure is not required. The prop is named onSuccess, not onChanged. The existing utils declaration below the mutation can be referenced from a deferred lifecycle callback; it must not be accessed eagerly before initialization. Invalidating apps.integrations is not required for this finding."
+  },
+  {
+   "issueId": "async-import-of-the-appstore-packages-cal-com#sncc-01",
+   "defectStatement": "The appStore initializer invokes every dynamic import while packages/app-store/index.ts is evaluated, initiating loading of all registered apps even when none or only one is needed. The conversion therefore does not provide per-app lazy loading.",
+   "obligations": [
+    "Importing the registry alone must not initiate imports of registered app modules.",
+    "Accessing and awaiting a selected app entry must load and resolve that app's module without initiating imports of unrelated registry entries.",
+    "Preserve all existing app keys, their module-path mappings, and the default-exported registry.",
+    "Preserve compatibility with callers that await registry entries; replacing promise-valued entries with functions alone must not silently change those callers' results."
+   ],
+   "notes": "Only lines 1–31 can be replaced. Lazy getters returning import promises or compatible lazy thenables can preserve existing await-based callers; plain thunks require use-site changes outside the allowed span. The eager initiation is evident, but exact bundling behavior and the significance of await overhead are not established by this snippet."
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#03",
+   "defectStatement": "ZAddGuestsInputSchema validates each guest email but accepts repeated email strings within the guests array, allowing duplicate entries to pass server-side input validation. The shown code does not establish whether downstream insertion actually creates duplicate attendee records.",
+   "obligations": [
+    "Prevent repeated identical email strings within a submitted guests array from reaching callers as duplicate entries, either by rejecting the input or by deduplicating the parsed output.",
+    "Preserve email-format validation for every submitted guest; malformed emails must still be rejected.",
+    "Preserve the numeric bookingId requirement and acceptance of empty arrays and arrays of distinct valid emails.",
+    "Keep the exported schema compatible with the existing inferred input type, with successfully parsed guests represented as a string array."
+   ],
+   "notes": "Both validation-based rejection and output deduplication are valid. Case-insensitive uniqueness, database-level uniqueness, and checking attendees already associated with a booking are not established requirements by this snippet. The handler and its createMany behavior are not shown."
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#02",
+   "defectStatement": "At line 31, schema validation throws an uncaught ZodError when an authorized request has a body that fails the schema, causing the async handler to reject rather than return a controlled HTTP 400 response.",
+   "obligations": [
+    "Return HTTP 400 with a JSON error response for bodies that fail the existing schema, without propagating the validation exception.",
+    "Terminate processing on validation failure before any database access, decryption, or credential mutation.",
+    "Preserve the existing schema semantics: require an integer number userId and string appSlug and keys, and make the validated values available as reqBody to the unchanged downstream code.",
+    "Preserve the preceding feature-flag and webhook-secret checks and the existing downstream behavior for schema-valid requests."
+   ],
+   "notes": "safeParse or locally catching schema-validation errors are both valid; no exact error message is required. Empty strings are currently schema-valid, and encryption/JSON failures in string keys are outside this finding. The code demonstrates an unhandled handler rejection, not necessarily a server-process crash or disclosure of exception details."
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#05",
+   "defectStatement": "In checkIfIsAvailable, the cited override checks reject slots ending at or before the override start or starting after its end, but fail to reject partial overlaps. Consequently, events starting before the override or ending after it—including a positive-duration event starting exactly at the override end—can be reported available.",
+   "obligations": [
+    "Reject a slot when its start precedes the applicable override's adjusted start or its end exceeds the override's adjusted end.",
+    "Allow full containment with inclusive boundaries: a slot may start exactly at the override start and end exactly at the override end.",
+    "Compare against override bounds using the existing organizer-time-zone offset adjustment, including the zero-offset fallback when no time zone is supplied.",
+    "Preserve the surrounding control flow: returning true from the find callback signals rejection, and slots without a matching override must still reach the existing working-hours and busy checks."
+   ],
+   "notes": "For a 10:00–11:00 override, reject 09:30–10:30 and 10:30–11:30, but allow 10:00–11:00. The cited replacement need not address separate issues in multiple-override handling, the Dayjs object-identity equality check above these lines, or the override branch bypassing busy checks."
+  },
+  {
+   "issueId": "async-import-of-the-appstore-packages-cal-com#02",
+   "defectStatement": "In the reschedule cancellation block, forEach discards the async callbacks’ promises, so calendar initialization and calendar/video deletions are not awaited and their failures do not propagate to the enclosing operation. Reschedule emails and webhooks can therefore proceed before cancellation finishes.",
+   "obligations": [
+    "Await the calendar/video cancellation work before proceeding to the reschedule email and subsequent webhook logic on successful completion.",
+    "Ensure failures from getCalendar, calendar.deleteEvent, and deleteMeeting are observed and propagated to the enclosing async operation rather than becoming detached rejections.",
+    "Preserve dispatch and arguments: calendar references use their mapped credential, UID, builder.calendarEvent, and externalCalendarId; video references use their mapped credential and UID.",
+    "Continue skipping references without a UID or a recognized calendar/video suffix, tolerate an absent calendar provider as before, and handle an empty reference list."
+   ],
+   "notes": "Concurrent aggregation or sequential awaited iteration are both valid; Promise.all is not mandatory. Promise.all may reject before other cancellations settle, which is acceptable. The shown window does not establish an enclosing try/catch, and stale external bookings are a possible consequence rather than a guaranteed outcome."
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#kimi-01",
+   "defectStatement": "The uniqueGuests filter compares incoming guest emails to existing attendee emails case-sensitively and checks raw guest emails against an already-lowercased blacklist. Consequently, a casing variant of an existing attendee can be added again, and a mixed- or uppercase variant of a blacklisted address can bypass exclusion.",
+   "obligations": [
+    "Exclude a guest when its email matches any existing attendee email ignoring case, regardless of which address contains uppercase characters.",
+    "Exclude a guest when its email matches a blacklisted address ignoring case.",
+    "Continue admitting guests that match neither exclusion, including when the blacklist is empty, and leave an empty result to trigger the existing BAD_REQUEST behavior."
+   ],
+   "notes": "The blacklist is already lowercased before the cited lines; normalizing it again is unnecessary. The duplicate check here concerns existing booking attendees: deduplication among guests within the same request is not required by this finding. Comparison normalization need not change the casing of retained email values."
+  },
+  {
+   "issueId": "unified-storage-performance-optimizations-grafana-codex#01",
+   "defectStatement": "BuildIndex now locks only cache publication, leaving index creation, the builder callback, and flushing unsynchronized between concurrent calls for the same key. Such calls can contend on the same on-disk index directory or build separate in-memory indexes that overwrite one another in the cache.",
+   "obligations": [
+    "Prevent overlapping builds for the same key from independently executing index creation, population, and flushing; locking only cache publication is insufficient.",
+    "Preserve synchronized cache publication, and publish an index only after its builder and flush have succeeded.",
+    "Preserve error propagation and release any build coordination on every failure path so subsequent calls cannot deadlock."
+   ],
+   "notes": "The cited lines alone cannot establish mutual exclusion around work that has already executed; a complete fix needs changes earlier in BuildIndex or coordination at its callers. Per-key locking, suitable singleflight coordination, or restoring whole-build serialization can be valid. Serialization alone need not deduplicate successive builds. The actual disk path is Root/Namespace/Resource.Group, not Root/Namespace/Group. Both disk creations need not succeed, and the unconditional metric increment on creation failure is pre-existing, not introduced by this change."
+  },
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#03",
+   "defectStatement": "In useAllGrafanaPromRuleAbilities, an undefined rule yields loading=false, so Duplicate is reported as supported and can be allowed solely by Grafana create permission. When this hook is skipped for a data-source rule, that result can incorrectly enable Duplicate when combined with the ruler ability.",
+   "obligations": [
+    "For an undefined rule, including skipToken translated to undefined by the wrapper hooks, report Duplicate as unsupported regardless of Grafana create permission.",
+    "For a defined rule, preserve the existing Duplicate behavior: unsupported while loading or for plugin-provided rules, otherwise gated by Grafana create permission.",
+    "Preserve existing immutability and permission restrictions for defined rules and the returned abilities structure."
+   ],
+   "notes": "Gating the shared MaybeSupported value on rule presence is valid, as is a targeted Duplicate support guard. The finding's claim that its suggested change makes every ability unsupported is inaccurate: View, Explore, and Silence do not use MaybeSupported. Requiring changes to every ability is unnecessary for this Duplicate defect."
+  },
+  {
+   "issueId": "database-performance-optimizations-grafana-codex#08",
+   "defectStatement": "In CleanUpService.Run, the shared cleanup ticker was reduced from ten minutes to one minute, so each tick now triggers the entire cleanup suite rather than just annotation cleanup. This increases scheduling frequency for unrelated database and filesystem cleanup work and can substantially increase load.",
+   "obligations": [
+    "Restore the shared cleanup suite's ten-minute cadence by default rather than running it every minute.",
+    "Preserve the immediate startup call to cleanUpTmpFiles(ctx) and subsequent periodic execution of the existing cleanup suite.",
+    "Preserve context cancellation handling, including returning ctx.Err() when cancellation is observed.",
+    "If faster annotation cleanup is retained, isolate it from the shared suite so it does not also accelerate unrelated cleanup jobs."
+   ],
+   "notes": "Restoring the ten-minute ticker is sufficient within the cited lines; a separate annotation schedule is not required. The claimed 10x increase applies to nominal scheduling frequency, not necessarily actual database/IO volume: jobs execute synchronously, ticks may be dropped during long runs, and individual jobs may do no work."
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#snapi-01",
+   "defectStatement": "In DualWriterMode3.Create, the asynchronous Legacy.Create error is used only to label a duration metric and is never logged. A failed legacy create therefore loses its error details, making divergence from the successful primary storage write harder to diagnose.",
+   "obligations": [
+    "When Legacy.Create returns a non-nil error, log that actual error with the contextual logger and a message identifying a legacy create failure.",
+    "Do not emit an error log for a successful legacy create.",
+    "Preserve the legacy duration metric for both success and failure, including its existing error flag and labels.",
+    "Preserve the single asynchronous legacy create call, its arguments and timeout context, and the caller-visible primary storage result; legacy failure must not become a returned error."
+   ],
+   "notes": "Scope is the cited Create lines only; analogous omissions in other goroutines need not be fixed here. The existing local log carries the same contextual fields as the logger attached to ctx, so either is acceptable. Exact message wording and inclusion of the created object are not required."
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#03",
+   "defectStatement": "In DualWriterMode3.Delete, the successful storage-duration metric at line 106 uses the object name as its kind label rather than options.Kind. This misattributes successful deletes and makes metric cardinality grow with distinct object names.",
+   "obligations": [
+    "Record the successful storage Delete duration with options.Kind as the kind label, independent of the object name.",
+    "Preserve exactly one successful storage-duration observation with failure=false, mode=mode3Str, method=delete, and the existing startStorage timestamp.",
+    "Preserve Delete's storage result and error handling, asynchronous legacy deletion, and returned values."
+   ],
+   "notes": "The finding is supported by the shown code. Only the successful storage metric call is in scope; the error-path and legacy Delete metrics already use options.Kind."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "defectStatement": "Both close() and terminate() shut down the supplied queue pool even though it may be shared with replacement strategies, making subsequent submissions fail and potentially abandoning queued work. Strategy-local commit-thread cleanup is also asymmetric: close() waits for the thread, while terminate() only signals it, allowing it to continue briefly using the old callback.",
+   "obligations": [
+    "Closing or terminating a strategy must not shut down the shared pool or prevent another strategy from submitting and processing work through it.",
+    "Both lifecycle paths must signal the strategy's own commit loop to stop and provide consistent thread cleanup rather than leaving terminate()'s thread unobserved.",
+    "Cleanup must preserve shared queued work and offset-tracking state for continued processing by other strategies.",
+    "Repeated cleanup, including join() calling close(), must remain safe."
+   ],
+   "notes": "The shown code does not include the factory, so factory ownership and create_with_partitions behavior are not independently demonstrated. close() already signals and joins its commit thread, so persistent duplicate commit threads are not inevitable. The loop can perform one final commit after being signaled, and a bounded join cannot guarantee termination of a blocked callback; do not require these cited lines alone to solve arbitrary concurrent creation or callback blocking. Pool lifetime management belongs to its owner, not each borrowing strategy."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#05",
+   "defectStatement": "In test_thread_queue_parallel_error_handling, the test stops shortly after processing finishes and asserts that no offset was committed, even though failed processing also completes the offset and allows committing through both messages. This makes the assertion dependent on beating the periodic commit loop rather than verifying that processing errors do not block commits.",
+   "obligations": [
+    "Wait boundedly for the expected commit to be observed, rather than exiting solely because processing has finished and a short sleep has elapsed.",
+    "Assert that test_partition has a committed next-to-read offset of 102 after processing offsets 100 and 101.",
+    "Preserve verification that the processor was called exactly twice with the existing failure-then-success setup."
+   ],
+   "notes": "An intermediate commit may contain offset 101, so waiting for just any commit can still race; waiting for the expected offset avoids that trap. Keep the wait bounded and fail if the expected commit never arrives. No production behavior change is required."
+  },
+  {
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "defectStatement": "In join(), the deadline check breaks out of the worker loop before termination, leaving the current and all subsequent multiprocessing workers without cleanup when the deadline has already expired. If an earlier worker consumes the remaining time, that worker reaches terminate(), but later live workers can remain running after join() returns.",
+   "obligations": [
+    "Ensure every remaining live multiprocessing worker is terminated when the shared deadline expires, including when it expires before the first worker is visited.",
+    "Keep waiting bounded by the existing shared deadline; do not grant each worker a new timeout or wait indefinitely after expiry.",
+    "Preserve graceful waiting for workers while time remains, and unbounded graceful waiting when no deadline is set.",
+    "Continue supporting threading.Thread workers without calling process-only termination methods on them."
+   ],
+   "notes": "Removing the early deadline break or separating waiting from termination are both valid approaches. The worker whose polling loop crosses the deadline already reaches terminate(); it is subsequent workers that are skipped. This finding does not require adding OS-process reaping or changing timeout=0 semantics, which are determined outside the cited lines."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#muse13-02",
+   "defectStatement": "submit() attempts to decode filtered messages and only tracks offsets available through a BrokerValue. Filtered messages represented by a non-BrokerValue can therefore lose their commit progress, potentially stalling commits or causing replay after restart.",
+   "obligations": [
+    "Recognize filtered messages before invoking the decoder, and do not send them to grouping_fn or the work queue.",
+    "Record and complete the offsets represented by filtered messages using their available commit metadata, including all represented partitions and respecting the offset tracker's offset convention.",
+    "Leave filtered-message progress subject to the existing offset tracker and commit loop, without committing past earlier outstanding work.",
+    "Preserve normal-message decoding, grouping, and queuing, as well as immediate offset completion for decoder results of None and the existing handling of submission exceptions for BrokerValue messages."
+   ],
+   "notes": "The finding is too broad: a filtered payload wrapped in BrokerValue already has its offset added and completed by the exception handler if decoding raises. The decoder implementation is not shown, so its specific AssertionError is not established here. Checking only whether message.value is BrokerValue does not by itself identify a filtered payload; non-BrokerValue messages must use their actual commit metadata rather than assumed partition/offset attributes. Commit metadata may use next-offset semantics, unlike the tracker's processed-offset semantics."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#12",
+   "defectStatement": "The background `_commit_loop` directly invokes `commit_function`, allowing processor/consumer state to be mutated concurrently with main-thread processing and partition revocation. It also ignores the result of `shutdown_event.wait(1.0)`, so shutdown can wake the thread into another commit rather than stopping it.",
+   "obligations": [
+    "Ensure commit callbacks execute on the processor thread, or under synchronization actually shared with main-thread processing and lifecycle transitions; a lock used only by the commit thread is insufficient.",
+    "Prevent shutdown-triggered wakeups and stale pending work from issuing commits after the strategy has stopped or lost ownership of the relevant partitions.",
+    "Continue delivering nonempty committable offsets during normal operation, including when no new messages arrive, without committing beyond the offset tracker's safe frontier.",
+    "Mark offsets committed only after the corresponding callback succeeds; callback failures must not discard offsets that still need to be committed."
+   ],
+   "notes": "A main-thread handoff is valid only if something on the main thread actually drains it; merely storing offsets in this loop disables commits with the unchanged poll/submit methods. The cited range alone does not include those methods or lifecycle synchronization, so a conventional fix may require changes outside it. The supplied code establishes the background invocation and shutdown wakeup bug; the callback implementation and exact revocation behavior are not shown. An arbitrary local lock does not establish callback thread safety or satisfy any strict main-thread-affinity requirement."
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#sncc-01",
+   "defectStatement": "The merge condition in gen_request_data compares error timestamps in seconds directly with replay event timestamps in milliseconds. For ordinary epoch timestamps this emits errors prematurely, typically before the first replay event, rather than at their chronological positions in the logs sent to Seer.",
+   "obligations": [
+    "Compare error and replay timestamps in a common unit, retaining fractional-second precision so errors between replay events are placed correctly.",
+    "Preserve the strict earlier-than comparison: an error at exactly the current replay event's time must not be emitted before that event.",
+    "Preserve safe handling of an empty or exhausted error list and the existing zero default for replay events without a timestamp.",
+    "Preserve original error timestamps and log-message formatting, and continue emitting each error exactly once, including remaining errors after all replay events."
+   ],
+   "notes": "Multiplying error seconds by 1000 or dividing replay milliseconds by 1000 are both valid. The finding's claim that every error precedes every breadcrumb is overstated for zero or missing replay timestamps and unusual timestamp ranges; the unit mismatch is the actual defect. Only the cited comparison lines are being replaced."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "defectStatement": "FixedQueuePool creates unbounded queues, so submit() continues accepting work without capacity-based backpressure when workers fall behind. Sustained overload or a sufficiently large burst can grow the queued backlog until memory is exhausted.",
+   "obligations": [
+    "Enforce a finite backlog capacity and apply backpressure when it is reached, including when traffic concentrates on a single group.",
+    "Preserve lossless submission during normal operation: capacity exhaustion must not silently discard work or cause the caller to mark unprocessed work complete.",
+    "Preserve stable group-to-queue routing, FIFO processing, and one worker per queue.",
+    "Keep offset registration before an accepted item can be processed, and retain compatibility with existing queue statistics and shutdown behavior."
+   ],
+   "notes": "A positive finite queue maxsize with blocking put() is sufficient; no particular capacity is required. A depth check alone is insufficient if concurrent submissions can bypass the bound. Raising queue.Full is not a safe substitute here: the existing strategy catches submission exceptions and marks the message offset complete. This finding concerns queued backlog, not a guarantee that all memory usage is bounded."
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#19",
+   "defectStatement": "The query key in useTraceItemAttributeKeys identifies cached attribute keys only by queryOptions, omitting the organization used by the fetcher. Requests for different organizations with identical options can therefore share a cache entry and reuse another organization's TagCollection.",
+   "obligations": [
+    "Distinguish cache entries by the current organization used by the attribute-key fetcher, even when queryOptions are identical.",
+    "Ensure an organization change updates the effective query key; memoization must not retain the previous organization's key.",
+    "Preserve queryOptions as part of cache identity so existing distinctions between project, datetime, and attribute/dataset options remain intact."
+   ],
+   "notes": "An organization slug or another stable, unambiguous organization identifier is valid. The shown scope has no organization binding or useOrganization import, so adding organization.slug alone in the cited lines would not compile; a valid replacement must obtain the identifier through available, valid code. Cache isolation does not by itself guarantee that usePrevious cannot temporarily display prior data while fetching; changing that separate behavior is not required by this finding."
+  },
+  {
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01",
+   "defectStatement": "The redirect traversal in add-buffer.lua was reduced from an inclusive 0–10000 loop to 0–1000, so longer redirect chains can stop at an intermediate span rather than the terminal set. Subsequent redirect writes and set merges then use that intermediate ID, potentially splitting a segment across buffers.",
+   "obligations": [
+    "Restore at least the previous traversal allowance (inclusive iterations 0 through 10000), or otherwise correctly resolve chains supported by that allowance independently of the 1000-span eviction cap.",
+    "Preserve traversal from parent_span_id and termination when a redirect is missing or points to the current set_span_id.",
+    "Preserve redirect_depth reporting for existing terminating chains and leave set_span_id holding the resolved target for downstream writes and merges.",
+    "Keep traversal bounded or otherwise ensure cyclic redirects cannot cause the script to run indefinitely; preserve the separate 1000-span retention behavior."
+   ],
+   "notes": "Lua numeric for-loop bounds are inclusive: the current loop performs up to 1001 lookups, not exactly 1000. A chain just over 1000 links does not necessarily select the wrong target; failure occurs when the loop exhausts before reaching it. Restoring 10000 is sufficient and does not promise correctness for arbitrarily deep chains."
+  },
+  {
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#03",
+   "defectStatement": "Both ZUNIONSTORE calls use Redis's default SUM aggregation, so a member present in both input sorted sets receives the sum of its scores instead of retaining a timestamp score. This artificially raises duplicate members' eviction priority and causes the later ZPOPMIN trimming to retain them ahead of genuinely newer spans.",
+   "obligations": [
+    "Prevent duplicate-member scores from being added in both the span-key merge and the parent-key merge; retain an input timestamp score for each duplicate.",
+    "Preserve the union of distinct members and the scores of members present in only one input.",
+    "Preserve the existing merge conditions, source cleanup after merging, and accurate span_count tracking so the subsequent size-limit trimming still works."
+   ],
+   "notes": "MAX or MIN aggregation are both acceptable; equal timestamp scores must remain unchanged. 'Effectively never evicted' is overstated: eviction is rank-based, and inflated scores delay eviction rather than make it impossible. No unrelated aliasing or redirect behavior change is required for this finding."
+  },
+  {
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#05",
+   "defectStatement": "The overflow eviction at lines 62–64 removes the lowest-scored members without protecting the segment span whose span_id equals set_span_id. If that span is present among the eviction candidates, trimming can leave the buffered segment without its segment/root span.",
+   "obligations": [
+    "Preserve any existing segment-span member whose span_id equals set_span_id when trimming an overflowing set, regardless of its score.",
+    "Reduce an overflowing set to at most 1000 members, counting the protected segment span toward that limit and evicting the lowest-scored eligible non-segment members.",
+    "When no segment-span member is present, retain the existing lowest-score eviction behavior; leave sets of 1000 or fewer members unchanged.",
+    "Preserve retained members' payloads and scores, the set's expiration, and the surrounding script's return and root-presence behavior."
+   ],
+   "notes": "Only lines 62–64 are replaceable. The shown script merges existing sorted sets; it does not insert an incoming payload here. Protection must identify the actual member by span_id, not assume the current span_id or is_root_span identifies the segment member. Removing victims and restoring the segment is valid only if the final size still respects the cap and its original score is preserved. The remote-span and downstream-flush details are not demonstrated in this window."
+  },
+  {
+   "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#01",
+   "defectStatement": "Making the header’s .contents a flex container can prevent a long, non-wrapping topic title from shrinking: the header-extra-info component’s outer flex item retains its automatic minimum width, which is not removed by overflow:hidden on an inner wrapper. The title can consequently push the navigation panel outside the header rather than truncate with its existing ellipsis.",
+   "obligations": [
+    "Allow the flex item containing header-extra-info to shrink below its title’s intrinsic width when header space is constrained.",
+    "Preserve the title’s existing truncation and ellipsis behavior while keeping navigation visible within the header when the available width accommodates the non-title controls.",
+    "Preserve the header’s flex layout, vertical centering, and existing navigation ordering and alignment."
+   ],
+   "notes": "The supplied window does not show the component markup or inner overflow rule, so the wrapper relationship is contextual information from the finding. A scoped rule added within the cited replacement can address the actual flex item; applying min-width:0 only to an inner non-flex wrapper is insufficient. Equivalent sizing or overflow solutions are valid if they preserve truncation and do not merely clip the navigation."
+  },
+  {
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07",
+   "defectStatement": "In app/serializers/user_serializer.rb, the method at lines 153–155 is named include_website_name rather than the serializer inclusion hook include_website_name?, so its presence check does not control serialization. Because website_name is also absent from untrusted_attributes, it can expose the website’s host and sometimes path even when scope.restrict_user_fields?(object) hides website.",
+   "obligations": [
+    "Ensure the serializer actually applies an inclusion condition to website_name.",
+    "Omit website_name whenever scope.restrict_user_fields?(object) is true, even if the website is present.",
+    "Omit website_name when website is blank; for unrestricted users with a present website, preserve inclusion and the existing website_name computation.",
+    "Preserve the existing restrictions and serialization behavior of other user fields."
+   ],
+   "notes": "The replacement is limited to lines 153–155; adding website_name to the earlier untrusted_attributes declaration is outside that edit range. Renaming the hook alone does not close the disclosure. The shown code establishes serialization exposure, but does not itself establish how clients display the value."
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#10",
+   "defectStatement": "In remove_member, deleting the membership through group.users.delete(user_id) does not explicitly clear the removed user's primary_group_id when it points to this group. This can leave a user referencing a group they no longer belong to as their primary group.",
+   "obligations": [
+    "Continue removing the specified user's membership in the specified non-automatic group.",
+    "Persistently clear the specified user's primary_group_id if it equals the group being removed.",
+    "Preserve primary-group assignments pointing to other groups and do not modify other users' primary-group assignments.",
+    "Preserve the automatic-group rejection and existing save/JSON response flow; a nonexistent user ID should remain harmless."
+   ],
+   "notes": "The historical destroy_deletions behavior and exact flair/title consequences are not established by the supplied code. A conditional database update or an equivalent removal operation with the required cleanup is valid; the finding's suggested implementation is not mandatory."
+  },
+  {
+   "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#01",
+   "defectStatement": "The added call loads fallback locales only when ApplicationController#set_locale runs; it does not itself cover translations in background jobs or mailers that bypass this controller. If fallback locales are not otherwise loaded lazily, those translations can miss entries that exist in fallback locale files.",
+   "obligations": [
+    "Ensure fallback translations are available in non-request translation paths without requiring a prior web request.",
+    "Preserve fallback translation availability for web requests and the existing selection of the user's effective locale or the site default.",
+    "Preserve fallback precedence and locale scoping, including restoration of the previous locale after I18n.with_locale."
+   ],
+   "notes": "The window establishes only the controller-local loading call, not the claimed absence of loading elsewhere. The cited single line cannot ordinarily fix non-request paths: a complete fix would generally require changes to shared locale-loading behavior or non-request callers outside this replacement scope. Removing this call alone is not a fix unless equivalent loading is already guaranteed elsewhere."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimip-01",
+   "defectStatement": "TopicEmbed.import_remote fetches url with open(url).read before any local URL or destination validation, allowing unsafe destinations or redirects to be contacted if an attacker-controlled URL reaches it. The HTTP(S) check in import runs only after the fetch and therefore cannot protect this request from SSRF.",
+   "obligations": [
+    "Validate the initial URL before any fetch: accept only HTTP(S) URLs and permitted web ports, and reject malformed or non-network inputs without opening them.",
+    "Prevent connections to private, loopback, link-local, or otherwise non-public destinations, including IPv4 and IPv6 addresses obtained through DNS; validation must apply to the destination actually contacted.",
+    "Disable automatic redirects or subject every redirect destination to the same scheme, port, and destination restrictions before contacting it.",
+    "Preserve successful fetching of permitted public articles and pass their response body to Readability with the existing tags and attributes, retaining the existing title override and import behavior."
+   ],
+   "notes": "The controller/job path and host validation described in the finding are not shown, so their exact behavior cannot be confirmed here. A nonstandard port on an allowed public hostname does not by itself target an arbitrary internal host, and ignoring the path is not inherently an SSRF flaw. A timeout alone does not prevent SSRF; a hardened fetch helper is valid only if its protections actually enforce the destination restrictions."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "defectStatement": "The body extraction in PollFeed#poll_feed unconditionally calls scrub on i.content, which can be nil for RSS items whose body is supplied only through description. Such an item raises NoMethodError and interrupts processing of the feed instead of importing its description or skipping it if it has no body.",
+   "obligations": [
+    "Use the item's description as a fallback when content is nil, while preserving preference for available content.",
+    "Skip items with no usable body without raising or calling TopicEmbed.import for them, and continue processing subsequent items.",
+    "Preserve encoding scrubbing and HTML entity unescaping for the selected body before import.",
+    "Preserve the existing import arguments and URL selection behavior for items that have a body."
+   ],
+   "notes": "Only line 35 is replaceable, so any fallback and per-item skip must fit there without relying on changes to surrounding lines. A nil-based fallback followed by a blank-body check is valid; falling back for blank content as well is also acceptable. The synchronous TopicRetriever caller is not shown, but the exception would propagate to any unprotected caller."
+  },
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "defectStatement": "In TopicsController#unsubscribe, TopicUser.find_by can return nil for the current user and topic, but the code immediately reads tu.notification_level. With no TopicUser record, unsubscribing raises NoMethodError instead of persisting a notification preference and showing the topic.",
+   "obligations": [
+    "Handle an absent TopicUser record by obtaining or initializing a usable record for the current user and requested topic, with a valid notification level for the comparison.",
+    "Preserve the existing transition for existing records: levels above regular become regular; levels at or below regular become muted.",
+    "Ensure the missing-record path also persists the resulting notification preference through the subsequent save! and reaches the existing response handling."
+   ],
+   "notes": "Only lines 105–107 are replaceable; later assignments and tu.save! still require a non-nil, saveable tu. A nil guard on the comparison alone is insufficient. TopicUser.get is valid only if its actual contract supplies the required record and notification level; initializing or creating a record is also valid. The email scenario is plausible but not established by the shown code."
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "defectStatement": "The category-selection queries access row 0 without checking for an empty result. A missing embed_category setting, an embed category with no matching category, or a missing uncategorized_category_id fallback can therefore abort the migration before hosts are migrated.",
+   "obligations": [
+    "Handle an empty embed-category query result without accessing a nonexistent row, and proceed to the uncategorized-category fallback.",
+    "Preserve selection of the matching embed category when its ID is nonzero, including integer conversion of the returned ID.",
+    "Preserve use of the uncategorized_category_id setting when the primary category resolves to zero or is absent; handle an empty fallback result without an exception.",
+    "Ensure category_id has a deterministic integer default when neither query supplies a usable value, so the unchanged host-insertion code can continue."
+   ],
+   "notes": "The exact exception is adapter-dependent: some result objects raise on an out-of-range row index rather than returning nil and causing NoMethodError. Guarding only a nil result object does not handle an empty result set. The shown code does not establish a required default category ID; do not require a particular numeric default or changes outside the cited lines."
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#06",
+   "defectStatement": "The public group-members route calls model.findMembers() only once without requesting additional pages. With the reported default limit of 50 and no pagination controls in the public view, non-automatic groups with more than 50 members expose only the first page rather than the full membership previously available.",
+   "obligations": [
+    "Make members beyond the default first page accessible on the public group-members view, including groups spanning multiple pages.",
+    "Use pagination or all-members behavior actually supported by the member-loading API; do not assume an arbitrary large limit guarantees complete results.",
+    "Preserve the group controller's showing='members' state and the members controller's group model binding.",
+    "Keep empty groups and groups fitting within one page working, and ensure any additional page loads retain earlier members rather than replacing them."
+   ],
+   "notes": "The shown code establishes the single call, but not the API's default limit or historical behavior; those details come from the finding. Only lines 8–12 may be replaced, so adding hypothetical controls elsewhere is not a sufficient fix. Full retrieval or pagination wired to an actually reachable public-view mechanism can both be valid."
+  },
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#09",
+   "defectStatement": "The downsizing loop writes to the path of an already-open Tempfile without refreshing its file handle. If downsizing replaces that path with a new inode, the loop's tempfile.size checks and the subsequent Upload.create_for call can use the original file's size and contents rather than the reduced image.",
+   "obligations": [
+    "After a successful downsizing operation, subsequent size checks must reflect the current reduced image, including when the output replaces the input inode.",
+    "Leave tempfile referring to the current image with its contents readable from the beginning, so the unchanged Upload.create_for call receives the reduced contents and matching size.",
+    "Preserve the existing eligibility checks and bounded behavior: only nonempty images with a positive size limit are candidates, and perform at most five 80% downsizing attempts, stopping when the current size is within the limit.",
+    "Preserve the animation setting passed to downsizing and maintain compatible temporary-file cleanup through the existing ensure block."
+   ],
+   "notes": "The inode-replacement behavior is conditional; the shown code does not establish how OptimizedImage.downsize writes its output. Refreshing/reopening the handle or using a separate output tempfile are valid approaches. Merely changing the loop to File.size(tempfile.path), or rewinding the old descriptor, is insufficient because the unchanged downstream call still uses tempfile and tempfile.size. Do not require that five attempts always bring every image under the limit."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#01",
+   "defectStatement": "In get_committable_offsets, the numeric range scan stops at an absent offset even when later tracked offsets are complete, unnecessarily limiting the committable offset across legitimate Kafka offset gaps. The finding overstates permanent blockage: after mark_committed removes the completed prefix, the existing min_offset logic can skip the gap on a subsequent call.",
+   "obligations": [
+    "Return the highest completed tracked offset before the first outstanding tracked offset, without treating untracked numeric gaps as blockers.",
+    "Never advance past an outstanding tracked offset above last_committed, including when later offsets complete first.",
+    "Only return tracked offsets strictly greater than last_committed; omit partitions with no newly committable offset and preserve independent per-partition results.",
+    "Preserve the existing locking and mark_committed lifecycle: querying must not discard pending commit candidates or mark them committed before the caller successfully commits."
+   ],
+   "notes": "Only lines 86–96 are replaceable. Scanning existing tracked offsets in numeric order is valid; a new submission-order deque is not required and would need changes outside this span. For example, completed offsets 10 and 12 should yield 12 immediately; if 12 is outstanding, yield 10. Preserve the current returned-offset convention, without adding 1."
+  },
+  {
+   "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "defectStatement": "MetricAlertDetectorHandler inherits StatefulDetectorHandler but leaves its required abstract members unimplemented, so constructing the handler for MetricAlertFire raises TypeError instead of returning a usable handler. The previous handler was an instantiable placeholder whose evaluate method returned an empty list.",
+   "obligations": [
+    "Make MetricAlertDetectorHandler concrete and instantiable through the existing detector-handler construction path.",
+    "Preserve compatibility with QuerySubscriptionUpdate packets and the handler interface expected by detector callers.",
+    "Preserve the placeholder behavior of evaluating packets without producing detector evaluation results; do not introduce unsupported metric-alert issue generation."
+   ],
+   "notes": "A concrete-base approach or suitable implementations of the abstract members can be valid; stateful metric-alert functionality is not required. Merely suppressing abstractness is insufficient if evaluation then fails or emits spurious results. Only the cited class lines are replaceable, so any newly needed names must be available or introduced within that replacement."
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#12",
+   "defectStatement": "In tableResultComponent, the feature-enabled branch supplies TableWidgetVisualization with no columns, no rows, and empty metadata instead of the current result and query configuration. Consequently, table widgets rendered through this branch cannot display returned table data.",
+   "obligations": [
+    "Supply the feature-enabled visualization with the current result's rows and metadata, retaining available field types and units rather than replacing them with empty objects.",
+    "Supply columns derived from the corresponding query at index i, preserving configured field order and the existing derived-metric prefix normalization.",
+    "Keep each visualization paired with its own result and query, and handle absent query fields without introducing a crash.",
+    "Preserve the feature gate and the existing feature-disabled rendering path, including its loading and span-widget behavior."
+   ],
+   "notes": "Changes are limited to the cited branch. Use the actual TableWidgetVisualization prop contract; adapting result metadata to that contract is valid, and defaults for genuinely absent metadata are acceptable. The finding does not establish that all legacy renderer options must be replicated in the new visualization."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03",
+   "defectStatement": "OrderedQueueWorker.run unconditionally completes the current offset in its finally block, even when processing raises an exception or queue.ShutDown. This removes failed work from the outstanding set and can allow commits to advance past an unsuccessfully processed message.",
+   "obligations": [
+    "Complete the current work item's partition and offset only when its processing succeeds; leave failed processing outstanding so commits cannot advance through that offset.",
+    "Continue completing successfully processed items, including successful items handled after an earlier failure, without clearing the earlier failed offset.",
+    "Preserve exception logging and continued worker operation for ordinary processing exceptions, and preserve termination on queue.ShutDown without completing the interrupted item.",
+    "Preserve queue-depth metric emission on both successful and exceptional processing paths."
+   ],
+   "notes": "The shown commit loop passes offsets directly to commit_function; it does not itself add one, so the finding's offset+1 claim is not established here. Leaving an offset outstanding prevents unsafe commits but does not itself retry or immediately redeliver the failed item. Replacement is limited to lines 144–149; any restructuring must keep the following metric call valid and preserve its execution on failure."
+  },
+  {
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#14",
+   "defectStatement": "The helper recognizes only strings equal to `count()` after case folding and outer whitespace removal. Consequently, equivalent count expressions accepted by the query language, such as an explicitly aliased count or supported internal whitespace variants, are left unweighted instead of being converted to `upsampled_count()`.",
+   "obligations": [
+    "Recognize supported syntactic variants of a standalone zero-argument count aggregate, including explicit aliases and whitespace variants, and convert them to the weighted aggregate.",
+    "Preserve an explicit output alias; retain the existing `upsampled_count() as count` output for an unaliased count, including currently supported case and outer-whitespace variants.",
+    "Leave unrelated columns and aggregates unchanged; do not rewrite expressions merely because they contain the text `count`.",
+    "Continue returning a list in input order with one output per input column, including an empty list for empty input, without mutating the input."
+   ],
+   "notes": "The provided code does not establish which extra parentheses or alias spellings the endpoint accepts; require normalization only for syntax actually supported by its query language. A parser is not mandatory: a suitably constrained matcher is also valid. Rewriting counts nested in arbitrary equations or other aggregates is outside the demonstrated standalone-count defect."
+  },
+  {
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#opa-01",
+   "defectStatement": "The added organization/BROKER_PUBLIC condition in LoginFilter.getLoginPredicate() changes a shared predicate from the enabled/not-link-only/not-hidden checks to also reject non-public organization providers. For the reported IdentityProviderBean caller, this removes otherwise eligible already-linked providers from the federated-provider list merely because BROKER_PUBLIC is absent or not true.",
+   "obligations": [
+    "Make getLoginPredicate() accept otherwise eligible organization-linked providers regardless of BROKER_PUBLIC, including absent and false values.",
+    "Preserve rejection of null providers without dereferencing them.",
+    "Preserve the existing LoginFilter checks: disabled, link-only, or hidden-on-login providers must still be rejected, for both realm-level and organization-linked providers.",
+    "Preserve the public method signature so existing callers continue to compile."
+   ],
+   "notes": "Only the shared predicate's lines are editable here; removing the extra organization condition is a sufficient local correction. Separating cache-specific eligibility into another predicate and updating its callers would require broader changes and should not be required for this replacement. The IdentityProviderBean usage and cache motivation are reported by the finding, not independently shown in the supplied window."
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "defectStatement": "The removal listener is gated by ADMIN_FINE_GRAINED_AUTHZ, but its management() calls select MgmtPermissionsV2 whenever ADMIN_FINE_GRAINED_AUTHZ_V2 is enabled. This mixes legacy removal cleanup with V2 management APIs, potentially invoking unsupported operations when both features are enabled; V2-only configurations skip this listener's cleanup entirely.",
+   "obligations": [
+    "Do not dispatch legacy setPermissionsEnabled(..., false) cleanup to V2 management implementations that do not support it.",
+    "Preserve legacy permission cleanup for role, client, and group removal when the legacy feature is enabled, including both client-role and realm-role realm resolution.",
+    "Handle V2 configurations consistently with ownership of the permission artifacts: perform any required V2 cleanup through supported operations, or keep this listener explicitly legacy-only if V2 cleanup is handled elsewhere or is unnecessary.",
+    "Continue ignoring unrelated events and avoid permission-management work when neither relevant feature is enabled."
+   ],
+   "notes": "Simply widening the feature guard to include V2 does not fix unsupported V2 calls. Explicitly routing legacy cleanup to legacy management is also a valid approach; a new V2 cleanup path is not inherently required. The supplied file establishes the dispatch mismatch, but does not show the V2 implementations or establish that skipped legacy cleanup leaves V2 artifacts behind."
+  },
+  {
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+   "defectStatement": "In verifySafeHtml(), the independently computed common prefix and suffix can overlap, causing either diagnostic substring's start index to exceed its end index. This throws StringIndexOutOfBoundsException instead of recording the illegal-HTML message and continuing verification.",
+   "obligations": [
+    "Construct diagnostics without invalid substring bounds when common prefixes and suffixes overlap, including when either string is empty or one is a prefix or suffix of the other.",
+    "Continue recording an illegal-HTML diagnostic identifying the key and file and showing original-versus-sanitized content whenever the enclosing inequality check succeeds.",
+    "Preserve meaningful difference reporting: remove only matching, non-overlapping context, or retain additional context rather than losing the differing content.",
+    "Preserve existing diagnostic behavior for non-overlapping differences and do not change sanitization, HTML policy selection, or which keys are considered offending."
+   ],
+   "notes": "The end index need not be negative; reversed bounds alone cause the exception, and the current suffix bounds keep end indices nonnegative. The 'aaa' versus 'aa' example illustrates the indexing defect but is not demonstrated to arise from this sanitizer. Preventing overlap during matching or safely retaining more context are valid approaches. Independently clamping both slices as suggested can yield two empty excerpts for unequal strings, so merely avoiding the exception is insufficient."
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#04",
+   "defectStatement": "In hasPermission(ClientModel, String), the fallback for a missing client-specific resource passes the potentially null Clients type resource to findByResource without checking it. When that fallback resource is also missing, the permission check can throw rather than deny access, and any continuation would also dereference the null resource during evaluation.",
+   "obligations": [
+    "When both the client-specific resource and the Clients type resource are absent, return false without passing null to findByResource or evaluating a null resource.",
+    "When the fallback resource exists but has no associated policies, continue to return false.",
+    "When the fallback resource exists and has policies, preserve permission evaluation against that resource and grant only if the requested scope is granted.",
+    "Preserve the existing client-specific resource path and the same-realm and resource-server guards."
+   ],
+   "notes": "A separate null guard or a short-circuit condition is valid. The shown code establishes the unchecked null path, but the precise exception behavior inside findByResource depends on its implementation; a later resource.getScopes() dereference is also unsafe if execution continues."
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#09",
+   "defectStatement": "ClientPermissionsV2.canView() recognizes default view authorization and global VIEW permission but not global MANAGE permission. Consequently, a caller granted only MANAGE on all clients can pass canManage() while failing the global view check, unlike the client-scope view check that accepts either permission.",
+   "obligations": [
+    "Return true from canView() when the caller is granted MANAGE on the all-clients resource, even without VIEW or default view authorization.",
+    "Preserve successful authorization through canViewClientDefault() and global VIEW permission.",
+    "Continue denying global view access when none of those authorization paths succeeds; do not promote a permission on an individual client to global view access.",
+    "Preserve the existing realm and resource-server restrictions on fine-grained permission evaluation."
+   ],
+   "notes": "Adding a global MANAGE check or incorporating canManage() while retaining existing view paths are valid approaches. Replacing the entire result with canManage() would lose view-only access. The shown code establishes the global-view mismatch, but does not show canList(); individual-client viewing can already succeed via canConfigure(client), so not every view operation is necessarily denied."
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01",
+   "defectStatement": "In getSubGroups, the unconditional per-subgroup canView filter removes the global-view authorization short-circuit. Callers with global group-view permission now incur redundant per-group authorization checks for each subgroup traversed during pagination.",
+   "obligations": [
+    "Determine global group-view permission once per request/listing, and bypass per-subgroup visibility checks when that permission is granted.",
+    "For callers without global group-view permission, continue checking each candidate subgroup's visibility and exclude unauthorized subgroups before applying pagination.",
+    "Preserve the parent group's requireView authorization gate and the existing search, exact-match, ordering, and pagination behavior.",
+    "Preserve representation generation, including briefRepresentation handling and subgroup-count population."
+   ],
+   "notes": "The prior auth.groups().canView() check is the global permission test, distinct from canView(group). Either a short-circuit predicate or a conditional filtering path is valid. The shown code establishes redundant calls, not the precise cost of V2 internals; traversal can include offset entries and, for filtered callers, rejected entries, so checks are not necessarily limited to the returned page size."
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#06",
+   "defectStatement": "The legacy Update call in DualWriterMode3.Update passes the original objInfo rather than the result successfully written to unified storage. Legacy storage can therefore recompute a patch against its own stale object, yielding a different update or failing after the unified update has succeeded.",
+   "obligations": [
+    "Supply legacy Update with updated-object information that returns the successful unified-storage result res rather than recomputing the update against the legacy old object.",
+    "Preserve the original objInfo's precondition behavior when supplying the replacement updated-object information.",
+    "Preserve the legacy call's context, name, validation callbacks, forceAllowCreate, and options, and retain its error for the existing metrics recording.",
+    "Keep legacy replication asynchronous and best-effort, without changing the unified-storage result returned to the caller or invoking legacy Update after a unified-storage failure."
+   ],
+   "notes": "The existing updateWrapper with upstream set to objInfo and updated set to res is the intended reusable mechanism; behaviorally equivalent alternatives are valid. The cited change need not address unrelated metrics or context issues."
+  },
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#01",
+   "defectStatement": "The actions at line 47 supply only a Prometheus rule. With the reported ruler-rule guard in AlertRuleMenu, this leaves eligible Grafana rules without a Pause/Resume control even when their pause ability allows it.",
+   "obligations": [
+    "Provide a usable Pause action for eligible unpaused Grafana rules and a Resume action for eligible paused Grafana rules.",
+    "Ensure the action targets the actual Grafana rule and has access to the valid data needed to perform the pause-state change.",
+    "Preserve permission and eligibility checks rather than exposing pause-state changes for disallowed rules.",
+    "Preserve the existing compact rule actions, other menu functionality, and correct rule/group identity."
+   ],
+   "notes": "The menu guard and pause component are not shown, so that downstream behavior is a premise of the finding, not independently verified here. Only line 47 is replaceable; the suggested changes to downstream components are outside that scope. Do not treat a Prometheus DTO cast or relabeled as a ruler DTO as valid ruler data."
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#sncc-01",
+   "defectStatement": "DualWriterMode3.Delete returns immediately for every Storage.Delete error, including NotFound, so it never schedules Legacy.Delete when the object is absent from Storage. This regresses the previous NotFound-tolerant behavior and leaves objects that exist only in legacy storage undeleted.",
+   "obligations": [
+    "When Storage.Delete returns a Kubernetes NotFound error, continue to the existing asynchronous Legacy.Delete attempt with the same name, validation callback, and options.",
+    "For other Storage.Delete errors, preserve the early return of the storage result, async flag, and error without attempting Legacy.Delete.",
+    "Preserve legacy deletion after a successful Storage.Delete and retain the existing asynchronous, timeout-bounded behavior.",
+    "Preserve the Storage.Delete result, async flag, and error returned to the caller, including the NotFound error; legacy results must not replace them."
+   ],
+   "notes": "NotFound tolerance concerns continuing legacy cleanup, not converting the caller's NotFound response to success. The old code also returned the storage NotFound error. The cited replacement cannot rely on the removed apierrors import without making its NotFound check compile within the allowed edit scope. Unrelated metric-label issues are outside this finding."
+  },
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#11",
+   "defectStatement": "The silence drawer is gated solely on `rule` being a Grafana ruler alerting rule, although this component now supports callers that supply only `promRule`. For a Grafana alerting rule in that list-view path, selecting Silence sets the open state but never renders the drawer.",
+   "obligations": [
+    "Selecting Silence for a Grafana alerting `promRule` must open a usable silence drawer even when `rule` is undefined.",
+    "Supply valid rule data through the drawer's supported interface so the silence targets the selected rule; do not merely remove the guard and pass an undefined ruler rule.",
+    "Preserve silence support for existing callers supplying a Grafana ruler alerting rule, and keep the drawer closed until requested and dismissible through its close callback.",
+    "Do not enable the Grafana alert-rule silence drawer for recording rules or non-Grafana rules, and preserve the menu's delete and duplicate behavior."
+   ],
+   "notes": "The defect concerns promRule-only callers, not every list-view invocation unconditionally. A correct fix may use either supported drawer data path; widening the render condition alone is insufficient. Only the cited lines are replaceable, so do not require changes to the drawer implementation or unrelated component logic."
+  },
+  {
+   "issueId": "unified-storage-performance-optimizations-grafana-codex#02",
+   "defectStatement": "TotalDocs iterates b.cache without synchronizing with BuildIndex's cache writes, allowing a data race and potentially a fatal concurrent map iteration/write error during collection. The race is real, but the previous BuildIndex-wide lock did not prevent it either because TotalDocs did not acquire that lock.",
+   "obligations": [
+    "Synchronize all access to b.cache in TotalDocs with writers using cacheMu, including the entire map traversal or a complete snapshot taken under the lock.",
+    "Preserve TotalDocs behavior: sum successful DocCount results, skip entries whose DocCount returns an error, and return zero for an empty cache.",
+    "Preserve synchronized publication of idx in BuildIndex and its successful return, and release any acquired locks on every exit path."
+   ],
+   "notes": "Holding cacheMu.RLock throughout traversal is valid; copying index references under the lock and counting afterward is also valid. Merely extending BuildIndex's lock does not fix an unlocked reader. No requirement to serialize index construction or provide an atomic snapshot of document counts."
+  },
+  {
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#07",
+   "defectStatement": "TagDevice propagates a tagDeviceUI failure, but tagDeviceUI has already cached the device before CreateOrUpdateDevice succeeds. A subsequent request using the same cache key can therefore return nil without retrying the failed write, bypassing device-limit rejection until the entry expires.",
+   "obligations": [
+    "After a failed CreateOrUpdateDevice call, subsequent requests for the same cache key must not succeed solely because that failed attempt populated the cache.",
+    "Continue returning the tagging error to the caller, including device-limit errors, rather than suppressing authentication rejection.",
+    "Preserve successful tagging and the cache-based suppression of redundant writes for successfully recorded devices.",
+    "Preserve the existing no-op behavior for requests without a device ID or with an unparseable remote address."
+   ],
+   "notes": "Only lines 144–148 may be replaced, so error-path cache invalidation here is a valid alternative to moving cache insertion in tagDeviceUI. Invalidation must target the actual key used by tagDeviceUI, not assume it is the device ID. The shown code establishes the stale-success cache problem; authentication handling is not shown, and the 29-minute duration is the configured default TTL rather than a guaranteed exact bypass interval."
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "defectStatement": "The refresh path assigns the parse-result wrapper returned by parseRefreshTokenResponse to key and persists it as credential.key, rather than persisting the validated Google credential object. This nests the token fields under data, so a subsequent GoogleCalendarService instantiation fails when googleCredentialSchema.parse expects those fields at the top level.",
+   "obligations": [
+    "Persist the schema-validated Google credential object directly as credential.key, without a success/data or error wrapper.",
+    "Preserve the refreshed access_token and expiry_date along with existing required credential fields, including refresh_token.",
+    "Do not persist a failed parse result or an undefined key when credential validation fails.",
+    "Keep the update targeted to credential.id and preserve the surrounding authentication and error-handling behavior."
+   ],
+   "notes": "Extracting successful parsed data or using googleCredentialSchema.parse directly are valid approaches; failure handling must remain safe. The helper implementation is not shown, so unconditionally accessing .data is only valid if its return contract guarantees success or throws on failure. The corruption breaks subsequent loads, but 'permanently' overstates it: credential repair or reauthorization can recover it."
+  },
+  {
+   "issueId": "feat-2fa-backup-codes-cal-com#01",
+   "defectStatement": "In the backup-code branch at lines 131–157, a non-empty totpCode causes the earlier password verification to be skipped, but the backupCode takes precedence and prevents TOTP verification as well. For a two-factor-enabled account, an email and valid backup code can therefore authenticate without the account password by including a dummy totpCode.",
+   "obligations": [
+    "Prevent a request containing both a non-empty totpCode and backupCode from authenticating through backup-code validation without successful password verification; rejecting such requests is also valid.",
+    "Reject the bypass attempt before consuming or persisting changes to the backup code.",
+    "Preserve ordinary backup-code login with a correct password, including hyphen normalization, rejection of invalid or missing backup codes, encryption-key checks, and consumption of the matched code.",
+    "Preserve the existing TOTP-only verification flow and behavior for requests without a backup code."
+   ],
+   "notes": "Only lines 131–157 are replaceable, so the fix must not depend on editing the earlier password guard. Either a mixed-input rejection or password verification within the affected path is valid. Merely ignoring totpCode in the backup branch does not undo the earlier skipped password check. Broader changes to the pre-existing TOTP/password authentication design are outside this finding."
+  },
+  {
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "defectStatement": "In testCacheIDPForLogin, both cleanup registrations target the literal alias \"alias\" rather than the providers created as \"idp-alias-0\" through \"idp-alias-20\". Consequently, teardown does not remove those providers and can fail when deleting a nonexistent provider, leaving test state behind.",
+   "obligations": [
+    "Register deferred cleanup for each loop-created provider using that iteration's actual alias, not the literal \"alias\".",
+    "Register deferred cleanup for the additional provider using its actual alias, \"idp-alias-20\".",
+    "Preserve provider creation, organization associations, login-availability settings, and cache assertions; removal must remain deferred until cleanup."
+   ],
+   "notes": "The admin client's get(alias) returns a resource proxy, so a nonexistent alias normally causes an HTTP not-found error on remove(), not a NullPointerException. Explicit alias expressions or safely captured aliases/resources are valid. The test explicitly deletes idp-alias-1 later; do not require this localized fix to change the cleanup framework's existing handling of already-deleted resources."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
+   "defectStatement": "Line 13 interpolates the unescaped URL into both a single-quoted href attribute and HTML link text in the imported-from footer. URL characters can therefore become attributes or markup in content stored and rendered as raw HTML, rather than remaining URL data.",
+   "obligations": [
+    "Ensure URL data cannot escape the footer link's href attribute or create markup through its visible text, including URLs containing quotes, angle brackets, and ampersands.",
+    "Preserve the localized imported-from footer and a functional link whose parsed href and displayed text represent the original URL, without double escaping.",
+    "Keep the original URL unchanged for subsequent embed lookup, persistence, and relative-URL resolution; limit HTML encoding to footer construction.",
+    "Continue appending the footer to the supplied contents without escaping or otherwise altering the existing article HTML."
+   ],
+   "notes": "Context-appropriate HTML escaping or safe DOM construction are both valid. Escaping must cover apostrophes if the attribute remains single-quoted. The shown method checks an HTTP(S) prefix, not a host allowlist; request provenance and host validation are not established by this excerpt. The exact exploit example may also encounter URI parsing restrictions downstream, but those restrictions are not HTML escaping."
+  }
+ ]
+}

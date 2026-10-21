@@ -1,0 +1,48 @@
+{
+ "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+ "items": [
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#14",
+   "defectStatement": "Validation permits storing host:port, but record_for_host queries only URI.host, which excludes the port. Consequently, port-qualified entries cannot authorize embedding or supply their configured category.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Match a configured host:port against URLs using that host and port.",
+    "Do not match a port-qualified entry against a different port.",
+    "Preserve hostname-only matching and rejection of malformed or hostless inputs."
+   ],
+   "exampleFix": "  def self.record_for_host(host)\n    uri = URI(host) rescue nil\n    return false unless uri.present?\n\n    host = uri.host\n    return false unless host.present?\n    host = host.downcase\n\n    if uri.port\n      record = where(\"lower(host) = ?\", \"#{host}:#{uri.port}\").first\n      return record if record\n    end\n\n    where(\"lower(host) = ?\", host).first\n  end",
+   "notes": "This example prefers a port-specific entry and retains hostname-only fallback. It also supports explicitly configured default ports. Rejecting ports in validation requires editing outside this anchor."
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#11",
+   "defectStatement": "The save callback resolves the category from the submitted categoryId, which can be null even when the server assigned uncategorized. The row consequently displays no category until reload.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": false,
+   "obligations": [
+    "Resolve the displayed category from the persisted category ID, including the server's uncategorized fallback.",
+    "Continue displaying explicitly selected categories correctly.",
+    "Preserve completion of editing on success and existing error handling."
+   ],
+   "exampleFix": "      host.save(props).then(() => {\n        host.set('category', Discourse.Category.findById(host.get('category_id')));",
+   "notes": "Repository inspection confirms that save applies the response's category_id to host before this callback. That contract is absent from the frozen input. The serializer returns category_id, not a category object; simply deleting the assignment does not reliably fix the display."
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "defectStatement": "The migration indexes the first result row without checking whether either category-setting query returned anything. A missing or unmatched embed_category prevents the intended uncategorized fallback, and a missing uncategorized setting can also abort migration.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": false,
+   "obligations": [
+    "Handle empty results from both queries without accessing a nonexistent row.",
+    "Prefer the category matched by the legacy embed_category setting.",
+    "Otherwise use the configured uncategorized category or the application's default when that setting is absent.",
+    "Preserve subsequent host migration and legacy-setting cleanup."
+   ],
+   "exampleFix": "    category_row = execute(\"SELECT c.id FROM categories AS c\n                        INNER JOIN site_settings AS s ON s.value = c.name\n                        WHERE s.name = 'embed_category'\").first\n    category_id = category_row ? category_row['id'].to_i : 0\n\n    if category_id == 0\n      uncategorized_row = execute(\"SELECT value FROM site_settings WHERE name = 'uncategorized_category_id'\").first\n      category_id = uncategorized_row ? uncategorized_row['value'].to_i : SiteSetting.uncategorized_category_id\n    end",
+   "notes": "The frozen input does not establish the SiteSetting API or missing-setting default. The repository defines that default as -1, a sentinel rather than an existing category; this fallback prevents the crash but does not create an uncategorized category."
+  }
+ ]
+}

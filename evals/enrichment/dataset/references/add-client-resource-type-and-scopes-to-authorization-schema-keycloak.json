@@ -1,0 +1,78 @@
+{
+ "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+   "defectStatement": "getClientsWithPermission searches for type \"Clients\", which matches the all-clients resource but misses untyped per-client resources. It consequently returns an empty set or the literal \"Clients\" instead of internal client IDs, causing missing role mappings or a null dereference in its caller.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": false,
+   "obligations": [
+    "Return internal client IDs for clients granted the requested scope.",
+    "Include grants on untyped per-client resources and applicable all-clients grants.",
+    "Preserve client-specific resource precedence and the existing realm/resource-server guards.",
+    "Do not return resource-type names or dereference missing resources."
+   ],
+   "exampleFix": "        Set<String> granted = new HashSet<>();\n\n        try (java.util.stream.Stream<ClientModel> clients = realm.getClientsStream()) {\n            clients.forEach(client -> {\n                Resource resource = resourceStore.findByName(server, client.getId(), server.getId());\n                if (resource == null) {\n                    resource = AdminPermissionsSchema.SCHEMA.getResourceTypeResource(session, server, AdminPermissionsSchema.CLIENTS_RESOURCE_TYPE);\n                    if (resource == null || authz.getStoreFactory().getPolicyStore().findByResource(server, resource).isEmpty()) {\n                        return;\n                    }\n                }\n                if (hasGrantedPermission(resource, scope)) {\n                    granted.add(client.getId());\n                }\n            });\n        }\n\n        return granted;",
+   "notes": "The frozen input omits the inherited realm field and client-enumeration API. getClientId() is the wrong identifier: the caller uses getClientById(). Merely assigning types elsewhere would not expand an all-clients grant into actual client IDs."
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#10",
+   "defectStatement": "canView(client) accepts an all-clients VIEW grant before evaluating the client's explicit resource, bypassing a client-specific denial. ClientsResource.getClients also independently uses canView() to skip per-client authorization.",
+   "anchorCoversDefect": true,
+   "fixability": "needs-wider-change",
+   "contextSufficient": false,
+   "obligations": [
+    "Evaluate client-specific permissions before applying the all-clients fallback.",
+    "Ensure listing cannot bypass client-specific denials through its global shortcut.",
+    "Preserve built-in administrative role access and legitimate configure/manage grants.",
+    "Preserve listing eligibility and correct pagination when filtering individual clients."
+   ],
+   "exampleFix": null,
+   "notes": "Replacing canView() with canViewClientDefault() at this anchor fixes the direct check only. The listing shortcut remains outside the anchor; its implementation and inherited listing checks are absent from the frozen input."
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "defectStatement": "The V1-only feature guard skips removal handling in V2-only configurations, leaving V2 per-client authorization resources behind. If the guarded listener runs while management() selects V2, client deletion instead calls setPermissionsEnabled(), which throws UnsupportedOperationException.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": false,
+   "obligations": [
+    "Clean up a deleted client's V2 authorization resource without calling the unsupported V2 setter.",
+    "Preserve legacy client, role, and group cleanup.",
+    "Preserve permissions for surviving resources when removing shared policy associations.",
+    "Handle absent authorization resources and unrelated events without failure."
+   ],
+   "exampleFix": "                KeycloakSession session;\n                RealmModel realm;\n                ClientModel removedClient = null;\n                java.util.function.Consumer<MgmtPermissions> cleanup;\n\n                if (event instanceof RoleContainerModel.RoleRemovedEvent) {\n                    RoleContainerModel.RoleRemovedEvent cast = (RoleContainerModel.RoleRemovedEvent) event;\n                    RoleModel role = cast.getRole();\n                    session = cast.getKeycloakSession();\n                    realm = role.getContainer() instanceof ClientModel\n                            ? ((ClientModel) role.getContainer()).getRealm()\n                            : (RealmModel) role.getContainer();\n                    cleanup = permissions -> permissions.roles().setPermissionsEnabled(role, false);\n                } else if (event instanceof ClientModel.ClientRemovedEvent) {\n                    ClientModel.ClientRemovedEvent cast = (ClientModel.ClientRemovedEvent) event;\n                    session = cast.getKeycloakSession();\n                    realm = cast.getClient().getRealm();\n                    removedClient = cast.getClient();\n                    cleanup = permissions -> permissions.clients().setPermissionsEnabled(cast.getClient(), false);\n                } else if (event instanceof GroupModel.GroupRemovedEvent) {\n                    GroupModel.GroupRemovedEvent cast = (GroupModel.GroupRemovedEvent) event;\n                    session = cast.getKeycloakSession();\n                    realm = cast.getRealm();\n                    cleanup = permissions -> permissions.groups().setPermissionsEnabled(cast.getGroup(), false);\n                } else {\n                    return;\n                }\n\n                cleanup.accept(new MgmtPermissions(session, realm));\n\n                if (Profile.isFeatureEnabled(Profile.Feature.ADMIN_FINE_GRAINED_AUTHZ_V2)) {\n                    MgmtPermissionsV2 permissions = new MgmtPermissionsV2(session, realm);\n                    if (removedClient == null) {\n                        cleanup.accept(permissions);\n                    } else {\n                        org.keycloak.authorization.model.ResourceServer server = permissions.realmResourceServer();\n                        if (server != null) {\n                            org.keycloak.authorization.store.ResourceStore resourceStore = session\n                                    .getProvider(org.keycloak.authorization.AuthorizationProvider.class)\n                                    .getStoreFactory().getResourceStore();\n                            org.keycloak.authorization.model.Resource resource = resourceStore.findByName(\n                                    server, removedClient.getId(), server.getId());\n                            if (resource != null) {\n                                resourceStore.delete(resource.getId());\n                            }\n                        }\n                    }\n                }",
+   "notes": "Inline cleanup fits the anchor; adding a cleanup API elsewhere is optional. The frozen input lacks V2 naming and store-deletion behavior. The repository's wrapped resource store cleans policy associations on deletion. V2's schema defines Users and Clients, so the finding overstates V2-specific role/group resources."
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#04",
+   "defectStatement": "When neither the client-specific resource nor the all-clients resource exists, hasPermission(client, scope) passes null to findByResource. This causes a null dereference instead of denying permission.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Return false when the fallback resource is absent.",
+    "Do not query policies or evaluate permissions with a null resource.",
+    "Preserve evaluation of existing resources and denial when the fallback has no policies."
+   ],
+   "exampleFix": "        if (resource == null) {\n            // check if there is permission for \"all-clients\". If so, load its resource and proceed with evaluation\n            resource = AdminPermissionsSchema.SCHEMA.getResourceTypeResource(session, server, AdminPermissionsSchema.CLIENTS_RESOURCE_TYPE);\n\n            if (resource == null || authz.getStoreFactory().getPolicyStore().findByResource(server, resource).isEmpty()) {\n                return false;\n            }",
+   "notes": "The outer closing brace is outside the anchor and must remain there. A separate null guard is equally valid."
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#09",
+   "defectStatement": "canView() ignores an all-clients MANAGE grant, even though manage permits viewing individual clients. Without a query role, inherited canList() rejects listing; with a query role, listing unnecessarily fetches unpaginated candidates and evaluates each client.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Recognize an all-clients MANAGE grant as granting global view eligibility.",
+    "Preserve existing default-role and all-clients VIEW grants.",
+    "Do not treat a grant limited to one client as a global grant."
+   ],
+   "exampleFix": "    @Override\n    public boolean canView() {\n        return canViewClientDefault() || hasPermission(AdminPermissionsSchema.VIEW)\n                || hasPermission(AdminPermissionsSchema.MANAGE);\n    }",
+   "notes": "Calling canManage() is also valid. This fixes the missing MANAGE implication independently; the global listing shortcut's handling of client-specific denials remains the separate issue in #10."
+  }
+ ]
+}

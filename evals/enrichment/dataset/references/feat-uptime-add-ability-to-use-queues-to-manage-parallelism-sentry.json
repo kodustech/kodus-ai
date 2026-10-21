@@ -1,0 +1,108 @@
+{
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "items": [
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "defectStatement": "Both close() and terminate() shut down the factory-owned queue pool that subsequent strategies reuse. After rebalance, submissions to that pool fail, and submit() incorrectly marks those unprocessed messages complete.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Leave the shared queue pool usable when an individual strategy closes or terminates.",
+    "Stop the retiring strategy's commit thread before teardown returns so it cannot keep invoking its stale callback.",
+    "Preserve queued work and leave pool shutdown to its owner."
+   ],
+   "exampleFix": "    def close(self) -> None:\n        self.shutdown_event.set()\n        self.commit_thread.join()\n\n    def terminate(self) -> None:\n        self.shutdown_event.set()\n        self.commit_thread.join()\n",
+   "notes": "The factory already shuts down its pool. Removing only the shutdown calls fixes pool reuse, but retaining a timed join can leave a stale commit callback running. Partition-generation isolation and submission-error handling are separate issues."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#muse13-02",
+   "defectStatement": "submit() sends FilteredPayload to the factory decoder, which asserts against that payload type, routing intentional filtering through exception handling. A filtered payload wrapped in BrokerValue still has its offset completed by that handler, so the finding's blanket claim that filtered offsets are never tracked is incorrect.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Recognize FilteredPayload before invoking the decoder.",
+    "Record and complete the broker offset of a filtered message without enqueueing work or logging a submission failure.",
+    "Preserve decoding, grouping, and queue submission for ordinary payloads.",
+    "Preserve the existing handling of decoder results that are None."
+   ],
+   "exampleFix": "    def submit(self, message: Message[KafkaPayload | FilteredPayload]) -> None:\n        try:\n            result = None if isinstance(message.payload, FilteredPayload) else self.decoder(message.payload)\n\n            assert isinstance(message.value, BrokerValue)\n            partition = message.value.partition\n            offset = message.value.offset\n\n            if result is None:\n                self.queue_pool.offset_tracker.add_offset(partition, offset)\n                self.queue_pool.offset_tracker.complete_offset(partition, offset)\n                return\n\n            group_key = self.grouping_fn(result)\n\n            work_item = WorkItem(\n                partition=partition,\n                offset=offset,\n                result=result,\n                message=message,\n            )\n\n            self.queue_pool.submit(group_key, work_item)\n\n        except Exception:\n            logger.exception(\"Error submitting message to queue\")\n            if isinstance(message.value, BrokerValue):\n                self.queue_pool.offset_tracker.add_offset(\n                    message.value.partition, message.value.offset\n                )\n                self.queue_pool.offset_tracker.complete_offset(\n                    message.value.partition, message.value.offset\n                )\n",
+   "notes": "Check message.payload, not whether message.value is FilteredPayload. The repository test constructs BrokerValue(FilteredPayload(), ...). Broader support for non-BrokerValue messages is not established by this finding."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#05",
+   "defectStatement": "The error-handling test checks for absent commits only 0.2 seconds after processing attempts, before the one-second commit loop normally runs. It therefore passes even though the current worker completes both offsets and subsequently commits next-read offset 102.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Observe the expected commit outcome, or synchronize an actual commit attempt before asserting that no commit occurred.",
+    "Fail on timeout instead of treating an unobserved commit cycle as success.",
+    "Retain verification that both processing attempts occurred."
+   ],
+   "exampleFix": "                if (\n                    stats[\"total_items\"] == 0\n                    and mock_processor_call.call_count >= 2\n                    and committed_offsets.get(test_partition) == 102\n                ):\n                    break\n                time.sleep(0.1)\n\n            assert mock_processor_call.call_count == 2\n            assert test_partition in committed_offsets\n            assert committed_offsets[test_partition] == 102\n",
+   "notes": "This example follows the finding's proposed assertion and characterizes current behavior. It conflicts with #03's success-only policy. A regression test for that policy should instead synchronize a commit attempt and assert the failed offset remains uncommitted; that test should fail on the current implementation."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#12",
+   "defectStatement": "_commit_loop() invokes Arroyo's commit callback from a background thread while the consumer thread can poll or revoke partitions. This permits concurrent access to consumer state and commits using a retiring strategy's callback.",
+   "anchorCoversDefect": true,
+   "fixability": "needs-wider-change",
+   "contextSufficient": true,
+   "obligations": [
+    "Invoke the commit callback on the consumer thread through its strategy lifecycle methods.",
+    "Continue advancing eligible offsets while the strategy is active.",
+    "Mark tracker offsets committed only after the callback succeeds.",
+    "Prevent deferred commits from surviving the strategy's ownership lifecycle."
+   ],
+   "exampleFix": null,
+   "notes": "Changing only the background loop cannot establish a consumer-thread commit path; poll/submit and lifecycle wiring must also change. Merely deleting commits loses progress, and a lock used only by the background thread provides no protection."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "defectStatement": "FixedQueuePool creates unbounded queues, and submit() always accepts additional work without applying backpressure. When workers fall behind, retained work items can grow without limit.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Enforce a finite bound on queued work.",
+    "Apply backpressure when capacity is exhausted without dropping or completing unprocessed messages.",
+    "Preserve stable group assignment and FIFO processing.",
+    "Register offsets before workers can complete the corresponding work."
+   ],
+   "exampleFix": "        for i in range(num_queues):\n            work_queue: queue.Queue[WorkItem[T]] = queue.Queue(maxsize=1000)\n            self.queues.append(work_queue)\n\n            worker = OrderedQueueWorker[T](\n                worker_id=i,\n                work_queue=work_queue,\n                result_processor=result_processor,\n                identifier=identifier,\n                offset_tracker=self.offset_tracker,\n            )\n            worker.start()\n            self.workers.append(worker)\n\n    def get_queue_for_group(self, group_key: str) -> int:\n        \"\"\"\n        Get queue index for a group using consistent hashing.\n        \"\"\"\n        return hash(group_key) % self.num_queues\n\n    def submit(self, group_key: str, work_item: WorkItem[T]) -> None:\n        \"\"\"\n        Submit a work item to the appropriate queue.\n        \"\"\"\n        queue_index = self.get_queue_for_group(group_key)\n        work_queue = self.queues[queue_index]\n\n        self.offset_tracker.add_offset(work_item.partition, work_item.offset)\n        work_queue.put(work_item)\n",
+   "notes": "The capacity is illustrative; other finite positive bounds are valid. Blocking put is explicitly permitted by the finding. Nonblocking rejection needs wider changes because the strategy currently catches submission exceptions and completes their offsets."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#01",
+   "defectStatement": "get_committable_offsets() stops at an integer offset that was never submitted, unnecessarily withholding later completed records across legitimate Kafka gaps. The blockage is not permanent in this implementation: committing and removing the earlier prefix allows a subsequent scan to start beyond the gap.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Advance across absent offsets when all earlier submitted records have completed.",
+    "Stop before any earlier submitted offset that remains outstanding.",
+    "Preserve the committed watermark and partition-specific locking.",
+    "Return processed offsets using the existing tracker convention, without adding one."
+   ],
+   "exampleFix": "                start = max(last_committed + 1, min_offset)\n\n                highest_committable = last_committed\n                for offset in sorted(o for o in all_offsets if start <= o <= max_offset):\n                    if offset in outstanding:\n                        break\n                    highest_committable = offset\n\n                if highest_committable > last_committed:\n                    committable[partition] = highest_committable\n",
+   "notes": "Sorting delivered offsets suffices for ordered Kafka partition delivery; a deque is not required. Verified that the original code returns 100, then 103 after mark_committed(100), for completed offsets 100/102/103. Rebalance-state cleanup is a separate issue outside this anchor."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03",
+   "defectStatement": "OrderedQueueWorker completes each work item's offset in finally even when result_processor raises, including its ShutDown path. Later commits can therefore advance past failed processing and prevent redelivery.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Complete the offset only when processing succeeds.",
+    "Leave failed or interrupted work outstanding so commits cannot advance past it.",
+    "Preserve exception logging and the existing ShutDown exit behavior.",
+    "Keep queue-depth metrics running on both successful and failed attempts."
+   ],
+   "exampleFix": "            except Exception:\n                logger.exception(\n                    \"Unexpected error in queue worker\", extra={\"worker_id\": self.worker_id}\n                )\n            else:\n                self.offset_tracker.complete_offset(work_item.partition, work_item.offset)\n            finally:\n",
+   "notes": "The trailing finally owns the unchanged metrics.gauge block immediately after the anchor. Moving completion into else avoids needing a success flag outside the replacement range."
+  }
+ ]
+}

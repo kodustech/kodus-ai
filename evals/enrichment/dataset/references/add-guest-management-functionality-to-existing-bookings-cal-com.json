@@ -1,0 +1,62 @@
+{
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "items": [
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "defectStatement": "The team authorization expression requires both admin and owner checks to succeed. A team admin who is neither the organizer nor an attendee is therefore incorrectly rejected with FORBIDDEN.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Authorize either an admin or an owner of the booking's team.",
+    "Preserve organizer and attendee authorization.",
+    "Continue rejecting users who satisfy none of the authorized roles."
+   ],
+   "exampleFix": "  const isTeamAdminOrOwner =\n    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) ||\n    (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));",
+   "notes": "isTeamAdmin already accepts owners in this repository; using OR remains correct and is supported by the frozen input."
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#03",
+   "defectStatement": "The input schema accepts repeated email strings, and the handler only filters against previously stored attendees. Repeating a new email within one request therefore produces duplicate attendee rows.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Prevent repeated email strings in one request from producing multiple attendee rows.",
+    "Preserve email-format validation and numeric bookingId validation.",
+    "Continue accepting requests containing distinct valid emails."
+   ],
+   "exampleFix": "export const ZAddGuestsInputSchema = z.object({\n  bookingId: z.number(),\n  guests: z.array(z.string().email()).transform((guests) => Array.from(new Set(guests))),\n});",
+   "notes": "Rejecting duplicate inputs with a refinement is also valid. Case-insensitive uniqueness is addressed separately by kimi-01."
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#kimi-01",
+   "defectStatement": "The guest filter compares raw email strings against existing attendees and a lowercased blacklist, allowing case variants of existing or blacklisted addresses through. It also permits differently cased copies of the same new address within one request.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Exclude existing attendees using case-insensitive email comparison.",
+    "Exclude blacklisted addresses regardless of input casing.",
+    "Accept at most one case-insensitive occurrence of each new email per request.",
+    "Preserve accepted email spelling so downstream exact-match email classification still recognizes new attendees."
+   ],
+   "exampleFix": "  const seenGuestEmails = new Set(booking.attendees.map((attendee) => attendee.email.toLowerCase()));\n  const uniqueGuests = guests.filter((guest) => {\n    const normalizedEmail = guest.toLowerCase();\n    if (seenGuestEmails.has(normalizedEmail) || blacklistedGuestEmails.includes(normalizedEmail)) {\n      return false;\n    }\n    seenGuestEmails.add(normalizedEmail);\n    return true;\n  });",
+   "notes": "Normalize comparison keys while retaining accepted input strings. Lowercasing stored guest values alone can break the unchanged sendAddGuestsEmails(evt, guests) call's exact-match classification."
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "defectStatement": "The add-guests handler compares raw guest addresses against lowercased blacklist entries, allowing case variants and plus-address aliases of blocked addresses to become attendees and receive invitations. Unlike handleNewBooking, it does not normalize incoming guests to lowercase base addresses before checking the blacklist.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Exclude guests whose lowercase base address matches a lowercased blacklist entry, including case variants and plus-address aliases.",
+    "Preserve existing-attendee exclusion and retain the submitted email addresses for allowed guests.",
+    "Preserve empty-blacklist behavior and the existing error when no eligible guests remain."
+   ],
+   "exampleFix": "  const blacklistedGuestEmails = process.env.BLACKLISTED_GUEST_EMAILS\n    ? process.env.BLACKLISTED_GUEST_EMAILS.split(\",\").map((email) => email.toLowerCase())\n    : [];\n\n  const normalizeGuestEmail = (email: string): string => {\n    const [localPart, domain] = email.split(\"@\");\n    return `${localPart.split(\"+\")[0]}@${domain}`.toLowerCase();\n  };\n\n  const uniqueGuests = guests.filter(\n    (guest) =>\n      !booking.attendees.some((attendee) => guest === attendee.email) &&\n      !blacklistedGuestEmails.includes(normalizeGuestEmail(guest))",
+   "notes": "The replacement deliberately leaves the filter's closing `);` on line 78 untouched. extractBaseEmail is not imported; equivalent inline normalization keeps the fix within the anchor. Lowercasing alone leaves the finding's plus-alias bypass unresolved."
+  }
+ ]
+}

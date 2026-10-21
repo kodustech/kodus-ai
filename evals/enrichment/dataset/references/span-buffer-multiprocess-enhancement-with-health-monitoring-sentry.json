@@ -1,0 +1,20 @@
+{
+ "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+ "items": [
+  {
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "defectStatement": "In join(), expiration of the shared deadline breaks out of the worker loop, skipping cleanup for the current and remaining workers. Additionally, the termination guard does not recognize the SpawnProcess workers created by self.mp_context, so merely removing the break still leaves those processes unterminated.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Visit every worker for cleanup even when the deadline has already expired.",
+    "Use the existing shared deadline to bound waiting without granting each worker a fresh timeout.",
+    "Terminate remaining spawned processes while avoiding termination calls on thread workers.",
+    "Preserve waiting for workers to finish when no deadline exists."
+   ],
+   "exampleFix": "        for process in self.processes.values():\n            while process.is_alive() and (deadline is None or deadline > time.time()):\n                time.sleep(0.1)\n\n            if isinstance(process, self.mp_context.Process):\n                process.terminate()\n",
+   "notes": "The frozen diff shows the spawn context and thread alternative. SpawnProcess is not a subclass of multiprocessing.Process; a BaseProcess guard is also valid. Replacing break with continue still skips termination."
+  }
+ ]
+}

@@ -1,0 +1,48 @@
+{
+ "caseId": "replays-self-serve-bulk-delete-system-sentry",
+ "items": [
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#sncc-01",
+   "defectStatement": "The merge loop compares error timestamps in seconds with recording-event timestamps in milliseconds. For ordinary epoch timestamps, this emits errors before earlier breadcrumbs and sends incorrectly ordered logs to Seer.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Compare error and recording timestamps in the same unit without discarding fractional precision.",
+    "Preserve the bounds check, strict comparison, and existing emission of remaining errors.",
+    "Do not mutate stored timestamps or change error-message formatting."
+   ],
+   "exampleFix": "            while (\n                error_idx < len(error_events)\n                and error_events[error_idx][\"timestamp\"] * 1000 < event.get(\"timestamp\", 0)\n            ):",
+   "notes": "Dividing recording timestamps by 1000 is also valid."
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#19",
+   "defectStatement": "The attribute-key cache key omits organization identity even though the fetcher requests an organization-specific endpoint. Organizations with identical query options therefore share cached attribute names.",
+   "anchorCoversDefect": true,
+   "fixability": "needs-wider-change",
+   "contextSufficient": true,
+   "obligations": [
+    "Include the active organization's identity in the query key.",
+    "Recompute the memoized key when organization identity changes.",
+    "Retain query options in the key so different filters remain separately cached."
+   ],
+   "exampleFix": null,
+   "notes": "The diff supplies the removed useOrganization import and invocation, so the wider fix is clear. Restoring the import requires editing outside the anchor; merely referencing organization.slug here would leave an undefined identifier."
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#12",
+   "defectStatement": "The enabled table-visualization branch supplies empty columns, rows, and metadata instead of the current query result. Consequently, table widgets render empty even when their queries return data.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": false,
+   "obligations": [
+    "Render the current result's rows in the enabled visualization.",
+    "Build columns from the corresponding query's fields, preserving their order and available aliases.",
+    "Pass result field types and units, with safe defaults when metadata is absent.",
+    "Preserve feature-flag selection and the existing disabled branch."
+   ],
+   "exampleFix": "          {organization.features.includes('use-table-widget-visualization') ? (\n            <TableWidgetVisualization\n              columns={fields.map((field, columnIndex) => ({\n                key: field,\n                name: fieldAliases[columnIndex] || field,\n                type: result.meta?.fields?.[field],\n              }))}\n              tableData={{\n                data: result.data,\n                meta: {\n                  fields: result.meta?.fields ?? {},\n                  units: (result.meta?.units ?? {}) as Record<string, DataUnit>,\n                },\n              }}\n            />",
+   "notes": "The frozen input omits TabularColumn/TabularData contracts and result metadata optionality. Repository inspection confirms the column object shape, required metadata maps, and an existing DataUnit import used by this replacement. Passing fields directly as columns is invalid."
+  }
+ ]
+}

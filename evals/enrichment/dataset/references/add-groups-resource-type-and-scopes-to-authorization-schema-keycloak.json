@@ -1,0 +1,62 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "defectStatement": "GroupPermissionsV2.canManage() accepts either VIEW or MANAGE, so an all-groups VIEW-only grant passes the global manage check. This permits operations such as top-level group creation without manage permission.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Reject VIEW-only grants in the no-argument manage check.",
+    "Continue accepting all-groups MANAGE permission.",
+    "Preserve the MANAGE_USERS role bypass."
+   ],
+   "exampleFix": "    @Override\n    public boolean canManage() {\n        if (root.hasOneAdminRole(AdminRoles.MANAGE_USERS)) {\n            return true;\n        }\n\n        return hasPermission(null, AdminPermissionsSchema.MANAGE);\n    }",
+   "notes": "The finding overstates the affected endpoints: group-specific update/delete checks use canManage(GroupModel), which already requires MANAGE."
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#04",
+   "defectStatement": "JpaUserProvider.groupsWithPermissionsSubquery requires a resource named group.resource.<groupId>, whereas V2 resources are named with the group ID alone. Consequently, group-restricted user searches and counts exclude authorized members when only V2 resources exist, even if supplied group IDs are correct.",
+   "anchorCoversDefect": false,
+   "fixability": "needs-wider-change",
+   "contextSufficient": false,
+   "obligations": [
+    "Allow authorized V2 group members in filtered user searches and counts without requiring legacy resources.",
+    "Keep results restricted to authorized group membership and the requested realm.",
+    "Preserve legacy V1 filtering behavior."
+   ],
+   "exampleFix": null,
+   "notes": "The anchor only returns the set; the defective JPA predicate and its surrounding contract are absent from the frozen input. Correcting resource IDs in #02 does not fix this independent issue."
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "defectStatement": "getGroupIdsWithViewPermission() uses authorization resource UUIDs instead of resource names, which contain the group IDs. This makes permission lookup miss the group-specific resource and returns identifiers that cannot match user group memberships.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Evaluate each group's member-view permission using its actual group ID.",
+    "Add actual group IDs, rather than authorization resource UUIDs, to the returned set.",
+    "Continue accepting VIEW_MEMBERS or MANAGE_MEMBERS and exclude groups whose check fails."
+   ],
+   "exampleFix": "        resourceStore.findByType(server, AdminPermissionsSchema.GROUPS_RESOURCE_TYPE, groupResource -> {\n            if (hasPermission(groupResource.getName(), AdminPermissionsSchema.VIEW_MEMBERS, AdminPermissionsSchema.MANAGE_MEMBERS)) {\n                granted.add(groupResource.getName());\n            }\n        });",
+   "notes": "Both getId() occurrences must change. The separate legacy JPA resource-name restriction in #04 remains outside this fix."
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01",
+   "defectStatement": "getSubGroups() unconditionally performs a per-group visibility check for every subgroup examined by the listing filter. For V2 all-groups viewers, this repeats authorization evaluation instead of using one global visibility check to bypass those filter checks.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Compute global group visibility once before filtering.",
+    "Skip per-subgroup visibility checks in the filter when global visibility is granted.",
+    "Retain per-subgroup filtering when global visibility is denied.",
+    "Preserve parent authorization, search parameters, filtering before pagination, and representation mapping."
+   ],
+   "exampleFix": "        this.auth.groups().requireView(group);\n        boolean canViewGlobal = auth.groups().canView();\n        return paginatedStream(\n            group.getSubGroupsStream(search, exact, -1, -1)\n            .filter(g -> canViewGlobal || auth.groups().canView(g)), first, max)\n            .map(g -> GroupUtils.populateSubGroupCount(g, GroupUtils.toRepresentation(auth.groups(), g, !briefRepresentation)));",
+   "notes": "Local classification applies to the finding's getSubGroups regression. The analogous GroupsResource listing requires a separate edit. Representation access calculations may still evaluate permissions; this fix removes repeated visibility-filter checks."
+  }
+ ]
+}

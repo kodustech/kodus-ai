@@ -1,0 +1,90 @@
+{
+ "caseId": "dual-storage-architecture-grafana-codex",
+ "items": [
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#04",
+   "defectStatement": "Mode 3 Create and Update call recordLegacyDuration when unified Storage fails, attributing unified-storage latency and errors to legacy storage.",
+   "anchorCoversDefect": false,
+   "fixability": "local",
+   "contextSufficient": false,
+   "obligations": [
+    "Record failed unified Create and Update operations in the storage duration metric with the error flag set.",
+    "Preserve timing, labels, error logging, and returned results.",
+    "Do not record legacy operations that were never attempted."
+   ],
+   "exampleFix": null,
+   "notes": "The defect requires simple recorder substitutions at both failure sites, but this item has no usable anchor. Failed operations should still be measured."
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#02",
+   "defectStatement": "The asynchronous legacy DeleteCollection records its duration through recordStorageDuration, attributing legacy latency and failures to unified storage.",
+   "anchorCoversDefect": false,
+   "fixability": "local",
+   "contextSufficient": false,
+   "obligations": [
+    "Record the legacy DeleteCollection observation in the legacy duration metric.",
+    "Preserve its error flag, labels, and legacy start time.",
+    "Preserve the separate unified-storage observation."
+   ],
+   "exampleFix": null,
+   "notes": "A recorder substitution fixes the defect, but this item has no usable anchor."
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#snapi-01",
+   "defectStatement": "The asynchronous legacy Create, Update, Delete, and DeleteCollection calls discard their error details after recording a metric flag. Legacy replication failures therefore lose the diagnostic logging present before this change.",
+   "anchorCoversDefect": true,
+   "fixability": "needs-wider-change",
+   "contextSufficient": true,
+   "obligations": [
+    "Log non-nil legacy write errors for all four operations using a contextual logger.",
+    "Include the actual error and identify the failed legacy operation.",
+    "Preserve duration observations and asynchronous execution.",
+    "Keep legacy failures from replacing the unified-storage result returned to callers."
+   ],
+   "exampleFix": null,
+   "notes": "The anchor covers only Create. Adding logging there is a partial fix; the finding explicitly includes the other three goroutines, which the diff shows."
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#03",
+   "defectStatement": "Delete's successful unified-storage observation passes the object name as the kind label, producing per-object metric series and inconsistent labels between success and failure.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Use options.Kind for the successful Delete observation's kind label.",
+    "Preserve the storage recorder, success flag, mode, method, and start time."
+   ],
+   "exampleFix": "\td.recordStorageDuration(false, mode3Str, options.Kind, method, startStorage)",
+   "notes": "The complete fix fits in the cited line."
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#sncc-01",
+   "defectStatement": "Mode 3 Delete returns immediately when unified storage reports NotFound, skipping legacy deletion. Objects present only in legacy storage are consequently left behind.",
+   "anchorCoversDefect": true,
+   "fixability": "needs-wider-change",
+   "contextSufficient": true,
+   "obligations": [
+    "Attempt legacy deletion when unified deletion succeeds or reports Kubernetes NotFound.",
+    "Continue returning early for other unified-storage errors.",
+    "Preserve the unified-storage result, deletion flag, and error returned to callers.",
+    "Record the unified operation once without treating NotFound as a successful deletion."
+   ],
+   "exampleFix": null,
+   "notes": "Restoring apierrors.IsNotFound requires its removed import outside the anchor. Allowing NotFound to fall through also requires adjusting the unconditional success observation at line 106 to avoid incorrect or duplicate metrics."
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#06",
+   "defectStatement": "Legacy.Update receives the original objInfo, causing it to recompute the update against legacy's potentially stale object. It can therefore store a different result or fail after unified storage has successfully committed the update.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Supply the object returned by successful Storage.Update to the legacy update instead of recomputing it.",
+    "Preserve the original objInfo preconditions.",
+    "Preserve the remaining update arguments and the error variable consumed by duration recording."
+   ],
+   "exampleFix": "\t\t_, _, errObjectSt := d.Legacy.Update(ctx, name, &updateWrapper{\n\t\t\tupstream: objInfo,\n\t\t\tupdated:  res,\n\t\t}, createValidation, updateValidation, forceAllowCreate, options)",
+   "notes": "The diff shows the prior updateWrapper usage and field names; the window shows res. The existing wrapper returns the supplied object and delegates preconditions upstream."
+  }
+ ]
+}

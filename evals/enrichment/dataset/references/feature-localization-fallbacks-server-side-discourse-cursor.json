@@ -1,0 +1,33 @@
+{
+ "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+ "items": [
+  {
+   "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#06",
+   "defectStatement": "The translation accelerator caches results without including SiteSetting.default_locale, although fallback translations now depend on it. Cached text can therefore come from the wrong fallback locale after a default-locale change or when switching between sites with different defaults.",
+   "anchorCoversDefect": false,
+   "fixability": "needs-wider-change",
+   "contextSufficient": false,
+   "obligations": [
+    "Prevent cached translations from being reused across different site-default fallback locales.",
+    "Make default-locale changes affect subsequent translations without restarting the process.",
+    "Preserve the user-locale, site-default, English fallback order."
+   ],
+   "exampleFix": null,
+   "notes": "The anchor defines the intended fallback order; the defective cache lookup is in lib/freedom_patches/translate_accelerator.rb. Partitioning by default locale or reliable invalidation is valid; site identity alone does not handle default-locale changes. The frozen input omits the cache implementation."
+  },
+  {
+   "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#01",
+   "defectStatement": "Fallback catalogs are explicitly preloaded only by ApplicationController#set_locale, while the translation accelerator loads only the current locale. Jobs and mailers can consequently miss translations available in unloaded site-default or English catalogs.",
+   "anchorCoversDefect": false,
+   "fixability": "needs-wider-change",
+   "contextSufficient": false,
+   "obligations": [
+    "Make required fallback catalogs available to translations outside controller requests, including in a fresh worker.",
+    "Resolve fallbacks using the active site's default locale and the requested locale.",
+    "Preserve fallback order and working request-time translations."
+   ],
+   "exampleFix": null,
+   "notes": "The cited preload call is valid but cannot cover execution paths that never enter this controller. A fix requires shared translation/loading changes or coverage of non-request entry points, whose implementations are absent from the frozen input."
+  }
+ ]
+}

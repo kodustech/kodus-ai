@@ -1,0 +1,109 @@
+{
+ "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+ "items": [
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03",
+   "defectStatement": "In checkIfIsAvailable, a matching date override returns true before checking busy intervals. Consequently, an otherwise eligible override slot is reported available even when it overlaps an existing booking.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Reject override slots that overlap a busy interval.",
+    "Allow nonconflicting override slots even when they fall outside recurring working hours.",
+    "Allow slots that merely touch a busy interval at an endpoint.",
+    "Preserve the existing currentSeats exception and non-override path."
+   ],
+   "exampleFix": "  if (dateOverrideExist) {\n    return busy.every((busyTime) => {\n      const startTime = dayjs.utc(busyTime.start);\n      const endTime = dayjs.utc(busyTime.end);\n      return !slotStartTime.isBefore(endTime) || !slotEndTime.isAfter(startTime);\n    });\n  }",
+   "notes": "Deleting the early return alone is insufficient: it would subject overrides to recurring working hours. A local replacement can perform the busy check directly."
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "defectStatement": "The day-off check compares separately constructed Dayjs objects by reference, so it never detects equal override endpoints. Other bounds checks reject some slots anyway, but slots starting at or spanning the zero-length override timestamp can incorrectly remain available.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Compare override endpoints by timestamp value.",
+    "Make an equal-endpoint override on the matching day trigger the enclosing unavailable result.",
+    "Leave unequal-endpoint overrides subject to the existing bounds checks."
+   ],
+   "exampleFix": "        if (\n          dayjs(date.start)\n            .add(utcOffset, \"minutes\")\n            .isSame(dayjs(date.end).add(utcOffset, \"minutes\"))\n        ) {\n          return true;\n        }",
+   "notes": "Returning true here matches the find callback and causes the outer function to return false. Comparing Date.getTime() values is also valid."
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-03",
+   "defectStatement": "The dateOverrides.find callback rejects a slot when any matching-day override excludes it. With separate morning and afternoon overrides, an interval that does not contain the slot vetoes another interval that does.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Accept the override eligibility check when at least one matching-day interval contains the entire slot.",
+    "Reject slots in gaps or outside all matching-day override intervals.",
+    "Preserve dateOverrideExist so matching overrides supersede recurring working hours and unmatched days retain the normal path.",
+    "Do not treat a zero-length override as an available interval."
+   ],
+   "exampleFix": "  const matchingOverrides = dateOverrides\n    .map((date) => {\n      const utcOffset = organizerTimeZone ? dayjs.tz(date.start, organizerTimeZone).utcOffset() * -1 : 0;\n      return {\n        start: dayjs(date.start).add(utcOffset, \"minutes\"),\n        end: dayjs(date.end).add(utcOffset, \"minutes\"),\n      };\n    })\n    .filter((date) => date.start.format(\"YYYY MM DD\") === slotStartTime.format(\"YYYY MM DD\"));\n\n  dateOverrideExist = matchingOverrides.length > 0;\n\n  if (\n    dateOverrideExist &&\n    !matchingOverrides.some(\n      (date) =>\n        date.end.isAfter(date.start) &&\n        !slotStartTime.isBefore(date.start) &&\n        !slotEndTime.isAfter(date.end)\n    )\n  ) {\n    // slot is not within any date override\n    return false;\n  }",
+   "notes": "The later unconditional availability return is the separate #03 defect. This replacement preserves the existing timezone conversion and matching-day convention."
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "defectStatement": "The working-hours check calculates both bounds from slotStartTime, allowing events to extend beyond closing time. It also rejects a slot whenever any same-day interval excludes it, incorrectly eliminating availability on split schedules.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Use the actual slot end when checking the closing bound, without wrapping overnight ends back to early clock minutes.",
+    "Pass the working-hours check when any applicable interval contains the whole slot.",
+    "Reject slots outside every applicable interval when working hours are supplied.",
+    "Preserve busy-only checks when workingHours is omitted or empty, and continue checking busy intervals after containment succeeds."
+   ],
+   "exampleFix": "  if (\n    workingHours.length > 0 &&\n    !workingHours.some((workingHour) => {\n      if (!workingHour.days.includes(slotStartTime.day())) {\n        return false;\n      }\n      const start = slotStartTime.hour() * 60 + slotStartTime.minute();\n      const end = slotEndTime.diff(slotStartTime.startOf(\"day\"), \"minute\");\n      return start >= workingHour.startTime && end <= workingHour.endTime;\n    })\n  ) {\n    // slot is outside of working hours\n    return false;\n  }",
+   "notes": "The finding includes both defects, so correcting only the end calculation is incomplete. The empty-array guard preserves the reservation-conflict call shown in the diff, which supplies no workingHours."
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#04",
+   "defectStatement": "The working-hours check rejects a slot if any interval for its weekday excludes it. With disjoint morning and afternoon intervals, each valid slot is vetoed by the other interval.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Allow a slot contained in any applicable working-hours interval.",
+    "Reject slots in gaps or outside all applicable intervals when working hours are supplied.",
+    "Check containment using the actual slot end.",
+    "Preserve omitted or empty workingHours as a busy-only check and retain subsequent busy-time validation."
+   ],
+   "exampleFix": "  if (\n    workingHours.length > 0 &&\n    !workingHours.some((workingHour) => {\n      if (!workingHour.days.includes(slotStartTime.day())) {\n        return false;\n      }\n      const start = slotStartTime.hour() * 60 + slotStartTime.minute();\n      const end = slotEndTime.diff(slotStartTime.startOf(\"day\"), \"minute\");\n      return start >= workingHour.startTime && end <= workingHour.endTime;\n    })\n  ) {\n    // slot is outside of working hours\n    return false;\n  }",
+   "notes": "Shares its anchor with #01. Successful containment must fall through to busy checking rather than return true immediately."
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#06",
+   "defectStatement": "In getSlots, extracting only hour and minute from shifted override endpoints discards their calendar-day displacement. An active override crossing invitee midnight can therefore become an inverted range or generate slots on the original day instead of the shifted day.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Represent converted endpoints as minutes relative to the invitee calendar day's midnight, retaining negative values and values beyond 1440.",
+    "Preserve the existing organizer-to-invitee offset conversion without applying the invitee offset twice.",
+    "Preserve interval duration and ordering across midnight.",
+    "Preserve userIds and the returned timeframe structure."
+   ],
+   "exampleFix": "      const inviteeCalendarDayStart = dayjs.utc(startOfInviteeDay.format(\"YYYY-MM-DD\"));\n\n      return {\n        userIds: override.userId ? [override.userId] : [],\n        startTime: dayjs(override.start)\n          .utc()\n          .add(offset, \"minute\")\n          .diff(inviteeCalendarDayStart, \"minute\"),\n        endTime: dayjs(override.end)\n          .utc()\n          .add(offset, \"minute\")\n          .diff(inviteeCalendarDayStart, \"minute\"),\n      };",
+   "notes": "This fixes date loss for active overrides. The earlier start-only activeOverrides filter is a separate selection limitation. Override dates encode organizer wall time in UTC-shaped values, so the suggested direct .tz(timeZone).diff(...) is not an equivalent conversion."
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#05",
+   "defectStatement": "The override bounds check tests whether the slot is disjoint from the override instead of requiring full containment. Slots starting before the override, ending after it, or starting exactly at its end can therefore pass.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Reject a slot whose start precedes the converted override start.",
+    "Reject a slot whose end exceeds the converted override end.",
+    "Allow full containment with equality at either boundary.",
+    "Preserve callback rejection semantics and the closing brace outside the replacement range."
+   ],
+   "exampleFix": "        if (slotStartTime.isBefore(dayjs(date.start).add(utcOffset, \"minutes\"))) {\n          return true;\n        }\n        if (slotEndTime.isAfter(dayjs(date.end).add(utcOffset, \"minutes\"))) {\n          return true;",
+   "notes": "The cited range ends before the second if's closing brace; the replacement intentionally leaves that brace to existing line 125. Multiple-override aggregation remains the separate #oph-03 defect."
+  }
+ ]
+}

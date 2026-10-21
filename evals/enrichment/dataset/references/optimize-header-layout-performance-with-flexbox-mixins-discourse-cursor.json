@@ -1,0 +1,19 @@
+{
+ "caseId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+ "items": [
+  {
+   "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#01",
+   "defectStatement": "Making .contents a flex container leaves the header-extra-info component's outer div with min-width:auto. Its inner overflow constraint cannot make that flex item shrink, so long non-wrapping topic titles push the navigation panel outside the header instead of truncating.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Allow the outer header-extra-info flex item to shrink below its content's intrinsic width.",
+    "Preserve topic-title truncation and keep the navigation panel within the header when the other header controls fit.",
+    "Preserve the flex layout, vertical centering, and existing logo and panel sizing constraints."
+   ],
+   "exampleFix": "      @include flexbox();\n      @include align-items(center);\n\n      > div:not(.title):not(.panel) {\n        min-width: 0;\n      }",
+   "notes": "The replacement can add a nested direct-child rule inside .contents. The exclusion selector uses classes visible in the frozen input and reaches the component root; applying min-width:0 only to .extra-info-wrapper would not fix the defect."
+  }
+ ]
+}

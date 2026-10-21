@@ -1,0 +1,19 @@
+{
+ "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+ "items": [
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#03",
+   "defectStatement": "CredentialActionsDropdown deletes the calendar cache without invalidating viewer.calendars.connectedCalendars. When the optional parent callback does not refetch, the stale cache timestamp and delete action remain visible after successful deletion.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Invalidate viewer.calendars.connectedCalendars after successful cache deletion independently of the optional parent callback.",
+    "Preserve the success toast and optional onSuccess callback on successful deletion.",
+    "Preserve the error toast on deletion failure."
+   ],
+   "exampleFix": "  const deleteCacheMutation = trpc.viewer.calendars.deleteCache.useMutation({\n    onSuccess: () => {\n      showToast(t(\"cache_deleted_successfully\"), \"success\");\n      onSuccess?.();\n    },\n    onError: () => {\n      showToast(t(\"error_deleting_cache\"), \"error\");\n    },\n    async onSettled() {\n      await utils.viewer.calendars.connectedCalendars.invalidate();\n    },\n  });",
+   "notes": "Invalidation in onSuccess is also valid. The existing utils declaration below the anchor can be referenced by the deferred callback; it need not be moved or duplicated."
+  }
+ ]
+}

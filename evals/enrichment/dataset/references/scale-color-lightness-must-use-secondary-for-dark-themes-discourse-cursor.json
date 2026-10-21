@@ -1,0 +1,46 @@
+{
+ "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
+ "items": [
+  {
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "defectStatement": "In desktop/user.scss, `.group-member-info .name` now scales primary lightness by 50% instead of the original 30%, making names lighter in light themes. Its dark-theme branch also uses 50% rather than the intended complementary 70% secondary scaling.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Restore light-theme name color to primary scaled by 30% lightness.",
+    "Use secondary scaled by 70% lightness for dark-theme names.",
+    "Preserve surrounding layout and title styling."
+   ],
+   "exampleFix": "        color: dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%));",
+   "notes": "The single cited declaration contains the complete fix."
+  },
+  {
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+   "defectStatement": "In mobile/user.scss, `.group-member-info .name` now scales primary lightness by 50% instead of the original 30%, making names lighter in light themes. Its dark-theme branch uses 50% secondary scaling instead of the intended 70%.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Restore light-theme name color to primary scaled by 30% lightness.",
+    "Use secondary scaled by 70% lightness for dark-theme names.",
+    "Preserve surrounding layout, vertical alignment, and title styling."
+   ],
+   "exampleFix": "        color: dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%));",
+   "notes": "The single cited declaration contains the complete fix."
+  },
+  {
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "defectStatement": "The mobile .custom-message-length color reverses the intended lightness pair: light themes use 30% instead of the original 70%, making hint text too dark, while dark themes use 70% instead of 30% on $secondary.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Restore the light-theme color to $primary scaled to 70% lightness.",
+    "Use $secondary scaled to 30% lightness for the dark-theme color."
+   ],
+   "exampleFix": "  color: dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%));",
+   "notes": "Keep theme-aware selection; reverting to the original single color would lose the dark-theme correction."
+  }
+ ]
+}
