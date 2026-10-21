@@ -1,4 +1,5 @@
 import type { AgentSpec } from '@libs/agent-harness/domain/contracts/agent.contract';
+import type { RunState } from '@libs/agent-harness/domain/contracts/run-state.contract';
 import { finalText } from '@libs/agent-harness/domain/run-state.util';
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
@@ -358,20 +359,16 @@ export class IntentJudge {
                 },
                 ctx,
             );
+            const structured = options.submitResultTool
+                ? readValidationArtifact(state)
+                : undefined;
             // The runner returns a failed call as a state; read as text it is
-            // an empty answer and would pass for a parse error.
-            if (state.status === 'error') {
-                const failure = state.trace.find((e) => e.kind === 'error');
-                throw new Error(
-                    String(failure?.detail?.message ?? 'the model call failed'),
-                );
+            // an empty answer and would pass for a parse error. A run that
+            // already submitted its verdict keeps it.
+            if (state.status === 'error' && structured === undefined) {
+                throw new Error(providerFailure(state));
             }
-            return {
-                content: finalText(state),
-                structured: options.submitResultTool
-                    ? readValidationArtifact(state)
-                    : undefined,
-            };
+            return { content: finalText(state), structured };
         } finally {
             cleanup();
         }
@@ -411,4 +408,21 @@ function isParserFallback(result: ValidationResult): boolean {
             .toLowerCase()
             .includes(PARSER_FALLBACK_FRAGMENT)
     );
+}
+
+/**
+ * What the provider said when the call failed: its message, and the HTTP
+ * status and response body the runner recorded, so a 401 or 404 says why.
+ */
+function providerFailure(state: RunState): string {
+    const detail = state.trace.find((e) => e.kind === 'error')?.detail ?? {};
+    return [
+        String(detail.message ?? 'the model call failed'),
+        detail.status !== undefined ? `HTTP ${String(detail.status)}` : '',
+        typeof detail.responseBody === 'string'
+            ? detail.responseBody.slice(0, 300)
+            : '',
+    ]
+        .filter(Boolean)
+        .join(' — ');
 }

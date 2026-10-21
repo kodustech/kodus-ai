@@ -235,6 +235,22 @@ describe('analyzer run — submitValidation result tool', () => {
 
         expect(result.reason).toBe('analyzer_failure');
         expect(result.missingInfo).toContain('invalid x-api-key');
+        expect(result.missingInfo).toContain('HTTP 401');
+    });
+
+    it('keeps a verdict the analyzer submitted before its run failed', async () => {
+        jest.spyOn(AiSdkAgentRunner.prototype, 'run').mockResolvedValue({
+            ...runResult('', [
+                { type: VALIDATION_RESULT_TOOL, payload: verdict },
+            ]),
+            status: 'error',
+            trace: [{ kind: 'error', detail: { message: 'stream reset' } }],
+        });
+
+        const result = await makeJudge().judge(judgeInput);
+
+        expect(result.reason).not.toBe('analyzer_failure');
+        expect(result.status).toBe('compliant');
     });
 
     it('takes the last submission when the analyzer called the tool more than once', () => {

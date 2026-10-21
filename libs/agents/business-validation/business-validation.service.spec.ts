@@ -524,6 +524,38 @@ describe('BusinessValidationService · the log of a run', () => {
         );
     });
 
+    it('reads a parser fallback as no verdict, and a thin task as thin', async () => {
+        const task = { tracker: 'Linear', id: 'SAA-96', title: 'Notes' };
+        const judgeWith = (reason: string) => {
+            const s = service();
+            const warn = jest.spyOn((s as any).logger, 'warn');
+            return (s as any)
+                .judgeTask(
+                    request,
+                    DEFAULT_BUSINESS_LOGIC_SETTINGS,
+                    { task },
+                    'diff',
+                    [],
+                    'en-US',
+                    async () => ({
+                        judge: async () => ({ needsMoreInfo: true, reason }),
+                    }),
+                )
+                .then((outcome: unknown) => ({ outcome, warn }));
+        };
+
+        const fallback = await judgeWith('parser_fallback');
+        expect(fallback.outcome).toBeUndefined();
+        expect(fallback.warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.stringContaining('SAA-96 (parser_fallback)'),
+            }),
+        );
+
+        const thin = await judgeWith('task_context_weak');
+        expect(thin.outcome).toEqual({ thin: task });
+        expect(thin.warn).not.toHaveBeenCalled();
+    });
     it('carries each task verdict, by requirement state', () => {
         const s = service();
         const log = jest.spyOn((s as any).logger, 'log');

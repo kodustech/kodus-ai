@@ -80,6 +80,20 @@ describe('withRepositoryReader', () => {
         await expect(reader.readFile('src/filter.ts')).resolves.toBeUndefined();
     });
 
+    it('answers nothing, without throwing, when only reading the file fails', async () => {
+        const c = code();
+        c.getRepositoryContentFile.mockRejectedValue(new Error('500'));
+        const reader = withRepositoryReader(
+            { ...base, pullRequest: { number: 7, headRef: 'feat/x' } } as any,
+            c as any,
+        ).repositoryReader!;
+        await expect(reader.listFiles('filter')).resolves.toEqual([
+            'src/filter.ts',
+        ]);
+        await expect(reader.readFile('src/filter.ts')).resolves.toBeUndefined();
+        expect(c.getRepositoryContentFile).toHaveBeenCalledTimes(1);
+    });
+
     it('leaves a request with no PR (a local diff) without a reader', () => {
         expect(
             withRepositoryReader(base as any, code() as any).repositoryReader,

@@ -66,7 +66,7 @@ export function extractTaskReferences(
     for (const source of SOURCE_ORDER) {
         const text =
             source === 'body'
-                ? sources.body && withoutKodySummary(sources.body)
+                ? withoutKodySummary(sources.body ?? '')
                 : sources[source];
         if (!text?.trim()) {
             continue;

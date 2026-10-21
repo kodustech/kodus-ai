@@ -539,13 +539,11 @@ export class BusinessValidationService {
         });
 
         if (verdict.needsMoreInfo) {
-            if (
-                verdict.reason === 'analyzer_failure' ||
-                verdict.reason === 'parser_fallback'
-            ) {
+            const { reason } = verdict;
+            if (reason === 'analyzer_failure' || reason === 'parser_fallback') {
                 // The run only records `judge_failed`; the cause lives here.
                 this.logger.warn({
-                    message: `[BUSINESS-LOGIC] Could not judge ${found.task.id} (${verdict.reason})`,
+                    message: `[BUSINESS-LOGIC] Could not judge ${found.task.id} (${reason})`,
                     context: BusinessValidationService.name,
                     metadata: {
                         organizationId:
