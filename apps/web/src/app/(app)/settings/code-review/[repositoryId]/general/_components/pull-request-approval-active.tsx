@@ -1,8 +1,5 @@
 "use client";
 
-import { Button } from "@components/ui/button";
-import { CardHeader } from "@components/ui/card";
-import { Heading } from "@components/ui/heading";
 import { Switch } from "@components/ui/switch";
 import { Controller, useFormContext } from "react-hook-form";
 import { OverrideIndicatorForm } from "src/app/(app)/settings/code-review/_components/override";
@@ -17,32 +14,36 @@ export const PullRequestApprovalActive = () => {
             name="pullRequestApprovalActive.value"
             control={form.control}
             render={({ field }) => (
-                <Button
-                    size="sm"
-                    variant="helper"
-                    disabled={field.disabled}
-                    onClick={() => field.onChange(!field.value)}
-                    className="w-full">
-                    <CardHeader className="flex flex-row items-center justify-between gap-6">
-                        <div className="flex flex-col gap-1">
-                            <div className="flex flex-row items-center gap-2">
-                                <Heading variant="h3">
-                                    Enable Pull Request Approval
-                                </Heading>
-
-                                <OverrideIndicatorForm fieldName="pullRequestApprovalActive" />
-                            </div>
-
-                            <p className="text-text-secondary text-sm">
-                                When Kody completes an automated code review and
-                                finds no issues, it will automatically approve
-                                the Pull Request.
-                            </p>
+                <div className="border-card-lv3/60 flex flex-wrap items-start justify-between gap-4 border-b px-5 py-5 sm:px-6 sm:py-6">
+                    <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2.5">
+                            <h2 className="text-text-primary text-lg font-semibold tracking-tight">
+                                Automatic PR approval
+                            </h2>
+                            <span
+                                className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                                    field.value
+                                        ? "bg-primary-light/15 text-primary-light"
+                                        : "bg-card-lv3 text-text-secondary"
+                                }`}>
+                                {field.value ? "On" : "Off"}
+                            </span>
+                            <OverrideIndicatorForm fieldName="pullRequestApprovalActive" />
                         </div>
-
-                        <Switch decorative checked={field.value} />
-                    </CardHeader>
-                </Button>
+                        <p className="text-text-secondary mt-1.5 max-w-2xl text-sm leading-5">
+                            After a clean automated review, Kody approves a PR
+                            only when it passes the conditions below.
+                        </p>
+                    </div>
+                    <Switch
+                        id={field.name}
+                        aria-label="Automatic PR approval"
+                        checked={field.value ?? false}
+                        disabled={field.disabled}
+                        onCheckedChange={field.onChange}
+                        className="mt-0.5 shrink-0"
+                    />
+                </div>
             )}
         />
     );

@@ -34,8 +34,8 @@ import {
     useCodeReviewRouteParams,
     useCurrentConfigLevel,
 } from "../../../_hooks";
-import { AutomatedReviewActive } from "./_components/automated-review-active";
 import { ApprovalPolicySettings } from "./_components/approval-policy";
+import { AutomatedReviewActive } from "./_components/automated-review-active";
 import { BaseBranches } from "./_components/base-branches";
 import { BYOKModelSelectorSection } from "./_components/byok-model-selector";
 import { CentralizedConfigModal } from "./_components/centralized-config-modal";
@@ -250,7 +250,9 @@ export default function General() {
                 <div data-field-name="kodusConfigFileOverridesWebPreferences">
                     <KodusConfigFileOverridesWebPreferences />
                 </div>
-                <div data-field-name="pullRequestApprovalActive">
+                <div
+                    data-field-name="pullRequestApprovalActive"
+                    className="border-card-lv3/60 bg-card-lv1 overflow-hidden rounded-xl border">
                     <PullRequestApprovalActive />
                     <ApprovalPolicySettings />
                 </div>
