@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import axios, { AxiosResponse } from 'axios';
 import { createHash, randomBytes } from 'crypto';
 
@@ -48,6 +49,8 @@ export function authorizationServerMetadataUrls(issuer: string): string[] {
     return urls;
 }
 
+const logger = new Logger('OAuthDiscovery');
+
 export async function discoverOAuth(baseUrl: string) {
     let rsMetadataUrl = buildWellKnownUrl(baseUrl, 'oauth-protected-resource');
     let rsResp = await axios.get<OAuthProtectedResourceMetadata>(
@@ -57,8 +60,8 @@ export async function discoverOAuth(baseUrl: string) {
         },
     );
     if (rsResp.status >= 400) {
-        console.error(
-            `Error accessing ${rsMetadataUrl}, code: ${rsResp.status}, attempting with root url`,
+        logger.warn(
+            `Error accessing ${rsMetadataUrl}, status: ${rsResp.status}, attempting with root url`,
         );
 
         rsMetadataUrl = buildWellKnownUrl(
@@ -71,8 +74,8 @@ export async function discoverOAuth(baseUrl: string) {
         });
 
         if (rsResp.status >= 400) {
-            console.error(
-                `Error accessing ${rsMetadataUrl}, code: ${rsResp.status}, attempting to proceed without`,
+            logger.warn(
+                `Error accessing ${rsMetadataUrl}, status: ${rsResp.status}, attempting to proceed without`,
             );
         }
     }
@@ -106,7 +109,9 @@ export async function discoverOAuth(baseUrl: string) {
             asResp = resp;
             break;
         }
-        console.error(`Error accessing ${url}, status: ${resp.status}`);
+        logger.error(
+            `Error accessing authorization server metadata at ${url}, status: ${resp.status}`,
+        );
     }
     if (!asResp) {
         throw new Error('Failed to fetch authorization server metadata');
@@ -399,11 +404,12 @@ export interface TokenData {
  * Never the request, which carries the code and the client secret.
  */
 function errorBody(response: AxiosResponse): Record<string, unknown> {
-    if (typeof response.data !== 'string') {
-        return response.data || {};
+    const raw: unknown = response.data;
+    if (typeof raw !== 'string') {
+        return (raw as Record<string, unknown>) || {};
     }
     try {
-        return JSON.parse(response.data);
+        return JSON.parse(raw);
     } catch {
         return {};
     }
