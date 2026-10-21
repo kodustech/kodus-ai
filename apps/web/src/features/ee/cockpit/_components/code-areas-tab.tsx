@@ -413,10 +413,10 @@ export function CodeAreasTab({
                                         <span className="text-text-tertiary pointer-events-none absolute top-4 right-4 text-right text-[11px]">
                                             More fixes · more changes
                                         </span>
-                                        <span className="text-text-tertiary pointer-events-none absolute bottom-4 left-4 text-[11px]">
+                                        <span className="text-text-tertiary pointer-events-none absolute top-[53%] left-4 text-[11px]">
                                             Fewer fixes · fewer changes
                                         </span>
-                                        <span className="text-text-tertiary pointer-events-none absolute right-4 bottom-4 text-right text-[11px]">
+                                        <span className="text-text-tertiary pointer-events-none absolute top-[53%] right-4 text-right text-[11px]">
                                             Fewer fixes · more changes
                                         </span>
                                         {plottedAreas.map((group) => {
@@ -433,7 +433,7 @@ export function CodeAreasTab({
                                                     onClick={() =>
                                                         selectPoint(group)
                                                     }
-                                                    aria-label={`${group.length} ${group.length === 1 ? "directory" : "directories"}: ${group.map((item) => item.path).join(", ")}; ${area.changedPrs} changed PRs, ${area.linkedBugFixPrs} linked bug-fix PRs`}
+                                                    aria-label={`${group.length} ${group.length === 1 ? "directory" : "directories"}: ${group.map((item) => item.path).join(", ")}; ${area.changedPrs} changed PRs, ${area.linkedBugFixPrs} ${area.linkedBugFixPrs === 1 ? "PR" : "PRs"} linked to bug issues`}
                                                     aria-pressed={selected}
                                                     title={group
                                                         .map(
