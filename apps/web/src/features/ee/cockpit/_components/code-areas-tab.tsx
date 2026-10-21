@@ -109,9 +109,9 @@ function AreaChoice({
             onClick={onSelect}
             aria-pressed={selected}
             className={
-                "border-card-lv3 focus-visible:ring-primary-light hover:border-primary-light/60 w-full min-w-0 rounded-md border px-3 py-2.5 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none " +
+                "border-card-lv3 focus-visible:ring-primary-light hover:border-text-secondary/50 w-full min-w-0 rounded-md border px-3 py-2.5 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none " +
                 (selected
-                    ? "border-primary-light/70 bg-primary-light/10"
+                    ? "border-text-secondary/60 bg-card-lv3/70"
                     : "bg-card-lv2/60")
             }>
             <span
