@@ -1,0 +1,186 @@
+/** Isolated, explicit Cockpit fixture for manual preview QA. */
+import 'dotenv/config';
+
+const { Client } = require('pg');
+
+import { buildCodeAreaRiskMap } from '../../libs/platformData/domain/code-area-risk/build-area-risk-map';
+import { mongoMigrationClient } from '../../libs/core/infrastructure/database/mongo/mongo-migration-client';
+
+const repositoryId = 'preview-code-area-demo';
+const api = (
+    process.env.PREVIEW_SEED_API_URL ?? 'http://localhost:3001'
+).replace(/\/+$/, '');
+
+async function main(): Promise<void> {
+    const password = process.env.PREVIEW_SEED_PASSWORD;
+    if (!password) throw new Error('PREVIEW_SEED_PASSWORD is required');
+
+    const login = await fetch(`${api}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            email: process.env.PREVIEW_SEED_EMAIL ?? 'preview@kodus.io',
+            password,
+        }),
+    });
+    if (!login.ok) throw new Error(`preview login returned ${login.status}`);
+    const loginBody = (await login.json()) as {
+        data?: { accessToken?: string };
+        accessToken?: string;
+    };
+    const token = loginBody.data?.accessToken ?? loginBody.accessToken;
+    if (!token) throw new Error('preview login has no token');
+    const claims = JSON.parse(
+        Buffer.from(token.split('.')[1], 'base64url').toString('utf8'),
+    ) as {
+        organizationId?: string;
+    };
+    if (!claims.organizationId)
+        throw new Error('preview token has no organization');
+
+    const teamsResponse = await fetch(`${api}/team`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!teamsResponse.ok)
+        throw new Error(`GET /team returned ${teamsResponse.status}`);
+    const teamsBody = (await teamsResponse.json()) as {
+        data?: Array<{ uuid: string }> | { uuid: string };
+    };
+    const teams = teamsBody.data ?? teamsBody;
+    const teamId = Array.isArray(teams) ? teams[0]?.uuid : teams.uuid;
+    if (!teamId) throw new Error('preview has no team');
+
+    const postgres = new Client({
+        host: process.env.API_PG_DB_HOST,
+        port: Number(process.env.API_PG_DB_PORT ?? 5432),
+        user: process.env.API_PG_DB_USERNAME,
+        password: process.env.API_PG_DB_PASSWORD,
+        database: process.env.API_PG_DB_DATABASE,
+    });
+    await postgres.connect();
+    try {
+        await postgres.query('BEGIN');
+        const existing = await postgres.query(
+            `SELECT uuid FROM integration_configs
+             WHERE team_id = $1 AND "configKey" = 'repositories'
+               AND "configValue" @> $2::jsonb LIMIT 1`,
+            [teamId, JSON.stringify([{ id: repositoryId }])],
+        );
+        if (!existing.rowCount) {
+            const integration = await postgres.query(
+                `INSERT INTO integrations (status, platform, "integrationCategory", organization_id, team_id)
+                 VALUES (false, 'INTERNAL', 'CODE_MANAGEMENT', $1, $2) RETURNING uuid`,
+                [claims.organizationId, teamId],
+            );
+            await postgres.query(
+                `INSERT INTO integration_configs ("configKey", "configValue", integration_id, team_id)
+                 VALUES ('repositories', $1::jsonb, $2, $3)`,
+                [
+                    JSON.stringify([
+                        {
+                            id: repositoryId,
+                            name: 'code-area-demo (sample data)',
+                            full_name: 'preview/code-area-demo (sample data)',
+                        },
+                    ]),
+                    integration.rows[0].uuid,
+                    teamId,
+                ],
+            );
+        }
+        await postgres.query('COMMIT');
+    } catch (error) {
+        await postgres.query('ROLLBACK');
+        throw error;
+    } finally {
+        await postgres.end();
+    }
+
+    const now = Date.now();
+    const pullRequests = [
+        {
+            number: 101,
+            title: 'Fix auth session regression',
+            files: ['src/auth/session.ts'],
+            linkedBugIssues: ['https://example.invalid/issues/101'],
+        },
+        {
+            number: 102,
+            title: 'Update billing checkout',
+            files: ['src/billing/checkout.ts'],
+            linkedBugIssues: [],
+        },
+        {
+            number: 103,
+            title: 'Fix billing invoice bug',
+            files: ['src/billing/invoice.ts'],
+            linkedBugIssues: ['https://example.invalid/issues/103'],
+        },
+        {
+            number: 104,
+            title: 'Improve auth token refresh',
+            files: ['src/auth/token.ts'],
+            linkedBugIssues: [],
+        },
+    ].map((pr, index) => ({
+        ...pr,
+        url: `https://example.invalid/pull/${pr.number}`,
+        mergedAt: new Date(now - (index + 1) * 86400000).toISOString(),
+        filesComplete: true,
+    }));
+    const snapshot = buildCodeAreaRiskMap({
+        source: 'preview-demo',
+        windowStart: new Date(now - 30 * 86400000).toISOString(),
+        windowEnd: new Date(now).toISOString(),
+        refreshedAt: new Date(now).toISOString(),
+        discoveredMergedPrs: pullRequests.length,
+        scanComplete: true,
+        pullRequests,
+    });
+    const mongo = await mongoMigrationClient();
+    try {
+        await mongo.db
+            .collection('codeAreaRiskMaps')
+            .updateOne(
+                { organizationId: claims.organizationId, repositoryId },
+                { $set: { snapshot } },
+                { upsert: true },
+            );
+    } finally {
+        await mongo.close();
+    }
+    const headers = { Authorization: `Bearer ${token}` };
+    const selected = await fetch(
+        `${api}/code-management/repositories/selected?teamId=${teamId}`,
+        { headers },
+    );
+    if (!selected.ok) {
+        throw new Error(`selected repositories returned ${selected.status}`);
+    }
+    const selectedBody = (await selected.json()) as
+        { data: Array<{ id: string }> } | Array<{ id: string }>;
+    const repositories = Array.isArray(selectedBody)
+        ? selectedBody
+        : selectedBody.data;
+    if (!repositories?.some((repo) => repo.id === repositoryId)) {
+        throw new Error('Cockpit demo repository is not visible through API');
+    }
+    const map = await fetch(
+        `${api}/code-management/area-risk-map?repositoryId=${repositoryId}`,
+        { headers },
+    );
+    if (!map.ok) throw new Error(`area map returned ${map.status}`);
+    const mapBody = (await map.json()) as {
+        data?: { topAreas?: Array<{ path: string }> };
+        topAreas?: Array<{ path: string }>;
+    };
+    if (!(mapBody.data ?? mapBody).topAreas?.length) {
+        throw new Error('Cockpit demo area map has no ranked areas');
+    }
+    console.log('seed:preview: Cockpit demo repository and area map available');
+}
+
+main().catch((error) => {
+    console.error(`seed:preview: Cockpit demo failed: ${error.message}`);
+    process.exitCode = 1;
+});

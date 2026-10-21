@@ -397,6 +397,10 @@ jobs:
                   for profile in $PROFILES; do
                     $RUNO exec --branch "$HEAD_REF" --profile "$profile" -- \
                       "docker exec kodus_api pnpm run smoke:preview:approval-map"
+                    if [ "$profile" = cloud ]; then
+                      $RUNO exec --branch "$HEAD_REF" --profile "$profile" -- \
+                        "docker exec kodus_api pnpm run seed:preview:cockpit-demo"
+                    fi
                     $RUNO exec --branch "$HEAD_REF" --profile "$profile" -- \
                       "node evals/wiring-smoke.js --only=approval-risk"
                   done
