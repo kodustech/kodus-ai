@@ -211,7 +211,29 @@ export function CodeAreasTab({
         (max, area) => Math.max(max, area.linkedBugFixPrs),
         1,
     );
+    const focusAreas = [...areas]
+        .filter((area) => area.linkedBugFixPrs > 0)
+        .sort(
+            (a, b) =>
+                b.linkedBugFixPrs - a.linkedBugFixPrs ||
+                b.changedPrs - a.changedPrs ||
+                a.path.localeCompare(b.path),
+        )
+        .slice(0, 3);
     const coverage = data?.map?.coverage;
+
+    const inspectArea = (path: string) => {
+        setQuery("");
+        setSelectedPath(path);
+        requestAnimationFrame(() => {
+            document
+                .getElementById(`area-row-${encodeURIComponent(path)}`)
+                ?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "center",
+                });
+        });
+    };
 
     return (
         <div className="flex min-w-0 flex-col gap-5 pb-8">
@@ -306,6 +328,11 @@ export function CodeAreasTab({
                             <span className="text-text-primary font-medium tabular-nums">
                                 {coverage?.scannedPrs ?? 0} merged PRs scanned
                             </span>
+                            {!coverage?.scanComplete && (
+                                <span className="text-primary-light text-xs font-medium">
+                                    Scan in progress
+                                </span>
+                            )}
                             <span className="text-text-secondary tabular-nums">
                                 {areas.length} directories
                             </span>
@@ -319,6 +346,60 @@ export function CodeAreasTab({
                                 {date(data.map.windowEnd)}
                             </span>
                         </div>
+                        {focusAreas.length > 0 && (
+                            <div className="border-card-lv3/70 bg-primary-light/5 border-b px-5 py-6">
+                                <div className="mb-5">
+                                    <p className="text-primary-light text-xs font-semibold tracking-wide uppercase">
+                                        Review focus
+                                    </p>
+                                    <h3 className="text-text-primary mt-1 text-lg font-semibold">
+                                        Start here when a PR touches these areas
+                                    </h3>
+                                    <p className="text-text-secondary mt-1 text-sm">
+                                        These directories have the most PRs
+                                        linked to bug issues in this history
+                                        window.
+                                    </p>
+                                </div>
+                                <div className="grid gap-0 md:grid-cols-3">
+                                    {focusAreas.map((area, index) => (
+                                        <button
+                                            key={area.path}
+                                            type="button"
+                                            onClick={() =>
+                                                inspectArea(area.path)
+                                            }
+                                            className="border-card-lv3/70 focus-visible:ring-primary-light hover:bg-primary-light/10 min-w-0 border-t py-4 text-left focus-visible:ring-2 focus-visible:outline-none md:border-t-0 md:border-l md:px-5 md:first:border-l-0 md:first:pl-0">
+                                            <span className="text-text-tertiary text-xs font-medium tabular-nums">
+                                                {String(index + 1).padStart(
+                                                    2,
+                                                    "0",
+                                                )}
+                                            </span>
+                                            <span
+                                                className="text-text-primary mt-2 block truncate font-mono text-sm font-semibold"
+                                                title={area.path}>
+                                                {area.path}
+                                            </span>
+                                            <span className="mt-3 flex items-baseline gap-2">
+                                                <span className="text-primary-light text-3xl font-semibold tabular-nums">
+                                                    {area.linkedBugFixPrs}
+                                                </span>
+                                                <span className="text-text-secondary text-sm">
+                                                    linked fixes ·{" "}
+                                                    {area.changedPrs} changed
+                                                    PRs
+                                                </span>
+                                            </span>
+                                            <span className="text-primary-light mt-3 inline-flex items-center gap-1 text-sm font-medium">
+                                                Inspect evidence{" "}
+                                                <ChevronDown className="size-3.5" />
+                                            </span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                         <div className="flex flex-wrap items-end justify-between gap-4 px-5 pt-6 pb-5">
                             <div>
                                 <h3 className="text-text-primary text-lg font-semibold">
@@ -376,7 +457,9 @@ export function CodeAreasTab({
                                 {filteredAreas.map((area) => {
                                     const selected = selectedPath === area.path;
                                     return (
-                                        <div key={area.path}>
+                                        <div
+                                            key={area.path}
+                                            id={`area-row-${encodeURIComponent(area.path)}`}>
                                             <button
                                                 type="button"
                                                 onClick={() =>
