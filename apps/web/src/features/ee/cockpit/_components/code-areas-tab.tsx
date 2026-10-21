@@ -81,11 +81,11 @@ function SummaryStat({
 }) {
     return (
         <div className="border-card-lv3/70 min-w-0 border-b px-5 py-4 last:border-b-0 sm:border-r sm:border-b-0 sm:last:border-r-0">
-            <p className="text-text-tertiary text-xs">{label}</p>
+            <p className="text-text-tertiary text-sm">{label}</p>
             <p className="text-text-primary mt-2 text-2xl font-semibold tabular-nums">
                 {value}
             </p>
-            <p className="text-text-tertiary mt-1 text-xs">{detail}</p>
+            <p className="text-text-tertiary mt-1 text-sm">{detail}</p>
         </div>
     );
 }
@@ -109,7 +109,7 @@ function EvidenceList({ evidence }: { evidence: AreaEvidence[] }) {
                         <p className="text-text-primary text-sm font-medium">
                             PR #{item.prNumber}
                         </p>
-                        <p className="text-text-tertiary mt-0.5 text-xs">
+                        <p className="text-text-tertiary mt-0.5 text-sm">
                             {item.bugFixEvidence === "linked-bug-issue"
                                 ? "Linked bug issue"
                                 : item.bugFixEvidence === "title-signal"
@@ -126,7 +126,7 @@ function EvidenceList({ evidence }: { evidence: AreaEvidence[] }) {
                                             href={url}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="text-primary-light focus-visible:ring-primary-light inline-flex items-center gap-1 rounded text-xs hover:underline focus-visible:ring-2">
+                                            className="text-primary-light focus-visible:ring-primary-light inline-flex items-center gap-1 rounded text-sm hover:underline focus-visible:ring-2">
                                             {issueLabel(url, index)}
                                             <ArrowUpRight className="size-3" />
                                         </a>
@@ -163,6 +163,7 @@ export function CodeAreasTab({
     const [localRepositoryId, setLocalRepositoryId] = useState("");
     const [query, setQuery] = useState("");
     const [selectedPath, setSelectedPath] = useState("");
+    const [expandedQuadrant, setExpandedQuadrant] = useState("");
 
     const globalRepository = selectedRepository
         ? repositories.find(
@@ -226,23 +227,50 @@ export function CodeAreasTab({
         (max, area) => Math.max(max, area.linkedBugFixPrs),
         1,
     );
-    const plottedAreas = useMemo(() => {
-        const groups = new Map<string, CodeArea[]>();
-        for (const area of filteredAreas) {
-            const key = `${area.changedPrs}:${area.linkedBugFixPrs}`;
-            groups.set(key, [...(groups.get(key) ?? []), area]);
-        }
-        return [...groups.values()];
-    }, [filteredAreas]);
-    const activePoint = plottedAreas.find((group) =>
-        group.some((area) => area.path === activeArea?.path),
-    );
-    const selectPoint = (group: CodeArea[]) => {
-        const selectedIndex = group.findIndex(
-            (area) => area.path === activeArea?.path,
-        );
-        setSelectedPath(group[(selectedIndex + 1) % group.length].path);
-    };
+    const changeBoundary = Math.floor(maxChanges / 2);
+    const fixBoundary = Math.floor(maxLinkedFixes / 2);
+    const quadrants = [
+        {
+            id: "more-fixes-fewer-changes",
+            title: "More linked fixes · fewer changes",
+            rule: `Up to ${changeBoundary} changed PRs · over ${fixBoundary} linked fixes`,
+            areas: filteredAreas.filter(
+                (area) =>
+                    area.changedPrs <= changeBoundary &&
+                    area.linkedBugFixPrs > fixBoundary,
+            ),
+        },
+        {
+            id: "more-fixes-more-changes",
+            title: "More linked fixes · more changes",
+            rule: `Over ${changeBoundary} changed PRs · over ${fixBoundary} linked fixes`,
+            areas: filteredAreas.filter(
+                (area) =>
+                    area.changedPrs > changeBoundary &&
+                    area.linkedBugFixPrs > fixBoundary,
+            ),
+        },
+        {
+            id: "fewer-fixes-fewer-changes",
+            title: "Fewer linked fixes · fewer changes",
+            rule: `Up to ${changeBoundary} changed PRs · up to ${fixBoundary} linked fixes`,
+            areas: filteredAreas.filter(
+                (area) =>
+                    area.changedPrs <= changeBoundary &&
+                    area.linkedBugFixPrs <= fixBoundary,
+            ),
+        },
+        {
+            id: "fewer-fixes-more-changes",
+            title: "Fewer linked fixes · more changes",
+            rule: `Over ${changeBoundary} changed PRs · up to ${fixBoundary} linked fixes`,
+            areas: filteredAreas.filter(
+                (area) =>
+                    area.changedPrs > changeBoundary &&
+                    area.linkedBugFixPrs <= fixBoundary,
+            ),
+        },
+    ];
     const coverage = data?.map?.coverage;
 
     return (
@@ -369,14 +397,12 @@ export function CodeAreasTab({
                             <div className="border-card-lv3/70 flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4">
                                 <div>
                                     <h2 className="text-text-primary text-sm font-semibold">
-                                        Changes and linked bug fixes
+                                        Where changes and bug fixes happened
                                     </h2>
-                                    <p className="text-text-secondary mt-1 max-w-lg text-xs leading-5">
-                                        Each point is a directory. Further right
-                                        means more merged PRs changed it; higher
-                                        means more PRs linked to bug issues.
-                                        Select a point to see the PRs and
-                                        issues.
+                                    <p className="text-text-secondary mt-1 max-w-lg text-sm leading-5">
+                                        Four groups compare activity in this
+                                        repository. Select a directory to see
+                                        its PRs and linked issues.
                                     </p>
                                 </div>
                                 <label className="border-card-lv3/70 text-text-tertiary flex h-9 w-full items-center gap-2 rounded-md border px-3 sm:w-52">
@@ -388,86 +414,127 @@ export function CodeAreasTab({
                                         }
                                         placeholder="Find a directory"
                                         aria-label="Find a directory"
-                                        className="text-text-primary placeholder:text-text-tertiary w-full min-w-0 bg-transparent text-xs outline-none"
+                                        className="text-text-primary placeholder:text-text-tertiary w-full min-w-0 bg-transparent text-sm outline-none"
                                     />
                                 </label>
                             </div>
                             {filteredAreas.length ? (
-                                <div className="px-4 pt-5 pb-4 sm:px-6">
-                                    <div className="text-text-tertiary mb-2 flex justify-between text-[11px]">
-                                        <span>PRs linked to bug issues ↑</span>
-                                        <span>{maxLinkedFixes} at most</span>
-                                    </div>
-                                    <div className="border-card-lv3/70 bg-card-lv2/30 relative h-[360px] overflow-hidden rounded-md border sm:h-[420px]">
-                                        <div
-                                            className="border-card-lv3/70 pointer-events-none absolute inset-y-0 border-l border-dashed"
-                                            style={{ left: "47.5%" }}
-                                        />
-                                        <div
-                                            className="border-card-lv3/70 pointer-events-none absolute inset-x-0 border-t border-dashed"
-                                            style={{ bottom: "46%" }}
-                                        />
-                                        <span className="text-text-tertiary pointer-events-none absolute top-4 left-4 text-[11px]">
-                                            More fixes · fewer changes
-                                        </span>
-                                        <span className="text-text-tertiary pointer-events-none absolute top-4 right-4 text-right text-[11px]">
-                                            More fixes · more changes
-                                        </span>
-                                        <span className="text-text-tertiary pointer-events-none absolute top-[53%] left-4 text-[11px]">
-                                            Fewer fixes · fewer changes
-                                        </span>
-                                        <span className="text-text-tertiary pointer-events-none absolute top-[53%] right-4 text-right text-[11px]">
-                                            Fewer fixes · more changes
-                                        </span>
-                                        {plottedAreas.map((group) => {
-                                            const area = group[0];
-                                            const selected = group.some(
-                                                (item) =>
-                                                    item.path ===
-                                                    activeArea?.path,
-                                            );
+                                <div className="p-4 sm:p-5">
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                        {quadrants.map((quadrant) => {
+                                            const expanded =
+                                                expandedQuadrant ===
+                                                quadrant.id;
+                                            const visibleAreas =
+                                                query.trim() || expanded
+                                                    ? quadrant.areas
+                                                    : quadrant.areas.slice(
+                                                          0,
+                                                          4,
+                                                      );
+                                            const remaining =
+                                                quadrant.areas.length -
+                                                visibleAreas.length;
                                             return (
-                                                <button
-                                                    key={`${area.changedPrs}:${area.linkedBugFixPrs}`}
-                                                    type="button"
-                                                    onClick={() =>
-                                                        selectPoint(group)
-                                                    }
-                                                    aria-label={`${group.length} ${group.length === 1 ? "directory" : "directories"}: ${group.map((item) => item.path).join(", ")}; ${area.changedPrs} changed PRs, ${area.linkedBugFixPrs} ${area.linkedBugFixPrs === 1 ? "PR" : "PRs"} linked to bug issues`}
-                                                    aria-pressed={selected}
-                                                    title={group
-                                                        .map(
-                                                            (item) => item.path,
-                                                        )
-                                                        .join(", ")}
-                                                    className="focus-visible:ring-primary-light absolute z-10 flex size-8 -translate-x-1/2 translate-y-1/2 items-center justify-center rounded-full focus-visible:ring-2 focus-visible:outline-none"
-                                                    style={{
-                                                        left: `${5 + (area.changedPrs / maxChanges) * 85}%`,
-                                                        bottom: `${8 + (area.linkedBugFixPrs / maxLinkedFixes) * 76}%`,
-                                                    }}>
-                                                    <span
-                                                        className={`bg-primary-light flex items-center justify-center rounded-full text-[11px] font-semibold text-black tabular-nums ${group.length > 1 ? "size-6" : selected ? "ring-primary-light/20 size-4 ring-4" : "size-3 opacity-80"}`}>
-                                                        {group.length > 1
-                                                            ? group.length
-                                                            : null}
-                                                    </span>
-                                                </button>
+                                                <div
+                                                    key={quadrant.id}
+                                                    className={`min-w-0 rounded-md border p-4 ${quadrant.id === "more-fixes-more-changes" ? "border-primary-light/50 bg-primary-light/5" : "border-card-lv3/70 bg-card-lv2/30"}`}>
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div>
+                                                            <h3 className="text-text-primary text-sm leading-5 font-semibold">
+                                                                {quadrant.title}
+                                                            </h3>
+                                                            <p className="text-text-secondary mt-1 text-sm leading-5">
+                                                                {quadrant.rule}
+                                                            </p>
+                                                        </div>
+                                                        <span className="text-text-primary text-xl font-semibold tabular-nums">
+                                                            {
+                                                                quadrant.areas
+                                                                    .length
+                                                            }
+                                                        </span>
+                                                    </div>
+                                                    {visibleAreas.length ? (
+                                                        <div className="mt-4 space-y-1.5">
+                                                            {visibleAreas.map(
+                                                                (area) => (
+                                                                    <button
+                                                                        key={
+                                                                            area.path
+                                                                        }
+                                                                        type="button"
+                                                                        onClick={() =>
+                                                                            setSelectedPath(
+                                                                                area.path,
+                                                                            )
+                                                                        }
+                                                                        aria-pressed={
+                                                                            area.path ===
+                                                                            activeArea?.path
+                                                                        }
+                                                                        className={`focus-visible:ring-primary-light w-full rounded-md border px-3 py-2.5 text-left focus-visible:ring-2 focus-visible:outline-none ${area.path === activeArea?.path ? "border-primary-light bg-primary-light/10" : "border-card-lv3/70 hover:bg-card-lv3/40"}`}>
+                                                                        <span className="text-text-primary block font-mono text-sm leading-5 break-all">
+                                                                            {
+                                                                                area.path
+                                                                            }
+                                                                        </span>
+                                                                        <span className="text-text-secondary mt-1 block text-sm tabular-nums">
+                                                                            {
+                                                                                area.changedPrs
+                                                                            }{" "}
+                                                                            changed
+                                                                            PRs
+                                                                            ·{" "}
+                                                                            {
+                                                                                area.linkedBugFixPrs
+                                                                            }{" "}
+                                                                            linked
+                                                                            fixes
+                                                                        </span>
+                                                                    </button>
+                                                                ),
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <p className="text-text-tertiary mt-5 text-sm">
+                                                            No directories in
+                                                            this group.
+                                                        </p>
+                                                    )}
+                                                    {!query.trim() &&
+                                                        remaining > 0 && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    setExpandedQuadrant(
+                                                                        quadrant.id,
+                                                                    )
+                                                                }
+                                                                className="text-primary-light focus-visible:ring-primary-light mt-3 rounded text-sm font-medium hover:underline focus-visible:ring-2">
+                                                                Show {remaining}{" "}
+                                                                more
+                                                            </button>
+                                                        )}
+                                                    {!query.trim() &&
+                                                        expanded &&
+                                                        quadrant.areas.length >
+                                                            4 && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    setExpandedQuadrant(
+                                                                        "",
+                                                                    )
+                                                                }
+                                                                className="text-primary-light focus-visible:ring-primary-light mt-3 rounded text-sm font-medium hover:underline focus-visible:ring-2">
+                                                                Show fewer
+                                                            </button>
+                                                        )}
+                                                </div>
                                             );
                                         })}
                                     </div>
-                                    <div className="text-text-tertiary mt-2 flex justify-between text-[11px]">
-                                        <span>0</span>
-                                        <span>
-                                            Merged PRs that changed it →{" "}
-                                            {maxChanges} at most
-                                        </span>
-                                    </div>
-                                    <p className="text-text-tertiary mt-3 text-xs">
-                                        Dashed lines mark half the largest count
-                                        on each axis, not a risk threshold. A
-                                        numbered point groups directories with
-                                        the same counts.
-                                    </p>
                                 </div>
                             ) : (
                                 <p className="text-text-secondary px-5 py-12 text-sm">
@@ -484,31 +551,10 @@ export function CodeAreasTab({
                                     <p className="text-text-tertiary text-xs font-medium tracking-wide uppercase">
                                         Area detail
                                     </p>
-                                    <h2 className="text-text-primary mt-2 font-mono text-base font-medium break-all">
+                                    <h2 className="text-text-primary mt-2 font-mono text-lg font-medium break-all">
                                         {activeArea.path}
                                     </h2>
-                                    {activePoint && activePoint.length > 1 && (
-                                        <div className="mt-3 flex flex-wrap gap-1.5">
-                                            {activePoint.map((area) => (
-                                                <button
-                                                    key={area.path}
-                                                    type="button"
-                                                    onClick={() =>
-                                                        setSelectedPath(
-                                                            area.path,
-                                                        )
-                                                    }
-                                                    aria-pressed={
-                                                        area.path ===
-                                                        activeArea.path
-                                                    }
-                                                    className={`focus-visible:ring-primary-light rounded border px-2 py-1 font-mono text-[11px] focus-visible:ring-2 ${area.path === activeArea.path ? "border-primary-light text-text-primary" : "border-card-lv3 text-text-tertiary hover:text-text-primary"}`}>
-                                                    {area.path}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                    <div className="border-card-lv3/70 mt-5 grid grid-cols-3 gap-2 border-y py-4">
+                                    <div className="border-card-lv3/70 mt-5 grid grid-cols-2 gap-2 border-y py-4">
                                         {[
                                             [
                                                 "Changed PRs",
@@ -518,22 +564,18 @@ export function CodeAreasTab({
                                                 "Linked bug-fix PRs",
                                                 activeArea.linkedBugFixPrs,
                                             ],
-                                            [
-                                                "Title signals",
-                                                activeArea.titleBugFixPrs,
-                                            ],
                                         ].map(([label, value]) => (
                                             <div key={label}>
                                                 <p className="text-text-primary text-lg font-semibold tabular-nums">
                                                     {value}
                                                 </p>
-                                                <p className="text-text-tertiary text-[11px]">
+                                                <p className="text-text-tertiary text-xs">
                                                     {label}
                                                 </p>
                                             </div>
                                         ))}
                                     </div>
-                                    <h3 className="text-text-primary mt-5 mb-3 text-xs font-semibold">
+                                    <h3 className="text-text-primary mt-5 mb-3 text-sm font-semibold">
                                         Recent PR evidence
                                     </h3>
                                     <EvidenceList
@@ -548,12 +590,11 @@ export function CodeAreasTab({
                         </aside>
                     </div>
 
-                    <p className="text-text-tertiary max-w-3xl text-xs leading-5">
-                        The chart counts PRs linked to bug issues, not bugs
-                        caused by a directory. Title-only signals appear in the
-                        detail panel. This is an investigation aid, not a
-                        measured probability of a future bug. A PR can touch
-                        multiple directories.
+                    <p className="text-text-tertiary max-w-3xl text-sm leading-5">
+                        Counts are merged PRs. A linked fix is a PR linked to a
+                        bug issue. The groups compare this repository with
+                        itself; they are not a measured probability of future
+                        bugs.
                     </p>
                 </>
             )}
