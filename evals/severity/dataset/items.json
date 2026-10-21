@@ -6,6 +6,8 @@
    "caseId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "doc_defect",
+   "label": "bug",
    "source": "inventory:sonnet-5.5|feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry|S3",
    "finding": {
     "relevantFile": "src/sentry/incidents/grouptype.py",
@@ -19,6 +21,8 @@
    "caseId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "doc_defect",
+   "label": "bug",
    "source": "inventory:sonnet-5.5|ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry|S2",
    "finding": {
     "relevantFile": "src/sentry/monitors/logic/incident_occurrence.py",
@@ -32,6 +36,8 @@
    "caseId": "frontend-asset-optimization-grafana-codex",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "concurrency",
+   "label": "bug",
    "source": "lean:kimi",
    "finding": {
     "relevantFile": "webassets.go",
@@ -45,6 +51,8 @@
    "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "perf",
+   "label": "performance",
    "source": "lean:kimi20",
    "finding": {
     "relevantFile": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
@@ -58,6 +66,8 @@
    "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "test_gap",
+   "label": "bug",
    "source": "lean:gpt",
    "finding": {
     "relevantFile": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
@@ -71,6 +81,8 @@
    "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "doc_defect",
+   "label": "bug",
    "source": "round:sncc/classif-in-b.json:sonnet-cc:S2",
    "finding": {
     "relevantFile": "pkg/plugins/log/ifaces.go",
@@ -84,6 +96,8 @@
    "caseId": "dual-storage-architecture-grafana-codex",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "style",
+   "label": "bug",
    "source": "inventory:gpt-6.1-sol|dual-storage-architecture-grafana-codex|S5",
    "finding": {
     "relevantFile": "pkg/apiserver/rest/dualwriter_mode3_test.go",
@@ -97,6 +111,8 @@
    "caseId": "notification-rule-processing-engine-grafana-codex",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "style",
+   "label": "bug",
    "source": "round:kimi/classif-in-a.json:kimi-kimi:S7",
    "finding": {
     "relevantFile": "useAbilities.ts",
@@ -110,6 +126,8 @@
    "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "style",
+   "label": "bug",
    "source": "inventory:deepseek-v4.1-flash|sms-workflow-reminder-retry-count-tracking-cal-com|S11",
    "finding": {
     "relevantFile": "scheduleSMSReminders.ts",
@@ -123,6 +141,8 @@
    "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "doc_defect",
+   "label": "bug",
    "source": "inventory:muse-spark-1.3|enhanced-pagination-performance-for-high-volume-audit-logs-sentry|S10",
    "finding": {
     "relevantFile": "src/sentry/api/paginator.py",
@@ -136,6 +156,8 @@
    "caseId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "style",
+   "label": "bug",
    "source": "round:snloop/classif-in.json:sonnet-snloop:S5",
    "finding": {
     "relevantFile": "unspecified (changed files that define `logger`)",
@@ -149,6 +171,8 @@
    "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "doc_defect",
+   "label": "bug",
    "source": "inventory:gpt-6.1-sol|feat-add-calendar-cache-status-and-actions-22532-cal-com|S8",
    "finding": {
     "relevantFile": "packages/prisma/migrations/20250715160635_add_calendar_cache_updated_at/migration.sql",
@@ -162,6 +186,8 @@
    "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "style",
+   "label": "bug",
    "source": "round:snloop/classif-in.json:sonnet-snloop:S15",
    "finding": {
     "relevantFile": "EventManager.ts",
@@ -175,6 +201,8 @@
    "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "style",
+   "label": "bug",
    "source": "inventory:deepseek-v4.1-flash|comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com|S1",
    "finding": {
     "relevantFile": "packages/trpc/server/routers/viewer/workflows.tsx",
@@ -188,6 +216,8 @@
    "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "perf",
+   "label": "performance",
    "source": "lean:kimi20",
    "finding": {
     "relevantFile": "app/controllers/admin/groups_controller.rb",
@@ -201,6 +231,8 @@
    "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "style",
+   "label": "bug",
    "source": "lean:muse",
    "finding": {
     "relevantFile": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
@@ -214,6 +246,8 @@
    "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "doc_defect",
+   "label": "bug",
    "source": "inventory:deepseek-v4.1-flash|span-buffer-multiprocess-enhancement-with-health-monitoring-sentry|S5",
    "finding": {
     "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
@@ -227,6 +261,8 @@
    "caseId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "doc_defect",
+   "label": "bug",
    "source": "inventory:sonnet-5.5|feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry|S2",
    "finding": {
     "relevantFile": "src/sentry/workflow_engine/processors/detector.py",
@@ -240,6 +276,8 @@
    "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:ds20",
    "finding": {
     "relevantFile": "packages/lib/server/service/insightsBooking.ts",
@@ -253,6 +291,8 @@
    "caseId": "feat-2fa-backup-codes-cal-com",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "style",
+   "label": "bug",
    "source": "lean:kimi20",
    "finding": {
     "relevantFile": "apps/web/components/auth/BackupCode.tsx",
@@ -266,6 +306,8 @@
    "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "doc_defect",
+   "label": "bug",
    "source": "round:opa/classif-in-a.json:opus-api:S7",
    "finding": {
     "relevantFile": "pkg/services/anonymous/anonimpl/anonstore/database.go",
@@ -279,6 +321,8 @@
    "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "doc_defect",
+   "label": "bug",
    "source": "round:opa/classif-in-a.json:opus-api:S20",
    "finding": {
     "relevantFile": "packages/ui/form/MultiEmailLazy.tsx",
@@ -292,6 +336,8 @@
    "caseId": "advanced-sql-analytics-framework-grafana-codex",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "style",
+   "label": "bug",
    "source": "inventory:muse-spark-1.3|advanced-sql-analytics-framework-grafana-codex|S2",
    "finding": {
     "relevantFile": "pkg/expr/sql/parser.go",
@@ -305,6 +351,8 @@
    "caseId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "style",
+   "label": "bug",
    "source": "round:kimi/classif-in-a.json:kimi-kimi:S3",
    "finding": {
     "relevantFile": "app/assets/stylesheets/common/base/topic-post.scss",
@@ -318,6 +366,8 @@
    "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "style",
+   "label": "bug",
    "source": "lean:ds",
    "finding": {
     "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
@@ -331,6 +381,8 @@
    "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "doc_defect",
+   "label": "bug",
    "source": "inventory:deepseek-v4.1-flash|add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak|S2",
    "finding": {
     "relevantFile": "server-spi/src/main/java/org/keycloak/models/IdentityProviderStorageProvider.java",
@@ -344,6 +396,8 @@
    "caseId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:kimi",
    "finding": {
     "relevantFile": "src/sentry/monitors/logic/incident_occurrence.py",
@@ -357,6 +411,8 @@
    "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:kimi20",
    "finding": {
     "relevantFile": "app/assets/javascripts/discourse/models/group.js",
@@ -370,6 +426,8 @@
    "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "style",
+   "label": "bug",
    "source": "round:oph/classif-in.json:opus-api:S5",
    "finding": {
     "relevantFile": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
@@ -383,6 +441,8 @@
    "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "bug",
+   "label": "bug",
    "source": "inventory:sonnet-5.5|feature-can-edit-category-host-relationships-for-embedding-discourse-cursor|S6",
    "finding": {
     "relevantFile": "spec/fabricators/embeddable_host_fabricator.rb",
@@ -396,6 +456,8 @@
    "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "doc_defect",
+   "label": "bug",
    "source": "inventory:deepseek-v4.1-flash|scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor|S6",
    "finding": {
     "relevantFile": "app/assets/stylesheets/common/base/discourse.scss",
@@ -409,6 +471,8 @@
    "caseId": "authzservice-improve-authz-caching-grafana-codex",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "doc_defect",
+   "label": "bug",
    "source": "inventory:deepseek-v4.1-flash|authzservice-improve-authz-caching-grafana-codex|S2",
    "finding": {
     "relevantFile": "pkg/services/authz/rbac/service.go",
@@ -422,6 +486,8 @@
    "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "style",
+   "label": "bug",
    "source": "inventory:sonnet-5.5|comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com|S3",
    "finding": {
     "relevantFile": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
@@ -435,6 +501,8 @@
    "caseId": "unified-storage-performance-optimizations-grafana-codex",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:muse",
    "finding": {
     "relevantFile": "pkg/storage/unified/resource/server.go",
@@ -448,6 +516,8 @@
    "caseId": "implement-access-token-context-encoding-framework-keycloak",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "doc_defect",
+   "label": "bug",
    "source": "lean:ds",
    "finding": {
     "relevantFile": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java",
@@ -461,6 +531,8 @@
    "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "test_gap",
+   "label": "bug",
    "source": "round:prod-finder/classif-in.json:prodfinder-ds:C1",
    "finding": {
     "relevantFile": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
@@ -474,6 +546,8 @@
    "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "perf",
+   "label": "performance",
    "source": "lean:sonnet",
    "finding": {
     "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
@@ -487,6 +561,8 @@
    "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": null,
+   "label": "bug",
    "source": "inventory:deepseek-v4.1-flash|add-comprehensive-email-validation-for-blocked-users-discourse-cursor|S8",
    "finding": {
     "relevantFile": "spec/models/blocked_email_spec.rb",
@@ -500,6 +576,8 @@
    "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
    "severity": "low",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:ds20",
    "finding": {
     "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
@@ -513,6 +591,8 @@
    "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "style",
+   "label": "bug",
    "source": "inventory:muse-spark-1.3|plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex|S8",
    "finding": {
     "relevantFile": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
@@ -526,6 +606,8 @@
    "caseId": "feat-2fa-backup-codes-cal-com",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "perf",
+   "label": "performance",
    "source": "lean:kimi",
    "finding": {
     "relevantFile": "apps/web/components/settings/EnableTwoFactorModal.tsx",
@@ -539,6 +621,8 @@
    "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "style",
+   "label": "bug",
    "source": "inventory:deepseek-v4.1-flash|feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry|S12",
    "finding": {
     "relevantFile": "src/sentry/api/helpers/error_upsampling.py",
@@ -552,6 +636,8 @@
    "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "style",
+   "label": "bug",
    "source": "round:kimi/classif-in.json:kimi-kimi:S8",
    "finding": {
     "relevantFile": "packages/core/CalendarManager.ts",
@@ -565,6 +651,8 @@
    "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": null,
+   "label": "bug",
    "source": "lean:muse",
    "finding": {
     "relevantFile": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
@@ -578,6 +666,8 @@
    "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "doc_defect",
+   "label": "bug",
    "source": "inventory:muse-spark-1.3|add-groups-resource-type-and-scopes-to-authorization-schema-keycloak|S5",
    "finding": {
     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
@@ -591,6 +681,8 @@
    "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "style",
+   "label": "bug",
    "source": "inventory:sonnet-5.5|add-guest-management-functionality-to-existing-bookings-cal-com|S9",
    "finding": {
     "relevantFile": "packages/ui/form/MultiEmail.tsx",
@@ -604,6 +696,8 @@
    "caseId": "dual-storage-architecture-grafana-codex",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:muse",
    "finding": {
     "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
@@ -617,6 +711,8 @@
    "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "doc_defect",
+   "label": "bug",
    "source": "inventory:sonnet-5.5|add-groups-resource-type-and-scopes-to-authorization-schema-keycloak|S3",
    "finding": {
     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
@@ -630,6 +726,8 @@
    "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "style",
+   "label": "bug",
    "source": "round:kimi/classif-in-a.json:kimi-kimi:S11",
    "finding": {
     "relevantFile": "spec/models/embeddable_host_spec.rb",
@@ -643,6 +741,8 @@
    "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
    "severity": "low",
    "classReviewed": "FP nit",
+   "category": "doc_defect",
+   "label": "bug",
    "source": "inventory:muse-spark-1.3|sms-workflow-reminder-retry-count-tracking-cal-com|S4",
    "finding": {
     "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
@@ -656,6 +756,8 @@
    "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
    "severity": "medium",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:ds",
    "finding": {
     "relevantFile": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
@@ -669,6 +771,8 @@
    "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
    "severity": "medium",
    "classReviewed": "FP nit",
+   "category": "bug",
+   "label": "bug",
    "source": "round:kimi/classif-in.json:kimi-kimi:S1",
    "finding": {
     "relevantFile": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
@@ -682,6 +786,8 @@
    "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
    "severity": "medium",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "round:e2b/classif-in.json:gpt-e2b:S4",
    "finding": {
     "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
@@ -695,6 +801,8 @@
    "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
    "severity": "medium",
    "classReviewed": "FP nit",
+   "category": "perf",
+   "label": "performance",
    "source": "lean:muse",
    "finding": {
     "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
@@ -708,6 +816,8 @@
    "caseId": "database-performance-optimizations-grafana-codex",
    "severity": "medium",
    "classReviewed": "FP nit",
+   "category": "concurrency",
+   "label": "bug",
    "source": "lean:muse",
    "finding": {
     "relevantFile": "pkg/services/annotations/annotationsimpl/xorm_store.go",
@@ -721,6 +831,8 @@
    "caseId": "replays-self-serve-bulk-delete-system-sentry",
    "severity": "medium",
    "classReviewed": "TP",
+   "category": "perf",
+   "label": "performance",
    "source": "inventory:gpt-6.1-sol|replays-self-serve-bulk-delete-system-sentry|S6",
    "finding": {
     "relevantFile": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
@@ -734,6 +846,8 @@
    "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
    "severity": "medium",
    "classReviewed": "FP nit",
+   "category": "security",
+   "label": "security",
    "source": "lean:muse",
    "finding": {
     "relevantFile": "app/assets/javascripts/embed.js",
@@ -747,6 +861,8 @@
    "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
    "severity": "medium",
    "classReviewed": "TP",
+   "category": "test_gap",
+   "label": "bug",
    "source": "inventory:deepseek-v4.1-flash|feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry|S7",
    "finding": {
     "relevantFile": "tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py",
@@ -760,6 +876,8 @@
    "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
    "severity": "medium",
    "classReviewed": "FP nit",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:sonnet",
    "finding": {
     "relevantFile": "src/sentry/api/helpers/error_upsampling.py",
@@ -773,6 +891,8 @@
    "caseId": "async-import-of-the-appstore-packages-cal-com",
    "severity": "medium",
    "classReviewed": "TP",
+   "category": "concurrency",
+   "label": "bug",
    "source": "lean:kimi",
    "finding": {
     "relevantFile": "packages/app-store/wipemycalother/lib/reschedule.ts",
@@ -786,6 +906,8 @@
    "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com",
    "severity": "medium",
    "classReviewed": "TP",
+   "category": "perf",
+   "label": "performance",
    "source": "lean:opus",
    "finding": {
     "relevantFile": "packages/app-store/salesforce/lib/CalendarService.ts",
@@ -799,6 +921,8 @@
    "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
    "severity": "medium",
    "classReviewed": "TP",
+   "category": "perf",
+   "label": "performance",
    "source": "lean:ds20",
    "finding": {
     "relevantFile": "lib/topic_retriever.rb",
@@ -812,6 +936,8 @@
    "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
    "severity": "medium",
    "classReviewed": "TP",
+   "category": "perf",
+   "label": "performance",
    "source": "lean:muse",
    "finding": {
     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/GroupResource.java",
@@ -825,6 +951,8 @@
    "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
    "severity": "medium",
    "classReviewed": "FP nit",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:kimi",
    "finding": {
     "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
@@ -838,6 +966,8 @@
    "caseId": "feat-2fa-backup-codes-cal-com",
    "severity": "medium",
    "classReviewed": "FP nit",
+   "category": "security",
+   "label": "security",
    "source": "round:sncc/classif-in.json:sonnet-cc:S4",
    "finding": {
     "relevantFile": "packages/features/auth/lib/next-auth-options.ts",
@@ -851,6 +981,8 @@
    "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
    "severity": "medium",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "inventory:deepseek-v4.1-flash|feature-automatically-downsize-large-images-discourse-cursor|S2",
    "finding": {
     "relevantFile": "app/controllers/uploads_controller.rb",
@@ -864,6 +996,8 @@
    "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
    "severity": "medium",
    "classReviewed": "FP nit",
+   "category": "test_gap",
+   "label": "bug",
    "source": "inventory:gpt-6.1-sol|add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak|S3",
    "finding": {
     "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
@@ -877,6 +1011,8 @@
    "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
    "severity": "medium",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:sonnet",
    "finding": {
     "relevantFile": "packages/features/bookings/lib/handleCancelBooking.ts",
@@ -890,6 +1026,8 @@
    "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
    "severity": "medium",
    "classReviewed": "FP nit",
+   "category": "test_gap",
+   "label": "bug",
    "source": "inventory:deepseek-v4.1-flash|feature-can-edit-category-host-relationships-for-embedding-discourse-cursor|S13",
    "finding": {
     "relevantFile": "spec/models/topic_spec.rb",
@@ -903,6 +1041,8 @@
    "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
    "severity": "medium",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "inventory:gpt-6.1-sol|fix-proper-handling-of-group-memberships-discourse-cursor|S8",
    "finding": {
     "relevantFile": "app/controllers/admin/groups_controller.rb",
@@ -916,6 +1056,8 @@
    "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
    "severity": "medium",
    "classReviewed": "FP nit",
+   "category": "bug",
+   "label": "bug",
    "source": "round:prod/muse/classif-in.json:muse-musep:S4",
    "finding": {
     "relevantFile": "packages/core/EventManager.ts",
@@ -929,6 +1071,8 @@
    "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
    "severity": "medium",
    "classReviewed": "TP",
+   "category": "security",
+   "label": "security",
    "source": "lean:opus",
    "finding": {
     "relevantFile": "app/config/routes.rb",
@@ -942,6 +1086,8 @@
    "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
    "severity": "medium",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:opus",
    "finding": {
     "relevantFile": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
@@ -955,6 +1101,8 @@
    "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
    "severity": "medium",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:muse",
    "finding": {
     "relevantFile": "app/models/topic_embed.rb",
@@ -968,6 +1116,8 @@
    "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
    "severity": "medium",
    "classReviewed": "FP nit",
+   "category": "api",
+   "label": "bug",
    "source": "lean:muse",
    "finding": {
     "relevantFile": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
@@ -981,6 +1131,8 @@
    "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
    "severity": "medium",
    "classReviewed": "TP",
+   "category": "security",
+   "label": "security",
    "source": "lean:gpt",
    "finding": {
     "relevantFile": "app/models/blocked_email.rb",
@@ -994,6 +1146,8 @@
    "caseId": "replays-self-serve-bulk-delete-system-sentry",
    "severity": "medium",
    "classReviewed": "TP",
+   "category": "perf",
+   "label": "performance",
    "source": "round:opa/classif-in.json:opus-api:S3",
    "finding": {
     "relevantFile": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
@@ -1007,6 +1161,8 @@
    "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
    "severity": "medium",
    "classReviewed": "FP nit",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:muse",
    "finding": {
     "relevantFile": "pkg/plugins/log/fake.go",
@@ -1020,6 +1176,8 @@
    "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
    "severity": "medium",
    "classReviewed": "FP nit",
+   "category": "test_gap",
+   "label": "bug",
    "source": "inventory:deepseek-v4.1-flash|feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry|S9",
    "finding": {
     "relevantFile": "tests/sentry/api/helpers/test_error_upsampling.py",
@@ -1033,6 +1191,8 @@
    "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
    "severity": "medium",
    "classReviewed": "FP nit",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:kimi",
    "finding": {
     "relevantFile": "app/models/embeddable_host.rb",
@@ -1046,6 +1206,8 @@
    "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
    "severity": "medium",
    "classReviewed": "FP nit",
+   "category": "perf",
+   "label": "performance",
    "source": "lean:kimi",
    "finding": {
     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
@@ -1059,6 +1221,8 @@
    "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
    "severity": "medium",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:kimi20",
    "finding": {
     "relevantFile": "app/controllers/admin/groups_controller.rb",
@@ -1072,6 +1236,8 @@
    "caseId": "notification-rule-processing-engine-grafana-codex",
    "severity": "medium",
    "classReviewed": "FP nit",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:ds20",
    "finding": {
     "relevantFile": "public/app/features/alerting/unified/hooks/useAbilities.ts",
@@ -1085,6 +1251,8 @@
    "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
    "severity": "medium",
    "classReviewed": "TP",
+   "category": "test_gap",
+   "label": "bug",
    "source": "round:sncc/classif-in.json:sonnet-cc:S11",
    "finding": {
     "relevantFile": "tests/sentry/uptime/consumers/test_results_consumer.py",
@@ -1098,6 +1266,8 @@
    "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
    "severity": "medium",
    "classReviewed": "FP nit",
+   "category": "test_gap",
+   "label": "bug",
    "source": "lean:sonnet",
    "finding": {
     "relevantFile": "tests/sentry/spans/consumers/process/test_consumer.py",
@@ -1111,6 +1281,8 @@
    "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
    "severity": "medium",
    "classReviewed": "FP nit",
+   "category": "bug",
+   "label": "bug",
    "source": "round:prod/muse/classif-in.json:muse-musep:S4",
    "finding": {
     "relevantFile": "app/models/topic_embed.rb",
@@ -1124,6 +1296,8 @@
    "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
    "severity": "medium",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:opus",
    "finding": {
     "relevantFile": "app/controllers/topics_controller.rb",
@@ -1137,6 +1311,8 @@
    "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
    "severity": "medium",
    "classReviewed": "TP",
+   "category": "test_gap",
+   "label": "bug",
    "source": "inventory:gpt-6.1-sol|add-client-resource-type-and-scopes-to-authorization-schema-keycloak|S6",
    "finding": {
     "relevantFile": "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/PermissionClientTest.java",
@@ -1150,6 +1326,8 @@
    "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
    "severity": "medium",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:muse",
    "finding": {
     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
@@ -1163,6 +1341,8 @@
    "caseId": "notification-rule-processing-engine-grafana-codex",
    "severity": "medium",
    "classReviewed": "FP nit",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:ds20",
    "finding": {
     "relevantFile": "public/app/features/alerting/unified/rule-list/FilterView.tsx",
@@ -1176,6 +1356,8 @@
    "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
    "severity": "medium",
    "classReviewed": "FP nit",
+   "category": "test_gap",
+   "label": "bug",
    "source": "inventory:muse-spark-1.3|feature-can-edit-category-host-relationships-for-embedding-discourse-cursor|S16",
    "finding": {
     "relevantFile": "test/javascripts/models/store-test.js.es6",
@@ -1189,6 +1371,8 @@
    "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
    "severity": "medium",
    "classReviewed": "FP nit",
+   "category": "perf",
+   "label": "performance",
    "source": "lean:ds",
    "finding": {
     "relevantFile": "pkg/services/anonymous/anonimpl/client.go",
@@ -1202,6 +1386,8 @@
    "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
    "severity": "medium",
    "classReviewed": "FP nit",
+   "category": "concurrency",
+   "label": "bug",
    "source": "inventory:deepseek-v4.1-flash|add-guest-management-functionality-to-existing-bookings-cal-com|S15",
    "finding": {
     "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
@@ -1215,6 +1401,8 @@
    "caseId": "replays-self-serve-bulk-delete-system-sentry",
    "severity": "medium",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:kimi20",
    "finding": {
     "relevantFile": "src/sentry/issues/endpoints/browser_reporting_collector.py",
@@ -1228,6 +1416,8 @@
    "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
    "severity": "medium",
    "classReviewed": "FP nit",
+   "category": "style",
+   "label": "bug",
    "source": "lean:kimi20",
    "finding": {
     "relevantFile": "app/assets/stylesheets/desktop/topic-post.scss",
@@ -1241,6 +1431,8 @@
    "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
    "severity": "medium",
    "classReviewed": "FP nit",
+   "category": "style",
+   "label": "bug",
    "source": "inventory:deepseek-v4.1-flash|add-comprehensive-email-validation-for-blocked-users-discourse-cursor|S7",
    "finding": {
     "relevantFile": "app/assets/javascripts/discourse/controllers/create_account_controller.js",
@@ -1254,6 +1446,8 @@
    "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
    "severity": "medium",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "round:oph/classif-in.json:opus-api:S7",
    "finding": {
     "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
@@ -1267,6 +1461,8 @@
    "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
    "severity": "medium",
    "classReviewed": "FP nit",
+   "category": "api",
+   "label": "bug",
    "source": "lean:kimi20",
    "finding": {
     "relevantFile": "spec/controllers/admin/groups_controller_spec.rb",
@@ -1280,6 +1476,8 @@
    "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
    "severity": "medium",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "round:oph/classif-in-a.json:opus-api:S4",
    "finding": {
     "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
@@ -1293,6 +1491,8 @@
    "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
    "severity": "medium",
    "classReviewed": "TP",
+   "category": "api",
+   "label": "bug",
    "source": "lean:sonnet",
    "finding": {
     "relevantFile": "packages/trpc/server/routers/viewer/calendars/deleteCache.handler.ts",
@@ -1306,6 +1506,8 @@
    "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
    "severity": "high",
    "classReviewed": "FP nit",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:opus",
    "finding": {
     "relevantFile": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
@@ -1319,6 +1521,8 @@
    "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
    "severity": "high",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:muse",
    "finding": {
     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
@@ -1332,6 +1536,8 @@
    "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com",
    "severity": "high",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:muse",
    "finding": {
     "relevantFile": "packages/app-store/salesforce/lib/CalendarService.ts",
@@ -1345,6 +1551,8 @@
    "caseId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor",
    "severity": "high",
    "classReviewed": "TP",
+   "category": "api",
+   "label": "bug",
    "source": "lean:ds20",
    "finding": {
     "relevantFile": "app/serializers/user_serializer.rb",
@@ -1358,6 +1566,8 @@
    "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
    "severity": "high",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "round:prod/pool/classif-in-a.json:prod-gpt:S1",
    "finding": {
     "relevantFile": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
@@ -1371,6 +1581,8 @@
    "caseId": "github-oauth-security-enhancement-sentry",
    "severity": "high",
    "classReviewed": "FP nit",
+   "category": "security",
+   "label": "security",
    "source": "lean:kimi20",
    "finding": {
     "relevantFile": "src/sentry/integrations/github/integration.py",
@@ -1384,6 +1596,8 @@
    "caseId": "dual-storage-architecture-grafana-codex",
    "severity": "high",
    "classReviewed": "TP",
+   "category": "data",
+   "label": "bug",
    "source": "lean:gpt",
    "finding": {
     "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
@@ -1397,6 +1611,8 @@
    "caseId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry",
    "severity": "high",
    "classReviewed": "TP",
+   "category": "api",
+   "label": "bug",
    "source": "lean:kimi20",
    "finding": {
     "relevantFile": "src/sentry/incidents/grouptype.py",
@@ -1410,6 +1626,8 @@
    "caseId": "replays-self-serve-bulk-delete-system-sentry",
    "severity": "high",
    "classReviewed": "TP",
+   "category": "security",
+   "label": "security",
    "source": "inventory:deepseek-v4.1-flash|replays-self-serve-bulk-delete-system-sentry|S6",
    "finding": {
     "relevantFile": "src/sentry/issues/endpoints/browser_reporting_collector.py",
@@ -1423,6 +1641,8 @@
    "caseId": "dual-storage-architecture-grafana-codex",
    "severity": "high",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:ds",
    "finding": {
     "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
@@ -1436,6 +1656,8 @@
    "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
    "severity": "high",
    "classReviewed": "FP nit",
+   "category": "concurrency",
+   "label": "bug",
    "source": "inventory:gpt-6.1-sol|add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak|S4",
    "finding": {
     "relevantFile": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
@@ -1449,6 +1671,8 @@
    "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
    "severity": "high",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "round:sncc/classif-in.json:sonnet-cc:S12",
    "finding": {
     "relevantFile": "app/views/layouts/embed.html.erb",
@@ -1462,6 +1686,8 @@
    "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
    "severity": "high",
    "classReviewed": "FP nit",
+   "category": "bug",
+   "label": "bug",
    "source": "inventory:sonnet-5.5|fix-handle-collective-multiple-host-on-destinationcalendar-cal-com|S12",
    "finding": {
     "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
@@ -1475,6 +1701,8 @@
    "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
    "severity": "high",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:opus",
    "finding": {
     "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
@@ -1488,6 +1716,8 @@
    "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
    "severity": "high",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "inventory:gpt-6.1-sol|advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com|S4",
    "finding": {
     "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
@@ -1501,6 +1731,8 @@
    "caseId": "replays-self-serve-bulk-delete-system-sentry",
    "severity": "high",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:muse",
    "finding": {
     "relevantFile": "static/app/views/dashboards/widgetCard/chart.tsx",
@@ -1514,6 +1746,8 @@
    "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
    "severity": "high",
    "classReviewed": "FP nit",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:ds",
    "finding": {
     "relevantFile": "src/sentry/api/endpoints/organization_auditlogs.py",
@@ -1527,6 +1761,8 @@
    "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
    "severity": "high",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:kimi20",
    "finding": {
     "relevantFile": "packages/features/bookings/lib/handleCancelBooking.ts",
@@ -1540,6 +1776,8 @@
    "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
    "severity": "high",
    "classReviewed": "TP",
+   "category": "security",
+   "label": "security",
    "source": "lean:ds",
    "finding": {
     "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
@@ -1553,6 +1791,8 @@
    "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
    "severity": "high",
    "classReviewed": "FP nit",
+   "category": "speculative",
+   "label": "bug",
    "source": "lean:muse",
    "finding": {
     "relevantFile": "common/src/main/java/org/keycloak/common/crypto/CryptoProvider.java",
@@ -1566,6 +1806,8 @@
    "caseId": "unified-storage-performance-optimizations-grafana-codex",
    "severity": "high",
    "classReviewed": "TP",
+   "category": "concurrency",
+   "label": "bug",
    "source": "lean:gpt",
    "finding": {
     "relevantFile": "pkg/storage/unified/resource/search.go",
@@ -1579,6 +1821,8 @@
    "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
    "severity": "high",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:kimi20",
    "finding": {
     "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
@@ -1592,6 +1836,8 @@
    "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
    "severity": "high",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "round:prod/muse/classif-in.json:muse-musep:S4",
    "finding": {
     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
@@ -1605,6 +1851,8 @@
    "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
    "severity": "high",
    "classReviewed": "FP nit",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:kimi",
    "finding": {
     "relevantFile": "packages/core/EventManager.ts",
@@ -1618,6 +1866,8 @@
    "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
    "severity": "high",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:muse",
    "finding": {
     "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
@@ -1631,6 +1881,8 @@
    "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
    "severity": "high",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:gpt",
    "finding": {
     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
@@ -1644,6 +1896,8 @@
    "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
    "severity": "high",
    "classReviewed": "FP nit",
+   "category": "security",
+   "label": "security",
    "source": "lean:muse",
    "finding": {
     "relevantFile": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
@@ -1657,6 +1911,8 @@
    "caseId": "advanced-sql-analytics-framework-grafana-codex",
    "severity": "high",
    "classReviewed": "FP nit",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:kimi",
    "finding": {
     "relevantFile": "pkg/expr/reader.go",
@@ -1670,6 +1926,8 @@
    "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
    "severity": "high",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "round:snloop/classif-in.json:sonnet-snloop:S11",
    "finding": {
     "relevantFile": "GroupPermissionsV2.java",
@@ -1683,6 +1941,8 @@
    "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
    "severity": "high",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:muse",
    "finding": {
     "relevantFile": "app/controllers/topics_controller.rb",
@@ -1696,6 +1956,8 @@
    "caseId": "notification-rule-processing-engine-grafana-codex",
    "severity": "high",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:kimi",
    "finding": {
     "relevantFile": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx",
@@ -1709,6 +1971,8 @@
    "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com",
    "severity": "high",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:ds20",
    "finding": {
     "relevantFile": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
@@ -1722,6 +1986,8 @@
    "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
    "severity": "high",
    "classReviewed": "FP nit",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:gpt",
    "finding": {
     "relevantFile": "src/sentry/api/endpoints/organization_events_stats.py",
@@ -1735,6 +2001,8 @@
    "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com",
    "severity": "high",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:ds20",
    "finding": {
     "relevantFile": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
@@ -1748,6 +2016,8 @@
    "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
    "severity": "high",
    "classReviewed": "FP nit",
+   "category": null,
+   "label": "bug",
    "source": "inventory:sonnet-5.5|add-guest-management-functionality-to-existing-bookings-cal-com|S15",
    "finding": {
     "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
@@ -1761,6 +2031,8 @@
    "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
    "severity": "high",
    "classReviewed": "FP nit",
+   "category": "data",
+   "label": "bug",
    "source": "lean:gpt",
    "finding": {
     "relevantFile": "db/migrate/20150818190757_create_embeddable_hosts.rb",
@@ -1774,6 +2046,8 @@
    "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
    "severity": "high",
    "classReviewed": "FP nit",
+   "category": "security",
+   "label": "security",
    "source": "lean:muse",
    "finding": {
     "relevantFile": "pkg/services/anonymous/anonimpl/client.go",
@@ -1787,6 +2061,8 @@
    "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
    "severity": "high",
    "classReviewed": "FP nit",
+   "category": null,
+   "label": "bug",
    "source": "lean:muse",
    "finding": {
     "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
@@ -1800,6 +2076,8 @@
    "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
    "severity": "high",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "inventory:gpt-6.1-sol|anonymous-add-configurable-device-limit-grafana-codex|S4",
    "finding": {
     "relevantFile": "pkg/setting/setting.go",
@@ -1813,6 +2091,8 @@
    "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
    "severity": "high",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:ds",
    "finding": {
     "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
@@ -1826,6 +2106,8 @@
    "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
    "severity": "high",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:kimi20",
    "finding": {
     "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
@@ -1839,6 +2121,8 @@
    "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
    "severity": "high",
    "classReviewed": "FP nit",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:ds",
    "finding": {
     "relevantFile": "src/sentry/api/paginator.py",
@@ -1852,6 +2136,8 @@
    "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
    "severity": "high",
    "classReviewed": "TP",
+   "category": null,
+   "label": "bug",
    "source": "lean:kimi20",
    "finding": {
     "relevantFile": "app/models/topic_embed.rb",
@@ -1865,6 +2151,8 @@
    "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
    "severity": "high",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "inventory:muse-spark-1.3|add-comprehensive-email-validation-for-blocked-users-discourse-cursor|S2",
    "finding": {
     "relevantFile": "lib/validators/email_validator.rb",
@@ -1878,6 +2166,8 @@
    "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
    "severity": "high",
    "classReviewed": "TP",
+   "category": "data",
+   "label": "bug",
    "source": "lean:muse",
    "finding": {
     "relevantFile": "app/controllers/uploads_controller.rb",
@@ -1891,6 +2181,8 @@
    "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
    "severity": "high",
    "classReviewed": "FP nit",
+   "category": "security",
+   "label": "security",
    "source": "lean:opus",
    "finding": {
     "relevantFile": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
@@ -1904,6 +2196,8 @@
    "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
    "severity": "high",
    "classReviewed": "FP nit",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:ds20",
    "finding": {
     "relevantFile": "src/sentry/api/endpoints/organization_events_stats.py",
@@ -1917,6 +2211,8 @@
    "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com",
    "severity": "high",
    "classReviewed": "FP nit",
+   "category": "api",
+   "label": "bug",
    "source": "lean:kimi",
    "finding": {
     "relevantFile": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
@@ -1930,6 +2226,8 @@
    "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
    "severity": "high",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:kimi20",
    "finding": {
     "relevantFile": "packages/features/bookings/lib/handleNewBooking.ts",
@@ -1943,6 +2241,8 @@
    "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com",
    "severity": "high",
    "classReviewed": "FP nit",
+   "category": "security",
+   "label": "security",
    "source": "lean:kimi20",
    "finding": {
     "relevantFile": "apps/web/pages/api/webhook/app-credential.ts",
@@ -1956,6 +2256,8 @@
    "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
    "severity": "critical",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:muse",
    "finding": {
     "relevantFile": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
@@ -1969,6 +2271,8 @@
    "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
    "severity": "critical",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:opus",
    "finding": {
     "relevantFile": "app/models/topic_embed.rb",
@@ -1982,6 +2286,8 @@
    "caseId": "feat-2fa-backup-codes-cal-com",
    "severity": "critical",
    "classReviewed": "TP",
+   "category": "security",
+   "label": "security",
    "source": "lean:gpt",
    "finding": {
     "relevantFile": "packages/features/auth/lib/next-auth-options.ts",
@@ -1995,6 +2301,8 @@
    "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
    "severity": "critical",
    "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
    "source": "lean:kimi20",
    "finding": {
     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
@@ -2008,6 +2316,8 @@
    "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
    "severity": "critical",
    "classReviewed": "FP nit",
+   "category": "security",
+   "label": "security",
    "source": "lean:sonnet",
    "finding": {
     "relevantFile": "app/models/post.rb",
@@ -2021,6 +2331,8 @@
    "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
    "severity": "critical",
    "classReviewed": "TP",
+   "category": "security",
+   "label": "security",
    "source": "round:opa/classif-in-a.json:opus-api:S3",
    "finding": {
     "relevantFile": "app/controllers/uploads_controller.rb",
@@ -2034,6 +2346,8 @@
    "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
    "severity": "critical",
    "classReviewed": "TP",
+   "category": null,
+   "label": "bug",
    "source": "lean:ds",
    "finding": {
     "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
@@ -2047,6 +2361,8 @@
    "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com",
    "severity": "critical",
    "classReviewed": "TP",
+   "category": "data",
+   "label": "bug",
    "source": "lean:opus",
    "finding": {
     "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",

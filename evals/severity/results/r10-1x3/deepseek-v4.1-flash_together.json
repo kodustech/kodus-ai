@@ -1,0 +1,1787 @@
+{
+ "model": "deepseek-v4.1-flash@together",
+ "prompt": "r10",
+ "perLevel": {
+  "low": {
+   "n": 50,
+   "right": 38,
+   "got": {
+    "low": 38,
+    "medium": 10,
+    "high": 2,
+    "critical": 0
+   }
+  },
+  "medium": {
+   "n": 50,
+   "right": 39,
+   "got": {
+    "low": 2,
+    "medium": 39,
+    "high": 8,
+    "critical": 1
+   }
+  },
+  "high": {
+   "n": 50,
+   "right": 36,
+   "got": {
+    "low": 0,
+    "medium": 10,
+    "high": 36,
+    "critical": 4
+   }
+  },
+  "critical": {
+   "n": 8,
+   "right": 8,
+   "got": {
+    "low": 0,
+    "medium": 0,
+    "high": 4,
+    "critical": 4
+   }
+  }
+ },
+ "unmeasured": 0,
+ "rows": [
+  {
+   "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#01",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 26311
+  },
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#kimi-02",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 3507
+  },
+  {
+   "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#01",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 26748
+  },
+  {
+   "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#sncc-02",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 13441
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#10",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 8948
+  },
+  {
+   "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#snloop-02",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 810
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#snloop-01",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 661
+  },
+  {
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#14",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 7520
+  },
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#05",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 12938
+  },
+  {
+   "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#03",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 29963
+  },
+  {
+   "issueId": "frontend-asset-optimization-grafana-codex#01",
+   "gold": "low",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 39729
+  },
+  {
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#snapi-01",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 35012
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#kimip-01",
+   "gold": "low",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 12511
+  },
+  {
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#04",
+   "gold": "low",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 20790
+  },
+  {
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#05",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 7760
+  },
+  {
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#pf-muse-C2",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 17082
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#opa-01",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 10065
+  },
+  {
+   "issueId": "advanced-sql-analytics-framework-grafana-codex#06",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 10042
+  },
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#09",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 35271
+  },
+  {
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#10",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 4456
+  },
+  {
+   "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#03",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 26684
+  },
+  {
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#opa-04",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 29721
+  },
+  {
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#11",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 17429
+  },
+  {
+   "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#01",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 39881
+  },
+  {
+   "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-03",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 30139
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#05",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 26919
+  },
+  {
+   "issueId": "feat-2fa-backup-codes-cal-com#04",
+   "gold": "low",
+   "got": "high",
+   "votes": [
+    "high",
+    "low",
+    "high"
+   ],
+   "ms": 61717
+  },
+  {
+   "issueId": "authzservice-improve-authz-caching-grafana-codex#08",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 25371
+  },
+  {
+   "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02",
+   "gold": "low",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "low",
+    "medium"
+   ],
+   "ms": 47144
+  },
+  {
+   "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#kimi-01",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 56867
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#03",
+   "gold": "low",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "high",
+    "medium"
+   ],
+   "ms": 56453
+  },
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#sncc-01",
+   "gold": "low",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 13391
+  },
+  {
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 9260
+  },
+  {
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#07",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 53505
+  },
+  {
+   "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#06",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 6415
+  },
+  {
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#11",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 32453
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#kimi-01",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 4450
+  },
+  {
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#09",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 8051
+  },
+  {
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#07",
+   "gold": "low",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 27601
+  },
+  {
+   "issueId": "feat-2fa-backup-codes-cal-com#15",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 14670
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#12",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 8817
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#07",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 20043
+  },
+  {
+   "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#pf-ds-C1",
+   "gold": "low",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 48102
+  },
+  {
+   "issueId": "unified-storage-performance-optimizations-grafana-codex#03",
+   "gold": "low",
+   "got": "medium",
+   "votes": [
+    "low",
+    "medium",
+    "medium"
+   ],
+   "ms": 60775
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#01",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 26084
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 20674
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-04",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 17832
+  },
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#03",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 19660
+  },
+  {
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-02",
+   "gold": "low",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 44182
+  },
+  {
+   "issueId": "implement-access-token-context-encoding-framework-keycloak#03",
+   "gold": "low",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "high",
+    "medium"
+   ],
+   "ms": 80237
+  },
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#07",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 19352
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#e2b-01",
+   "gold": "medium",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 19722
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#07",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 9765
+  },
+  {
+   "issueId": "database-performance-optimizations-grafana-codex#musep-01",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 19630
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#13",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 7007
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#01",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 20846
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 6509
+  },
+  {
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#01",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 2076
+  },
+  {
+   "issueId": "feat-2fa-backup-codes-cal-com#sncc-01",
+   "gold": "medium",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 6715
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#16",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 25591
+  },
+  {
+   "issueId": "async-import-of-the-appstore-packages-cal-com#02",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 25518
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#30",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 33311
+  },
+  {
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+   "gold": "medium",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 68542
+  },
+  {
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 39823
+  },
+  {
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#14",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 21976
+  },
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#04",
+   "gold": "medium",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 28697
+  },
+  {
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#kimi-01",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 73537
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#09",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 30249
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-01",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 37971
+  },
+  {
+   "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#01",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 14644
+  },
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
+   "gold": "medium",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "medium"
+   ],
+   "ms": 31079
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10",
+   "gold": "medium",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "high"
+   ],
+   "ms": 28493
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-01",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 14314
+  },
+  {
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 25922
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#musep-01",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 48495
+  },
+  {
+   "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#03",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 31083
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 17181
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#07",
+   "gold": "medium",
+   "got": "high",
+   "votes": [
+    "high",
+    "medium",
+    "high"
+   ],
+   "ms": 61251
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#18",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "high",
+    "medium"
+   ],
+   "ms": 58684
+  },
+  {
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#18",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 37015
+  },
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#04",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 24357
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 46156
+  },
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#oph-01",
+   "gold": "medium",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 22809
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-02",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 40167
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-01",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 61280
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#04",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 30843
+  },
+  {
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#02",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 48708
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#musep-01",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 54590
+  },
+  {
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#09",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 22770
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#10",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 34934
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-02",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 7600
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#11",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 57471
+  },
+  {
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#02",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 15904
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#04",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 27808
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#01",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 31681
+  },
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#07",
+   "gold": "medium",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 57986
+  },
+  {
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "gold": "medium",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 36537
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#12",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 21155
+  },
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#08",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 15063
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-01",
+   "gold": "medium",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 23715
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#16",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 14081
+  },
+  {
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#prod-01",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 9129
+  },
+  {
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#08",
+   "gold": "high",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 30277
+  },
+  {
+   "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 13325
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-02",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 40574
+  },
+  {
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07",
+   "gold": "high",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 36530
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#05",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 22607
+  },
+  {
+   "issueId": "github-oauth-security-enhancement-sentry#03",
+   "gold": "high",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 31760
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#12",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 1408
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-03",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 12225
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#02",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "medium",
+    "high"
+   ],
+   "ms": 25630
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#06",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 34695
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "gold": "high",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 5328
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#14",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 19094
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 19098
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#07",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 24887
+  },
+  {
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#04",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 21788
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#13",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 22599
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 10817
+  },
+  {
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#05",
+   "gold": "high",
+   "got": "medium",
+   "votes": [
+    "high",
+    "medium",
+    "medium"
+   ],
+   "ms": 50086
+  },
+  {
+   "issueId": "unified-storage-performance-optimizations-grafana-codex#02",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "medium",
+    "high"
+   ],
+   "ms": 32026
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#04",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 15013
+  },
+  {
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#07",
+   "gold": "high",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "high"
+   ],
+   "ms": 46042
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 28498
+  },
+  {
+   "issueId": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 19689
+  },
+  {
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#05",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 29860
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#snloop-01",
+   "gold": "high",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "high",
+    "medium"
+   ],
+   "ms": 19390
+  },
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#02",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 15467
+  },
+  {
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#08",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 13569
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 53630
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+   "gold": "high",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 19189
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#12",
+   "gold": "high",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 54098
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 16127
+  },
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 39179
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#09",
+   "gold": "high",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 19998
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#07",
+   "gold": "high",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 26776
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 11814
+  },
+  {
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 16973
+  },
+  {
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#02",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 31809
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#10",
+   "gold": "high",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 26658
+  },
+  {
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#11",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 26592
+  },
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#03",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 9234
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 2044
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 3202
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 8465
+  },
+  {
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#oph-01",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 28530
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#19",
+   "gold": "high",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 31993
+  },
+  {
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#08",
+   "gold": "high",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 30040
+  },
+  {
+   "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#05",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "critical",
+    "high",
+    "high"
+   ],
+   "ms": 24565
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 18192
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "gold": "critical",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 18425
+  },
+  {
+   "issueId": "feat-2fa-backup-codes-cal-com#01",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 12920
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 12791
+  },
+  {
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#15",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "medium",
+    "high"
+   ],
+   "ms": 21610
+  },
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#06",
+   "gold": "critical",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 5564
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "gold": "critical",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 7593
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#08",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "high",
+    "critical",
+    "critical"
+   ],
+   "ms": 17419
+  },
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#opa-01",
+   "gold": "critical",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 12821
+  }
+ ]
+}

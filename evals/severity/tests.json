@@ -1,0 +1,91 @@
+[
+ {
+  "pasta": "r11x3",
+  "titulo": "Refino 5 (teste 14) · exemplos reais do gold",
+  "mudou": "O prompt do refino 2 com voto de 3, mais 12 exemplos reais do gold v3 com a severidade que receberam (4 low, 4 medium, 4 high), tirados de problemas que não estão no dataset, um por categoria quando possível.",
+  "leitura": "Melhor low no DeepSeek e no Opus (86%), mas high não sai de 74–78% e o Sonnet segue em 62%. Orçamento encerrado: nenhum modelo chega a 90% em todos os níveis."
+ },
+ {
+  "pasta": "r10-1x3",
+  "titulo": "Refino 4 (teste 13) · uma sugestão por chamada",
+  "mudou": "O prompt do refino 2 com voto de 3, mas cada sugestão vai numa chamada própria em vez de todas as do PR juntas. Tira a comparação entre sugestões do mesmo PR; custa uma chamada por sugestão.",
+  "leitura": "Melhor GPT (80/78/78) e o Opus segue com 80% ou mais em todos os níveis, mas o DeepSeek piora (76/78/72). Sem ganho que pague uma chamada por sugestão."
+ },
+ {
+  "pasta": "r10x5",
+  "titulo": "Refino 3 (teste 12) · voto de 5 respostas",
+  "mudou": "O prompt do refino 2, chamado 5 vezes por PR em vez de 3; cada sugestão fica com a severidade mais votada (empate: a do meio).",
+  "leitura": "Igual ao voto de 3, com variação de 1 a 2 itens: o voto já tirou a oscilação que dava para tirar."
+ },
+ {
+  "pasta": "r10x3",
+  "titulo": "Refino 2 (teste 11) · sem desconto para sugestão que hesita",
+  "mudou": "Sobre o teste 9 (sem os casos de low do refino 1): a regra que rebaixava problemas latentes ou não confirmados passa a valer só para o que nenhum caminho atual alcança; uma sugestão que hesita (\"might\", \"não confirmado\") é avaliada pela falha que descreve, como o gold faz.",
+  "leitura": "Melhor até aqui: DeepSeek 80/88/78/100 e Opus 84/80/80/100. O GPT ainda sobe medium para high (74%) e o Sonnet rebaixa high (60%)."
+ },
+ {
+  "pasta": "r9x3",
+  "titulo": "Refino 1 (teste 10) · mais casos de low, voto de 3",
+  "mudou": "Sobre o teste 9: entram como low os casos que os quatro modelos subiam para medium: race ou falta de nova checagem cujo único efeito é trabalho duplicado, valor ou campo calculado que nenhum chamador lê, contador de tentativas errado só para entradas que já falham na validação.",
+  "leitura": "Sem ganho: os low que todos sobem continuam subindo, e o resto oscila 1 a 2 itens."
+ },
+ {
+  "pasta": "r8x3",
+  "titulo": "Teste 9 · teste 8 com voto de 3 respostas",
+  "mudou": "O mesmo prompt do teste 8, chamado 3 vezes por PR; cada sugestão fica com a severidade mais votada (empate: a do meio). Ataca o erro que aparece só em um modelo ou numa rodada, não o erro em que todos os modelos discordam do gold.",
+  "leitura": "O voto melhora high em todos menos o Sonnet. O Opus passa de 80% em todos os níveis (84/82/80/100), o primeiro a bater 80%. Daqui em diante, até 5 refinos sobre este prompt."
+ },
+ {
+  "pasta": "r8",
+  "titulo": "Teste 8 · desempate de medium para high",
+  "mudou": "Exemplos do teste 7, sem pedir o motivo antes da severidade (volta ao formato do teste 5), e uma regra nova: uma falha no caminho que o PR adiciona ou reescreve conta como gatilho comum, salvo se a sugestão disser o contrário, e na dúvida entre medium e high, high.",
+  "leitura": "Melhor resultado do Sonnet e o melhor high do Opus (76%). Medium do DeepSeek chega a 90%. Os erros que sobram são em boa parte os mesmos itens em todos os modelos: 8 low, 6 medium e 10 high errados por 3 ou 4 dos 4 modelos."
+ },
+ {
+  "pasta": "r7",
+  "titulo": "Teste 7 · exemplos alinhados ao gold e motivo antes da severidade",
+  "mudou": "Sobre o teste 5 (sem código): o exemplo inventado de lista de bloqueio burlada por maiúsculas passa de high para medium, como o gold rotula esses casos; entram dois exemplos inventados de high que os modelos rebaixavam (crash de usuário sem um registro opcional, fallback que nunca casa e grava no lugar errado) e um de low; e cada resposta escreve o motivo, dizendo se o gatilho é comum ou específico, antes da severidade.",
+  "leitura": "Medium sobe para 78–86%, mas high cai (40–70%): escrever o motivo antes deixou os modelos mais conservadores."
+ },
+ {
+  "pasta": "r6",
+  "titulo": "Teste 6 · teste 4 com o label",
+  "mudou": "O mesmo prompt do teste 4, com o label do achado em cada sugestão (bug, security ou performance), como o Finder entrega.",
+  "leitura": "Mesmo resultado do teste 4, com variação de 1 a 2 itens: o label não ajuda."
+ },
+ {
+  "pasta": "r5",
+  "titulo": "Teste 5 · teste 4 sem o trecho do código",
+  "mudou": "O mesmo prompt do teste 4, mas cada sugestão vai só com arquivo, linhas e texto, sem as 21 linhas do arquivo. Mede se o código ajuda a decidir a severidade.",
+  "leitura": "Igual ou melhor que o teste 4: o trecho do código não ajuda a decidir a severidade. Os próximos testes seguem sem código, o que dispensa ler o arquivo em produção."
+ },
+ {
+  "pasta": "r4",
+  "titulo": "Teste 4 · calibração do teste 2 + tipos que ficam baixos",
+  "mudou": "Volta a calibração por gatilho do teste 2 para bugs, contratos, races e segurança, e acrescenta do teste 3 só os tipos que o gold mantém em low ou medium: documentação e estilo (low), testes (medium ou low), performance (medium ou low). Exemplos e trecho do código mantidos.",
+  "leitura": "Melhor média até aqui: Opus e DeepSeek passam de 80% em low, medium e critical; high ainda fica em 72%. O Sonnet continua rebaixando high."
+ },
+ {
+  "pasta": "r3",
+  "titulo": "Teste 3 · tipo do problema primeiro",
+  "mudou": "No lugar das definições por nível, o prompt pede primeiro o tipo do problema (documentação e estilo, teste, performance, concorrência, bug funcional, contrato, segurança) e dá o nível de cada tipo, tirado de como o gold distribui as categorias. Mantém a regra de gatilho específico, os exemplos e o trecho do código.",
+  "leitura": "Low e medium passam de 80% em todos, mas high cai para 44–58%: crashes de usuário sem registro opcional, segredos comparados sem tempo constante e races viram medium."
+ },
+ {
+  "pasta": "r2",
+  "titulo": "Teste 2 · calibração entre níveis e exemplos",
+  "mudou": "A rubrica troca as definições pela calibração da s16 do gold v2: o gatilho do problema é comum ou específico, e um gatilho específico desce um nível. Mais 10 exemplos inventados, um por fronteira entre níveis. Com o trecho do código.",
+  "leitura": "Opus e DeepSeek acertam bem mais medium; o Sonnet rebaixa high para medium em metade dos casos."
+ },
+ {
+  "pasta": "r1",
+  "titulo": "Teste 1 · rubrica do gold com o trecho do código",
+  "mudou": "As definições de nível passam a ser as da rubrica que rotulou o gold (Opus e Astra). Cada sugestão vai com 21 linhas do arquivo no head, marcando as linhas alteradas pelo PR e as citadas. Uma chamada por PR, como produção.",
+  "leitura": "Medium e high sobem muito em relação à produção, mas os modelos passam a subir low para medium e medium para high."
+ },
+ {
+  "pasta": "prod",
+  "titulo": "Base · prompt de produção",
+  "mudou": "O prompt de severidade de produção, sem mudança: arquivo e texto da sugestão, as 4 definições padrão. Uma chamada por PR."
+ }
+]

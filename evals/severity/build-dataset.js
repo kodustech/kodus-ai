@@ -22,6 +22,8 @@ const LR = path.join(WORK, 'light-rescue');
 const OUT = path.join(__dirname, 'dataset');
 const SEED = 'severity-v1';
 const PER_LEVEL = { low: 50, medium: 50, high: 50, critical: Infinity };
+// The finder labels a problem bug, security or performance; the gold's finer categories map onto those.
+const LABEL = { security: 'security', perf: 'performance' };
 const LEAN = ['sonnet', 'opus', 'ds', 'gpt', 'kimi', 'muse', 'ds20', 'kimi20'];
 
 const rand = (s) => parseInt(crypto.createHash('sha256').update(`${SEED}|${s}`).digest('hex').slice(0, 12), 16) / 2 ** 48;
@@ -81,7 +83,7 @@ for (const [level, n] of Object.entries(PER_LEVEL)) {
     for (const x of shuffle(covered.map((x) => x.issueId), level).slice(0, n)) {
         const g = real.get(x);
         const pick = shuffle(texts.get(x), x)[0];
-        items.push({ issueId: x, caseId: g.caseId, severity: g.severity, classReviewed: g.class_reviewed, source: pick.source, finding: { relevantFile: pick.relevantFile, relevantLinesStart: pick.relevantLinesStart, relevantLinesEnd: pick.relevantLinesEnd, suggestionContent: pick.suggestionContent } });
+        items.push({ issueId: x, caseId: g.caseId, severity: g.severity, classReviewed: g.class_reviewed, category: g.category || null, label: LABEL[g.category] || 'bug', source: pick.source, finding: { relevantFile: pick.relevantFile, relevantLinesStart: pick.relevantLinesStart, relevantLinesEnd: pick.relevantLinesEnd, suggestionContent: pick.suggestionContent } });
     }
 }
 fs.mkdirSync(OUT, { recursive: true });
