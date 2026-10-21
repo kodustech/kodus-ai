@@ -559,7 +559,8 @@
   {
    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#07",
    "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
-   "severity": "low",
+   "severity": "medium",
+   "severityBefore": "low",
    "classReviewed": "FP nit",
    "category": null,
    "label": "bug",
@@ -649,7 +650,8 @@
   {
    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-02",
    "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
-   "severity": "low",
+   "severity": "medium",
+   "severityBefore": "low",
    "classReviewed": "FP nit",
    "category": null,
    "label": "bug",
@@ -1099,7 +1101,8 @@
   {
    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#18",
    "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
-   "severity": "medium",
+   "severity": "high",
+   "severityBefore": "medium",
    "classReviewed": "TP",
    "category": "bug",
    "label": "bug",
@@ -1129,7 +1132,8 @@
   {
    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
    "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
-   "severity": "medium",
+   "severity": "high",
+   "severityBefore": "medium",
    "classReviewed": "TP",
    "category": "security",
    "label": "security",
@@ -1189,7 +1193,8 @@
   {
    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
    "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
-   "severity": "medium",
+   "severity": "high",
+   "severityBefore": "medium",
    "classReviewed": "FP nit",
    "category": "bug",
    "label": "bug",
@@ -1339,7 +1344,8 @@
   {
    "issueId": "notification-rule-processing-engine-grafana-codex#07",
    "caseId": "notification-rule-processing-engine-grafana-codex",
-   "severity": "medium",
+   "severity": "low",
+   "severityBefore": "medium",
    "classReviewed": "FP nit",
    "category": "bug",
    "label": "bug",
@@ -1414,7 +1420,8 @@
   {
    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
    "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
-   "severity": "medium",
+   "severity": "low",
+   "severityBefore": "medium",
    "classReviewed": "FP nit",
    "category": "style",
    "label": "bug",
@@ -1444,7 +1451,8 @@
   {
    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-02",
    "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
-   "severity": "medium",
+   "severity": "high",
+   "severityBefore": "medium",
    "classReviewed": "TP",
    "category": "bug",
    "label": "bug",
@@ -1474,7 +1482,8 @@
   {
    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-01",
    "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
-   "severity": "medium",
+   "severity": "high",
+   "severityBefore": "medium",
    "classReviewed": "TP",
    "category": "bug",
    "label": "bug",
@@ -1504,7 +1513,8 @@
   {
    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#08",
    "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
-   "severity": "high",
+   "severity": "medium",
+   "severityBefore": "high",
    "classReviewed": "FP nit",
    "category": "bug",
    "label": "bug",
@@ -1549,7 +1559,8 @@
   {
    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07",
    "caseId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor",
-   "severity": "high",
+   "severity": "medium",
+   "severityBefore": "high",
    "classReviewed": "TP",
    "category": "api",
    "label": "bug",
@@ -1624,7 +1635,8 @@
   {
    "issueId": "replays-self-serve-bulk-delete-system-sentry#02",
    "caseId": "replays-self-serve-bulk-delete-system-sentry",
-   "severity": "high",
+   "severity": "medium",
+   "severityBefore": "high",
    "classReviewed": "TP",
    "category": "security",
    "label": "security",
@@ -1654,7 +1666,8 @@
   {
    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#05",
    "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
-   "severity": "high",
+   "severity": "medium",
+   "severityBefore": "high",
    "classReviewed": "FP nit",
    "category": "concurrency",
    "label": "bug",
@@ -1969,7 +1982,8 @@
   {
    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
    "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com",
-   "severity": "high",
+   "severity": "medium",
+   "severityBefore": "high",
    "classReviewed": "TP",
    "category": "bug",
    "label": "bug",
@@ -1984,7 +1998,8 @@
   {
    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#08",
    "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
-   "severity": "high",
+   "severity": "medium",
+   "severityBefore": "high",
    "classReviewed": "FP nit",
    "category": "bug",
    "label": "bug",
@@ -2134,7 +2149,8 @@
   {
    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#19",
    "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
-   "severity": "high",
+   "severity": "medium",
+   "severityBefore": "high",
    "classReviewed": "TP",
    "category": null,
    "label": "bug",
@@ -2239,7 +2255,8 @@
   {
    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01",
    "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com",
-   "severity": "high",
+   "severity": "medium",
+   "severityBefore": "high",
    "classReviewed": "FP nit",
    "category": "security",
    "label": "security",
@@ -2359,7 +2376,8 @@
   {
    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
    "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com",
-   "severity": "critical",
+   "severity": "high",
+   "severityBefore": "critical",
    "classReviewed": "TP",
    "category": "data",
    "label": "bug",

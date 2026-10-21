@@ -350,6 +350,15 @@ for d in (golden, fps, revisao):
     for l in d.values():
         for r in l: r['class_reviewed'] = revisada(r)
 
+# Severidades reclassificadas por Opus e Astra ao escrever as definicoes de nivel.
+SEVREV = json.load(open(f'{W}/revisao-severidade.json'))['itens'] if os.path.exists(f'{W}/revisao-severidade.json') else {}
+for d in (golden, fps, revisao):
+    for l in d.values():
+        for r in l:
+            v = SEVREV.get(r['issueId'])
+            if v and r.get('severity') == v['de']:
+                r.update(severidadeAnterior=v['de'], severity=v['para'], severidadeRevisao=v['motivo'])
+
 meta = {'versao': 'v3', 'prs': len(A), 'modelos': list(ABR.values()) + list(RODADAS.values()) + list(RODADAS_JUIZ.values()) + list(RODADAS_PROD.values()) + list(RODADAS_FP.values()) + [f'{m}@prod-finder' for m in RODADAS_FINDER.values()], 'classificadores': ['claude-opus-5.5', 'gpt-6-astra'],
         'regua': 'TP = o problema existe no codigo do head e o PR o introduz ou mexe no codigo envolvido; FP = nao ha problema a reportar no PR',
         'regua_class_reviewed': 'Medir pelo class_reviewed. TP = TP confirmado ou descontinuado no repositorio original; FP nit = TP pendente ou que nao entrou no original, TP nit e FP; FP hallucination = o fato alegado e falso. Cada TP conta uma vez: a segunda sugestao sobre o mesmo TP conta como FP nit.'}

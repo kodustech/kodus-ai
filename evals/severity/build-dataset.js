@@ -34,9 +34,12 @@ const flat = (f) => {
     return Array.isArray(x) ? x : Object.values(x.prs).flat();
 };
 
+// The draw uses the level a problem had when the set was built, so a later
+// relabel (severidadeAnterior) changes an item's gold, not which items are in.
+const drawLevel = (x) => x.severidadeAnterior || x.severity;
 const real = new Map(
     [...flat(`${V3}/golden.json`), ...flat(`${V3}/fps-conhecidos.json`)]
-        .filter((x) => x.class === 'TP' && PER_LEVEL[x.severity])
+        .filter((x) => x.class === 'TP' && PER_LEVEL[drawLevel(x)])
         .map((x) => [x.issueId, x]),
 );
 
@@ -77,13 +80,13 @@ for (const [key, issueId] of Object.entries(read(`${V3}/sugestoes.json`).sugesto
 const items = [];
 const missing = {};
 for (const [level, n] of Object.entries(PER_LEVEL)) {
-    const pool = [...real.values()].filter((x) => x.severity === level);
+    const pool = [...real.values()].filter((x) => drawLevel(x) === level);
     const covered = pool.filter((x) => texts.has(x.issueId));
     missing[level] = pool.length - covered.length;
     for (const x of shuffle(covered.map((x) => x.issueId), level).slice(0, n)) {
         const g = real.get(x);
         const pick = shuffle(texts.get(x), x)[0];
-        items.push({ issueId: x, caseId: g.caseId, severity: g.severity, classReviewed: g.class_reviewed, category: g.category || null, label: LABEL[g.category] || 'bug', source: pick.source, finding: { relevantFile: pick.relevantFile, relevantLinesStart: pick.relevantLinesStart, relevantLinesEnd: pick.relevantLinesEnd, suggestionContent: pick.suggestionContent } });
+        items.push({ issueId: x, caseId: g.caseId, severity: g.severity, ...(g.severidadeAnterior && { severityBefore: g.severidadeAnterior }), classReviewed: g.class_reviewed, category: g.category || null, label: LABEL[g.category] || 'bug', source: pick.source, finding: { relevantFile: pick.relevantFile, relevantLinesStart: pick.relevantLinesStart, relevantLinesEnd: pick.relevantLinesEnd, suggestionContent: pick.suggestionContent } });
     }
 }
 fs.mkdirSync(OUT, { recursive: true });

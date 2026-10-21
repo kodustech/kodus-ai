@@ -1,0 +1,345 @@
+{
+ "__doc": "Severidades reclassificadas ao escrever as definicoes de low/medium/high/critical (21/10/26): o Astra propos, o Opus revisou; so entram as que os dois aceitaram. montar.py aplica por cima do rotulo e guarda o anterior em severidadeAnterior.",
+ "itens": {
+  "add-guest-management-functionality-to-existing-bookings-cal-com#kimi-01": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "The description explicitly includes bypassing the blacklist, beyond duplicate handling."
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "Case changes defeat the enforced email blocklist."
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex#opa-02": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "Omitting a client-controlled header bypasses the device limit."
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#kimip-01": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "Rescheduling leaves other hosts’ old calendar events active."
+  },
+  "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01": {
+   "de": "high",
+   "para": "medium",
+   "motivo": "Unawaited cancellation and unobserved errors do not themselves establish that cancellation never completes."
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com#10": {
+   "de": "critical",
+   "para": "high",
+   "motivo": "The malformed stored credential breaks subsequent reads, matching the operational consequence of `#07`."
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com#01": {
+   "de": "high",
+   "para": "medium",
+   "motivo": "Non-constant-time comparison establishes a weakness, not a demonstrated authentication compromise."
+  },
+  "feat-2fa-backup-codes-cal-com#14": {
+   "de": "medium",
+   "para": "low",
+   "motivo": "The log names the wrong operation without a further stated consequence."
+  },
+  "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#10": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "Entering through a supported navigation path never performs the unsubscribe."
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-01": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "Recovery-code login fails for the described LDAP-provider path."
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#opa-01": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "A linked provider disappears from the login choices for the affected configuration."
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com#05": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "Legitimate attendees are denied authorization because their stored email casing differs."
+  },
+  "database-performance-optimizations-grafana-codex#06": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "The affected cleanup batch configuration makes every DELETE fail."
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#04": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "Valid hostnames differing only in case are rejected by the embedding path."
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#18": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "Once the embedded post is deleted, every subsequent import of that URL crashes."
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor#02": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "The client prevents uploads explicitly allowed by the configured server limit."
+  },
+  "feature-automatically-downsize-large-images-discourse-cursor#musep-01": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "The upload pipeline corrupts or changes SVG format before subsequent SVG processing."
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "Mixed-case allowed hosts cannot embed."
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#14": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "Host-with-port configurations accepted by validation never match at runtime."
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#prod-01": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "Valid long-TLD hosts cannot be configured."
+  },
+  "github-oauth-security-enhancement-sentry#09": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "Existing integrations without sender metadata crash the installation-check path."
+  },
+  "implement-recovery-key-support-for-user-storage-providers-keycloak#02": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "Federated recovery credentials cannot be removed through the ID-based removal operation."
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com#17": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "The Salesforce connection uses stale credentials despite completing refresh."
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#musep-02": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "The described crash leaves a permanent retrieval block for the URL."
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#29": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "The migration/import workflow now aborts when an imported thread’s original URL is dead."
+  },
+  "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#06": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "An existing quoted host value breaks the migration’s SQL statement."
+  },
+  "database-performance-optimizations-grafana-codex#muse13-01": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "The cleanup race deletes annotations that should be retained."
+  },
+  "implement-access-token-context-encoding-framework-keycloak#06": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "Registering a conflicting shortcut changes the grant identity decoded from existing tokens."
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#19": {
+   "de": "high",
+   "para": "medium",
+   "motivo": "Failure is described for dead or unparseable sources, without a wider outage or batch failure."
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#14": {
+   "de": "high",
+   "para": "medium",
+   "motivo": "Missing upsampling produces incorrect diagnostic counts, matching the other medium upsampling errors."
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07": {
+   "de": "high",
+   "para": "medium",
+   "motivo": "The inclusion guard is bypassed, but this description establishes no sensitive disclosure or broken operation."
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#08": {
+   "de": "high",
+   "para": "medium",
+   "motivo": "A private provider remains listed; successful unauthorized authentication is not established."
+  },
+  "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#08": {
+   "de": "high",
+   "para": "medium",
+   "motivo": "Rankings disagree with weighted counts without an additional operational consequence."
+  },
+  "feature-localization-fallbacks-server-side-discourse-cursor#01": {
+   "de": "high",
+   "para": "medium",
+   "motivo": "Missing fallback translations are established, but failed job or email delivery is not."
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#15": {
+   "de": "high",
+   "para": "medium",
+   "motivo": "The stored reference lacks an external ID, but the description does not establish a failed subsequent operation."
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com#08": {
+   "de": "high",
+   "para": "medium",
+   "motivo": "Token fields are mishandled by the schema without a stated refresh or authentication failure."
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com#15": {
+   "de": "high",
+   "para": "medium",
+   "motivo": "The request carries the wrong user ID, but neither a cross-user write nor a failed sync is established."
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#01": {
+   "de": "high",
+   "para": "medium",
+   "motivo": "The header layout displaces navigation without establishing that navigation becomes unusable."
+  },
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#05": {
+   "de": "high",
+   "para": "medium",
+   "motivo": "Stale provider IDs persist without an established login failure or authorization bypass."
+  },
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com#03": {
+   "de": "high",
+   "para": "medium",
+   "motivo": "Concurrent requests create duplicate rows; credential loss or unusable authentication is not described."
+  },
+  "fix-proper-handling-of-group-memberships-discourse-cursor#10": {
+   "de": "high",
+   "para": "medium",
+   "motivo": "A stale primary-group field remains, without establishing retained access after removal."
+  },
+  "replays-self-serve-bulk-delete-system-sentry#02": {
+   "de": "high",
+   "para": "medium",
+   "motivo": "Raw-report logging creates exposure risk without identifying a severe disclosure or log-based exploit."
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06": {
+   "de": "high",
+   "para": "medium",
+   "motivo": "Disclosure is limited to the hidden website host/path, without broader protected-resource access."
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#05": {
+   "de": "medium",
+   "para": "low",
+   "motivo": "The requested difference is how much of the website URL the label displays."
+  },
+  "notification-rule-processing-engine-grafana-codex#07": {
+   "de": "medium",
+   "para": "low",
+   "motivo": "Missing React keys produce warnings; incorrect row behavior is not described."
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#05": {
+   "de": "medium",
+   "para": "low",
+   "motivo": "The login panel loses right alignment without losing functionality."
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#pf-gpt-C1": {
+   "de": "medium",
+   "para": "low",
+   "motivo": "Action buttons move within the row without becoming unavailable."
+  },
+  "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02": {
+   "de": "medium",
+   "para": "low",
+   "motivo": "Hint text changes shade without a stated readability failure."
+  },
+  "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04": {
+   "de": "medium",
+   "para": "low",
+   "motivo": "Mobile names change shade without a stated usability consequence."
+  },
+  "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05": {
+   "de": "medium",
+   "para": "low",
+   "motivo": "Heading lightness differs from the intended palette without established readability loss."
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#01": {
+   "de": "medium",
+   "para": "low",
+   "motivo": "Host casing changes the displayed URL label, not the destination or access."
+  },
+  "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#04": {
+   "de": "medium",
+   "para": "low",
+   "motivo": "The domain heuristic changes label verbosity without a stated functional consequence."
+  },
+  "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03": {
+   "de": "medium",
+   "para": "low",
+   "motivo": "Desktop names change shade without a stated usability consequence."
+  },
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor#16": {
+   "de": "medium",
+   "para": "low",
+   "motivo": "In-place string mutation is identified without a caller-visible failure."
+  },
+  "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#02": {
+   "de": "medium",
+   "para": "low",
+   "motivo": "Legacy-browser vertical alignment is cosmetic on the stated evidence."
+  },
+  "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01": {
+   "de": "medium",
+   "para": "low",
+   "motivo": "Links become paler, without the explicit contrast failure described in the separate badge finding."
+  },
+  "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-02": {
+   "de": "low",
+   "para": "medium",
+   "motivo": "The method returns the wrong provider implementation, violating its behavioral contract."
+  },
+  "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#07": {
+   "de": "low",
+   "para": "medium",
+   "motivo": "The assertion cannot distinguish the required result from an incorrect one."
+  },
+  "implement-access-token-context-encoding-framework-keycloak#01": {
+   "de": "low",
+   "para": "medium",
+   "motivo": "Missing validation permits a null token ID to be encoded."
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#05": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "The same change’s high-labelled `#01` accepts slots extending beyond working hours through the same start-versus-end mistake. Configured working hours and date overrides enforce the same scheduling constraint; their source does not justify different severity."
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-01": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "Accepting a slot before the permitted interval violates the same constraint as accepting one after it. The high-labelled `#01` provides the direct comparator. “Partial overlap” does not distinguish their consequences."
+  },
+  "notification-rule-processing-engine-grafana-codex#05": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "The same change’s `#01`, `#02`, and `#11` are high for unavailable list-view management actions. This description establishes failure of that supported UI path. Requiring proof that no alternative interface exists would also undermine those labels."
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com#kimip-02": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "This bypasses an explicit participation-capacity constraint. The high device-limit findings `#07` and `#11`, plus the already-agreed promotion of device-limit `#opa-02`, establish the corresponding treatment of configured admission caps."
+  },
+  "add-guest-management-functionality-to-existing-bookings-cal-com#musep-01": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "The description establishes guest admission and calendar updates against cancelled or rejected bookings, violating lifecycle eligibility. This aligns with high findings for broken cancellation effects, including collective-calendar `#13`. The medium cancelled-reminder timing case describes a late notification without these guest and calendar mutations."
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#06": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "Inverted ranges break availability for the stated midnight-crossing configuration; wrong-day ranges misapply the enforced schedule. The same change’s high `#04` and `#oph-03` likewise make configured intervals unusable. Timezone dependence does not reduce the consequence."
+  },
+  "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-02": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "Skipping or moving a configured override defeats its scheduling constraint. High-labelled `#02` similarly ignores day-off overrides, while `#07` accepts availability on unconfigured weekdays. Server timezone supplies the trigger, not a lesser consequence."
+  },
+  "anonymous-add-configurable-device-limit-grafana-codex#01": {
+   "de": "medium",
+   "para": "high",
+   "motivo": "These are distinct new devices admitted beyond the cap, not merely duplicate bookkeeping rows. High-labelled `#07` and `#11` also defeat that cap. Concurrency changes the trigger; it does not change which admission constraint is violated."
+  },
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#10": {
+   "de": "medium",
+   "para": "low",
+   "motivo": "A small bounded N+1 over a booking's calendar references is low under the agreed N+1 rule."
+  }
+ }
+}
