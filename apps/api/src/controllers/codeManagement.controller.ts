@@ -124,6 +124,7 @@ export class CodeManagementController {
         return {
             map,
             sync,
+            rankedAreas: map ? rankCodeAreas(map.directDirectories) : [],
             topAreas: map
                 ? rankCodeAreas(map.directDirectories).slice(
                       0,

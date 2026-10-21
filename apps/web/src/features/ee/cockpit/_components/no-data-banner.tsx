@@ -1,8 +1,15 @@
+"use client";
+
+import { useSearchParams } from "next/navigation";
 import { Image } from "@components/ui/image";
 import { PAGE_MAX_WIDTH } from "@components/ui/page";
 import { cn } from "src/core/utils/components";
 
+import { COCKPIT_PARAM } from "../_constants";
+
 export const CockpitNoDataBanner = () => {
+    const tab = useSearchParams().get(COCKPIT_PARAM.tab);
+    if (tab === "code-areas") return null;
     return (
         <div className="bg-warning/10 -mt-10 mb-8 flex min-h-16 items-center justify-center">
             <div

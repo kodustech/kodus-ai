@@ -1,6 +1,5 @@
 import { extractApiData } from "../_helpers/api-data-extractor";
 import { getSelectedDateRange } from "../_helpers/get-selected-date-range";
-import { getSelectedRepository } from "../_helpers/get-selected-repository";
 import {
     getIgnoredCriticals,
     getImplementationRateByCategory,
@@ -20,7 +19,6 @@ import {
     ReviewOperationalOutcomesChart,
     WeeklyImplementationChart,
 } from "./_components/charts.no-ssr";
-import { CodeAreaRiskSection } from "./_components/code-area-risk-section";
 import { RateByCategoryChart } from "./_components/rate-by-category-chart";
 import { RepositoriesHealthTable } from "./_components/repositories-health-table";
 import { ReviewCards } from "./_components/review-cards";
@@ -28,10 +26,7 @@ import { ReviewSection } from "./_components/review-section";
 import { RulesHealthTable } from "./_components/rules-health-table";
 
 export default async function KodusReviewTab() {
-    const [{ startDate, endDate }, selectedRepository] = await Promise.all([
-        getSelectedDateRange(),
-        getSelectedRepository(),
-    ]);
+    const { startDate, endDate } = await getSelectedDateRange();
     const params = { startDate, endDate };
 
     const [
@@ -85,8 +80,6 @@ export default async function KodusReviewTab() {
                 ignoredCriticals={ignoredCriticals}
                 operationalMetrics={operationalMetrics}
             />
-
-            <CodeAreaRiskSection selectedRepository={selectedRepository} />
 
             {operationalMetrics && operationalWeekly?.length ? (
                 <ReviewSection

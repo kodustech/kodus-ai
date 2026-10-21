@@ -6,6 +6,7 @@ export type TabValue = keyof typeof tabs;
 export const tabs = {
     "kodus-review": "Kodus Review",
     "productivity": "Productivity",
+    "code-areas": "Code areas",
 } satisfies Record<string, string>;
 
 // URL search-param keys that carry the dashboard's current view, so it
