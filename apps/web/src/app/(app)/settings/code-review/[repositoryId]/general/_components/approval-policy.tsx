@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { Button } from "@components/ui/button";
 import { FormControl } from "@components/ui/form-control";
 import { Switch } from "@components/ui/switch";
 import TagInput from "@components/ui/tag-input";
@@ -71,6 +73,7 @@ function EligibilityFields() {
 
 export function ApprovalPolicySettings() {
     const form = useFormContext<CodeReviewFormType>();
+    const [guidanceOpen, setGuidanceOpen] = useState(false);
     const riskAssessmentActive = useWatch({
         control: form.control,
         name: "approvalRiskActive.value",
@@ -157,9 +160,11 @@ export function ApprovalPolicySettings() {
                                             <OverrideIndicatorForm fieldName="approvalRiskActive" />
                                         </div>
                                         <p className="text-text-secondary mt-1 text-xs leading-5">
-                                            Approve only low-risk PRs. Kody
-                                            considers the changes and historical
-                                            code-area risk.
+                                            Kody assesses the PR changes and
+                                            available code history using its
+                                            built-in criteria. After a clean
+                                            review, it approves low-risk PRs and
+                                            leaves the others for a person.
                                         </p>
                                     </div>
                                     <Switch
@@ -174,38 +179,99 @@ export function ApprovalPolicySettings() {
                         />
 
                         {riskAssessmentActive && (
-                            <Controller
-                                name="approvalRiskInstructions.value"
-                                control={form.control}
-                                render={({ field }) => (
-                                    <FormControl.Root className="border-card-lv3/60 mt-4 border-t pt-4">
-                                        <div className="mb-2 flex flex-wrap items-center gap-2">
-                                            <FormControl.Label
-                                                htmlFor={field.name}
-                                                className="mb-0 font-medium">
-                                                Team risk guidance
-                                            </FormControl.Label>
-                                            <OverrideIndicatorForm fieldName="approvalRiskInstructions" />
-                                        </div>
-                                        <FormControl.Input>
-                                            <Textarea
-                                                id={field.name}
-                                                value={field.value ?? ""}
-                                                disabled={field.disabled}
-                                                maxLength={4000}
-                                                onChange={field.onChange}
-                                                placeholder="What should require a person to approve?"
-                                                className="bg-card-lv1 min-h-24 resize-y px-4 py-3"
-                                            />
-                                        </FormControl.Input>
-                                        <FormControl.Helper className="text-xs leading-5">
-                                            Add team-specific context. The clean
-                                            review requirement still applies. Up
-                                            to 4,000 characters.
-                                        </FormControl.Helper>
-                                    </FormControl.Root>
-                                )}
-                            />
+                            <div className="border-card-lv3/60 mt-4 border-t pt-4">
+                                <Controller
+                                    name="approvalRiskInstructions.value"
+                                    control={form.control}
+                                    render={({ field }) => {
+                                        const hasGuidance = Boolean(
+                                            field.value?.trim(),
+                                        );
+
+                                        return (
+                                            <div>
+                                                <div className="flex items-start justify-between gap-4">
+                                                    <div className="min-w-0">
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <span className="text-text-primary text-sm font-medium">
+                                                                Additional team
+                                                                guidance
+                                                            </span>
+                                                            <OverrideIndicatorForm fieldName="approvalRiskInstructions" />
+                                                        </div>
+                                                        {hasGuidance ? (
+                                                            <p className="text-text-secondary mt-1 line-clamp-2 text-xs leading-5 break-words whitespace-pre-line">
+                                                                {field.value}
+                                                            </p>
+                                                        ) : (
+                                                            <p className="text-text-secondary mt-1 text-xs leading-5">
+                                                                No team-specific
+                                                                instructions.
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                    <Button
+                                                        type="button"
+                                                        variant="helper"
+                                                        size="xs"
+                                                        disabled={
+                                                            field.disabled
+                                                        }
+                                                        aria-expanded={
+                                                            guidanceOpen
+                                                        }
+                                                        onClick={() =>
+                                                            setGuidanceOpen(
+                                                                !guidanceOpen,
+                                                            )
+                                                        }>
+                                                        {guidanceOpen
+                                                            ? "Close"
+                                                            : hasGuidance
+                                                              ? "Edit"
+                                                              : "Add"}
+                                                    </Button>
+                                                </div>
+                                                {guidanceOpen && (
+                                                    <FormControl.Root className="mt-4">
+                                                        <FormControl.Label
+                                                            htmlFor={field.name}
+                                                            className="mb-2 font-medium">
+                                                            Additional
+                                                            instructions
+                                                        </FormControl.Label>
+                                                        <FormControl.Input>
+                                                            <Textarea
+                                                                id={field.name}
+                                                                value={
+                                                                    field.value ??
+                                                                    ""
+                                                                }
+                                                                disabled={
+                                                                    field.disabled
+                                                                }
+                                                                maxLength={4000}
+                                                                onChange={
+                                                                    field.onChange
+                                                                }
+                                                                placeholder="e.g. Require a person to approve payment retry changes"
+                                                                className="bg-card-lv1 min-h-24 resize-y px-4 py-3"
+                                                            />
+                                                        </FormControl.Input>
+                                                        <FormControl.Helper className="text-xs leading-5">
+                                                            These instructions
+                                                            add context to
+                                                            Kody&apos;s built-in
+                                                            assessment. Up to
+                                                            4,000 characters.
+                                                        </FormControl.Helper>
+                                                    </FormControl.Root>
+                                                )}
+                                            </div>
+                                        );
+                                    }}
+                                />
+                            </div>
                         )}
                     </div>
                 </div>
