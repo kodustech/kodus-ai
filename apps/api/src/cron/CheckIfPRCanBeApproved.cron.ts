@@ -833,6 +833,13 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 });
 
                 if (conditionalDecision) {
+                    const before =
+                        await this.codeManagementService.getReviewStatusByPullRequest(
+                            codeManagementRequestData,
+                        );
+                    if (before === PullRequestReviewState.APPROVED) {
+                        return false;
+                    }
                     // Comments and provider status checks can take time. A new
                     // commit or a removed scope label invalidates the decision
                     // made at the start of this cron pass.
@@ -865,13 +872,6 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         currentHeadSha: latestHeadSha,
                     });
                     if (conditionalDecision.kind !== 'approve') return false;
-                    const before =
-                        await this.codeManagementService.getReviewStatusByPullRequest(
-                            codeManagementRequestData,
-                        );
-                    if (before === PullRequestReviewState.APPROVED) {
-                        return false;
-                    }
                 }
 
                 await this.codeManagementService.checkIfPullRequestShouldBeApproved(
