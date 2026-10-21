@@ -499,35 +499,56 @@ export function CodeAreasTab({
                             </div>
                             {(structureCoverage?.analyzedFiles ?? 0) > 0 ? (
                                 <div className="p-4 sm:p-5">
-                                    <div className="text-text-tertiary mb-2 grid grid-cols-2 gap-3 pl-16 text-center text-xs font-medium sm:pl-20">
-                                        <span>Occasional changes</span>
-                                        <span>Frequent changes</span>
-                                    </div>
-                                    <div className="grid grid-cols-[52px_minmax(0,1fr)_minmax(0,1fr)] gap-2 sm:grid-cols-[68px_minmax(0,1fr)_minmax(0,1fr)] sm:gap-3">
-                                        <div className="text-text-secondary flex items-center justify-end text-right text-xs leading-4">
-                                            Structural
-                                            <br />
-                                            signals
-                                        </div>
-                                        {group("fragile-occasional", "Monitor")}
+                                    <div className="space-y-3 sm:hidden">
                                         {group(
                                             "fragile-frequent",
                                             "Investigate first",
                                             true,
                                         )}
-                                        <div className="text-text-secondary flex items-center justify-end text-right text-xs leading-4">
-                                            No signals
-                                            <br />
-                                            in sample
-                                        </div>
-                                        {group(
-                                            "clear-occasional",
-                                            "Less active",
-                                        )}
+                                        {group("fragile-occasional", "Monitor")}
                                         {group(
                                             "clear-frequent",
                                             "Watch changes",
                                         )}
+                                        {group(
+                                            "clear-occasional",
+                                            "Less active",
+                                        )}
+                                    </div>
+                                    <div className="hidden sm:block">
+                                        <div className="text-text-tertiary mb-2 grid grid-cols-2 gap-3 pl-20 text-center text-xs font-medium">
+                                            <span>Occasional changes</span>
+                                            <span>Frequent changes</span>
+                                        </div>
+                                        <div className="grid grid-cols-[68px_minmax(0,1fr)_minmax(0,1fr)] gap-3">
+                                            <div className="text-text-secondary flex items-center justify-end text-right text-xs leading-4">
+                                                Structural
+                                                <br />
+                                                signals
+                                            </div>
+                                            {group(
+                                                "fragile-occasional",
+                                                "Monitor",
+                                            )}
+                                            {group(
+                                                "fragile-frequent",
+                                                "Investigate first",
+                                                true,
+                                            )}
+                                            <div className="text-text-secondary flex items-center justify-end text-right text-xs leading-4">
+                                                No signals
+                                                <br />
+                                                in sample
+                                            </div>
+                                            {group(
+                                                "clear-occasional",
+                                                "Less active",
+                                            )}
+                                            {group(
+                                                "clear-frequent",
+                                                "Watch changes",
+                                            )}
+                                        </div>
                                     </div>
                                     <p className="text-text-tertiary mt-4 text-xs">
                                         Frequent = top 25% by changed PRs.
