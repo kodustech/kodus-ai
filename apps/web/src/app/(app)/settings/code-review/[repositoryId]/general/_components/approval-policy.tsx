@@ -13,20 +13,23 @@ const listFields = [
     {
         name: "approvalLabels" as const,
         label: "Approval labels",
+        maxTags: 50,
         placeholder: "Add a label",
-        help: "Only PRs with one of these labels are eligible. Leave empty for any label.",
+        help: "Only PRs with one of these labels are eligible. Leave empty for any label. Up to 50 labels.",
     },
     {
         name: "approvalAuthors" as const,
         label: "Approval authors",
+        maxTags: 50,
         placeholder: "Add a provider login",
-        help: "Only PRs by one of these authors are eligible. If labels are also set, both conditions apply.",
+        help: "Only PRs by one of these authors are eligible. If labels are also set, both conditions apply. Up to 50 authors.",
     },
     {
         name: "approvalSensitivePaths" as const,
         label: "Sensitive paths",
+        maxTags: 100,
         placeholder: "Add a file glob",
-        help: "Changes to these paths always require a person to approve.",
+        help: "Changes to these paths always require a person to approve. Up to 100 paths.",
     },
 ];
 
@@ -35,7 +38,7 @@ export function ApprovalPolicySettings() {
 
     return (
         <div className="flex flex-col gap-6">
-            {listFields.map(({ name, label, placeholder, help }) => (
+            {listFields.map(({ name, label, maxTags, placeholder, help }) => (
                 <Controller
                     key={name}
                     name={`${name}.value`}
@@ -53,6 +56,7 @@ export function ApprovalPolicySettings() {
                                     id={field.name}
                                     disabled={field.disabled}
                                     tags={field.value ?? []}
+                                    maxTags={maxTags}
                                     placeholder={placeholder}
                                     onTagsChange={field.onChange}
                                 />
@@ -104,13 +108,15 @@ export function ApprovalPolicySettings() {
                                 id={field.name}
                                 value={field.value ?? ""}
                                 disabled={field.disabled}
+                                maxLength={4000}
                                 onChange={field.onChange}
                                 placeholder="Describe changes that should require human approval"
                             />
                         </FormControl.Input>
                         <FormControl.Helper>
                             Kody uses this text when assessing risk. It does not
-                            bypass the clean review requirement.
+                            bypass the clean review requirement. Up to 4,000
+                            characters.
                         </FormControl.Helper>
                     </FormControl.Root>
                 )}
