@@ -6,7 +6,7 @@
 # the `oven/bun:${BUN_VERSION}-debian` stage below.
 ARG BUN_VERSION=1.2.12
 
-FROM docker.io/library/node:22.22.2-slim AS base
+FROM docker.io/library/node:22.23.4-slim AS base
 WORKDIR /usr/src/app
 
 ARG API_CLOUD_MODE=false
@@ -150,7 +150,7 @@ RUN apt-get update \
   && unzip -o /tmp/ast-grep.zip ast-grep -d / \
   && chmod +x /ast-grep && test -s /ast-grep
 
-FROM docker.io/library/node:22.22.2-slim AS runtime-common
+FROM docker.io/library/node:22.23.4-slim AS runtime-common
 LABEL org.opencontainers.image.source="https://github.com/kodustech/kodus-ai"
 WORKDIR /usr/src/app
 ENV NODE_ENV=production
