@@ -80,49 +80,48 @@ function EvidenceList({ evidence }: { evidence: AreaEvidence[] }) {
     }
 
     return (
-        <div className="divide-card-lv3/70 divide-y">
+        <div className="grid gap-x-8 md:grid-cols-2">
             {evidence.map((item) => (
                 <div
                     key={item.prNumber}
-                    className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
-                    <div className="min-w-0">
-                        <p className="text-text-primary text-sm font-medium">
-                            PR #{item.prNumber}
-                        </p>
-                        <p className="text-text-tertiary mt-0.5 text-sm">
-                            {item.bugFixEvidence === "linked-bug-issue"
-                                ? "Linked bug issue"
-                                : item.bugFixEvidence === "title-signal"
-                                  ? "Bug-fix title signal"
-                                  : "Changed this area"}
-                        </p>
-                        {!!item.bugIssueUrls?.length && (
-                            <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-                                {item.bugIssueUrls
-                                    .filter((url) => /^https?:\/\//i.test(url))
-                                    .map((url, index) => (
-                                        <a
-                                            key={url}
-                                            href={url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-primary-light focus-visible:ring-primary-light inline-flex items-center gap-1 rounded text-sm hover:underline focus-visible:ring-2">
-                                            {issueLabel(url, index)}
-                                            <ArrowUpRight className="size-3" />
-                                        </a>
-                                    ))}
-                            </div>
-                        )}
-                    </div>
-                    {/^https?:\/\//i.test(item.prUrl) && (
+                    className="border-card-lv3/70 min-w-0 border-b py-3 first:pt-0">
+                    {/^https?:\/\//i.test(item.prUrl) ? (
                         <a
                             href={item.prUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            aria-label={`Open PR #${item.prNumber}`}
-                            className="text-text-secondary hover:text-text-primary focus-visible:ring-primary-light shrink-0 rounded p-1 focus-visible:ring-2">
-                            <ArrowUpRight className="size-4" />
+                            className="text-text-primary hover:text-primary-light focus-visible:ring-primary-light inline-flex items-center gap-1 rounded text-sm font-medium focus-visible:ring-2">
+                            PR #{item.prNumber}
+                            <ArrowUpRight className="size-3.5" />
                         </a>
+                    ) : (
+                        <p className="text-text-primary text-sm font-medium">
+                            PR #{item.prNumber}
+                        </p>
+                    )}
+                    <p className="text-text-tertiary mt-0.5 text-sm">
+                        {item.bugFixEvidence === "linked-bug-issue"
+                            ? "Linked bug issue"
+                            : item.bugFixEvidence === "title-signal"
+                              ? "Bug-fix title signal"
+                              : "Changed this area"}
+                    </p>
+                    {!!item.bugIssueUrls?.length && (
+                        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+                            {item.bugIssueUrls
+                                .filter((url) => /^https?:\/\//i.test(url))
+                                .map((url, index) => (
+                                    <a
+                                        key={url}
+                                        href={url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-primary-light focus-visible:ring-primary-light inline-flex items-center gap-1 rounded text-sm hover:underline focus-visible:ring-2">
+                                        {issueLabel(url, index)}
+                                        <ArrowUpRight className="size-3" />
+                                    </a>
+                                ))}
+                        </div>
                     )}
                 </div>
             ))}
@@ -361,7 +360,7 @@ export function CodeAreasTab({
                                         window.
                                     </p>
                                 </div>
-                                <div className="grid gap-0 md:grid-cols-3">
+                                <div className="grid gap-0 lg:grid-cols-3">
                                     {focusAreas.map((area, index) => (
                                         <button
                                             key={area.path}
@@ -369,7 +368,7 @@ export function CodeAreasTab({
                                             onClick={() =>
                                                 inspectArea(area.path)
                                             }
-                                            className="border-card-lv3/70 focus-visible:ring-primary-light hover:bg-primary-light/10 min-w-0 border-t py-4 text-left focus-visible:ring-2 focus-visible:outline-none md:border-t-0 md:border-l md:px-5 md:first:border-l-0 md:first:pl-0">
+                                            className="border-card-lv3/70 focus-visible:ring-primary-light hover:bg-primary-light/10 min-w-0 border-t py-4 text-left focus-visible:ring-2 focus-visible:outline-none lg:border-t-0 lg:border-l lg:px-5 lg:first:border-l-0 lg:first:pl-0">
                                             <span className="text-text-tertiary text-xs font-medium tabular-nums">
                                                 {String(index + 1).padStart(
                                                     2,
@@ -446,7 +445,7 @@ export function CodeAreasTab({
                                 </Select>
                             </div>
                         </div>
-                        <div className="border-card-lv3/70 bg-card-lv2/30 text-text-tertiary hidden grid-cols-[minmax(260px,1fr)_minmax(180px,0.8fr)_minmax(180px,0.8fr)_24px] gap-6 border-y px-5 py-2 text-xs font-medium tracking-wide uppercase md:grid">
+                        <div className="border-card-lv3/70 bg-card-lv2/30 text-text-tertiary hidden grid-cols-[minmax(260px,1fr)_minmax(180px,0.8fr)_minmax(180px,0.8fr)_24px] gap-6 border-y px-5 py-2 text-xs font-medium tracking-wide uppercase lg:grid">
                             <span>Directory</span>
                             <span>Merged PRs that changed it</span>
                             <span>PRs linked to bug issues</span>
@@ -472,7 +471,7 @@ export function CodeAreasTab({
                                                 aria-expanded={selected}
                                                 aria-controls={`area-evidence-${area.path.replace(/[^a-zA-Z0-9-]/g, "-")}`}
                                                 className={`focus-visible:ring-primary-light hover:bg-card-lv2/50 w-full px-5 py-3.5 text-left focus-visible:ring-2 focus-visible:outline-none ${selected ? "bg-card-lv2/50" : ""}`}>
-                                                <div className="grid min-w-0 items-center gap-x-6 gap-y-3 md:grid-cols-[minmax(260px,1fr)_minmax(180px,0.8fr)_minmax(180px,0.8fr)_24px]">
+                                                <div className="grid min-w-0 items-center gap-x-6 gap-y-3 lg:grid-cols-[minmax(260px,1fr)_minmax(180px,0.8fr)_minmax(180px,0.8fr)_24px]">
                                                     <span className="text-text-primary min-w-0 font-mono text-sm font-medium break-all">
                                                         {area.path}
                                                     </span>
@@ -488,7 +487,7 @@ export function CodeAreasTab({
                                                                 }}
                                                             />
                                                         </span>
-                                                        <span className="text-text-tertiary text-xs md:hidden">
+                                                        <span className="text-text-tertiary text-xs lg:hidden">
                                                             changed PRs
                                                         </span>
                                                     </span>
@@ -506,12 +505,12 @@ export function CodeAreasTab({
                                                                 }}
                                                             />
                                                         </span>
-                                                        <span className="text-text-tertiary text-xs md:hidden">
+                                                        <span className="text-text-tertiary text-xs lg:hidden">
                                                             linked fixes
                                                         </span>
                                                     </span>
                                                     <ChevronDown
-                                                        className={`text-text-tertiary hidden size-4 transition-transform md:block ${selected ? "rotate-180" : ""}`}
+                                                        className={`text-text-tertiary hidden size-4 transition-transform lg:block ${selected ? "rotate-180" : ""}`}
                                                     />
                                                 </div>
                                             </button>
@@ -522,13 +521,11 @@ export function CodeAreasTab({
                                                     <h4 className="text-text-primary mb-4 text-sm font-semibold">
                                                         Recent PR evidence
                                                     </h4>
-                                                    <div className="max-w-3xl">
-                                                        <EvidenceList
-                                                            evidence={
-                                                                area.recentEvidence
-                                                            }
-                                                        />
-                                                    </div>
+                                                    <EvidenceList
+                                                        evidence={
+                                                            area.recentEvidence
+                                                        }
+                                                    />
                                                 </div>
                                             )}
                                         </div>
