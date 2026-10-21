@@ -95,37 +95,50 @@ async function main(): Promise<void> {
     }
 
     const now = Date.now();
-    const pullRequests = [
-        {
-            number: 101,
-            title: 'Fix auth session regression',
-            files: ['src/auth/session.ts'],
-            linkedBugIssues: ['https://example.invalid/issues/101'],
-        },
-        {
-            number: 102,
-            title: 'Update billing checkout',
-            files: ['src/billing/checkout.ts'],
-            linkedBugIssues: [],
-        },
-        {
-            number: 103,
-            title: 'Fix billing invoice bug',
-            files: ['src/billing/invoice.ts'],
-            linkedBugIssues: ['https://example.invalid/issues/103'],
-        },
-        {
-            number: 104,
-            title: 'Improve auth token refresh',
-            files: ['src/auth/token.ts'],
-            linkedBugIssues: [],
-        },
-    ].map((pr, index) => ({
-        ...pr,
-        url: `https://example.invalid/pull/${pr.number}`,
-        mergedAt: new Date(now - (index + 1) * 86400000).toISOString(),
-        filesComplete: true,
-    }));
+    // Synthetic coverage across all four chart regions; never used by evals.
+    const profiles: Array<[string, number, number]> = [
+        ['src/auth/session', 28, 17],
+        ['src/billing/checkout', 24, 14],
+        ['src/payments/refunds', 20, 4],
+        ['src/notifications/email', 18, 2],
+        ['src/dashboard/charts', 16, 1],
+        ['src/auth/sso', 13, 12],
+        ['src/billing/invoice', 12, 10],
+        ['src/api/webhooks', 10, 7],
+        ['src/infra/queue', 9, 1],
+        ['src/search/indexing', 8, 5],
+        ['src/integrations/github', 7, 1],
+        ['src/settings/preferences', 7, 0],
+        ['src/reviews/summary', 6, 4],
+        ['src/observability/tracing', 5, 0],
+        ['src/permissions/roles', 4, 2],
+        ['src/teams/members', 3, 1],
+        ['src/editor/commands', 3, 0],
+        ['src/docs/guides', 3, 1],
+        ['src/theme/tokens', 2, 0],
+        ['src/i18n/messages', 2, 0],
+    ];
+    let nextPrNumber = 101;
+    const pullRequests = profiles.flatMap(
+        ([directory, changedPrs, linkedBugFixPrs], profileIndex) =>
+            Array.from({ length: changedPrs }, (_, index) => {
+                const number = nextPrNumber++;
+                const bugFix = index < linkedBugFixPrs;
+                return {
+                    number,
+                    title: `${bugFix ? 'Fix' : 'Update'} ${directory}`,
+                    files: [`${directory}/change-${index}.ts`],
+                    linkedBugIssues: bugFix
+                        ? [`https://example.invalid/issues/${number}`]
+                        : [],
+                    url: `https://example.invalid/pull/${number}`,
+                    mergedAt: new Date(
+                        now - (index + 1) * 86400000 - profileIndex * 3600000,
+                    ).toISOString(),
+                    filesComplete: true,
+                };
+            }),
+    );
     const snapshot = buildCodeAreaRiskMap({
         source: 'preview-demo',
         windowStart: new Date(now - 30 * 86400000).toISOString(),

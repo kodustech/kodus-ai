@@ -59,6 +59,17 @@ const date = (value: string) =>
         year: "numeric",
     });
 
+const issueLabel = (url: string, index: number) => {
+    try {
+        const segment = new URL(url).pathname.split("/").filter(Boolean).at(-1);
+        return segment
+            ? `Issue ${decodeURIComponent(segment)}`
+            : `Issue ${index + 1}`;
+    } catch {
+        return `Issue ${index + 1}`;
+    }
+};
+
 function SummaryStat({
     label,
     value,
@@ -105,6 +116,23 @@ function EvidenceList({ evidence }: { evidence: AreaEvidence[] }) {
                                   ? "Bug-fix title signal"
                                   : "Changed this area"}
                         </p>
+                        {!!item.bugIssueUrls?.length && (
+                            <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+                                {item.bugIssueUrls
+                                    .filter((url) => /^https?:\/\//i.test(url))
+                                    .map((url, index) => (
+                                        <a
+                                            key={url}
+                                            href={url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-primary-light focus-visible:ring-primary-light inline-flex items-center gap-1 rounded text-xs hover:underline focus-visible:ring-2">
+                                            {issueLabel(url, index)}
+                                            <ArrowUpRight className="size-3" />
+                                        </a>
+                                    ))}
+                            </div>
+                        )}
                     </div>
                     {/^https?:\/\//i.test(item.prUrl) && (
                         <a
@@ -228,8 +256,8 @@ export function CodeAreasTab({
                         Code areas
                     </h2>
                     <p className="text-text-secondary mt-1 max-w-2xl text-sm">
-                        Find directories with concentrated change and bug-fix
-                        history. Use the evidence to guide review attention.
+                        See which directories changed most and where fixes were
+                        linked to bug issues.
                     </p>
                 </div>
                 {!repositoriesLoading && repositories.length > 0 && (
@@ -341,11 +369,14 @@ export function CodeAreasTab({
                             <div className="border-card-lv3/70 flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4">
                                 <div>
                                     <h2 className="text-text-primary text-sm font-semibold">
-                                        Change × bug-fix history
+                                        Changes and linked bug fixes
                                     </h2>
-                                    <p className="text-text-tertiary mt-0.5 text-xs">
-                                        Each point is a directory in this
-                                        repository
+                                    <p className="text-text-secondary mt-1 max-w-lg text-xs leading-5">
+                                        Each point is a directory. Further right
+                                        means more merged PRs changed it; higher
+                                        means more PRs linked to bug issues.
+                                        Select a point to see the PRs and
+                                        issues.
                                     </p>
                                 </div>
                                 <label className="border-card-lv3/70 text-text-tertiary flex h-9 w-full items-center gap-2 rounded-md border px-3 sm:w-52">
@@ -364,8 +395,8 @@ export function CodeAreasTab({
                             {filteredAreas.length ? (
                                 <div className="px-4 pt-5 pb-4 sm:px-6">
                                     <div className="text-text-tertiary mb-2 flex justify-between text-[11px]">
-                                        <span>More linked bug-fix PRs ↑</span>
-                                        <span>{maxLinkedFixes} max</span>
+                                        <span>PRs linked to bug issues ↑</span>
+                                        <span>{maxLinkedFixes} at most</span>
                                     </div>
                                     <div className="border-card-lv3/70 bg-card-lv2/30 relative h-[360px] overflow-hidden rounded-md border sm:h-[420px]">
                                         <div
@@ -409,14 +440,17 @@ export function CodeAreasTab({
                                                             (item) => item.path,
                                                         )
                                                         .join(", ")}
-                                                    className={`focus-visible:ring-primary-light absolute z-10 flex size-8 -translate-x-1/2 translate-y-1/2 items-center justify-center rounded-full border text-xs font-semibold tabular-nums shadow-sm transition-transform hover:scale-110 focus-visible:ring-2 focus-visible:outline-none ${selected ? "border-primary-light bg-primary-light text-black" : "border-primary-light/70 bg-card-lv1 text-text-primary"}`}
+                                                    className="focus-visible:ring-primary-light absolute z-10 flex size-8 -translate-x-1/2 translate-y-1/2 items-center justify-center rounded-full focus-visible:ring-2 focus-visible:outline-none"
                                                     style={{
                                                         left: `${5 + (area.changedPrs / maxChanges) * 85}%`,
                                                         bottom: `${8 + (area.linkedBugFixPrs / maxLinkedFixes) * 76}%`,
                                                     }}>
-                                                    {group.length > 1
-                                                        ? group.length
-                                                        : ""}
+                                                    <span
+                                                        className={`bg-primary-light flex items-center justify-center rounded-full text-[11px] font-semibold text-black tabular-nums ${group.length > 1 ? "size-6" : selected ? "ring-primary-light/20 size-4 ring-4" : "size-3 opacity-80"}`}>
+                                                        {group.length > 1
+                                                            ? group.length
+                                                            : null}
+                                                    </span>
                                                 </button>
                                             );
                                         })}
@@ -424,13 +458,15 @@ export function CodeAreasTab({
                                     <div className="text-text-tertiary mt-2 flex justify-between text-[11px]">
                                         <span>0</span>
                                         <span>
-                                            More changed PRs → {maxChanges} max
+                                            Merged PRs that changed it →{" "}
+                                            {maxChanges} at most
                                         </span>
                                     </div>
                                     <p className="text-text-tertiary mt-3 text-xs">
-                                        Dashes split the observed range in half.
-                                        Select a point to inspect its PRs; a
-                                        number means directories overlap.
+                                        Dashed lines mark half the largest count
+                                        on each axis, not a risk threshold. A
+                                        numbered point groups directories with
+                                        the same counts.
                                     </p>
                                 </div>
                             ) : (
