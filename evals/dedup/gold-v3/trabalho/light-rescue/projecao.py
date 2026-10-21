@@ -2,7 +2,9 @@
 do heavy que ja rodou (gold-v2 hv*, producedBy micro-exp-p3-*, classe pelo sugestoes.json). Nada roda de novo.
 Cada TP conta uma vez; a segunda sugestao sobre o mesmo TP e FP nit. Regua Martian.
   python3 projecao.py  ->  projecao-heavy.json"""
-import json, os, glob
+import json, os, glob, sys
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+from ancora import ok as ancora_ok
 AQUI = os.path.dirname(os.path.abspath(__file__)); V3 = os.path.join(AQUI, '..', '..'); G2 = os.path.join(V3, '..', 'gold-v2')
 sn = json.load(open(f'{V3}/sugestoes.json'))['sugestoes']
 cr = {r['issueId']: r['class_reviewed'] for f in ('golden.json', 'fps-conhecidos.json') for l in json.load(open(f'{V3}/{f}'))['prs'].values() for r in l}
@@ -23,6 +25,7 @@ for k, (model, mapa, hv) in HV.items():
     for c, cs in com.items():
         a = {x['id']: x['match'] for x in m1.get(c, [])}; b = {x['id']: x['match'] for x in m2.get(c, [])}
         for i in cs:
+            if not ancora_ok(c, i['file'], i['lines'][0], i['lines'][1], i['texto']): continue
             iss = a.get(i['id'], 'new')
             if iss == 'new': iss = b.get(i['id'], 'new')
             itens.append((None, 'FP nit') if iss == 'new' else (iss, cr[iss]))
@@ -30,6 +33,7 @@ for k, (model, mapa, hv) in HV.items():
     for c, v in s['prs'].items():
         for x in v['suggestions']:
             if x['producedBy'] == 'generalist-base': continue
+            if not ancora_ok(c, x.get('relevantFile'), x.get('relevantLinesStart'), x.get('relevantLinesEnd'), x.get('suggestionContent'), x.get('label')): continue
             i = sn[f'{mapa}|{c}|{x["id"]}']; itens.append((i, cr[i])); lentes += 1
     n = {'TP': 0, 'FP nit': 0, 'FP hallucination': 0}; vistos = set()
     for i, cl in itens:

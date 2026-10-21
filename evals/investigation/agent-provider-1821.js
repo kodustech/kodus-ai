@@ -989,6 +989,7 @@ function serializeResult(caseId, agentResult, remoteCommands, input, modelStats,
                 ...f,
                 producedBy: f.producedBy || 'generalist-base',
             })),
+            droppedByParseSchema: agentResult.droppedByParseSchema || [],
             // Which files the tiering picked, and whether the call graph had
             // anything to say. A run where every PR fell back to diff-size is a
             // different experiment from one where blast radius actually ranked.
@@ -1783,6 +1784,31 @@ class InvestigationAgentProvider {
             // the raw, pre-dedup candidate set. Cost is folded into tokenUsage
             // below so it's not silently absorbed into "the review's" cost.
             let dedupTrace = { status: 'skipped', reason: 'RECALL_SKIP_DEDUP=1' };
+            // Production's parse schema (agent-review.stage.ts, parseFinderSchema)
+            // discards a finding with no file, lines or text before anything else
+            // sees it, and a finding on a file outside the PR cannot be anchored.
+            // Neither becomes a comment, so neither reaches the score.
+            const droppedByParseSchema = [];
+            if (agentResult.findings?.suggestions) {
+                const { parseFinderSchema } = require(
+                    path.join(__dirname, '../../libs/code-review/infrastructure/agents/engine/parse-finder-schema.ts'),
+                );
+                const prFiles = new Set(
+                    (Array.isArray(caseData.prFiles) ? caseData.prFiles : input.changedFiles || []).map((f) => f.filename),
+                );
+                const all = agentResult.findings.suggestions;
+                const invalid = new Set(parseFinderSchema(all).discarded.map((d) => d.index));
+                agentResult.findings.suggestions = all.filter((f, i) => {
+                    const reason = invalid.has(i)
+                        ? 'missing-field'
+                        : f.label !== 'kody_rules' && !prFiles.has(f.relevantFile)
+                          ? 'file-not-in-pr'
+                          : null;
+                    if (reason) droppedByParseSchema.push({ ...f, reason });
+                    return !reason;
+                });
+                agentResult.droppedByParseSchema = droppedByParseSchema;
+            }
             // Snapshot BEFORE any post-processing runs. Without it a dump only
             // holds the survivors, so "would verify+dedup beat the reducer on
             // this same set?" can only be answered by re-running all 30 PRs —

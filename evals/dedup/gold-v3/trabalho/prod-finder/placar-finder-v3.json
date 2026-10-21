@@ -1,14 +1,14 @@
 {
  "deepseek|producao": {
-  "comentarios": 138,
-  "tp": 46,
-  "fpNit": 72,
-  "fpAlucinacao": 20,
+  "comentarios": 128,
+  "tp": 45,
+  "fpNit": 64,
+  "fpAlucinacao": 19,
   "totalTp": 192,
-  "recall": 24.0,
-  "precisao": 33.3,
-  "f1": 27.9,
-  "f2": 25.4
+  "recall": 23.4,
+  "precisao": 35.2,
+  "f1": 28.1,
+  "f2": 25.1
  },
  "deepseek|light": {
   "comentarios": 117,
@@ -22,15 +22,15 @@
   "f2": 26.0
  },
  "deepseek|heavy": {
-  "comentarios": 521,
-  "tp": 73,
-  "fpNit": 380,
-  "fpAlucinacao": 68,
+  "comentarios": 474,
+  "tp": 72,
+  "fpNit": 339,
+  "fpAlucinacao": 63,
   "totalTp": 192,
-  "recall": 38.0,
-  "precisao": 14.0,
-  "f1": 20.5,
-  "f2": 28.3
+  "recall": 37.5,
+  "precisao": 15.2,
+  "f1": 21.6,
+  "f2": 29.0
  },
  "gpt|producao": {
   "comentarios": 107,
@@ -55,14 +55,14 @@
   "f2": 46.5
  },
  "gpt|heavy": {
-  "comentarios": 400,
+  "comentarios": 399,
   "tp": 114,
-  "fpNit": 277,
+  "fpNit": 276,
   "fpAlucinacao": 9,
   "totalTp": 192,
   "recall": 59.4,
-  "precisao": 28.5,
-  "f1": 38.5,
+  "precisao": 28.6,
+  "f1": 38.6,
   "f2": 48.8
  },
  "sonnet-sdk|producao": {
@@ -88,15 +88,15 @@
   "f2": 32.0
  },
  "sonnet-sdk|heavy": {
-  "comentarios": 364,
-  "tp": 79,
-  "fpNit": 264,
+  "comentarios": 358,
+  "tp": 78,
+  "fpNit": 259,
   "fpAlucinacao": 21,
   "totalTp": 192,
-  "recall": 41.1,
-  "precisao": 21.7,
+  "recall": 40.6,
+  "precisao": 21.8,
   "f1": 28.4,
-  "f2": 34.9
+  "f2": 34.6
  },
  "sonnet-api|producao": {
   "comentarios": 122,
@@ -121,26 +121,26 @@
   "f2": 37.4
  },
  "sonnet-api|heavy": {
-  "comentarios": 441,
-  "tp": 98,
-  "fpNit": 321,
-  "fpAlucinacao": 22,
+  "comentarios": 414,
+  "tp": 97,
+  "fpNit": 297,
+  "fpAlucinacao": 20,
   "totalTp": 192,
-  "recall": 51.0,
-  "precisao": 22.2,
-  "f1": 31.0,
-  "f2": 40.5
+  "recall": 50.5,
+  "precisao": 23.4,
+  "f1": 32.0,
+  "f2": 41.0
  },
  "opus|producao": {
-  "comentarios": 156,
+  "comentarios": 152,
   "tp": 78,
-  "fpNit": 74,
+  "fpNit": 70,
   "fpAlucinacao": 4,
   "totalTp": 192,
   "recall": 40.6,
-  "precisao": 50.0,
-  "f1": 44.8,
-  "f2": 42.2
+  "precisao": 51.3,
+  "f1": 45.3,
+  "f2": 42.4
  },
  "opus|light": {
   "comentarios": 195,
@@ -154,15 +154,15 @@
   "f2": 53.5
  },
  "opus|heavy": {
-  "comentarios": 539,
+  "comentarios": 511,
   "tp": 127,
-  "fpNit": 393,
-  "fpAlucinacao": 19,
+  "fpNit": 366,
+  "fpAlucinacao": 18,
   "totalTp": 192,
   "recall": 66.1,
-  "precisao": 23.6,
-  "f1": 34.7,
-  "f2": 48.6
+  "precisao": 24.9,
+  "f1": 36.1,
+  "f2": 49.6
  },
  "muse|producao": {
   "comentarios": 196,
@@ -220,14 +220,14 @@
   "f2": 29.9
  },
  "kimi|heavy": {
-  "comentarios": 387,
-  "tp": 69,
-  "fpNit": 278,
-  "fpAlucinacao": 40,
+  "comentarios": 355,
+  "tp": 68,
+  "fpNit": 248,
+  "fpAlucinacao": 39,
   "totalTp": 192,
-  "recall": 35.9,
-  "precisao": 17.8,
-  "f1": 23.8,
-  "f2": 29.9
+  "recall": 35.4,
+  "precisao": 19.2,
+  "f1": 24.9,
+  "f2": 30.3
  }
 }

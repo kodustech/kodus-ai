@@ -204,7 +204,7 @@ html = f'''<title>Finder no gold v3</title>
 <style>{CSS}</style>
 <div class="wrap">
 <h1>Finder no gold v3</h1>
-<p class="sub">Só a etapa do finder, antes do dedup e do verify · 50 PRs (light 30 + holdout 20) · gold v3 medido pelo <code>class_reviewed</code> · {TOTAL} TPs{(" · pendentes: " + ", ".join(pend)) if pend else ""}</p>
+<p class="sub">Só a etapa do finder, antes do dedup e do verify · 50 PRs (light 30 + holdout 20) · gold v3 medido pelo <code>class_reviewed</code> · {TOTAL} TPs{(" · pendentes: " + ", ".join(pend)) if pend else ""} · só conta sugestão com âncora válida (arquivo do PR, linha inicial e final, como o parseFinderSchema de produção)</p>
 <nav class="tabs" role="tablist"><button class="tab on" data-t="geral" role="tab">Geral</button><button class="tab" data-t="passadas" role="tab">Generalista × synthesis rescue</button><button class="tab" data-t="diag" role="tab">Diagnóstico Muse e Kimi</button></nav>
 <section data-t="geral">
 <div class="regra">

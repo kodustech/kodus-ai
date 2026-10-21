@@ -7,6 +7,8 @@ Por origem (generalista, synthesis rescue): um TP achado pelas duas passadas con
 Uso por PR (trace.recallPasses do pool): tokens e tempo de cada passada; o finder e o generalista seguido do rescue.
   python3 placar.py <chave> pools [<chave> pools ...]  ->  placar.json (acumula)"""
 import json, os, sys, glob
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+from ancora import ok as ancora_ok
 AQUI = os.path.dirname(os.path.abspath(__file__)); V3 = os.path.join(AQUI, '..', '..')
 cr = {r['issueId']: r['class_reviewed'] for f in ('golden.json', 'fps-conhecidos.json') for l in json.load(open(f'{V3}/{f}'))['prs'].values() for r in l}
 TOTAL = sum(1 for v in cr.values() if v == 'TP')
@@ -17,6 +19,8 @@ def metr(tp, tot):
     return {'recall': round(100 * R, 1), 'precisao': round(100 * P, 1), 'f1': round(100 * f(1), 1), 'f2': round(100 * f(2), 1)}
 def placar(k, D):
     W = f'{AQUI}/{k}'; com = json.load(open(f'{W}/comentarios.json'))
+    # So o que vira comentario: ancora valida (parseFinderSchema + arquivo do PR).
+    com = {c: [i for i in v if ancora_ok(c, i['file'], i['lines'][0], i['lines'][1], i['texto'])] for c, v in com.items()}
     m1 = {}; [m1.update(json.load(open(f))) for f in glob.glob(f'{W}/opus-out*.json')]
     m2 = json.load(open(f'{W}/fp/opus-out0.json')) if os.path.exists(f'{W}/fp/opus-out0.json') else {}
     n = {'TP': 0, 'FP nit': 0, 'FP hallucination': 0}; por_pr = {}; vistos = set()

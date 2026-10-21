@@ -3143,16 +3143,16 @@
   }
  },
  "ds": {
-  "comentarios": 147,
+  "comentarios": 135,
   "tp": 53,
-  "fpNit": 86,
-  "fpAlucinacao": 8,
+  "fpNit": 75,
+  "fpAlucinacao": 7,
   "totalTp": 192,
-  "semCasamento": 25,
+  "semCasamento": 21,
   "recall": 27.6,
-  "precisao": 36.1,
-  "f1": 31.3,
-  "f2": 29.0,
+  "precisao": 39.3,
+  "f1": 32.4,
+  "f2": 29.3,
   "porOrigem": {
    "generalist": {
     "comentarios": 114,
@@ -3212,12 +3212,11 @@
     "f2": 25.5
    },
    "synthesis-rescue": {
-    "comentarios": 33,
-    "tp": 10,
+    "comentarios": 21,
+    "tp": 9,
     "tpIds": [
      "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#03",
      "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01",
-     "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10",
      "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
      "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
      "fix-proper-handling-of-group-memberships-discourse-cursor#07",
@@ -3226,12 +3225,12 @@
      "replays-self-serve-bulk-delete-system-sentry#13",
      "sms-workflow-reminder-retry-count-tracking-cal-com#e2b-01"
     ],
-    "fpNit": 20,
-    "fpAlucinacao": 3,
-    "recall": 5.2,
-    "precisao": 30.3,
-    "f1": 8.9,
-    "f2": 6.2
+    "fpNit": 10,
+    "fpAlucinacao": 2,
+    "recall": 4.7,
+    "precisao": 42.9,
+    "f1": 8.5,
+    "f2": 5.7
    }
   },
   "porPr": {
@@ -3271,9 +3270,9 @@
     "fp": 1
    },
    "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {
-    "comentarios": 2,
+    "comentarios": 1,
     "tp": 0,
-    "fp": 2
+    "fp": 1
    },
    "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
     "comentarios": 2,
@@ -3326,9 +3325,9 @@
     "fp": 2
    },
    "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
-    "comentarios": 4,
+    "comentarios": 2,
     "tp": 0,
-    "fp": 4
+    "fp": 2
    },
    "feat-2fa-backup-codes-cal-com": {
     "comentarios": 5,
@@ -3356,9 +3355,9 @@
     "fp": 3
    },
    "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
-    "comentarios": 8,
+    "comentarios": 4,
     "tp": 1,
-    "fp": 7
+    "fp": 3
    },
    "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
     "comentarios": 2,
@@ -3376,9 +3375,9 @@
     "fp": 4
    },
    "feature-localization-fallbacks-server-side-discourse-cursor": {
-    "comentarios": 5,
+    "comentarios": 4,
     "tp": 1,
-    "fp": 4
+    "fp": 3
    },
    "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
     "comentarios": 2,
@@ -3411,9 +3410,9 @@
     "fp": 1
    },
    "github-oauth-security-enhancement-sentry": {
-    "comentarios": 3,
+    "comentarios": 0,
     "tp": 0,
-    "fp": 3
+    "fp": 0
    },
    "implement-access-token-context-encoding-framework-keycloak": {
     "comentarios": 3,
@@ -3421,9 +3420,9 @@
     "fp": 3
    },
    "implement-recovery-key-support-for-user-storage-providers-keycloak": {
-    "comentarios": 2,
+    "comentarios": 1,
     "tp": 0,
-    "fp": 2
+    "fp": 1
    },
    "notification-rule-processing-engine-grafana-codex": {
     "comentarios": 3,
@@ -6262,16 +6261,16 @@
   }
  },
  "kimi": {
-  "comentarios": 214,
+  "comentarios": 209,
   "tp": 70,
-  "fpNit": 137,
+  "fpNit": 132,
   "fpAlucinacao": 7,
   "totalTp": 192,
   "semCasamento": 19,
   "recall": 36.5,
-  "precisao": 32.7,
-  "f1": 34.5,
-  "f2": 35.6,
+  "precisao": 33.5,
+  "f1": 34.9,
+  "f2": 35.8,
   "porOrigem": {
    "generalist": {
     "comentarios": 148,
@@ -6342,8 +6341,8 @@
     "f2": 30.6
    },
    "synthesis-rescue": {
-    "comentarios": 66,
-    "tp": 28,
+    "comentarios": 61,
+    "tp": 24,
     "tpIds": [
      "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
      "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#03",
@@ -6368,18 +6367,14 @@
      "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
      "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#03",
      "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#05",
-     "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
-     "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
-     "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
-     "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
      "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04"
     ],
-    "fpNit": 35,
+    "fpNit": 34,
     "fpAlucinacao": 3,
-    "recall": 14.6,
-    "precisao": 42.4,
-    "f1": 21.7,
-    "f2": 16.8
+    "recall": 12.5,
+    "precisao": 39.3,
+    "f1": 19.0,
+    "f2": 14.5
    }
   },
   "porPr": {
@@ -6609,9 +6604,9 @@
     "fp": 2
    },
    "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
-    "comentarios": 10,
+    "comentarios": 5,
     "tp": 4,
-    "fp": 6
+    "fp": 1
    },
    "sms-workflow-reminder-retry-count-tracking-cal-com": {
     "comentarios": 3,
