@@ -43,11 +43,9 @@ async function main(): Promise<void> {
     });
     if (!teamsResponse.ok)
         throw new Error(`GET /team returned ${teamsResponse.status}`);
-    const teamsBody = (await teamsResponse.json()) as {
-        data?: Array<{ uuid: string }> | { uuid: string };
-    };
-    const teams = teamsBody.data ?? teamsBody;
-    const teamId = Array.isArray(teams) ? teams[0]?.uuid : teams.uuid;
+    const teamsBody = (await teamsResponse.json()) as any;
+    const teams = teamsBody?.data ?? teamsBody;
+    const teamId = Array.isArray(teams) ? teams[0]?.uuid : teams?.uuid;
     if (!teamId) throw new Error('preview has no team');
 
     const postgres = new Client({
