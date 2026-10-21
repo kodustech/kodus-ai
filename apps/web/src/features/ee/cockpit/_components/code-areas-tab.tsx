@@ -359,11 +359,11 @@ export function CodeAreasTab({
                         Repository intelligence
                     </p>
                     <h2 className="text-text-primary text-2xl font-semibold tracking-tight">
-                        Code areas
+                        Code hotspots
                     </h2>
                     <p className="text-text-secondary mt-1 max-w-2xl text-sm">
-                        Find areas where frequent changes, structural issues and
-                        linked bug fixes meet.
+                        See which directories change often and contain
+                        structural signals. Linked bug fixes add context.
                     </p>
                 </div>
                 {!repositoriesLoading && repositories.length > 0 && (
@@ -389,7 +389,7 @@ export function CodeAreasTab({
                             }}>
                             <SelectTrigger
                                 size="sm"
-                                aria-label="Code area repository"
+                                aria-label="Hotspot repository"
                                 className="w-full sm:w-72">
                                 <SelectValue placeholder="Select repository" />
                             </SelectTrigger>
@@ -413,7 +413,7 @@ export function CodeAreasTab({
                 <div className="border-card-lv3 bg-card-lv1 flex flex-col items-start gap-3 rounded-lg border px-6 py-12">
                     <FolderGit2 className="text-text-tertiary size-6" />
                     <h3 className="text-text-primary text-base font-medium">
-                        Connect a repository to map its code areas
+                        Connect a repository to find code hotspots
                     </h3>
                     <p className="text-text-secondary max-w-lg text-sm">
                         Kodus uses merged PRs, linked bug issues and a limited
@@ -427,11 +427,11 @@ export function CodeAreasTab({
                 </div>
             ) : isLoading ? (
                 <div className="border-card-lv3 bg-card-lv1 text-text-secondary rounded-lg border px-5 py-12 text-sm">
-                    Loading code-area history…
+                    Loading repository history…
                 </div>
             ) : isError ? (
                 <div className="border-card-lv3 bg-card-lv1 text-text-secondary rounded-lg border px-5 py-12 text-sm">
-                    Could not load code-area history for this repository.
+                    Could not load repository history.
                 </div>
             ) : !data?.map ? (
                 <div className="border-card-lv3 bg-card-lv1 text-text-secondary rounded-lg border px-5 py-12 text-sm">
@@ -439,62 +439,33 @@ export function CodeAreasTab({
                 </div>
             ) : (
                 <>
-                    <div className="border-card-lv3 bg-card-lv1 flex flex-wrap gap-x-6 gap-y-2 rounded-lg border px-5 py-3 text-xs">
-                        <span className="text-text-primary font-medium tabular-nums">
-                            {coverage?.scannedPrs ?? 0} merged PRs scanned
+                    <div className="text-text-tertiary flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                        <span>
+                            Based on {coverage?.scannedPrs ?? 0} merged PRs
                         </span>
-                        <span className="text-text-secondary tabular-nums">
-                            {areas.length} directories
-                        </span>
-                        <span className="text-text-secondary tabular-nums">
-                            Issue data: {coverage?.prsWithIssueSupport ?? 0}/
-                            {coverage?.scannedPrs ?? 0} PRs
-                        </span>
-                        <span className="text-text-secondary tabular-nums">
-                            JS/TS structure:{" "}
-                            {structureCoverage?.analyzedFiles ?? 0}/
-                            {structureCoverage?.eligibleFiles ?? 0} files
-                        </span>
-                        {!coverage?.scanComplete && (
-                            <span className="text-primary-light">
-                                Scan in progress
-                            </span>
-                        )}
-                        <span className="text-text-tertiary ml-auto">
+                        <span aria-hidden="true">·</span>
+                        <span>
                             {date(data.map.windowStart)} –{" "}
                             {date(data.map.windowEnd)}
                         </span>
+                        {!coverage?.scanComplete && (
+                            <span className="text-primary-light">
+                                · History scan in progress
+                            </span>
+                        )}
                     </div>
-
-                    {focus.length > 0 && (
-                        <div className="border-card-lv3 bg-card-lv1 flex items-start gap-4 rounded-lg border px-5 py-4">
-                            <strong className="text-primary-light text-2xl leading-none tabular-nums">
-                                {focus.length}
-                            </strong>
-                            <div className="min-w-0">
-                                <p className="text-text-primary text-sm font-semibold">
-                                    {focus.length === 1
-                                        ? "Area to investigate first"
-                                        : "Areas to investigate first"}
-                                </p>
-                                <p className="text-text-secondary mt-1 text-xs leading-5">
-                                    Frequent changes and structural signals in
-                                    sampled files. Select an area to inspect its
-                                    PR and issue evidence.
-                                </p>
-                            </div>
-                        </div>
-                    )}
 
                     <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.75fr)]">
                         <section className="border-card-lv3 bg-card-lv1 min-w-0 overflow-hidden rounded-lg border">
                             <div className="border-card-lv3 border-b px-5 py-4">
                                 <h3 className="text-text-primary text-base font-semibold">
-                                    Attention map
+                                    Change activity and structure
                                 </h3>
                                 <p className="text-text-secondary mt-1 text-xs leading-5">
-                                    Position is relative to this repository. Fix
-                                    counts show PRs linked to bug issues.
+                                    Each card is a directory. Start with
+                                    “Investigate first”: these directories
+                                    change often and have structural signals in
+                                    sampled files.
                                 </p>
                             </div>
                             {(structureCoverage?.analyzedFiles ?? 0) > 0 ? (
@@ -551,10 +522,11 @@ export function CodeAreasTab({
                                         </div>
                                     </div>
                                     <p className="text-text-tertiary mt-4 text-xs">
-                                        Frequent = top 25% by changed PRs.
-                                        Structural signals = sampled JS/TS
-                                        functions with 80+ lines, 12+ branches
-                                        or nesting of 4+.
+                                        Frequent means the top quarter of
+                                        directories by changed PRs. Structural
+                                        signals identify long, branch-heavy or
+                                        deeply nested functions in sampled JS/TS
+                                        files.
                                     </p>
                                 </div>
                             ) : (
@@ -730,13 +702,35 @@ export function CodeAreasTab({
                             )}
                         </section>
                     )}
-                    <p className="text-text-tertiary max-w-4xl text-xs leading-5">
-                        Structural checks cover a bounded sample of JS/TS files
-                        on the default branch. Linked fixes count PRs that
-                        changed an area and linked to a bug issue; they do not
-                        establish where a defect originated or predict future
-                        bugs. Updated {date(data.map.refreshedAt)}.
-                    </p>
+                    <details className="border-card-lv3 bg-card-lv1 rounded-lg border px-5 py-4 text-xs">
+                        <summary className="text-text-secondary cursor-pointer font-medium">
+                            How this view is calculated
+                        </summary>
+                        <div className="text-text-tertiary mt-3 max-w-4xl space-y-2 leading-5">
+                            <p>
+                                {areas.length} directories were mapped from{" "}
+                                {coverage?.scannedPrs ?? 0} merged PRs. Issue
+                                data was available for{" "}
+                                {coverage?.prsWithIssueSupport ?? 0} of those
+                                PRs.
+                            </p>
+                            <p>
+                                Structural checks analyzed{" "}
+                                {structureCoverage?.analyzedFiles ?? 0} of{" "}
+                                {structureCoverage?.eligibleFiles ?? 0} JS/TS
+                                files from the default branch, up to 60 files
+                                total. A function is flagged at 80+ lines, 12+
+                                branches or nesting of 4+.
+                            </p>
+                            <p>
+                                Linked fixes are PRs that changed a directory
+                                and linked to a bug issue. They add historical
+                                context, but do not establish where a defect
+                                originated or predict future bugs. Updated{" "}
+                                {date(data.map.refreshedAt)}.
+                            </p>
+                        </div>
+                    </details>
                 </>
             )}
         </div>
